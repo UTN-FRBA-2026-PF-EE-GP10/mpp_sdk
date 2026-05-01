@@ -1,7 +1,25 @@
 [project]
 name = "mpp-sdk"
 version = "0.1.0"
-description = "Add your description here"
+description = "SDK for solar-panel MPPT algorithm simulation, comparison, and on-hardware execution."
 readme = "README.md"
 requires-python = ">=3.14"
-dependencies = []
+dependencies = [
+    "numpy",
+    "matplotlib",
+]
+
+[project.optional-dependencies]
+# Higher-fidelity panel models via the PvlibPanelModel adapter.
+pvlib = ["pvlib>=0.10"]
+# Hardware-side dependencies for the eventual SpiMcuSource (Phase 5a).
+hardware = ["spidev"]
+# Convenience: install everything optional in one go.
+all = ["pvlib>=0.10", "spidev"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["mpp_sdk"]
