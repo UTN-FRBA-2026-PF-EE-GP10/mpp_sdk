@@ -1,5 +1,5 @@
 """Power-stage models that sit between the panel and the load."""
 
-from .boost import BoostConverter
+from .sepic import SEPICConverter
 
-__all__ = ["BoostConverter"]
+__all__ = ["SEPICConverter"]

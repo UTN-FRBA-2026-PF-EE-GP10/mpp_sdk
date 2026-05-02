@@ -16,8 +16,9 @@ liability statement, and the LLM-usage policy.
   2. A written paper / thesis describing methodology, comparisons, and
      conclusions.
   3. A reproducible hardware demonstrator: Raspberry Pi 5 + a small
-     intermediary MCU (Pico / ESP32 under evaluation) over SPI + boost
-     converter + small PV panel.
+     intermediary MCU (Pico / ESP32 under evaluation) over SPI + a
+     **SEPIC** power stage (chosen so panel `V_mpp` may sit on either
+     side of the load voltage) + small PV panel.
   4. **An MCU-deployable algorithm**: a controller that has been
      validated against the framework's comparison harness *and* ported
      to MCU firmware, with code-size / RAM / latency budgets reported
@@ -103,14 +104,15 @@ has shipped *and* been independently verified per the rules in
   partial shading.
 - `PanelArray` + bypass diodes (one canonical shading pattern in the
   paper, not a topology survey).
-- `BoostConverter` model.
+- `SEPICConverter` model.
 - Algorithms: P&O (shipped), Incremental Conductance, one adaptive-step
   variant, and **one** Global-MPPT method (scan-and-track or simple
   PSO — pick the one easier to port).
-- Comparison harness against the EN 50530 dynamic profile.
-- Custom board: boost stage with GaN **or** SiC (pick one in block 1),
-  gate driver, V/I sense via INA226 or shunt + amp, MCU section, SPI to
-  Pi, basic protections.
+- Algorithm-focused comparison harness with the metrics listed in
+  Phase 4 below — no inverter-efficiency / EN-50530 work in v1.
+- Custom board: **SEPIC** stage with GaN **or** SiC (pick one in
+  block 1), gate driver, V/I sense via INA226 or shunt + amp, MCU
+  section, SPI to Pi, basic protections.
 - MCU firmware: HIL mode + the chosen algorithm in deployed mode.
 - Hardware-vs-simulation comparison; resource-budget report.
 - Paper / thesis covering all of the above.
@@ -129,10 +131,14 @@ become "future work" in the paper and re-open after v1 ships.
   curves is enough; no library work.
 - **Outdoor PV testing as required.** Bench is enough for the paper;
   outdoor is a block-6 stretch goal.
-- **Synchronous boost, multi-string MPPT in hardware, Wi-Fi
+- **Synchronous rectification, multi-string MPPT in hardware, Wi-Fi
   telemetry.**
-- **A general fixture format for the harness.** Hard-code the EN 50530
-  cases first; generalise later if a second profile shows up.
+- **Inverter-efficiency / EN-50530-style scoring.** EN 50530 grades
+  the inverter as a whole; this work is algorithm-focused, so we
+  measure the metrics in Phase 4 instead and leave EN-50530 numbers
+  to "future work."
+- **A general fixture format for the harness.** Hard-code the v1
+  test cases first; generalise later if a second profile shows up.
 
 ### Top risks
 
@@ -160,8 +166,9 @@ has **shipped *and* been independently verified**.
 ### Phase 1 — Scaffolding (shipped)
 
 - Package layout and four-pillar architecture.
-- `IdealSingleDiode` model, ideal `BoostConverter`, `SimulatedSource`.
-- `PerturbAndObserve` controller (sign-corrected for boost duty cycle).
+- `IdealSingleDiode` model, ideal `SEPICConverter`, `SimulatedSource`.
+- `PerturbAndObserve` controller (sign-corrected for SEPIC duty cycle;
+  same sign as a boost so boost-based papers port unchanged).
 - Live I-V / P-V view (`LivePanelView`) driven by `FuncAnimation`.
 - `AGENTS.md` (architectural pillars), `CHANGELOG.md`, this `PLAN.md`.
 
@@ -234,14 +241,46 @@ the SDK consumes it identically.
       maxima introduced by bypass diodes (Phase 2 / composition).
 - [ ] Data-driven baseline (supervised on swept curves and/or RL).
 
-### Phase 4 — Comparison harness
+### Phase 4 — Algorithm comparison harness
 
-- [ ] Standardized dynamic test profiles (e.g. EN 50530 irradiance ramps,
-      cloud-pass profiles).
-- [ ] Metrics: tracking efficiency (static and dynamic), settling time,
-      steady-state oscillation amplitude, response to step changes.
-- [ ] Auto-generated result tables and figures consumed directly by the
-      paper.
+The harness is **algorithm-focused**, not system-efficiency-focused.
+We are not measuring inverter conversion efficiency (the SEPIC is not
+optimised for that, and EN 50530 grades the inverter as a whole) — we
+are measuring how well an MPPT controller finds and holds the panel's
+MPP under realistic conditions, including the partial-shading case
+where Global-MPPT is the whole point.
+
+- [ ] **Test cases** (a fixed set, hard-coded for v1; generalise to a
+      fixture format only if a second profile shows up):
+  - Cold start at STC.
+  - Slow / medium / fast irradiance ramps.
+  - Step changes in irradiance.
+  - Partial-shading patterns producing 2 / 3 / 4 local maxima on the
+    P-V curve.
+  - Noise injected on V and I measurements at several levels.
+- [ ] **Steady-state metrics**:
+  - Tracking efficiency `η = ⟨P⟩ / P_mpp` at convergence.
+  - Steady-state oscillation amplitude (peak-to-peak P at the
+    converged operating point).
+- [ ] **Dynamic metrics**:
+  - Cold-start convergence time (`D_init` → within 5 % of MPP).
+  - Rise time on an irradiance step.
+  - Overshoot and settling time on an irradiance step.
+  - `η` under irradiance ramps (slow / medium / fast).
+- [ ] **Partial-shading metrics** (the centrepiece for Global-MPPT
+  comparison):
+  - Global-MPP success rate across the partial-shading bank.
+  - Time-to-global-MPP for the patterns the algorithm reaches.
+  - Worst-case trap depth `P_local / P_global` when fooled.
+- [ ] **Robustness metrics**:
+  - `η` degradation versus measurement-noise level.
+  - `η` degradation versus sample rate.
+- [ ] **Implementation-cost metrics** (binding for the MCU port):
+  - Algorithm state size, in bytes.
+  - Per-step worst-case compute, in cycles or μs on the chosen MCU.
+  - Code size after the port (flash / RAM).
+- [ ] Auto-generated result tables and figures consumed directly by
+      the paper.
 
 ### Phase 5 — Hardware demonstrator
 
@@ -295,6 +334,81 @@ the paper's "MCU-deployable algorithm" claim rests on.
 - [ ] Hardware validation chapter.
 - [ ] Discussion and conclusions.
 - [ ] SDK reference and reproducibility appendix.
+
+### Publishing to PyPI
+
+Releasing the package to PyPI makes it installable with a single command in
+any project (`uv add mpp-sdk`) and signals that the SDK is a citable,
+versioned artefact — useful for the thesis reproducibility appendix.
+
+**Prerequisites — add to `pyproject.toml` before the first upload:**
+
+```toml
+[project]
+license   = { text = "MIT" }
+authors   = [{ name = "Federico Borello", email = "fborello.contact@gmail.com" }]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Physics",
+]
+
+[project.urls]
+Homepage   = "https://github.com/<org>/mpp-sdk"
+Repository = "https://github.com/<org>/mpp-sdk"
+```
+
+**Manual release steps:**
+
+```bash
+# 1. Build the wheel and sdist
+uv build
+
+# 2. Smoke-check the distributions
+uv run twine check dist/*
+
+# 3. Test on Test PyPI first
+uv publish --publish-url https://test.pypi.org/legacy/ --token $TEST_PYPI_TOKEN
+
+# 4. Install from Test PyPI and run smoke tests
+uv add --index https://test.pypi.org/simple mpp-sdk
+uv run pytest tests/test_smoke.py
+
+# 5. Tag and publish to the real registry
+git tag v0.x.y && git push --tags
+uv publish --token $PYPI_TOKEN
+```
+
+**Automated CI release (add `.github/workflows/publish.yml`):**
+
+```yaml
+on:
+  push:
+    tags: ["v*"]
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write   # OIDC trusted publishing — no stored token needed
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv build
+      - run: uv publish
+```
+
+Configure **Trusted Publishers** at pypi.org (project → Publishing tab) to
+avoid storing an API token as a GitHub secret. The workflow above is ready
+for it: `id-token: write` grants the OIDC credential automatically.
+
+**Optional extras are already wired** in `[project.optional-dependencies]`
+and work out of the box after publishing:
+
+```bash
+uv add "mpp-sdk[pvlib]"     # high-fidelity panel models via pvlib adapter
+uv add "mpp-sdk[hardware]"  # SPI hardware deps for Phase-5 SpiMcuSource
+uv add "mpp-sdk[all]"       # both extras at once
+```
 
 ## Verification — each part must work separately
 
@@ -389,6 +503,66 @@ development of this repository. The policy:
    the human author. LLMs may help with prose, structure, and code;
    the science is not theirs.
 
+### Academic-integrity considerations
+
+The disclosure policy above (Disclose / Verify / Author / Off-limits)
+covers the *transparency* requirement. This subsection deals with the
+secondary risk that a heavily AI-assisted public repository may be
+*perceived* as undermining the academic contribution, regardless of
+disclosure. The mitigation is to (a) position AI as a deliberate
+methodological choice, (b) map exposure across project layers so
+reviewers can see what is and is not AI-touched, and (c) confirm each
+contributor's institutional policy before submission.
+
+**AI exposure by layer** (high → low):
+
+| Layer                         | AI exposure | Why it is acceptable                                                                                                       |
+| ----------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------- |
+| SDK Python code (this repo)   | High        | Framework / scaffolding work; every line was reviewed and is testable. Open source — reviewers can audit any line.         |
+| Documentation in this repo    | Medium      | Drafted with assistance, edited and signed off by a human. The thesis text itself is human-authored.                       |
+| Comparison-harness analysis   | Medium      | Glue code and figure plumbing are AI-assisted; the *choice* of metrics and the interpretation of results are the author's. |
+| Hardware design (PCB, BOM)    | Low         | Hands-on engineering; AI has limited effective contribution to PCB layout, soldering, or scope work.                       |
+| Algorithm derivations         | Low         | Mathematics in the thesis traces to citable references and is the author's analysis. AI may suggest references; it does not author the proofs. |
+| Experimental measurements     | None        | Real data on real hardware; the human reads the scope.                                                                     |
+| Conclusions and discussion    | None        | The author's argument, defended at the viva.                                                                               |
+
+**Defence talking points** (rehearse before the viva):
+
+1. *"Where did AI help, and where didn't it?"* — point at the table
+   above. The framework is AI-leveraged so the team's limited hours
+   could be spent on the original contributions: hardware design,
+   algorithm analysis, and experimental validation.
+2. *"How do we know the AI-generated code is correct?"* — point at
+   the verification policy: unit / smoke / integration tests for
+   every module; cross-validation between the in-tree models and the
+   pvlib adapter; HIL- and deployed-MCU cross-validation against the
+   Python reference.
+3. *"How do we know the prose is the author's argument?"* — the
+   thesis document is human-written; the repo's docs serve a
+   different purpose (project housekeeping) and have a different
+   bar.
+4. *"What if a reviewer is biased against AI-assisted work?"* —
+   engage with it. AI assistance is itself a methodological
+   contribution worth a paragraph in the methodology chapter, not
+   something to apologise for. The thesis's value is the framework,
+   the hardware, and the experiments — none of which AI authored.
+
+**Institutional policy — confirm per contributor.** Each contributor's
+institution has its own AI-assistance policy. Before the thesis is
+submitted, confirm:
+
+- The disclosure level the policy requires (footnote, dedicated
+  section, declaration form).
+- Whether the policy bans AI assistance on any specific layer
+  (e.g. some institutions ban it on "the writing of the thesis
+  itself"). Layers under such a ban must stay AI-free regardless of
+  what this repo does.
+- That co-authors / classmates are aware of the policy and the
+  disclosure and have given informed consent.
+
+These are tracked in *Open questions* until each institution is
+checked off.
+
 ## Viability assessment and related work
 
 This section answers two questions explicitly: *is the project viable as
@@ -430,7 +604,7 @@ layers that pvlib does not address:
    InCond, adaptive-step, fuzzy, sliding-mode, MPC, Global-MPPT and
    data-driven baselines on the roadmap).
 2. **Power-stage abstraction with an MCU-mediated hardware seam**: a
-   `BoostConverter` model plus a `SignalSource` ABC. The hardware
+   `SEPICConverter` model plus a `SignalSource` ABC. The hardware
    implementation is intentionally split — the Pi 5 hosts the SDK and
    the algorithm; a small MCU (Pi Pico / ESP32 under evaluation) drives
    the power stage and talks to the Pi over SPI. This isolates the
@@ -541,5 +715,9 @@ the framework + the deployment evidence are the artefacts.
 - **SPI protocol design (Phase 5a):** master/slave roles, frame
   format, sample rate, watchdog / soft-stop semantics. Document the
   protocol in `data/hardware/spi_protocol.md` once it stabilises.
+- **Institutional AI-assistance policy per contributor.** Disclosure
+  level required, layers where AI is banned, declaration-form
+  requirements, co-author informed consent. Must be checked off per
+  contributor before thesis submission.
 - Form of the comparison-harness configuration: YAML fixtures vs pure
   Python.

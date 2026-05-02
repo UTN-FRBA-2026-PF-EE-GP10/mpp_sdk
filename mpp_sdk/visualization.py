@@ -36,13 +36,19 @@ def plot_iv_with_operating_point(
 
     ax_iv.plot(v, i, label="I-V curve")
     ax_iv.plot(
-        v_mpp, i_mpp, "o", color="tab:green",
+        v_mpp,
+        i_mpp,
+        "o",
+        color="tab:green",
         label=f"MPP ({v_mpp:.2f} V, {i_mpp:.2f} A)",
     )
 
     ax_pv.plot(v, p, color="tab:orange", label="P-V curve")
     ax_pv.plot(
-        v_mpp, p_mpp, "o", color="tab:green",
+        v_mpp,
+        p_mpp,
+        "o",
+        color="tab:green",
         label=f"MPP ({p_mpp:.2f} W)",
     )
 
@@ -54,11 +60,17 @@ def plot_iv_with_operating_point(
     if operating_point is not None:
         v_op, i_op = operating_point
         ax_iv.plot(
-            v_op, i_op, "s", color="tab:red",
+            v_op,
+            i_op,
+            "s",
+            color="tab:red",
             label=f"operating ({v_op:.2f} V, {i_op:.2f} A)",
         )
         ax_pv.plot(
-            v_op, v_op * i_op, "s", color="tab:red",
+            v_op,
+            v_op * i_op,
+            "s",
+            color="tab:red",
             label=f"operating ({v_op * i_op:.2f} W)",
         )
 
@@ -126,12 +138,8 @@ class LivePanelView:
         )
         (self._traj_pv,) = self.ax_pv.plot([], [], "-", color="tab:gray", alpha=0.45)
 
-        (self._mpp_iv,) = self.ax_iv.plot(
-            [], [], "o", color="tab:green", markersize=8, label="MPP"
-        )
-        (self._mpp_pv,) = self.ax_pv.plot(
-            [], [], "o", color="tab:green", markersize=8, label="MPP"
-        )
+        (self._mpp_iv,) = self.ax_iv.plot([], [], "o", color="tab:green", markersize=8, label="MPP")
+        (self._mpp_pv,) = self.ax_pv.plot([], [], "o", color="tab:green", markersize=8, label="MPP")
 
         (self._op_iv,) = self.ax_iv.plot(
             [], [], "s", color="tab:red", markersize=9, label="operating"
@@ -141,13 +149,23 @@ class LivePanelView:
         )
 
         self._readout_iv = self.ax_iv.text(
-            0.02, 0.97, "", transform=self.ax_iv.transAxes,
-            ha="left", va="top", fontsize=9,
+            0.02,
+            0.97,
+            "",
+            transform=self.ax_iv.transAxes,
+            ha="left",
+            va="top",
+            fontsize=9,
             bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.7, edgecolor="none"),
         )
         self._readout_pv = self.ax_pv.text(
-            0.02, 0.97, "", transform=self.ax_pv.transAxes,
-            ha="left", va="top", fontsize=9,
+            0.02,
+            0.97,
+            "",
+            transform=self.ax_pv.transAxes,
+            ha="left",
+            va="top",
+            fontsize=9,
             bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.7, edgecolor="none"),
         )
 
@@ -205,13 +223,9 @@ class LivePanelView:
         p_op = v_op * i_op
         eff = (p_op / p_mpp * 100.0) if p_mpp > 0 else 0.0
         self._readout_iv.set_text(
-            f"MPP:  {v_mpp:5.2f} V  {i_mpp:5.2f} A\n"
-            f"now:  {v_op:5.2f} V  {i_op:5.2f} A"
+            f"MPP:  {v_mpp:5.2f} V  {i_mpp:5.2f} A\nnow:  {v_op:5.2f} V  {i_op:5.2f} A"
         )
-        self._readout_pv.set_text(
-            f"P_mpp: {p_mpp:6.2f} W\n"
-            f"P_now: {p_op:6.2f} W  ({eff:5.1f}%)"
-        )
+        self._readout_pv.set_text(f"P_mpp: {p_mpp:6.2f} W\nP_now: {p_op:6.2f} W  ({eff:5.1f}%)")
 
     @property
     def history(self) -> list[tuple[float, float]]:

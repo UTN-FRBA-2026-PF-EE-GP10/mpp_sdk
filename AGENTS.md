@@ -13,20 +13,22 @@ roadmap is:
 2. Build a library of MPPT algorithms (P&O, InCond, fuzzy, ML, …) with a
    uniform interface.
 3. Provide a hardware-abstraction seam so the same algorithm code can drive a
-   simulation **or** a real boost converter on a Raspberry Pi 5 + a small
-   intermediary microcontroller (Pi Pico / ESP32 under evaluation, talking
-   SPI). The MCU drives the power stage and isolates it from the Pi; once an
-   algorithm has been validated against the framework it is ported to the
-   MCU itself, which is the project's headline deliverable.
+   simulation **or** a real DC-DC converter (the project ships a **SEPIC**,
+   chosen so the panel can sit on either side of the load voltage) on a
+   Raspberry Pi 5 + a small intermediary microcontroller (Pi Pico / ESP32
+   under evaluation, talking SPI). The MCU drives the power stage and
+   isolates it from the Pi; once an algorithm has been validated against the
+   framework it is ported to the MCU itself, which is the project's
+   headline deliverable.
 
 ## Architectural pillars
 
 The codebase is organised around four orthogonal concerns. Keep them decoupled.
 
-```
+```text
 mpp_sdk/
 ├── models/         # Solar-panel I-V models           (PanelModel ABC)
-├── converters/     # Power-stage models               (BoostConverter, …)
+├── converters/     # Power-stage models               (SEPICConverter, …)
 ├── algorithms/     # MPPT controllers                 (MPPTAlgorithm ABC)
 ├── io/             # Hardware-abstraction layer       (SignalSource ABC)
 └── visualization.py
@@ -41,12 +43,14 @@ Hard rules:
   one question only: *given a terminal voltage (and my internal state), what
   current do I deliver?*
 - **The simulator is the glue.** `SimulatedSource` composes a panel + converter
-  + load behind a `SignalSource` so algorithms can be exercised offline.
+  - load behind a `SignalSource` so algorithms can be exercised offline.
 
 ## Modelling conventions
 
-- **Control variable** is the boost-converter duty cycle, `D ∈ (D_min, D_max)`.
-  MPPT algorithms in this SDK return `D`, never `V_ref` or `I_ref`.
+- **Control variable** is the converter duty cycle, `D ∈ (D_min, D_max)`
+  (the SDK ships a SEPIC by default; the same `D` interface fits other
+  topologies). MPPT algorithms in this SDK return `D`, never `V_ref` or
+  `I_ref`.
 - **Measured quantities** are panel terminal voltage `V` and panel output
   current `I` only. Algorithms must not consume irradiance, temperature, or
   model parameters directly — those exist in the *model*, not in the
@@ -55,11 +59,14 @@ Hard rules:
   e.g. `model.temperature` and `model.irradiance` as mutable attributes; the
   simulation loop updates them over time. The `current(V)` interface stays
   uniform — environmental state lives on the model instance.
-- **Boost-converter sign convention used in this repo:**
-    - `V_out = V_in / (1 - D)`.
-    - Increasing `D` ⇒ lower reflected resistance ⇒ **lower** panel terminal
-      voltage.
-    - When porting algorithms from papers that use `V_ref` as the control
+- **Converter sign convention used in this repo (SEPIC):**
+  - `V_out = V_in · D / (1 − D)`.
+  - Reflected resistance: `R_in = R_load · ((1 − D) / D)²`, monotonically
+      decreasing in `D` over `(0, 1)`.
+  - Increasing `D` ⇒ lower reflected resistance ⇒ **lower** panel terminal
+      voltage. (The plain boost has the same sign — algorithms ported from
+      boost-based papers do not need a sign change.)
+  - When porting algorithms from papers that use `V_ref` as the control
       variable, **flip the sign** when translating to `D`.
 - **Vectorisation:** model `current()` accepts arrays *and* scalars. Use
   `numpy.asarray` to broadcast.
@@ -123,7 +130,7 @@ pattern.
 ## Roadmap of algorithms
 
 - **Perturb & Observe** — *shipped*. Fixed-step P&O, sign-corrected for
-  boost-converter duty-cycle control.
+  SEPIC (and boost) duty-cycle control.
 - **Incremental Conductance** — first variant beyond P&O.
 - **Adaptive-step P&O / variable-step InCond** — improve speed/accuracy
   tradeoff.
@@ -176,7 +183,7 @@ topology, not a bare Pi.
   algorithm itself. It is *not* responsible for hard-real-time signals.
 - A small MCU (candidates under evaluation: **Raspberry Pi Pico / RP2040** and
   **ESP32**) drives the power-electronics board: ADC sense for `(V, I)`,
-  hardware PWM for the boost-converter switch, and SPI-slave to the Pi. The
+  hardware PWM for the SEPIC switch, and SPI-slave to the Pi. The
   MCU isolates the fast-switching / high-current side from the Pi *and*
   doubles as the deployment target for the algorithm itself once it has been
   validated.
@@ -207,6 +214,41 @@ not under `mpp_sdk/`.
 `SimulatedSource` to `SpiMcuSource`, or when their Python implementation is
 ported to MCU firmware. If a change to the algorithm API is required to
 support either, that change belongs in the base class first.
+
+## What not to commit
+
+This repo is (or will be made) public. Keep the following out of the tree,
+the commit messages, and the docs:
+
+- **Credentials of any kind.** API keys, tokens, passwords, SSH keys, Wi-Fi
+  credentials baked into firmware, supplier-portal cookies, license keys.
+- **Personal and institutional metadata.** Lab / workplace network paths,
+  internal hostnames or URLs, supplier-account usernames, GPS coordinates
+  of test sites, panel serial numbers tied to a known location. Commit
+  authors should use a no-reply email (the maintainer already does); other
+  contributors should pick the name they want in history before their
+  first commit.
+- **Embedded metadata in binary files.** When committing photos, scope
+  captures, or oscilloscope screenshots, strip:
+  - EXIF / camera GPS from photos (`exiftool -all= file.jpg` or similar).
+  - Serial numbers, IP addresses, hostnames written into instrument
+      captures by the scope itself.
+- **Datasheets, third-party schematics, or proprietary panel models** that
+  the project has not been licensed to redistribute. Cite by reference.
+- **Raw measurement files with location / serial metadata** that has not
+  been scrubbed. Measured data lives under `data/` with a `data/README.md`
+  documenting what was scrubbed and how.
+
+Mechanisms:
+
+- `.gitignore` covers the obvious patterns (`.env`, `*.key`, `*.pem`,
+  `secrets.*`, `credentials.*`). Extend it as new tools land.
+- Before each commit, grep the staged diff for obvious markers
+  (`API_KEY`, `password`, `token`, `secret`) unless the line is clearly
+  an example or a docstring.
+- If sensitive information ever lands in history, treat it as a security
+  incident: rotate the credential first, then rewrite history with
+  `git filter-repo` (after coordinating with the team) and force-push.
 
 ## Process expectations for agents
 

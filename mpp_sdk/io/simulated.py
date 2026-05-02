@@ -1,27 +1,30 @@
 """Software ``SignalSource`` backed by a panel + converter + load."""
 
-from ..converters.boost import BoostConverter
+from ..converters.sepic import SEPICConverter
 from ..models.base import PanelModel
 from .base import SignalSource
 
 
 class SimulatedSource(SignalSource):
-    """Panel + boost-converter + resistive-load operating-point solver.
+    """Panel + SEPIC-converter + resistive-load operating-point solver.
 
     Given a requested duty cycle ``D``, this source resolves the panel
     operating point by solving
 
-        I_panel(V) = V / R_eff,    R_eff = (1 - D)^2 * R_load
+        I_panel(V) = V / R_eff
 
-    on ``V ∈ [0, Voc]``. The panel I-V is monotonically decreasing in V and
-    the right-hand side is monotonically increasing, so a simple bisection
-    converges quickly and is robust without needing scipy.
+    on ``V ∈ [0, Voc]``, where ``R_eff`` is the converter's reflected
+    resistance at duty ``D`` (for an ideal SEPIC,
+    ``R_eff = R_load · ((1 - D) / D)²``). The panel I-V is monotonically
+    decreasing in V and the right-hand side is monotonically increasing,
+    so a simple bisection converges quickly and is robust without needing
+    scipy.
     """
 
     def __init__(
         self,
         panel: PanelModel,
-        converter: BoostConverter,
+        converter: SEPICConverter,
         load_resistance: float,
         initial_duty: float = 0.5,
         bisection_iterations: int = 60,

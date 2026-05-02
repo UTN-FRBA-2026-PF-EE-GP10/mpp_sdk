@@ -9,7 +9,7 @@ class SignalSource(ABC):
     All MPPT algorithms in this SDK interact with the world exclusively
     through this interface. Two concrete implementations are expected:
 
-    - ``SimulatedSource`` — wraps a panel model + boost converter + load and
+    - ``SimulatedSource`` — wraps a panel model + DC-DC converter + load and
       computes ``(V, I)`` from the requested duty cycle.
     - A future hardware source — reads ADC channels for V and I and writes
       a PWM duty cycle on a Raspberry Pi 5 (or similar).

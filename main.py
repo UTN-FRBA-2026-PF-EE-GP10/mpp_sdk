@@ -5,22 +5,23 @@ stop). The panel's photocurrent drifts slowly to imitate changing irradiance
 so the MPP moves and you can see the algorithm chasing it. For more demos,
 see ``examples/``.
 """
-import numpy as np
+
 import matplotlib.pyplot as plt
+import numpy as np
 from matplotlib.animation import FuncAnimation
 
 from mpp_sdk import (
-    BoostConverter,
     IdealSingleDiode,
     LivePanelView,
     PerturbAndObserve,
+    SEPICConverter,
     SimulatedSource,
 )
 
 
 def main() -> None:
     panel = IdealSingleDiode()
-    converter = BoostConverter()
+    converter = SEPICConverter()
     source = SimulatedSource(
         panel=panel,
         converter=converter,

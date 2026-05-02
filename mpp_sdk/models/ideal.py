@@ -47,17 +47,14 @@ class IdealSingleDiode(PanelModel):
 
     def current(self, voltage):
         v = np.asarray(voltage, dtype=float)
-        i = self.photocurrent - self.saturation_current * np.expm1(
-            v / self.module_thermal_voltage
-        )
+        i = self.photocurrent - self.saturation_current * np.expm1(v / self.module_thermal_voltage)
         i = np.maximum(i, 0.0)
         return float(i) if v.ndim == 0 else i
 
     @property
     def open_circuit_voltage(self) -> float:
         return float(
-            self.module_thermal_voltage
-            * np.log(self.photocurrent / self.saturation_current + 1.0)
+            self.module_thermal_voltage * np.log(self.photocurrent / self.saturation_current + 1.0)
         )
 
     @property

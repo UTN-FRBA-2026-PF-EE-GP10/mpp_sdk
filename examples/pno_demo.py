@@ -10,22 +10,22 @@ algorithm has something to chase. This is the same demo as ``main.py``;
 ``examples/`` is the home for future variants and algorithm comparisons.
 """
 
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 from matplotlib.animation import FuncAnimation
 
 from mpp_sdk import (
-    BoostConverter,
     IdealSingleDiode,
     LivePanelView,
     PerturbAndObserve,
+    SEPICConverter,
     SimulatedSource,
 )
 
 
 def main() -> None:
     panel = IdealSingleDiode()
-    converter = BoostConverter()
+    converter = SEPICConverter()
     source = SimulatedSource(
         panel=panel,
         converter=converter,

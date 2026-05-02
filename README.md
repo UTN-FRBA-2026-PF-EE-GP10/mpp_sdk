@@ -50,9 +50,46 @@ cross-paper comparisons and sim-to-real validation hard to reproduce
 The full viability assessment, related-work survey, and risk mitigations
 live in [`PLAN.md`](./PLAN.md).
 
-## Quickstart
+## Installation
+
+Once published to PyPI, install with `uv` (recommended) or `pip`:
 
 ```bash
+# Core library — panel models, SEPIC converter, P&O, SimulatedSource
+uv add mpp-sdk
+
+# With high-fidelity pvlib panel models (PvlibPanelModel adapter)
+uv add "mpp-sdk[pvlib]"
+
+# With SPI hardware dependencies (Phase 5 — SpiMcuSource)
+uv add "mpp-sdk[hardware]"
+
+# Everything at once
+uv add "mpp-sdk[all]"
+```
+
+Then import from your project:
+
+```python
+import mpp_sdk
+
+panel = mpp_sdk.IdealSingleDiode()
+conv  = mpp_sdk.SEPICConverter()
+src   = mpp_sdk.SimulatedSource(panel, conv, load_resistance=10.0)
+ctl   = mpp_sdk.PerturbAndObserve(initial_duty=src.duty)
+
+for _ in range(500):
+    v, i = src.read()
+    src.write(ctl.step(v, i))
+```
+
+## Quickstart (development)
+
+Clone the repo and run the live demo directly:
+
+```bash
+git clone https://github.com/<org>/mpp-sdk.git
+cd mpp-sdk
 uv sync
 uv run main.py
 ```

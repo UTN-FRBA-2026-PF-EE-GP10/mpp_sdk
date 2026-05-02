@@ -1,4 +1,4 @@
-"""Fixed-step Perturb & Observe MPPT for a boost converter."""
+"""Fixed-step Perturb & Observe MPPT for a SEPIC (or boost) converter."""
 
 from .base import MPPTAlgorithm
 
@@ -10,10 +10,12 @@ class PerturbAndObserve(MPPTAlgorithm):
     the most recent ``(ΔP, ΔV)`` pair to decide whether to keep going or
     reverse.
 
-    Sign convention is chosen for a **boost** converter, where increasing the
-    duty cycle decreases panel terminal voltage (``R_eff = (1-D)^2 R_load``).
-    The classical P&O decision (in V) is therefore mapped to its inverse in
-    D:
+    Sign convention is chosen for the SDK's default **SEPIC** converter,
+    where increasing the duty cycle decreases the panel terminal voltage
+    (``R_eff = R_load · ((1-D)/D)²``, monotonically decreasing in D over
+    ``(0, 1)``). The same sign held for the earlier boost variant, so this
+    block does not change when the topology does. The classical P&O
+    decision (in V) is therefore mapped to its inverse in D:
 
         - ΔP·ΔV > 0  → "we improved while V was moving in some direction" →
                        keep increasing V → **decrease** D.
@@ -31,9 +33,7 @@ class PerturbAndObserve(MPPTAlgorithm):
         max_duty: float = 0.95,
     ) -> None:
         if not 0.0 <= min_duty < max_duty <= 1.0:
-            raise ValueError(
-                f"need 0 <= min_duty < max_duty <= 1; got {min_duty=}, {max_duty=}"
-            )
+            raise ValueError(f"need 0 <= min_duty < max_duty <= 1; got {min_duty=}, {max_duty=}")
         self._duty = max(min_duty, min(max_duty, initial_duty))
         self._step_size = step_size
         self._min = min_duty

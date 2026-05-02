@@ -10,7 +10,7 @@ also expose them, so either of these is fine:
 
 from .algorithms.base import MPPTAlgorithm
 from .algorithms.perturb_observe import PerturbAndObserve
-from .converters.boost import BoostConverter
+from .converters.sepic import SEPICConverter
 from .io.base import SignalSource
 from .io.simulated import SimulatedSource
 from .models.base import PanelModel
@@ -22,7 +22,7 @@ __version__ = "0.1.0"
 __all__ = [
     "MPPTAlgorithm",
     "PerturbAndObserve",
-    "BoostConverter",
+    "SEPICConverter",
     "SignalSource",
     "SimulatedSource",
     "PanelModel",
