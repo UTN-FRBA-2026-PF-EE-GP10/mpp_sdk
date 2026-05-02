@@ -7,12 +7,20 @@ of the repo at each version**, not a transcript of every commit — see
 
 ## [Unreleased]
 
-- `plot_iv_with_operating_point` now raises `ValueError` when exactly one of `ax_iv`/`ax_pv` is provided; callers must supply both or neither.
-- `LivePanelView` recomputes axis limits every frame from the sampled curve so mutating-state models (irradiance, temperature ramps) stay in view.
-- `LivePanelView._refresh_curves` derives the MPP from the already-sampled `(v, i)` grid, avoiding a separate high-resolution `panel.mpp()` call each animation tick.
-- `PerturbAndObserve` now validates `step_size` at construction and raises `ValueError` for non-positive or non-finite values.
-- `spidev` in the `hardware`/`all` extras is now gated with `platform_system == "Linux"` so `pip/uv add "mpp-sdk[all]"` works on macOS and Windows.
-- README layout block and text updated: "boost converter" / `BoostConverter` annotation replaced with "SEPIC converter" / `SEPICConverter` to match the shipped `SEPICConverter` class.
+- `plot_iv_with_operating_point` now raises `ValueError` when exactly one of
+  `ax_iv`/`ax_pv` is provided; callers must supply both or neither.
+- `LivePanelView` recomputes axis limits every frame from the sampled curve so
+  mutating-state models (irradiance, temperature ramps) stay in view.
+- `LivePanelView._refresh_curves` derives the MPP from the already-sampled
+  `(v, i)` grid, avoiding a separate high-resolution `panel.mpp()` call each
+  animation tick.
+- `PerturbAndObserve` now validates `step_size` at construction and raises
+  `ValueError` for non-positive or non-finite values.
+- `spidev` in the `hardware`/`all` extras is now gated with
+  `platform_system == "Linux"` so `pip/uv add "mpp-sdk[all]"` works on macOS
+  and Windows.
+- README layout block and text updated: "boost converter" / `BoostConverter`
+  replaced with "SEPIC converter" / `SEPICConverter` to match the shipped class.
 
 ## [0.1.0] - 2026-04-30
 
