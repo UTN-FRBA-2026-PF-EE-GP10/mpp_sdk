@@ -13,9 +13,9 @@ dependencies = [
 # Higher-fidelity panel models via the PvlibPanelModel adapter.
 pvlib = ["pvlib>=0.10"]
 # Hardware-side dependencies for the eventual SpiMcuSource (Phase 5a).
-hardware = ["spidev"]
+hardware = ["spidev; platform_system == 'Linux'"]
 # Convenience: install everything optional in one go.
-all = ["pvlib>=0.10", "spidev"]
+all = ["pvlib>=0.10", "spidev; platform_system == 'Linux'"]
 
 [dependency-groups]
 # Development-only deps installed via `uv sync --group dev`.

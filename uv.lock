@@ -297,10 +297,10 @@ dependencies = [
 [package.optional-dependencies]
 all = [
     { name = "pvlib" },
-    { name = "spidev" },
+    { name = "spidev", marker = "sys_platform == 'linux'" },
 ]
 hardware = [
-    { name = "spidev" },
+    { name = "spidev", marker = "sys_platform == 'linux'" },
 ]
 pvlib = [
     { name = "pvlib" },
@@ -319,8 +319,8 @@ requires-dist = [
     { name = "numpy" },
     { name = "pvlib", marker = "extra == 'all'", specifier = ">=0.10" },
     { name = "pvlib", marker = "extra == 'pvlib'", specifier = ">=0.10" },
-    { name = "spidev", marker = "extra == 'all'" },
-    { name = "spidev", marker = "extra == 'hardware'" },
+    { name = "spidev", marker = "sys_platform == 'linux' and extra == 'all'" },
+    { name = "spidev", marker = "sys_platform == 'linux' and extra == 'hardware'" },
 ]
 provides-extras = ["pvlib", "hardware", "all"]
 

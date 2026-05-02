@@ -3,7 +3,7 @@
 A Python SDK for designing, comparing, and deploying **Maximum Power Point
 Tracking** (MPPT) algorithms for photovoltaic systems. Built around a clean
 hardware-abstraction seam so the same controller code drives a simulation
-today and a real boost converter on a Raspberry Pi 5 tomorrow.
+today and a real SEPIC converter on a Raspberry Pi 5 tomorrow.
 
 See [`AGENTS.md`](./AGENTS.md) for architectural pillars and contribution
 guidelines, [`PLAN.md`](./PLAN.md) for the full roadmap and viability
@@ -103,13 +103,13 @@ operating-point trajectory.
 ```text
 mpp_sdk/
 ├── models/         # Solar panel I-V models  (PanelModel ABC + IdealSingleDiode)
-├── converters/     # Power-stage models      (BoostConverter)
+├── converters/     # Power-stage models      (SEPICConverter)
 ├── algorithms/     # MPPT controllers        (MPPTAlgorithm ABC + PerturbAndObserve)
 ├── io/             # Hardware-abstraction    (SignalSource ABC + SimulatedSource)
 └── visualization.py
 ```
 
-The control variable is always the boost-converter **duty cycle**; the
+The control variable is always the SEPIC **duty cycle**; the
 measured quantities are always panel terminal **voltage** and **current**.
 Richer panel models may depend on temperature, irradiance, or measured
 curves, but those inputs live on the *model* — the controller never sees

@@ -27,8 +27,10 @@ def plot_iv_with_operating_point(
     """
     import matplotlib.pyplot as plt
 
-    if ax_iv is None or ax_pv is None:
+    if ax_iv is None and ax_pv is None:
         _fig, (ax_iv, ax_pv) = plt.subplots(1, 2, figsize=(10, 4))
+    elif ax_iv is None or ax_pv is None:
+        raise ValueError("provide either both axes (ax_iv and ax_pv) or neither")
 
     v, i = panel.iv_curve()
     p = v * i
@@ -148,6 +150,8 @@ class LivePanelView:
             [], [], "s", color="tab:red", markersize=9, label="operating"
         )
 
+        self._ylim_pad = ylim_pad
+
         self._readout_iv = self.ax_iv.text(
             0.02,
             0.97,
@@ -179,19 +183,23 @@ class LivePanelView:
             ax.grid(True, alpha=0.3)
             ax.legend(loc=legend_loc)
 
-        self._set_static_limits(ylim_pad)
         self._refresh_curves()
 
-    def _set_static_limits(self, pad: float) -> None:
+    def _set_static_limits(self) -> None:
+        """Set axis limits from current panel state; call whenever the model may have changed."""
         v, i = self.panel.iv_curve(self._n)
         p = v * i
+        self._apply_limits(v, i, p)
+
+    def _apply_limits(self, v, i, p) -> None:
+        """Update axis limits from an already-sampled (v, i, p) triple."""
         v_max = float(v[-1])
         i_max = float(np.max(i))
         p_max = float(np.max(p))
         self.ax_iv.set_xlim(0.0, v_max * 1.05)
-        self.ax_iv.set_ylim(0.0, max(i_max * pad, 1e-6))
+        self.ax_iv.set_ylim(0.0, max(i_max * self._ylim_pad, 1e-6))
         self.ax_pv.set_xlim(0.0, v_max * 1.05)
-        self.ax_pv.set_ylim(0.0, max(p_max * pad, 1e-6))
+        self.ax_pv.set_ylim(0.0, max(p_max * self._ylim_pad, 1e-6))
 
     def _refresh_curves(self) -> None:
         v, i = self.panel.iv_curve(self._n)
@@ -199,7 +207,14 @@ class LivePanelView:
         self._iv_line.set_data(v, i)
         self._pv_line.set_data(v, p)
 
-        v_mpp, i_mpp, p_mpp = self.panel.mpp()
+        # Recompute axis limits in case the model state has changed.
+        self._apply_limits(v, i, p)
+
+        # Derive MPP from the already-sampled curve to avoid a second high-resolution solve.
+        # Falls back to index 0 (short-circuit point) when all power values are non-positive,
+        # which can only occur if photocurrent is zero or the panel is in reverse-bias.
+        idx = int(np.argmax(p))
+        v_mpp, i_mpp, p_mpp = float(v[idx]), float(i[idx]), float(p[idx])
         self._mpp_iv.set_data([v_mpp], [i_mpp])
         self._mpp_pv.set_data([v_mpp], [p_mpp])
         self._mpp_text = (v_mpp, i_mpp, p_mpp)

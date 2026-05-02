@@ -1,5 +1,7 @@
 """Fixed-step Perturb & Observe MPPT for a SEPIC (or boost) converter."""
 
+import math
+
 from .base import MPPTAlgorithm
 
 
@@ -34,6 +36,8 @@ class PerturbAndObserve(MPPTAlgorithm):
     ) -> None:
         if not 0.0 <= min_duty < max_duty <= 1.0:
             raise ValueError(f"need 0 <= min_duty < max_duty <= 1; got {min_duty=}, {max_duty=}")
+        if not (math.isfinite(step_size) and step_size > 0):
+            raise ValueError(f"step_size must be a finite positive number; got {step_size=}")
         self._duty = max(min_duty, min(max_duty, initial_duty))
         self._step_size = step_size
         self._min = min_duty
