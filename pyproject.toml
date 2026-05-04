@@ -1,7 +1,60 @@
 [project]
 name = "mpp-sdk"
 version = "0.1.0"
-description = "Add your description here"
+description = "SDK for solar-panel MPPT algorithm simulation, comparison, and on-hardware execution."
 readme = "README.md"
 requires-python = ">=3.14"
-dependencies = []
+dependencies = [
+    "numpy",
+    "matplotlib",
+]
+
+[project.optional-dependencies]
+# Higher-fidelity panel models via the PvlibPanelModel adapter.
+pvlib = ["pvlib>=0.10"]
+# Hardware-side dependencies for the eventual SpiMcuSource (Phase 5a).
+hardware = ["spidev; platform_system == 'Linux'"]
+# Convenience: install everything optional in one go.
+all = ["pvlib>=0.10", "spidev; platform_system == 'Linux'"]
+
+[dependency-groups]
+# Development-only deps installed via `uv sync --group dev`.
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+    "pre-commit>=4",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"  # Bump when ruff supports py314 as a target.
+extend-exclude = [".venv", "build", "dist"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+    "SIM", # flake8-simplify
+]
+ignore = []
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E501"]  # tests can have long descriptive lines
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["mpp_sdk"]
