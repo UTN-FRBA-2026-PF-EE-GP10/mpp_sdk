@@ -19,3 +19,9 @@ wheels/
 *.kicad_prl
 *.jrl
 *.lck
+# Test / lint caches
+.pytest_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+.coverage.*

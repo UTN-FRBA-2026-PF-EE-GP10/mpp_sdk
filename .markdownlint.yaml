@@ -1,0 +1,16 @@
+# markdownlint-cli2 configuration
+# https://github.com/DavidAnson/markdownlint/blob/main/doc/Rules.md
+
+default: true
+
+MD013:
+  # Long lines are common in tables and code blocks — only enforce in prose.
+  line_length: 120
+  code_blocks: false
+  tables: false
+
+MD033: false   # inline HTML (used in PLAN.md badges / details blocks)
+
+MD041: false   # first line need not be an H1 (CHANGELOG, AGENTS use H2 first)
+
+MD060: false   # table column alignment style — cosmetic only
