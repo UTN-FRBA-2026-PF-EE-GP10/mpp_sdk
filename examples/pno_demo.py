@@ -1,9 +1,13 @@
-"""Quickstart: Perturb & Observe MPPT against an ideal single-diode panel.
+"""Perturb & Observe MPPT against the ideal single-diode panel — live demo.
+
+Run with::
+
+    uv run examples/pno_demo.py
 
 The simulation runs indefinitely (close the plot window or hit Ctrl-C to
-stop). The panel's photocurrent drifts slowly to imitate changing irradiance
-so the MPP moves and you can see the algorithm chasing it. For more demos,
-see ``examples/``.
+stop). Photocurrent drifts on a slow sinusoid so the MPP moves and the
+algorithm has something to chase. This is the same demo as ``main.py``;
+``examples/`` is the home for future variants and algorithm comparisons.
 """
 
 import matplotlib.pyplot as plt
@@ -34,17 +38,12 @@ def main() -> None:
     base_photocurrent = panel.photocurrent
 
     def step(frame: int):
-        # Slow sinusoidal drift of the photocurrent (≈ irradiance proxy in
-        # the ideal model). The MPP moves; P&O has to keep up. Replace this
-        # block with a constant when richer temperature/irradiance models land.
         panel.photocurrent = base_photocurrent * (1.0 + 0.15 * np.sin(0.02 * frame))
-
         v, i = source.read()
         d = controller.step(v, i)
         source.write(d)
         view.update((v, i))
 
-    # Hold the animation in a name so it isn't garbage-collected mid-run.
     _ani = FuncAnimation(view.fig, step, interval=20, cache_frame_data=False)
     plt.show()
 
