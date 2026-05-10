@@ -42,8 +42,8 @@ El diagrama (página siguiente) se lee de izquierda a derecha en
 sentido temporal y por *streams* horizontales:
 
 - **Stream A — SDK e integración.** Código en Python, paper, CI.
-- **Stream B — Hardware.** Esquemático, PCB, ensayos en banco.
-- **Stream C — Firmware.** Raspberry Pi Pico 2 (RP2350), HIL y
+- **Stream B — Banco de pruebas.** Esquemático, PCB, ensayos en banco.
+- **Stream C — Hardware/Firmware.** Raspberry Pi Pico 2 (RP2350), HIL y
   embebido del algoritmo final.
 
 Las flechas continuas son dependencias dentro de un mismo *stream*.
@@ -91,8 +91,8 @@ duros; el bloque en amarillo es la posición actual del proyecto.
 
 % --- Etiquetas de fila ---
 \node[lane] at (0.35, 2) {A — SDK e \\ integración};
-\node[lane] at (0.35, 1) {B — Hardware};
-\node[lane] at (0.35, 0) {C — Firmware};
+\node[lane] at (0.35, 1) {B — Banco de \\ pruebas};
+\node[lane] at (0.35, 0) {C — Hardware/\\ Firmware};
 
 % --- Fila A: SDK ---
 \node[here]  (a1) at (1, 2) {Lossy + Array \\ in-tree; pvlib \\ (esqueleto)};
@@ -170,7 +170,7 @@ duros; el bloque en amarillo es la posición actual del proyecto.
 
 ## 3. Entregables por bloque
 
-| Bloque | Entregable A (SDK)                            | Entregable B (Hardware)                                | Entregable C (Firmware, RP2350)                      |
+| Bloque | Entregable A (SDK)                            | Entregable B (Banco de pruebas)                        | Entregable C (Hardware/Firmware, RP2350)             |
 |-------:|-----------------------------------------------|---------------------------------------------------------|------------------------------------------------------|
 | 1      | `lossy.py`, `array.py`, esqueleto del adaptador `pvlib` | Esquemático v1, BOM, FET y controlador de compuerta | Esqueleto de ADC, PWM y SPI esclavo                  |
 | 2      | InCond, P\&O adaptativo, banco de comparación (esqueleto) | PCB v1, **fab. por sem 6**, pedido de componentes  | Protocolo SPI cerrado, HIL en lazo local             |
