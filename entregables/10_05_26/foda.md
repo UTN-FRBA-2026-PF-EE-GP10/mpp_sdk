@@ -47,8 +47,12 @@ driver*) y medición antes de pasar al diseño del circuito impreso.
   en simulación y en hardware sin modificaciones, lo que reduce el
   riesgo de divergencia entre simulación y realidad.
 - **Base de simulación operativa.** El algoritmo Perturbar y
-  Observar (P\&O) ya está implementado y funcionando contra el
-  modelo `IdealSingleDiode` y el modelo del convertidor SEPIC. La
+  Observar (P\&O) ya está implementado y funcionando como línea
+  base (*baseline*) contra el modelo `IdealSingleDiode` y el
+  convertidor SEPIC. Al contar con esta estructura probada, el
+  terreno está preparado para la integración y evaluación ágil de
+  los algoritmos avanzados que son el objetivo del trabajo (Lógica
+  Difusa, Enjambre de Partículas - PSO, y un algoritmo propio). La
   integración con `pvlib` se hace mediante un único adaptador, sin
   reimplementar la física del panel.
 - **Banco de comparación reproducible.** El proyecto incluye una
@@ -165,6 +169,14 @@ driver*) y medición antes de pasar al diseño del circuito impreso.
   el RP2350 por diseño. Si el RP2350 quedara subdimensionado para
   algún algoritmo en particular, se reescala el algoritmo, no el
   chip.
+- **Pérdida de novedad (*Scooping*) por publicaciones concurrentes.**
+  Existe el riesgo de que otro grupo de investigación publique un
+  estudio comparativo similar o un SDK de MPPT abierto en Python
+  validado en MCU antes de la publicación del nuestro. La
+  mitigación pasa por mantener un ritmo constante de avance y
+  apoyarse en la rigurosidad metodológica y la reproducibilidad
+  (simulación $\rightarrow$ HIL $\rightarrow$ MCU) como el gran valor
+  diferenciador frente a trabajos puramente teóricos.
 
 ## 3. Resumen estratégico
 
