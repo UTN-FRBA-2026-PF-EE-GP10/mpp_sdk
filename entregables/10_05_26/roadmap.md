@@ -59,10 +59,10 @@ duros; el bloque en amarillo es la posición actual del proyecto.
 \begin{center}
 \resizebox{\linewidth}{!}{%
 \begin{tikzpicture}[
-  x=3.2cm, y=2.2cm,
+  x=3.8cm, y=2.5cm,
   block/.style={
     rectangle, draw=black!60, rounded corners=2pt, thick,
-    minimum width=2.3cm, minimum height=1.5cm,
+    minimum width=2.8cm, minimum height=1.6cm,
     align=center, font=\footnotesize,
     inner sep=3pt, fill=blue!5
   },
@@ -90,9 +90,9 @@ duros; el bloque en amarillo es la posición actual del proyecto.
 }
 
 % --- Etiquetas de fila ---
-\node[lane] at (0.35, 2) {A — SDK e \\ integración};
-\node[lane] at (0.35, 1) {B — Banco de \\ pruebas};
-\node[lane] at (0.35, 0) {C — Hardware/\\ Firmware};
+\node[lane] at (0.45, 2) {A — SDK e \\ integración};
+\node[lane] at (0.45, 1) {B — Banco de \\ pruebas};
+\node[lane] at (0.45, 0) {C — Hardware/\\ Firmware};
 
 % --- Fila A: SDK ---
 \node[here]  (a1) at (1, 2) {Lossy + Array \\ in-tree; pvlib \\ (esqueleto)};
@@ -132,11 +132,11 @@ duros; el bloque en amarillo es la posición actual del proyecto.
 % --- Acoples entre streams (ruteados por los pasillos entre columnas) ---
 % SPI (verde teal): A2 -> C2 por el pasillo en x = 2.5
 \draw[crossSPI, rounded corners=6pt]
-  (a2.east) -- (2.5, 2) -- (2.5, 0) -- (c2.east);
+  (a2.south) -- (2, 1.45) -- (2.5, 1.45) -- (2.5, 0.55) -- (2, 0.55) -- (c2.north);
 
 % Embebido (magenta): A5 -> C5 por el pasillo en x = 5.5
 \draw[crossPort, rounded corners=6pt]
-  (a5.east) -- (5.5, 2) -- (5.5, 0) -- (c5.east);
+  (a5.south) -- (5, 1.45) -- (5.5, 1.45) -- (5.5, 0.55) -- (5, 0.55) -- (c5.north);
 
 % --- Tira inferior de hitos ---
 \draw[red!60, thick] (0.5, -1.1) -- (7.5, -1.1);

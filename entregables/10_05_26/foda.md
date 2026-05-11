@@ -74,10 +74,12 @@ driver*) y medición antes de pasar al diseño del circuito impreso.
   ($\le 16~\text{KB}$ de *flash*, $\le 4~\text{KB}$ de RAM,
   $\le 1~\text{ms}$ por paso de control).
 - **Acceso a los laboratorios de la facultad.** Disponibilidad de
-  osciloscopio, fuentes de alimentación, multímetros, soldador y
-  banco general sin costo adicional. Es crítico para la puesta en
-  marcha, la calibración de la cadena de medición y la
-  caracterización del SEPIC contra el modelo.
+  paneles solares, luces y un entorno especialmente desarrollado para
+  las pruebas fotovoltaicas. Si bien el acceso a instrumental de
+  banco (osciloscopios, multímetros, soldador) es una parte importante
+  para la puesta en marcha y la calibración de la cadena de medición,
+  el entorno dedicado a paneles solares es el diferencial clave para
+  caracterizar el sistema físico contra el modelo.
 - **Equipo con roles claros.** Tres integrantes, una persona por
   área (SDK, hardware, firmware), con reuniones semanales de
   coordinación.
