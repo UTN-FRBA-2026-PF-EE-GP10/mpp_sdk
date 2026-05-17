@@ -1,0 +1,180 @@
+name: Build entregables PDFs
+
+on:
+  push:
+    paths:
+      - 'entregables/**'
+      - '.github/workflows/entregables.yml'
+  pull_request:
+    paths:
+      - 'entregables/**'
+      - '.github/workflows/entregables.yml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  actions: write          # required to delete old artifacts
+  pull-requests: write    # required to post / update the PR comment
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Install xelatex and DejaVu fonts
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            texlive-xetex \
+            texlive-latex-recommended \
+            texlive-latex-extra \
+            texlive-fonts-recommended \
+            lmodern \
+            fonts-dejavu
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      # Pull the most recent successful artifact from this same workflow on
+      # the default branch, so the next upload contains every PDF and not
+      # just the ones we rebuilt this run. Best effort: skip silently if
+      # there is no prior artifact.
+      - name: Restore previous PDFs (best effort)
+        uses: dawidd6/action-download-artifact@v6
+        continue-on-error: true
+        with:
+          name: entregables-pdfs
+          path: entregables
+          workflow: entregables.yml
+          branch: ${{ github.event.repository.default_branch }}
+          if_no_artifact_found: ignore
+
+      - name: Determine what to build
+        id: changed
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          base=""
+          head=""
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base="${{ github.event.pull_request.base.sha }}"
+            head="${{ github.event.pull_request.head.sha }}"
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            base="${{ github.event.before }}"
+            head="${{ github.event.after }}"
+          fi
+
+          rebuild_all="false"
+          mds=""
+
+          # First push of a branch / manual dispatch / unknown base: build all.
+          if [ -z "$base" ] \
+             || [ "$base" = "0000000000000000000000000000000000000000" ] \
+             || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            rebuild_all="true"
+          else
+            # Logo, build script or workflow itself changed -> rebuild everything.
+            if git diff --name-only "$base" "$head" -- \
+                 'entregables/**/*.svg' \
+                 'entregables/gen_pdfs.py' \
+                 '.github/workflows/entregables.yml' \
+               | grep -q .; then
+              rebuild_all="true"
+            else
+              mds=$(git diff --name-only "$base" "$head" -- 'entregables/**/*.md' \
+                    | tr '\n' ' ')
+            fi
+          fi
+
+          echo "rebuild_all=$rebuild_all" >> "$GITHUB_OUTPUT"
+          echo "mds=$mds"                 >> "$GITHUB_OUTPUT"
+          echo "rebuild_all=$rebuild_all"
+          echo "mds=$mds"
+
+      - name: Build PDFs
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ steps.changed.outputs.rebuild_all }}" = "true" ]; then
+            uv run entregables/gen_pdfs.py --force
+          elif [ -n "${{ steps.changed.outputs.mds }}" ]; then
+            # shellcheck disable=SC2086
+            uv run entregables/gen_pdfs.py ${{ steps.changed.outputs.mds }}
+          else
+            echo "No .md files changed in entregables/. Nothing to build."
+          fi
+
+      - name: Upload PDFs as workflow artifact
+        id: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: entregables-pdfs
+          path: entregables/**/*.pdf
+          if-no-files-found: warn
+          retention-days: 90
+
+      # On pull_request runs, post (or update) a sticky comment on the PR
+      # with the artifact link. The comment is identified by a hidden
+      # marker so subsequent runs edit it in place instead of stacking.
+      - name: Comment artifact link on PR
+        if: github.event_name == 'pull_request' && steps.upload.outputs.artifact-id != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          ARTIFACT_ID: ${{ steps.upload.outputs.artifact-id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          MARKER="<!-- entregables-pdfs-artifact -->"
+          URL="https://github.com/${REPO}/actions/runs/${RUN_ID}/artifacts/${ARTIFACT_ID}"
+          BODY="${MARKER}
+          ### Entregables PDFs
+
+          Built from commit \`${GITHUB_SHA::7}\` on workflow run [#${RUN_ID}](https://github.com/${REPO}/actions/runs/${RUN_ID}).
+
+          **[Download the PDFs (artifact)](${URL})** — requires being signed into GitHub. Available for 90 days."
+
+          existing=$(gh api --paginate "repos/${REPO}/issues/${PR_NUMBER}/comments" \
+            --jq "[.[] | select(.body | contains(\"${MARKER}\"))] | .[0].id // empty")
+
+          if [ -n "$existing" ]; then
+            echo "Updating existing comment $existing"
+            gh api -X PATCH "repos/${REPO}/issues/comments/${existing}" \
+              -f body="$BODY" > /dev/null
+          else
+            echo "Posting new comment on PR #${PR_NUMBER}"
+            gh pr comment "$PR_NUMBER" --repo "$REPO" --body "$BODY"
+          fi
+
+      # Keep only the 3 newest "entregables-pdfs" artifacts repo-wide.
+      # Uses the preinstalled gh CLI; no third-party action.
+      - name: Rotate old artifacts (keep 3 most recent)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          KEEP: "3"
+          NAME: "entregables-pdfs"
+        shell: bash
+        run: |
+          set -euo pipefail
+          ids=$(gh api --paginate \
+            "repos/${{ github.repository }}/actions/artifacts" \
+            --jq ".artifacts
+                  | map(select(.name == \"$NAME\" and .expired == false))
+                  | sort_by(.created_at) | reverse
+                  | .[$KEEP:] | .[].id")
+          if [ -z "$ids" ]; then
+            echo "Nothing to delete (<= $KEEP artifacts named '$NAME')."
+            exit 0
+          fi
+          for id in $ids; do
+            echo "Deleting artifact $id"
+            gh api -X DELETE \
+              "repos/${{ github.repository }}/actions/artifacts/$id"
+          done

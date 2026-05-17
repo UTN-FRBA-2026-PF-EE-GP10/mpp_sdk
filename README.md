@@ -233,6 +233,29 @@ usage, the viability / related-work analysis, and the requirement that
 **each part of the SDK must work and be verified in isolation** before it
 is integrated.
 
+## On the use of AI
+
+This project uses large language models (Claude, ChatGPT, Copilot) as
+part of its day-to-day toolchain — and treats that usage as a deliberate
+methodological choice rather than something to apologise for.
+
+The thesis is being developed **without external funding**, by a
+three-person team with limited weekly hours, in a research landscape
+where comparable groups routinely operate with either dedicated funding
+or AI-assisted workflows (or both). Refusing to use AI would not buy us
+purity; it would simply widen the resource gap between this work and
+the well-resourced groups it has to be benchmarked against. We use AI
+for the same reason we use `pvlib` instead of re-implementing
+single-diode physics: because the leverage is real and the alternative
+is to do less science.
+
+That choice comes with explicit guardrails — disclosure, human
+verification of every change, citation of the underlying references,
+and human authorship of all numerical results, experimental claims, and
+conclusions. The full policy lives in [`PLAN.md`](./PLAN.md#use-of-large-language-models),
+together with a per-layer exposure table that makes it easy to audit
+where AI helped and where it didn't.
+
 ## References
 
 The bibliography below is the working set the project cites; it will grow
