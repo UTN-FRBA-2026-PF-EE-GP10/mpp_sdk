@@ -5078,7 +5078,7 @@
 			)
 		)
 		(property "Value" "1nF 1000V"
-			(at 157.988 59.69 0)
+			(at 152.654 60.452 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -5727,7 +5727,7 @@
 			)
 		)
 		(property "Value" "1000uF 100V Electrolytic D18"
-			(at 176.276 58.166 0)
+			(at 169.164 59.436 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -6127,7 +6127,7 @@
 			)
 		)
 		(property "Value" "1000uF 100V Electrolytic D18"
-			(at 120.396 58.166 0)
+			(at 105.918 55.372 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
