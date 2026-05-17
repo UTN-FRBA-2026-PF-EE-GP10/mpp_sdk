@@ -9,6 +9,16 @@ wheels/
 # Virtual environments
 .venv
 
+# tmp/cache from KiCAD
+*-bak
+*.bck
+*.kicad_pcb-bak
+*.kicad_sch-bak
+*_autosave-*
+*.tmp
+*.kicad_prl
+*.jrl
+*.lck
 # Test / lint caches
 .pytest_cache/
 .ruff_cache/
