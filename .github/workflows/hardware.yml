@@ -9,6 +9,12 @@ on:
 permissions:
   pull-requests: write
 
+# Not strictly needed since this workflow only posts a sticky comment,
+# but kept so rapid pushes don't queue up redundant runs per PR.
+concurrency:
+  group: hardware-preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   comment:
     runs-on: ubuntu-latest
