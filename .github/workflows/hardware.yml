@@ -24,4 +24,3 @@ jobs:
 
             - **Project** (all files): https://kicanvas.org/?github=https://github.com/${{ github.repository }}/tree/${{ github.event.pull_request.head.sha }}/hardware
             - **PCB**: https://kicanvas.org/?github=https://github.com/${{ github.repository }}/blob/${{ github.event.pull_request.head.sha }}/hardware/Proyecto0.1V.kicad_pcb
-            - **Schematic (top)**: https://kicanvas.org/?github=https://github.com/${{ github.repository }}/blob/${{ github.event.pull_request.head.sha }}/hardware/Proyecto0.1V.kicad_sch
