@@ -1,0 +1,27 @@
+name: hardware-preview
+
+on:
+  pull_request:
+    paths:
+      - 'hardware/**'
+      - '.github/workflows/hardware.yml'
+
+permissions:
+  pull-requests: write
+
+jobs:
+  comment:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post KiCanvas preview link
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: hardware-preview
+          message: |
+            ### 📐 Hardware preview
+
+            Open this PR's hardware files interactively in [KiCanvas](https://kicanvas.org):
+
+            - **Project** (all files): https://kicanvas.org/?github=https://github.com/${{ github.repository }}/tree/${{ github.event.pull_request.head.sha }}/hardware
+            - **PCB**: https://kicanvas.org/?github=https://github.com/${{ github.repository }}/blob/${{ github.event.pull_request.head.sha }}/hardware/Proyecto0.1V.kicad_pcb
+            - **Schematic (top)**: https://kicanvas.org/?github=https://github.com/${{ github.repository }}/blob/${{ github.event.pull_request.head.sha }}/hardware/Proyecto0.1V.kicad_sch
