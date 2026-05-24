@@ -1,4 +1,10 @@
+<div align="center">
+
 # mpp-sdk
+
+[![Hardware preview](https://img.shields.io/badge/hardware-open%20in%20KiCanvas-2b6cb0?logo=kicad&logoColor=white)](https://kicanvas.org/?github=https://github.com/UTN-FRBA-2026-PF-EE-GP10/mpp_sdk/tree/main/hardware)
+
+</div>
 
 A Python SDK for designing, comparing, and deploying **Maximum Power Point
 Tracking** (MPPT) algorithms for photovoltaic systems. Built around a clean
