@@ -80,3 +80,6 @@ Se busca que su eficiencia de rastreo sea competitiva frente a P&O estándar,
 validándolo primero en simulación y luego sobre el hardware real.
 
 # Referencias
+
+::: {#refs}
+:::
