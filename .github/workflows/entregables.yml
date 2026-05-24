@@ -23,7 +23,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          fetch-depth: 0
 
       - name: Install xelatex and DejaVu fonts
         uses: awalsh128/cache-apt-pkgs-action@latest
