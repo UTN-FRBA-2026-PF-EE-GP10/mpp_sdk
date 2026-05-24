@@ -31,8 +31,12 @@ header-includes:
       \let\savedtitle\@title
       \def\@title{\savedtitle\\[4pt]{\normalsize\itshape Tesis Final de Grado --- Ingeniería Electrónica}}%
       \def\@author{%
-        \IEEEauthorblockN{Borello,~Federico \and Falabella,~Juan \and Pirotta,~Diego~Nahuel}\\[4pt]%
-        \IEEEauthorblockA{Universidad Tecnológica Nacional --- Facultad Regional Buenos Aires}%
+        \parbox{\textwidth}{\centering
+          Federico Borello\IEEEauthorrefmark{1},\;
+          Juan Falabella\IEEEauthorrefmark{1},\;
+          Diego Nahuel Pirotta\IEEEauthorrefmark{1}\\[2pt]
+          {\small\IEEEauthorrefmark{1}Universidad Tecnológica Nacional --- Facultad Regional Buenos Aires}%
+        }%
       }%
     }
     \makeatother
