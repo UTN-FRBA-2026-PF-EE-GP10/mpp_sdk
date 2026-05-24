@@ -26,18 +26,17 @@ jobs:
           fetch-depth: 0
 
       - name: Install xelatex and DejaVu fonts
-        uses: awalsh128/cache-apt-pkgs-action@latest
-        with:
-          packages: >-
-            texlive-xetex
-            texlive-latex-recommended
-            texlive-latex-extra
-            texlive-fonts-recommended
-            texlive-publishers
-            texlive-lang-spanish
-            lmodern
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            texlive-xetex \
+            texlive-latex-recommended \
+            texlive-latex-extra \
+            texlive-fonts-recommended \
+            texlive-publishers \
+            texlive-lang-spanish \
+            lmodern \
             fonts-dejavu
-          version: 1.0
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
