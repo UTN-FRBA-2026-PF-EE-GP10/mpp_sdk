@@ -86,7 +86,7 @@ def render(md: Path, pandoc: str) -> bool:
     pdf = md.with_suffix(".pdf")
     print(f"  md   {md.relative_to(ROOT)}  ->  {pdf.name}")
     proc = subprocess.run(
-        [pandoc, md.name, "-o", pdf.name, "--pdf-engine=xelatex"],
+        [pandoc, md.name, "-o", pdf.name, "--pdf-engine=xelatex", "--citeproc"],
         cwd=md.parent,
         capture_output=True,
         text=True,
