@@ -33,6 +33,8 @@ jobs:
             texlive-latex-recommended \
             texlive-latex-extra \
             texlive-fonts-recommended \
+            texlive-publishers \
+            texlive-lang-spanish \
             lmodern \
             fonts-dejavu
 
@@ -86,8 +88,16 @@ jobs:
                | grep -q .; then
               rebuild_all="true"
             else
-              mds=$(git diff --name-only "$base" "$head" -- 'entregables/**/*.md' \
-                    | tr '\n' ' ')
+              # Find folders that contain any changed file, then collect every
+              # .md in those folders so the whole folder is always rebuilt together.
+              changed_dirs=$(git diff --name-only "$base" "$head" -- 'entregables/**' \
+                | xargs -r dirname \
+                | sort -u)
+              if [ -n "$changed_dirs" ]; then
+                mds=$(echo "$changed_dirs" | while read -r dir; do
+                  find "$dir" -maxdepth 1 -name '*.md'
+                done | sort -u | tr '\n' ' ')
+              fi
             fi
           fi
 
@@ -106,7 +116,7 @@ jobs:
             # shellcheck disable=SC2086
             uv run entregables/gen_pdfs.py ${{ steps.changed.outputs.mds }}
           else
-            echo "No .md files changed in entregables/. Nothing to build."
+            echo "No folders with .md files changed in entregables/. Nothing to build."
           fi
 
       - name: Upload PDFs as workflow artifact
