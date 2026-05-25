@@ -19,6 +19,8 @@ wheels/
 *.kicad_prl
 *.jrl
 *.lck
+.history/
+
 # Test / lint caches
 .pytest_cache/
 .ruff_cache/

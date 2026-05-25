@@ -59,6 +59,18 @@ from the top with the USB connector facing up):
 
 Both boards can be powered from their own USB cables — no shared power wire needed.
 
+##### RPi ↔ Pico SPI connection (HIL mode)
+
+The Pico runs as **SPI1 slave**. Connect the Raspberry Pi 5 SPI0 master to the Pico SPI1 pins:
+
+| RPi5 (SPI0 master) | RP2040 Pico (SPI1 slave) | GPIO   |
+|--------------------|--------------------------|--------|
+| MOSI (GPIO10)      | SPI1_TX / MOSI-in        | GPIO11 |
+| MISO (GPIO9)       | SPI1_RX / MISO-out       | GPIO12 |
+| SCLK (GPIO11)      | SPI1_SCK                 | GPIO10 |
+| CE0  (GPIO8)       | SPI1_CS                  | GPIO13 |
+| GND                | GND                      | —      |
+
 #### 4. Flash and stream logs
 
 The `.cargo/config.toml` runner is already set to `probe-rs run --chip RP2040`:
