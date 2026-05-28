@@ -96,7 +96,7 @@ B7 & Capítulo HW + BOM + calibración & 7 & 25 & 30 & B5, B6\\
 \rowcolor{colorC!50}
 C1 & Encendido RP2040; ADC/PWM/SPI proxy (esq.) & 1 & 1 & 4 & ---\\
 \rowcolor{colorC!30}
-C2 & Protocolo SPI cerrado; HIL en lazo local & 2 & 5 & 8 & C1, \textit{A2}\\
+C2 & Protocolo SPI cerrado; HIL en lazo local (coordinado con A2) & 2 & 5 & 8 & C1\\
 \rowcolor{colorC!50}
 C3 & Jitter ADC/PWM medido; enlace SPI a Pi vivo & 3 & 9 & 12 & C2, \textit{B3}\\
 \rowcolor{colorC!30}
