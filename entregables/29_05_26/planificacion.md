@@ -320,8 +320,9 @@ C6 & \emph{(stretch)} Algoritmo embebido validado & 4 & --- & --- & --- & --- & 
   La cadena B4→B5→B6→B7 llena exactamente los bloques 4–7 sin margen.
 - **C5/C6 — opcionales.** El algoritmo corre en la Raspberry Pi 4/5; el RP2040 solo
   acciona el transistor (proxy I/O). Portar el algoritmo al MCU queda como stretch.
-- **C7 — TF=7 semanas.** El capítulo de firmware puede escribirse en cualquier momento
-  entre la semana 17 (tras C4) y la 24, sin afectar la entrega final.
+- **C7 — TF=7 semanas.** El capítulo de firmware está planificado en el bloque 7
+  (semanas 25–30); esa holgura indica que su redacción es flexible y no condiciona
+  la fecha final de entrega mientras se mantenga dentro de esa planificación.
 - **Riesgo principal:** B2 (PCB a fabricación, sem. 6) tiene espera externa de 2–3
   semanas. Un atraso arrastra B3→B4→C4 y amenaza el hito duro HIL (semana 16).
   Con B6 ahora crítica, el mismo atraso también impacta el ensayo real.
