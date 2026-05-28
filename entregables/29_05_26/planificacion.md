@@ -70,7 +70,7 @@ A2 & InCond, P\&O adaptativo, harness (esq.) + def.\ SPI & 2 & 5 & 8 & A1\\
 \rowcolor{colorA!50}
 A3 & Adaptador \texttt{pvlib} integrado & 3 & 9 & 12 & A2\\
 \rowcolor{colorA!30}
-A4 & Sim + HIL en harness; figuras preliminares & 4 & 13 & 16 & A3, \textit{C4}\\
+A4 & Sim + HIL en harness; figuras preliminares & 4 & 13 & 16 & A3; coord.\ con \textit{C4} (no CPM)\\
 \rowcolor{colorA!50}
 A5 & Global-MPPT; primeras figuras del paper & 5 & 17 & 20 & A4\\
 \rowcolor{colorA!30}
