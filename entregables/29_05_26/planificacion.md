@@ -338,7 +338,7 @@ Existen **tres rutas de 30 semanas** — todas críticas:
 |------|----------------------|----------|
 | SDK | A1→A2→A3→A4→A5→A6→A7 | 30 sem. |
 | HW completa | B1→B2→B3→B4→B5→B6→B7 | 30 sem. |
-| FW→SDK | C1→C2→C3→C4→[A5]→A6→A7 | 30 sem. |
+| FW→SDK | C1→C2→C3→C4→A4→A5→A6→A7 | 30 sem. |
 
 C5 y C6 (embebido MCU) son **opcionales** y no pertenecen al camino crítico.
 
