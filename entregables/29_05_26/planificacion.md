@@ -467,7 +467,7 @@ C5 y C6 (embebido MCU) son **opcionales** y no pertenecen al camino crítico.
     \tikz\draw[teal!60!black,dashed,line width=1.2pt,->](0,0.12)--(0.7,0.12); &
       Acople entre streams (SPI, PCB, medición)\\[2pt]
     \tikz\draw[magenta!60!black,dashed,line width=1.2pt,->](0,0.12)--(0.7,0.12); &
-      Transferencia A$\to$C (HIL al harness, algoritmo)\\
+      Transferencia C$\to$A (HIL al harness)\\
   \end{tabular}};
 
 \end{tikzpicture}%
