@@ -211,7 +211,7 @@ C6 & \emph{(stretch)} Algoritmo embebido en MCU validado & 6 & 21 & 24 & C5\\
   \ganttbar[bar/.append style={fill=colorB!40, draw=colorB!60, dashed}]
     {C6 MCU validado (stretch)}{21}{24}\\
   \ganttbar[bar/.append style={fill=colorC, draw=colorC!80!black}]
-    {C7 Cap. FW + recursos}{25}{30}\\
+    {C7 Capítulo FW + informe HIL}{25}{30}\\
 
   %% Hitos duros
   \ganttmilestone[milestone/.append style={fill=colorHard, draw=red!70},
