@@ -74,7 +74,7 @@ A4 & Sim + HIL en harness; figuras preliminares & 4 & 13 & 16 & A3, \textit{C4}\
 \rowcolor{colorA!50}
 A5 & Global-MPPT; primeras figuras del paper & 5 & 17 & 20 & A4\\
 \rowcolor{colorA!30}
-A6 & Algoritmo a embarcar; figuras congeladas & 6 & 21 & 24 & A5\\
+A6 & Algoritmo a implementar; figuras congeladas & 6 & 21 & 24 & A5\\
 \rowcolor{colorA!50}
 A7 & Paper: borrador $\to$ revisión $\to$ pulido & 7 & 25 & 30 & A6, B7\\
 \midrule
