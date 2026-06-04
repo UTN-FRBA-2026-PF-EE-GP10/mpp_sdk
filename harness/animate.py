@@ -31,12 +31,12 @@ from harness.panel_config import (
     shaded_string,
 )
 
-STEP_SIZE = 0.004
 TRAIL = 60  # operating-point trail length
 
 ALGORITHMS = [
     ("P&O", mpp_sdk.PerturbAndObserve, "tab:blue"),
     ("InCond", mpp_sdk.IncrementalConductance, "tab:red"),
+    ("Fuzzy", mpp_sdk.FuzzyLogic, "tab:green"),
 ]
 
 
@@ -59,7 +59,7 @@ class Runner:
 
     def __init__(self, ctl_cls, panel_fn, initial_duty):
         self.src = make_dynamic_source(panel=panel_fn(), initial_duty=initial_duty)
-        self.ctl = ctl_cls(initial_duty=initial_duty, step_size=STEP_SIZE)
+        self.ctl = ctl_cls(initial_duty=initial_duty)
         self.trail: list[tuple[float, float]] = []
 
     def advance(self, n: int):

@@ -1,7 +1,8 @@
 """MPPT controllers."""
 
 from .base import MPPTAlgorithm
+from .fuzzy import FuzzyLogic
 from .incremental_conductance import IncrementalConductance
 from .perturb_observe import PerturbAndObserve
 
-__all__ = ["MPPTAlgorithm", "IncrementalConductance", "PerturbAndObserve"]
+__all__ = ["MPPTAlgorithm", "FuzzyLogic", "IncrementalConductance", "PerturbAndObserve"]

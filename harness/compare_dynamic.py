@@ -29,12 +29,12 @@ from harness.panel_config import (
 )
 
 N_STEPS = 1500
-STEP_SIZE = 0.004
 INITIAL_DUTY = 0.5
 
 ALGORITHMS = [
     ("P&O", mpp_sdk.PerturbAndObserve),
     ("InCond", mpp_sdk.IncrementalConductance),
+    ("Fuzzy", mpp_sdk.FuzzyLogic),
 ]
 
 SCENARIOS = [
@@ -45,7 +45,7 @@ SCENARIOS = [
 
 def run(ctl_cls, panel):
     src = make_dynamic_source(panel=panel, initial_duty=INITIAL_DUTY)
-    ctl = ctl_cls(initial_duty=INITIAL_DUTY, step_size=STEP_SIZE)
+    ctl = ctl_cls(initial_duty=INITIAL_DUTY)
     powers = np.empty(N_STEPS)
     for k in range(N_STEPS):
         v, i = src.read()

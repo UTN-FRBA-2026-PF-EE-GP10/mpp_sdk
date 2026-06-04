@@ -9,6 +9,7 @@ also expose them, so either of these is fine:
 """
 
 from .algorithms.base import MPPTAlgorithm
+from .algorithms.fuzzy import FuzzyLogic
 from .algorithms.incremental_conductance import IncrementalConductance
 from .algorithms.perturb_observe import PerturbAndObserve
 from .converters.sepic import SEPICConverter
@@ -26,6 +27,7 @@ __version__ = "0.1.0"
 
 __all__ = [
     "MPPTAlgorithm",
+    "FuzzyLogic",
     "IncrementalConductance",
     "PerturbAndObserve",
     "SEPICConverter",

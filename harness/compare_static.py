@@ -23,12 +23,12 @@ import mpp_sdk
 from harness.panel_config import make_static_source, series_string, shaded_string
 
 N_STEPS = 2000
-STEP_SIZE = 0.004
 INITIAL_DUTY = 0.5
 
 ALGORITHMS = [
     ("P&O", mpp_sdk.PerturbAndObserve),
     ("InCond", mpp_sdk.IncrementalConductance),
+    ("Fuzzy", mpp_sdk.FuzzyLogic),
 ]
 
 SCENARIOS = [
@@ -39,7 +39,7 @@ SCENARIOS = [
 
 def final_point(ctl_cls, panel):
     src = make_static_source(panel=panel, initial_duty=INITIAL_DUTY)
-    ctl = ctl_cls(initial_duty=INITIAL_DUTY, step_size=STEP_SIZE)
+    ctl = ctl_cls(initial_duty=INITIAL_DUTY)
     v = i = 0.0
     for _ in range(N_STEPS):
         v, i = src.read()
