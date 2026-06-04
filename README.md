@@ -35,8 +35,8 @@ cross-paper comparisons and sim-to-real validation hard to reproduce
    code runs against a `SimulatedSource` *or* a real power-electronics
    board, with no branches in the algorithm.
 3. **A microcontroller-as-deployment-target architecture.** The power
-   stage is driven by a small MCU (Raspberry Pi Pico / RP2040 and ESP32
-   are both under evaluation) connected to the Raspberry Pi 5 over SPI.
+   stage is driven by a small MCU (Raspberry Pi Pico / RP2040) connected
+   to the Raspberry Pi 5 over SPI.
    This isolates the fast-switching / high-current side from the Pi
    *and* gives us the natural deployment target: once an algorithm has
    been validated against the framework, it is ported to the MCU and
@@ -205,8 +205,7 @@ expectations, contributor liability, and LLM-usage policy — lives in
 ### Hardware
 
 The power-electronics board is driven by a small **microcontroller**
-(candidates under evaluation: Raspberry Pi Pico / RP2040 and ESP32),
-connected to the Raspberry Pi 5 over SPI. The MCU isolates the
+(Raspberry Pi Pico / RP2040), connected to the Raspberry Pi 5 over SPI. The MCU isolates the
 fast-switching / high-current side from the Pi *and* doubles as the
 deployment target for the final algorithm.
 

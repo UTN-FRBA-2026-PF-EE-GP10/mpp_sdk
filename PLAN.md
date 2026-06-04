@@ -16,7 +16,7 @@ liability statement, and the LLM-usage policy.
   2. A written paper / thesis describing methodology, comparisons, and
      conclusions.
   3. A reproducible hardware demonstrator: Raspberry Pi 5 + a small
-     intermediary MCU (Pico / ESP32 under evaluation) over SPI + a
+     intermediary MCU (Raspberry Pi Pico / RP2040) over SPI + a
      **SEPIC** power stage (chosen so panel `V_mpp` may sit on either
      side of the load voltage) + small PV panel.
   4. **An MCU-deployable algorithm**: a controller that has been
@@ -63,7 +63,7 @@ author for each stream; the team meets weekly to cross-pollinate.
   `SpiMcuSource`, paper drafting, CI / reproducibility. Heavy LLM
   assistance expected and welcome here.
 - **Person B — Power-electronics hardware lead.** Schematic and PCB
-  (KiCad), component selection (GaN **or** SiC FET, gate driver, V/I
+  (KiCad), component selection (MOSFET, gate driver, V/I
   sense), BOM, assembly, bench bringup, calibration, hardware chapter
   of the paper.
 - **Person C — Embedded firmware lead.** MCU bringup (Pi Pico SDK or
@@ -82,7 +82,7 @@ has shipped *and* been independently verified per the rules in
 
 | Block             | Weeks | A — SDK & integration                                                    | B — hardware                                              | C — firmware                                                  |
 | ----------------- | ----- | ------------------------------------------------------------------------ | --------------------------------------------------------- | ------------------------------------------------------------- |
-| **Foundation**    | 1–4   | Phase 2 in-tree (`lossy`, `array`); `pvlib_adapter` skeleton             | MCU choice; topology; FET + gate-driver selection; schematic v1 | MCU bringup; ADC / PWM / SPI-slave skeleton                   |
+| **Foundation** ✓  | 1–4   | Phase 2 in-tree (`lossy`, `array`); `pvlib_adapter` skeleton             | Topology; MOSFET + gate-driver selection; schematic v1          | MCU bringup (RP2040, Rust); SPI-slave skeleton with PIO done   |
 | **Sim & SPI**     | 5–8   | Phase 3: P&O variants + InCond; harness scaffold; `SpiMcuSource` skeleton | PCB layout v1; **fab order by week 6**; long-lead parts in | SPI protocol locked; loopback HIL working in software         |
 | **Hardware up**   | 9–12  | First sim-only comparison results; pvlib adapter integrated              | PCB assembly; bringup; ADC calibration                    | ADC / PWM jitter measurement; SPI link to Pi alive            |
 | **HIL milestone** | 13–16 | Sim + HIL numbers in the harness                                         | Bench: sense path validated against scope                 | **Phase 5a done** — HIL end-to-end with Python algorithm      |
@@ -110,8 +110,8 @@ has shipped *and* been independently verified per the rules in
   PSO — pick the one easier to port).
 - Algorithm-focused comparison harness with the metrics listed in
   Phase 4 below — no inverter-efficiency / EN-50530 work in v1.
-- Custom board: **SEPIC** stage with GaN **or** SiC (pick one in
-  block 1), gate driver, V/I sense via INA226 or shunt + amp, MCU
+- Custom board: **SEPIC** stage with MOSFET, gate driver, V/I sense via
+  INA226 or shunt + amp, MCU
   section, SPI to Pi, basic protections.
 - MCU firmware: HIL mode + the chosen algorithm in deployed mode.
 - Hardware-vs-simulation comparison; resource-budget report.
@@ -606,7 +606,7 @@ layers that pvlib does not address:
 2. **Power-stage abstraction with an MCU-mediated hardware seam**: a
    `SEPICConverter` model plus a `SignalSource` ABC. The hardware
    implementation is intentionally split — the Pi 5 hosts the SDK and
-   the algorithm; a small MCU (Pi Pico / ESP32 under evaluation) drives
+   the algorithm; a small MCU (Raspberry Pi Pico / RP2040) drives
    the power stage and talks to the Pi over SPI. This isolates the
    fast-switching / high-current side from the Pi *and* gives us a
    natural target for deploying the validated algorithm on the MCU
@@ -703,15 +703,11 @@ the framework + the deployment evidence are the artefacts.
   contrived patterns from the literature).
 - Demonstrator topology: synchronous vs asynchronous boost, switching
   frequency, current sensor (shunt + INA226 vs Hall-effect).
-- **MCU choice (Phase 5):** Raspberry Pi Pico (RP2040, deterministic
-  PIO-driven PWM, well-supported C SDK and MicroPython) vs ESP32
-  (more peripherals and RAM, but Wi-Fi background tasks can interfere
-  with hard-real-time loops). Decision needs a small back-to-back
-  bench measurement of PWM jitter and SPI throughput.
-- **Firmware language for the deployed algorithm:** C (Pi Pico SDK or
-  ESP-IDF) is the production answer; MicroPython / CircuitPython is
-  the prototyping shortcut. Pick early so the Phase-5b resource
-  budget is meaningful.
+- **MCU choice (Phase 5):** Resolved — Raspberry Pi Pico (RP2040).
+  Firmware language: Rust (decided during Block 1; SPI-slave PIO
+  scaffolding already in place).
+- **Firmware language for the deployed algorithm:** Resolved — Rust
+  with `rp2040-hal`. MicroPython prototyping path dropped.
 - **SPI protocol design (Phase 5a):** master/slave roles, frame
   format, sample rate, watchdog / soft-stop semantics. Document the
   protocol in `data/hardware/spi_protocol.md` once it stabilises.
