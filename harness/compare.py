@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 import mpp_sdk
-from harness.panel_config import make_source, series_string
+from harness.panel_config import CONTROL_PERIOD_MS, make_source, series_string
 
 # ── Experiment parameters ─────────────────────────────────────────────────────
 N_STEPS = 600
@@ -66,11 +66,12 @@ def main() -> None:
 
     # ── Left: power trace ─────────────────────────────────────────────────────
     ax_p = axes[0]
+    time_ms = np.arange(N_STEPS) * CONTROL_PERIOD_MS
     ax_p.axhline(p_mpp, color="k", lw=1, ls="--", label=f"MPP = {p_mpp:.2f} W")
     for (label, _), color in zip(ALGORITHMS, colors, strict=False):
         p = results[label]["p"]
-        ax_p.plot(p, label=label, color=color, lw=1.2)
-    ax_p.set_xlabel("Step")
+        ax_p.plot(time_ms, p, label=label, color=color, lw=1.2)
+    ax_p.set_xlabel("Time [ms]")
     ax_p.set_ylabel("Power [W]")
     ax_p.set_title("Convergence")
     ax_p.legend()

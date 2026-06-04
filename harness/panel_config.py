@@ -21,6 +21,11 @@ from mpp_sdk.models.pvlib_adapter import PvlibPanelModel
 V_IN_MAX: float = 40.0  # V — maximum SEPIC input voltage
 I_MAX: float = 1.0  # A — maximum string current
 
+# ── Control loop timing ──────────────────────────────────────────────────────
+CONTROL_PERIOD_MS: float = 1.0  # ms — one algorithm step = one control cycle
+# Matches the RP2040 firmware target (1 kHz loop).
+# Multiply step index by this to get real time and compare against PLECS.
+
 # ── Default environmental conditions ─────────────────────────────────────────
 STC_IRRADIANCE: float = 1000.0  # W/m²
 STC_TEMPERATURE: float = 25.0  # °C
