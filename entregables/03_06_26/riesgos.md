@@ -39,12 +39,10 @@ con el bloque PIO del RP2040 (`firmware/src/spi_slave_pio.rs`) y la contraparte 
 en el plan original (que presuponía C con el Pico SDK). Este cambio ya es un hecho consumado y
 debe ser incorporado explícitamente en el análisis de riesgos.
 
-En el stream de hardware, las decisiones críticas de componentes siguen abiertas a dos semanas
-del hito de fabricación: el tipo de transistor de potencia (MOSFET), el gate driver asociado, el
-sensor de corriente (INA226 vs. shunt más amplificador de instrumentación) y la frecuencia de
-conmutación del convertidor SEPIC. Estas cuatro variables deben cerrarse antes de que el diseñador
-de PCB pueda enrutar con criterio de integridad de señal, lo que convierte al proceso de decisión
-en sí mismo en un riesgo de cronograma.
+En el stream de hardware, el Bloque 1 cerró con el diseño de PCB completo: MOSFET y gate
+driver seleccionados, sensor de corriente definido (INA226 para corriente de carga y ADC con
+INA226 más operacionales para corriente de panel), y el convertidor SEPIC simulado en PLECS
+con comportamiento validado. La PCB está lista para enviar a fabricación al inicio del Bloque 2.
 
 El análisis adopta el marco estándar de gestión de riesgos: identificación, clasificación,
 cuantificación probabilidad × impacto, y definición de planes de acción con responsable y fecha
@@ -72,22 +70,22 @@ posteriores.
 \endlastfoot
 
 R01 & Cronograma &
-Atraso en cierre de decisiones de hardware (gate driver, sensor de corriente, frecuencia de
-conmutación) impide enrutar la PCB antes del hito de fabricación (semana 6). &
-Decisiones abiertas a semana 5; variables interrelacionadas sin responsable único. \\
+La PCB no se envía a fabricación antes del fin de la semana 6 por demoras en la revisión
+final del diseño o en la generación de Gerbers, desplazando el inicio del Bloque 3. &
+Diseño cerrado al fin del Bloque 1; riesgo residual de último DRC o error en exportación. \\
 \midrule
 
 R02 & Hardware &
-El MOSFET seleccionado, o el gate driver asociado, tienen tiempo de entrega
-(\textit{lead time}) superior a 3 semanas, retrasando el ensamblado y la calibración. &
-Mercado de componentes de potencia; stock limitado en distribuidores locales. \\
+Los INA226 o los operacionales seleccionados tienen tiempo de entrega superior a 3 semanas,
+retrasando el ensamblado y la calibración de la cadena de medición. &
+Mercado de componentes; stock variable en distribuidores locales. \\
 \midrule
 
 R03 & Hardware &
-La topología SEPIC no cumple las especificaciones de rizado de corriente o tensión en el
-rango de irradiancia de trabajo, obligando a rediseñar el esquemático tras la fabricación. &
-Brecha entre simulación LTspice (componentes ideales) y comportamiento real de inductores
-y capacitores de alta frecuencia. \\
+El comportamiento real de la SEPIC (pérdidas de conmutación, ESR, DCR) diverge del modelo
+PLECS en mayor grado del tolerado, requiriendo ajuste de parámetros o rediseño parcial. &
+PLECS simula con modelos más fieles que LTspice ideal, pero los parásitos reales de los
+componentes pueden diferir de los valores de datasheet usados en simulación. \\
 \midrule
 
 R04 & Hardware &
@@ -119,10 +117,10 @@ real. \\
 \midrule
 
 R08 & Integración &
-La brecha entre el modelo de simulación y el sistema real supera la tolerancia aceptable
-($> 5\%$ de error en eficiencia de seguimiento), invalidando las comparaciones del paper. &
-Modelo ideal sin pérdidas de conmutación, sin resistencias parásitas de inductores ni
-variación de temperatura de junction. \\
+La brecha entre la simulación en PLECS y el sistema real supera la tolerancia aceptable
+($> 5\%$ de error en eficiencia de seguimiento), debilitando las comparaciones del paper. &
+PLECS reduce el gap frente a modelos ideales, pero los parásitos reales y la calibración
+de la cadena de medición son fuentes de divergencia no capturadas en simulación. \\
 \midrule
 
 R09 & Integración &
@@ -191,9 +189,9 @@ indica materialización esperada sin acción activa.
 \textbf{ID} & \textbf{Descripción breve} & \textbf{Probabilidad (1--5)} & \textbf{Impacto (1--5)} &
 \textbf{Score} & \textbf{Nivel} \\
 \midrule
-R01 & Decisiones HW abiertas a sem. 5 & 4 & 5 & 20 & \cellcolor{red!30}Crítico \\
-R02 & Lead time de componentes        & 3 & 4 & 12 & \cellcolor{orange!30}Alto \\
-R03 & SEPIC no cumple spec en real    & 3 & 4 & 12 & \cellcolor{orange!30}Alto \\
+R01 & PCB no enviada a fab en sem. 6  & 2 & 5 & 10 & \cellcolor{orange!30}Alto \\
+R02 & Lead time INA226 / op-amps      & 2 & 4 & 8  & \cellcolor{orange!30}Alto \\
+R03 & Divergencia PLECS vs real       & 2 & 3 & 6  & \cellcolor{yellow!20}Medio \\
 R04 & Parásitos de PCB / inestabilidad & 3 & 3 & 9 & \cellcolor{orange!30}Alto \\
 R05 & Curva de aprendizaje Rust/Pico  & 4 & 3 & 12 & \cellcolor{orange!30}Alto \\
 R06 & Bug temporización PIO SPI slave & 3 & 4 & 12 & \cellcolor{orange!30}Alto \\
@@ -233,19 +231,19 @@ color de cada celda refleja el nivel de riesgo agregado según los umbrales defi
 \midrule
 \textbf{5} &
   \cellcolor{yellow!20} &
-  \cellcolor{orange!30}R10 &
+  \cellcolor{orange!30}R01, R10 &
   \cellcolor{red!30}R07 &
-  \cellcolor{red!30}R01, R11 &
+  \cellcolor{red!30}R11 &
   \cellcolor{red!30} \\
 \textbf{4} &
   \cellcolor{yellow!20} &
-  \cellcolor{orange!30}R14 &
-  \cellcolor{orange!30}R02, R03, R06, R08, R09, R15 &
+  \cellcolor{orange!30}R02, R14 &
+  \cellcolor{orange!30}R06, R08, R09, R15 &
   \cellcolor{red!30} &
   \cellcolor{red!30} \\
 \textbf{3} &
   \cellcolor{green!20} &
-  \cellcolor{yellow!20}R13 &
+  \cellcolor{yellow!20}R03, R13 &
   \cellcolor{orange!30}R04 &
   \cellcolor{orange!30}R05 &
   \cellcolor{red!30} \\
@@ -271,25 +269,17 @@ color de cada celda refleja el nivel de riesgo agregado según los umbrales defi
 
 ## 4. Análisis de riesgos críticos
 
-### 4.1 R01 — Decisiones de hardware abiertas (Score 20 — Crítico)
+### 4.1 R11 — Hito HIL no alcanzado en semana 16 (Score 20 — Crítico)
 
-Al cierre del Bloque 1, el gate driver del MOSFET, el sensor de corriente y la frecuencia de
-conmutación permanecen sin definir. Estas variables son interdependientes: la frecuencia
-determina las pérdidas en el transistor y condiciona el gate driver; el sensor define el ruteo
-de la PCB. Si no se cierran antes del fin de la semana 5, el Gerber no puede enviarse a tiempo
-(el fabricante requiere 7--10 días hábiles), lo que desplaza en cascada el inicio del Bloque 3
-y pone en riesgo el Hito 2 (HIL, semana 16). La acción más efectiva no es técnica sino
-organizativa: convocar una sesión de trabajo con agenda y BOM como entregable concreto.
+El diseño de la PCB está cerrado al fin del Bloque 1, lo que elimina el principal riesgo de
+cronograma anterior (R01). Ahora el riesgo dominante es R11: la cadena secuencial que lleva al
+HIL (fabricación $\to$ ensamblado $\to$ calibración $\to$ integración SPI $\to$ lazo cerrado)
+sigue siendo frágil aunque su primer eslabón esté resuelto. Un atraso de dos semanas en
+cualquier nodo de la cadena pone en jaque el Hito 2 (semana 16) y convierte la contribución
+experimental en solo-simulación. La herramienta de control más efectiva es el hito intermedio
+de semana 12 (PCB calibrada, SPI validado punto a punto) como indicador adelantado.
 
-### 4.2 R11 — Hito HIL no alcanzado en semana 16 (Score 20 — Crítico)
-
-El HIL es el hito que convierte el trabajo en un demostrador físico validado; sin él, el paper
-cae a contribución solo-simulación. La probabilidad (P = 4) surge de la cadena secuencial que lo
-precede: PCB fabricada $\to$ ensamblado $\to$ calibración $\to$ integración SPI $\to$ lazo HIL.
-Cada eslabón tiene su propio riesgo (R01, R02, R04, R06, R09), y la falla en cualquiera bloquea
-el siguiente. La herramienta de control más efectiva es definir un hito intermedio en semana 12
-(PCB calibrada, SPI validado punto a punto) que permita activar el plan de contingencia con
-margen suficiente.
+### 4.2 R07 — Algoritmo MPPT no entra en el presupuesto del RP2040 (Score 15 — Crítico)
 
 ### 4.3 R07 — Algoritmo MPPT no entra en el presupuesto del RP2040 (Score 15 — Crítico)
 
@@ -323,22 +313,22 @@ fecha límite y el indicador que confirma que la acción fue exitosa. Los riesgo
 \endfoot
 
 R01 & Evitar &
-Convocar reunión de decisión técnica antes del fin de la sem. 5; cerrar BOM completa en
-una sesión (gate driver, sensor de corriente, frecuencia de conmutación). &
-B & Sem. 5 &
-BOM completa en KiCad con todos los valores definidos. \\[8pt]
+Ejecutar DRC final sobre el diseño KiCad, exportar Gerbers y enviar el pedido al fabricante
+antes del fin de la semana 6. &
+B & Sem. 6 &
+Confirmación de pedido con plazo de entrega $\le 10$ días hábiles. \\[8pt]
 
 R02 & Mitigar &
-Verificar stock y lead time en Mouser/Digi-Key/LCSC para los candidatos; realizar el pedido
-el mismo día que se aprueba el esquemático. &
-B & Sem. 5 &
-Pedido confirmado con entrega $\le 5$ días hábiles. \\[8pt]
-
-R03 & Mitigar &
-Simular el SEPIC en LTspice con modelos reales (ESR de capacitores, DCR de inductores);
-documentar criterios de aceptación (rizado $< 2\%$, eficiencia $> 85\%$). &
+Verificar stock de INA226 y operacionales seleccionados en Mouser/Digi-Key/LCSC; realizar
+el pedido junto con el envío del PCB. &
 B & Sem. 6 &
-Reporte LTspice con parámetros reales adjunto al PR de fabricación. \\[8pt]
+Pedido de componentes confirmado con entrega $\le 5$ días hábiles. \\[8pt]
+
+R03 & Aceptar &
+La simulación PLECS valida el comportamiento nominal; las divergencias con el banco real se
+documentarán cuantitativamente durante la calibración del Bloque 3. &
+B & Sem. 9 &
+Tolerancia de divergencia PLECS vs.\ real documentada durante la calibración del ADC. \\[8pt]
 
 R04 & Mitigar &
 Seguir guías de layout de potencia (loop de conmutación mínimo, plano de retorno limpio);

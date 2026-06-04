@@ -213,12 +213,11 @@ deployment target for the final algorithm.
       cycle and reads `(V, I)` from the MCU over SPI
 - [ ] MCU firmware (HIL mode): ADC sense + hardware-PWM drive + SPI
       slave; in this mode the MCU is an I/O proxy and the algorithm
-      still runs on the Pi in Python
-- [ ] Calibration procedure (ADC scale / offset, sense-resistor value,
-      PWM frequency, soft duty-cycle limits)
-- [ ] Algorithm port from Python to the MCU (deployed mode): C with
-      the Pico SDK or ESP-IDF, MicroPython / CircuitPython for early
-      prototyping
+      still runs on the Pi in Python. SPI-slave scaffold with PIO done ✓.
+- [ ] Calibration procedure (ADC scale / offset, INA226 gain, PWM
+      frequency, soft duty-cycle limits)
+- [ ] Algorithm port from Python to the MCU (deployed mode): Rust with
+      `rp2040-hal` ✓ (language resolved)
 - [ ] Cross-validation: deployed-MCU vs Pi-driven-Python on the same
       physical rig, same load profile, same recorded V/I/D traces
 - [ ] Bench and outdoor validation against the simulator

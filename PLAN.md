@@ -63,7 +63,7 @@ author for each stream; the team meets weekly to cross-pollinate.
   `SpiMcuSource`, paper drafting, CI / reproducibility. Heavy LLM
   assistance expected and welcome here.
 - **Person B — Power-electronics hardware lead.** Schematic and PCB
-  (KiCad), component selection (MOSFET, gate driver, V/I
+  (KiCad), component selection (MOSFET ✓, gate driver ✓, INA226 + op-amps ✓, V/I
   sense), BOM, assembly, bench bringup, calibration, hardware chapter
   of the paper.
 - **Person C — Embedded firmware lead.** MCU bringup (Pi Pico SDK or
@@ -82,7 +82,7 @@ has shipped *and* been independently verified per the rules in
 
 | Block             | Weeks | A — SDK & integration                                                    | B — hardware                                              | C — firmware                                                  |
 | ----------------- | ----- | ------------------------------------------------------------------------ | --------------------------------------------------------- | ------------------------------------------------------------- |
-| **Foundation** ✓  | 1–4   | Phase 2 in-tree (`lossy`, `array`); `pvlib_adapter` skeleton             | Topology; MOSFET + gate-driver selection; schematic v1          | MCU bringup (RP2040, Rust); SPI-slave skeleton with PIO done   |
+| **Foundation** ✓  | 1–4   | Phase 2 in-tree (`lossy`, `array`); `pvlib_adapter` skeleton             | Topology ✓; MOSFET + gate-driver ✓; INA226 + op-amps ✓; SEPIC in PLECS ✓; PCB design closed ✓ | MCU bringup (RP2040, Rust) ✓; SPI-slave skeleton with PIO ✓ |
 | **Sim & SPI**     | 5–8   | Phase 3: P&O variants + InCond; harness scaffold; `SpiMcuSource` skeleton | PCB layout v1; **fab order by week 6**; long-lead parts in | SPI protocol locked; loopback HIL working in software         |
 | **Hardware up**   | 9–12  | First sim-only comparison results; pvlib adapter integrated              | PCB assembly; bringup; ADC calibration                    | ADC / PWM jitter measurement; SPI link to Pi alive            |
 | **HIL milestone** | 13–16 | Sim + HIL numbers in the harness                                         | Bench: sense path validated against scope                 | **Phase 5a done** — HIL end-to-end with Python algorithm      |
@@ -110,8 +110,8 @@ has shipped *and* been independently verified per the rules in
   PSO — pick the one easier to port).
 - Algorithm-focused comparison harness with the metrics listed in
   Phase 4 below — no inverter-efficiency / EN-50530 work in v1.
-- Custom board: **SEPIC** stage with MOSFET, gate driver, V/I sense via
-  INA226 or shunt + amp, MCU
+- Custom board: **SEPIC** stage (simulated in PLECS ✓), MOSFET + gate driver ✓,
+  V/I sense via INA226 + op-amps ✓, MCU
   section, SPI to Pi, basic protections.
 - MCU firmware: HIL mode + the chosen algorithm in deployed mode.
 - Hardware-vs-simulation comparison; resource-budget report.
@@ -315,8 +315,7 @@ The validated algorithm is ported from Python to MCU firmware; the Pi
 is reduced to monitoring and configuration. This is the contribution
 the paper's "MCU-deployable algorithm" claim rests on.
 
-- [ ] Pick firmware language / toolchain per chip (C with Pi Pico SDK
-      or ESP-IDF; MicroPython / CircuitPython for early prototyping).
+- [x] Firmware language / toolchain: Rust with `rp2040-hal` ✓.
 - [ ] Port the chosen algorithm. Cross-validate it against the Python
       reference point-by-point on recorded `(V, I, D)` traces from
       Phase 5a — same inputs, same outputs (within a defined
