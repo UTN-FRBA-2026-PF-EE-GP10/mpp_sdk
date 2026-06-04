@@ -14,7 +14,7 @@ Panel: Hissuma PSF10MONO, 10 W mono-Si
     Series:  V_oc=34 V, I_sc=0.79 A, V_mp=28 V, I_mp=0.72 A, P_max=20 W
 """
 
-from mpp_sdk import SEPICConverter, SimulatedSource
+from mpp_sdk import DynamicSimulatedSource, SEPICConverter
 from mpp_sdk.models.pvlib_adapter import PvlibPanelModel
 
 # ── Hardware safety limits ────────────────────────────────────────────────────
@@ -62,18 +62,19 @@ def make_source(
     panel: PvlibPanelModel | None = None,
     load_resistance: float = 10.0,
     initial_duty: float = 0.5,
-) -> SimulatedSource:
-    """Return a ``SimulatedSource`` for the series string.
+) -> DynamicSimulatedSource:
+    """Return a ``DynamicSimulatedSource`` for the series string.
 
-    Default load_resistance=10 Ω places the MPPT start point (D=0.5,
-    R_eff=10 Ω) below the series-string MPP impedance (~38.9 Ω), so
-    algorithms approach the MPP from the right side of the P-V curve.
+    Uses input-capacitor dynamics so the terminal voltage slews toward the
+    operating point instead of jumping — exposing settling time / overshoot.
+    The control period matches ``CONTROL_PERIOD_MS`` (1 kHz firmware loop).
     """
     if panel is None:
         panel = series_string()
-    return SimulatedSource(
+    return DynamicSimulatedSource(
         panel=panel,
         converter=SEPICConverter(),
         load_resistance=load_resistance,
         initial_duty=initial_duty,
+        dt=CONTROL_PERIOD_MS * 1e-3,
     )

@@ -13,6 +13,7 @@ from .algorithms.incremental_conductance import IncrementalConductance
 from .algorithms.perturb_observe import PerturbAndObserve
 from .converters.sepic import SEPICConverter
 from .io.base import SignalSource
+from .io.dynamic import DynamicSimulatedSource
 from .io.simulated import SimulatedSource
 from .models.base import PanelModel
 from .models.ideal import IdealSingleDiode
@@ -27,6 +28,7 @@ __all__ = [
     "SEPICConverter",
     "SignalSource",
     "SimulatedSource",
+    "DynamicSimulatedSource",
     "PanelModel",
     "IdealSingleDiode",
     "LivePanelView",
