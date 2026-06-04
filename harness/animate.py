@@ -77,12 +77,23 @@ def main():
 
     fig, ax = plt.subplots(figsize=(10, 6))
     fig.suptitle(f"Live MPPT — {title}", fontweight="bold")
+
+    # I-V curve in grey on a secondary axis, as a reference backdrop.
+    ax_iv = ax.twinx()
+    ax_iv.plot(v_curve, i_curve, color="grey", lw=1.2, ls="--", alpha=0.6, zorder=0)
+    ax_iv.set_ylabel("Current [A]", color="grey")
+    ax_iv.tick_params(axis="y", labelcolor="grey")
+    ax_iv.set_ylim(0, i_curve.max() * 1.25)
+
     ax.plot(v_curve, p_curve, "k-", lw=1.5, zorder=1, label="P-V curve")
     ax.plot(v_mpp, p_mpp, "k*", ms=16, zorder=2, label=f"global MPP ({p_mpp:.2f} W)")
+    ax.plot([], [], color="grey", ls="--", alpha=0.6, label="I-V curve")
     ax.set_xlabel("Voltage [V]")
     ax.set_ylabel("Power [W]")
     ax.set_xlim(0, v_curve[-1] * 1.05)
     ax.set_ylim(0, p_curve.max() * 1.25)
+    ax.set_zorder(ax_iv.get_zorder() + 1)  # keep P-V markers above the I-V backdrop
+    ax.patch.set_visible(False)
     ax.grid(True, alpha=0.3)
 
     runners, dots, trails = [], [], []
