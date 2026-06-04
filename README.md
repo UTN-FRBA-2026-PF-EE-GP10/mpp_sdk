@@ -35,8 +35,8 @@ cross-paper comparisons and sim-to-real validation hard to reproduce
    code runs against a `SimulatedSource` *or* a real power-electronics
    board, with no branches in the algorithm.
 3. **A microcontroller-as-deployment-target architecture.** The power
-   stage is driven by a small MCU (Raspberry Pi Pico / RP2040 and ESP32
-   are both under evaluation) connected to the Raspberry Pi 5 over SPI.
+   stage is driven by a small MCU (Raspberry Pi Pico / RP2040) connected
+   to the Raspberry Pi 5 over SPI.
    This isolates the fast-switching / high-current side from the Pi
    *and* gives us the natural deployment target: once an algorithm has
    been validated against the framework, it is ported to the MCU and
@@ -205,8 +205,7 @@ expectations, contributor liability, and LLM-usage policy — lives in
 ### Hardware
 
 The power-electronics board is driven by a small **microcontroller**
-(candidates under evaluation: Raspberry Pi Pico / RP2040 and ESP32),
-connected to the Raspberry Pi 5 over SPI. The MCU isolates the
+(Raspberry Pi Pico / RP2040), connected to the Raspberry Pi 5 over SPI. The MCU isolates the
 fast-switching / high-current side from the Pi *and* doubles as the
 deployment target for the final algorithm.
 
@@ -214,12 +213,11 @@ deployment target for the final algorithm.
       cycle and reads `(V, I)` from the MCU over SPI
 - [ ] MCU firmware (HIL mode): ADC sense + hardware-PWM drive + SPI
       slave; in this mode the MCU is an I/O proxy and the algorithm
-      still runs on the Pi in Python
-- [ ] Calibration procedure (ADC scale / offset, sense-resistor value,
-      PWM frequency, soft duty-cycle limits)
-- [ ] Algorithm port from Python to the MCU (deployed mode): C with
-      the Pico SDK or ESP-IDF, MicroPython / CircuitPython for early
-      prototyping
+      still runs on the Pi in Python. SPI-slave scaffold with PIO done ✓.
+- [ ] Calibration procedure (ADC scale / offset, INA226 gain, PWM
+      frequency, soft duty-cycle limits)
+- [ ] Algorithm port from Python to the MCU (deployed mode): Rust with
+      `rp2040-hal` ✓ (language resolved)
 - [ ] Cross-validation: deployed-MCU vs Pi-driven-Python on the same
       physical rig, same load profile, same recorded V/I/D traces
 - [ ] Bench and outdoor validation against the simulator
