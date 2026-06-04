@@ -83,10 +83,10 @@ def main():
     p_curve = v_curve * i_curve
     v_mpp, _, p_mpp = ref.mpp()
 
-    fig, ax = plt.subplots(figsize=(10, 6))
+    fig, (ax, ax_t) = plt.subplots(1, 2, figsize=(14, 6))
     fig.suptitle(f"Live MPPT — {title}", fontweight="bold")
 
-    # I-V curve in grey on a secondary axis, as a reference backdrop.
+    # ── Left panel: P-V curve with moving operating points ───────────────────
     ax_iv = ax.twinx()
     ax_iv.plot(v_curve, i_curve, color="grey", lw=1.2, ls="--", alpha=0.6, zorder=0)
     ax_iv.set_ylabel("Current [A]", color="grey")
@@ -96,6 +96,7 @@ def main():
     ax.plot(v_curve, p_curve, "k-", lw=1.5, zorder=1, label="P-V curve")
     ax.plot(v_mpp, p_mpp, "k*", ms=16, zorder=2, label=f"global MPP ({p_mpp:.2f} W)")
     ax.plot([], [], color="grey", ls="--", alpha=0.6, label="I-V curve")
+    ax.set_title("Operating point on P-V curve")
     ax.set_xlabel("Voltage [V]")
     ax.set_ylabel("Power [W]")
     ax.set_xlim(0, v_curve[-1] * 1.05)
@@ -104,13 +105,26 @@ def main():
     ax.patch.set_visible(False)
     ax.grid(True, alpha=0.3)
 
-    runners, dots, trails = [], [], []
+    # ── Right panel: power vs time ───────────────────────────────────────────
+    ax_t.axhline(p_mpp, color="k", lw=1, ls="--", label=f"global MPP ({p_mpp:.2f} W)")
+    ax_t.set_title("Power vs time")
+    ax_t.set_xlabel("Time [ms]")
+    ax_t.set_ylabel("Power [W]")
+    ax_t.set_ylim(0, p_curve.max() * 1.25)
+    ax_t.grid(True, alpha=0.3)
+
+    runners, dots, trails, time_lines = [], [], [], []
+    p_hist: list[list[float]] = []
+    t_hist: list[float] = []
     for label, cls, color in ALGORITHMS:
         runners.append(Runner(cls, panel_fn, args.duty))
         (trail_line,) = ax.plot([], [], "-", color=color, alpha=0.4, lw=1, zorder=3)
         (dot,) = ax.plot([], [], "o", color=color, ms=12, zorder=4, label=label)
+        (t_line,) = ax_t.plot([], [], "-", color=color, lw=1.4, label=label)
         trails.append(trail_line)
         dots.append(dot)
+        time_lines.append(t_line)
+        p_hist.append([])
 
     readout = ax.text(
         0.02,
@@ -122,23 +136,31 @@ def main():
         bbox=dict(boxstyle="round,pad=0.4", facecolor="white", alpha=0.8, edgecolor="none"),
     )
     ax.legend(loc="lower right")
+    ax_t.legend(loc="lower right", fontsize=9)
 
     def update(frame):
-        lines = []
-        for runner, dot, trail in zip(runners, dots, trails, strict=True):
+        artists = []
+        t_ms = frame * args.speed * CONTROL_PERIOD_MS
+        t_hist.append(t_ms)
+        for k, (runner, dot, trail, t_line) in enumerate(
+            zip(runners, dots, trails, time_lines, strict=True)
+        ):
             v, p = runner.advance(args.speed)
             arr = np.asarray(runner.trail)
             trail.set_data(arr[:, 0], arr[:, 1])
             dot.set_data([v], [p])
-            lines += [trail, dot]
-        t_ms = frame * args.speed * CONTROL_PERIOD_MS
+            p_hist[k].append(p)
+            t_line.set_data(t_hist, p_hist[k])
+            artists += [trail, dot, t_line]
+        # grow the time axis as the run advances
+        ax_t.set_xlim(0, max(t_ms, 1))
         txt = [f"t = {t_ms:.0f} ms"]
         for (label, _, _), runner in zip(ALGORITHMS, runners, strict=True):
             v, p = runner.trail[-1]
             txt.append(f"{label}: {p:5.2f} W  ({p / p_mpp * 100:5.1f}%)")
         readout.set_text("\n".join(txt))
-        lines.append(readout)
-        return lines
+        artists.append(readout)
+        return artists
 
     _ani = FuncAnimation(fig, update, interval=args.interval, blit=False, cache_frame_data=False)
     plt.show()
