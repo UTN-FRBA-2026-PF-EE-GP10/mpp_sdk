@@ -10,6 +10,9 @@ Run with::
     uv run harness/animate.py                 # full sun
     uv run harness/animate.py --shade          # partial shade (two-peak P-V)
     uv run harness/animate.py --shade --speed 1   # one control step per frame
+    uv run harness/animate.py --shade --duty 0.1  # start from the Voc side
+                                                  # (watch P&O get trapped on the
+                                                  #  local peak under shade)
 
 Close the window to stop.
 """
@@ -28,7 +31,6 @@ from harness.panel_config import (
     shaded_string,
 )
 
-INITIAL_DUTY = 0.5
 STEP_SIZE = 0.004
 TRAIL = 60  # operating-point trail length
 
@@ -41,6 +43,12 @@ ALGORITHMS = [
 def parse_args():
     ap = argparse.ArgumentParser()
     ap.add_argument("--shade", action="store_true", help="partial-shade scenario")
+    ap.add_argument(
+        "--duty",
+        type=float,
+        default=0.5,
+        help="initial duty cycle (low → start near Voc, high → start near Vsc)",
+    )
     ap.add_argument("--speed", type=int, default=2, help="control steps advanced per frame")
     ap.add_argument("--interval", type=int, default=30, help="ms between frames (higher = slower)")
     return ap.parse_args()
@@ -49,9 +57,9 @@ def parse_args():
 class Runner:
     """One algorithm + dynamic source, advanced step by step."""
 
-    def __init__(self, ctl_cls, panel_fn):
-        self.src = make_dynamic_source(panel=panel_fn(), initial_duty=INITIAL_DUTY)
-        self.ctl = ctl_cls(initial_duty=INITIAL_DUTY, step_size=STEP_SIZE)
+    def __init__(self, ctl_cls, panel_fn, initial_duty):
+        self.src = make_dynamic_source(panel=panel_fn(), initial_duty=initial_duty)
+        self.ctl = ctl_cls(initial_duty=initial_duty, step_size=STEP_SIZE)
         self.trail: list[tuple[float, float]] = []
 
     def advance(self, n: int):
@@ -98,7 +106,7 @@ def main():
 
     runners, dots, trails = [], [], []
     for label, cls, color in ALGORITHMS:
-        runners.append(Runner(cls, panel_fn))
+        runners.append(Runner(cls, panel_fn, args.duty))
         (trail_line,) = ax.plot([], [], "-", color=color, alpha=0.4, lw=1, zorder=3)
         (dot,) = ax.plot([], [], "o", color=color, ms=12, zorder=4, label=label)
         trails.append(trail_line)
