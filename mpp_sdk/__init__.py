@@ -19,6 +19,7 @@ from .models.base import PanelModel
 from .models.ideal import IdealSingleDiode
 from .models.pvlib_adapter import PvlibPanelModel
 from .models.string import PvString
+from .models.tabulated import TabulatedPanel
 from .visualization import LivePanelView, plot_iv_with_operating_point
 
 __version__ = "0.1.0"
@@ -35,6 +36,7 @@ __all__ = [
     "IdealSingleDiode",
     "PvlibPanelModel",
     "PvString",
+    "TabulatedPanel",
     "LivePanelView",
     "plot_iv_with_operating_point",
     "__version__",

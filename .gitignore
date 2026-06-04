@@ -31,3 +31,4 @@ htmlcov/
 # Generated PDFs under entregables/ (built by gen_pdfs.py from .md and .svg).
 # The .svg sources are committed; PDFs are an artifact.
 entregables/**/*.pdf
+harness/output/

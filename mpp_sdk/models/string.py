@@ -16,8 +16,12 @@ class PvString(PanelModel):
     plain P&O on a local maximum — the motivation for Global MPPT.
 
     Per-panel irradiance is set on the individual ``PvlibPanelModel``
-    instances (``panel.irradiance = ...``) before sampling, so partial
-    shading is just "give one panel a lower irradiance".
+    instances before constructing the string, so partial shading is just
+    "give one panel a lower irradiance".
+
+    For speed, each panel's inverse I-V curve ``V(I)`` is sampled onto a
+    table at construction time. The panels' conditions are therefore
+    snapshotted — rebuild the string if irradiance / temperature change.
 
     Parameters
     ----------
@@ -25,41 +29,51 @@ class PvString(PanelModel):
         The series-connected panel models (≥ 1).
     bypass_drop :
         Forward voltage of each bypass diode [V] (default 0.7).
+    samples :
+        Points per panel inverse-curve table.
     """
 
-    def __init__(self, panels: list[PanelModel], bypass_drop: float = 0.7) -> None:
+    def __init__(
+        self,
+        panels: list[PanelModel],
+        bypass_drop: float = 0.7,
+        samples: int = 600,
+    ) -> None:
         if not panels:
             raise ValueError("PvString needs at least one panel")
         self._panels = list(panels)
         self._vd = bypass_drop
+        # Per-panel inverse tables: current (ascending) → voltage.
+        self._tables: list[tuple[np.ndarray, np.ndarray]] = []
+        for p in self._panels:
+            v, i = p.iv_curve(n=samples)
+            v = np.asarray(v, dtype=float)
+            i = np.asarray(i, dtype=float)
+            # I-V is decreasing in V → I is decreasing along the V grid.
+            # Reverse so current is ascending for np.interp.
+            order = np.argsort(i)
+            self._tables.append((i[order], v[order]))
+        self._isc = float(max(p.short_circuit_current for p in self._panels))
+        self._voc = float(sum(p.open_circuit_voltage for p in self._panels))
 
     @property
     def panels(self) -> list[PanelModel]:
         return self._panels
 
-    def _panel_voltage(self, panel: PanelModel, string_current: float) -> float:
-        """Voltage of one panel carrying ``string_current`` (with bypass)."""
-        isc = panel.short_circuit_current
-        if string_current >= isc:
+    def _panel_voltage(self, idx: int, string_current: float) -> float:
+        i_tab, v_tab = self._tables[idx]
+        if string_current >= i_tab[-1]:
             # Panel can't source this much current → bypass diode conducts.
             return -self._vd
-        # Invert the panel I-V: find V where panel.current(V) == string_current.
-        lo, hi = 0.0, panel.open_circuit_voltage
-        for _ in range(60):
-            mid = 0.5 * (lo + hi)
-            if float(panel.current(mid)) > string_current:
-                lo = mid
-            else:
-                hi = mid
-        return 0.5 * (lo + hi)
+        return float(np.interp(string_current, i_tab, v_tab))
 
     def _string_voltage(self, string_current: float) -> float:
-        return sum(self._panel_voltage(p, string_current) for p in self._panels)
+        return sum(self._panel_voltage(k, string_current) for k in range(len(self._panels)))
 
     def _string_current(self, voltage: float) -> float:
         """Invert: find the string current giving the requested string voltage."""
         # String voltage is monotonically decreasing in current.
-        lo, hi = 0.0, self.short_circuit_current
+        lo, hi = 0.0, self._isc
         for _ in range(60):
             mid = 0.5 * (lo + hi)
             if self._string_voltage(mid) > voltage:
@@ -76,10 +90,8 @@ class PvString(PanelModel):
 
     @property
     def open_circuit_voltage(self) -> float:
-        # At I = 0 no bypass conducts; string Voc is the sum of panel Vocs.
-        return float(sum(p.open_circuit_voltage for p in self._panels))
+        return self._voc
 
     @property
     def short_circuit_current(self) -> float:
-        # The strongest panel sets the max current; weaker panels bypass.
-        return float(max(p.short_circuit_current for p in self._panels))
+        return self._isc

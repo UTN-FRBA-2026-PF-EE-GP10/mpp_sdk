@@ -14,7 +14,13 @@ Panel: Hissuma PSF10MONO, 10 W mono-Si
     Series:  V_oc=34 V, I_sc=0.79 A, V_mp=28 V, I_mp=0.72 A, P_max=20 W
 """
 
-from mpp_sdk import DynamicSimulatedSource, PvString, SEPICConverter
+from mpp_sdk import (
+    DynamicSimulatedSource,
+    PvString,
+    SEPICConverter,
+    SimulatedSource,
+    TabulatedPanel,
+)
 from mpp_sdk.models.pvlib_adapter import PvlibPanelModel
 
 # ── Hardware safety limits ────────────────────────────────────────────────────
@@ -75,23 +81,39 @@ def shaded_string(
     return PvString(panels)
 
 
-def make_source(
+def make_dynamic_source(
     panel=None,
     load_resistance: float = 10.0,
     initial_duty: float = 0.5,
 ) -> DynamicSimulatedSource:
-    """Return a ``DynamicSimulatedSource`` for the series string.
+    """Return a ``DynamicSimulatedSource`` for the given panel.
 
     Uses input-capacitor dynamics so the terminal voltage slews toward the
     operating point instead of jumping — exposing settling time / overshoot.
-    The control period matches ``CONTROL_PERIOD_MS`` (1 kHz firmware loop).
+    The panel is tabulated for speed (the I-V solve runs thousands of times).
     """
     if panel is None:
         panel = series_string()
     return DynamicSimulatedSource(
-        panel=panel,
+        panel=TabulatedPanel(panel),
         converter=SEPICConverter(),
         load_resistance=load_resistance,
         initial_duty=initial_duty,
         dt=CONTROL_PERIOD_MS * 1e-3,
+    )
+
+
+def make_static_source(
+    panel=None,
+    load_resistance: float = 10.0,
+    initial_duty: float = 0.5,
+) -> SimulatedSource:
+    """Return a ``SimulatedSource`` (instant operating point, no dynamics)."""
+    if panel is None:
+        panel = series_string()
+    return SimulatedSource(
+        panel=TabulatedPanel(panel),
+        converter=SEPICConverter(),
+        load_resistance=load_resistance,
+        initial_duty=initial_duty,
     )
