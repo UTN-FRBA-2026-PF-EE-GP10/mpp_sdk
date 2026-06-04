@@ -14,7 +14,7 @@ Panel: Hissuma PSF10MONO, 10 W mono-Si
     Series:  V_oc=34 V, I_sc=0.79 A, V_mp=28 V, I_mp=0.72 A, P_max=20 W
 """
 
-from mpp_sdk import DynamicSimulatedSource, SEPICConverter
+from mpp_sdk import DynamicSimulatedSource, PvString, SEPICConverter
 from mpp_sdk.models.pvlib_adapter import PvlibPanelModel
 
 # ── Hardware safety limits ────────────────────────────────────────────────────
@@ -58,8 +58,25 @@ def series_string(
     )
 
 
+def shaded_string(
+    irradiances: tuple[float, float] = (1000.0, 400.0),
+    temperature: float = STC_TEMPERATURE,
+) -> PvString:
+    """Two Hissuma panels in series with per-panel irradiance (partial shading).
+
+    With ``irradiances=(1000, 400)`` one panel is shaded: its bypass diode
+    conducts over part of the curve, producing a two-peak P-V curve where
+    plain P&O can get trapped on the local maximum.
+    """
+    panels = [
+        PvlibPanelModel.hissuma_psf10mono(irradiance=g, temperature=temperature)
+        for g in irradiances
+    ]
+    return PvString(panels)
+
+
 def make_source(
-    panel: PvlibPanelModel | None = None,
+    panel=None,
     load_resistance: float = 10.0,
     initial_duty: float = 0.5,
 ) -> DynamicSimulatedSource:

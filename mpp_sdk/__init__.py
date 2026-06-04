@@ -17,6 +17,8 @@ from .io.dynamic import DynamicSimulatedSource
 from .io.simulated import SimulatedSource
 from .models.base import PanelModel
 from .models.ideal import IdealSingleDiode
+from .models.pvlib_adapter import PvlibPanelModel
+from .models.string import PvString
 from .visualization import LivePanelView, plot_iv_with_operating_point
 
 __version__ = "0.1.0"
@@ -31,6 +33,8 @@ __all__ = [
     "DynamicSimulatedSource",
     "PanelModel",
     "IdealSingleDiode",
+    "PvlibPanelModel",
+    "PvString",
     "LivePanelView",
     "plot_iv_with_operating_point",
     "__version__",
