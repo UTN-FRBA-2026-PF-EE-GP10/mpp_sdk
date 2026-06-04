@@ -61,15 +61,27 @@ Both boards can be powered from their own USB cables — no shared power wire ne
 
 ##### RPi ↔ Pico SPI connection (HIL mode)
 
-The Pico runs as **SPI1 slave**. Connect the Raspberry Pi 5 SPI0 master to the Pico SPI1 pins:
+The Pico runs as **SPI1 slave**. Connect the Raspberry Pi (40-pin header, same on
+RPi4/RPi400/RPi5) SPI0 master to the Pico SPI1 pins:
 
-| RPi5 (SPI0 master) | RP2040 Pico (SPI1 slave) | GPIO   |
-|--------------------|--------------------------|--------|
-| MOSI (GPIO10)      | SPI1_TX / MOSI-in        | GPIO11 |
-| MISO (GPIO9)       | SPI1_RX / MISO-out       | GPIO12 |
-| SCLK (GPIO11)      | SPI1_SCK                 | GPIO10 |
-| CE0  (GPIO8)       | SPI1_CS                  | GPIO13 |
-| GND                | GND                      | —      |
+| RPi signal        | RPi pin | → | Pico signal       | Pico GPIO | Pico pin |
+|-------------------|---------|---|-------------------|-----------|----------|
+| MOSI (GPIO10)     | 19      | → | SPI1_RX (MOSI in) | GPIO12    | 16       |
+| MISO (GPIO9)      | 21      | ← | SPI1_TX (MISO out)| GPIO11    | 15       |
+| SCLK (GPIO11)     | 23      | → | SPI1_SCK          | GPIO10    | 14       |
+| CE0  (GPIO8)      | 24      | → | SPI1_CS           | GPIO13    | 17       |
+| GND               | 25      | — | GND               | —         | 18       |
+
+Pico pins 14–18 are adjacent on the left side of the board (USB connector facing up).
+
+**Frame protocol** (4 bytes, Mode 0, MSB-first, CS held low for entire frame):
+
+| Direction      | Byte 0  | Byte 1  | Byte 2 | Byte 3 |
+|----------------|---------|---------|--------|--------|
+| MOSI (RPi→Pico)| DUTY_H  | DUTY_L  | 0x00   | 0x00   |
+| MISO (Pico→RPi)| V_H     | V_L     | I_H    | I_L    |
+
+DUTY is a u16 (0 = 0 %, 65535 = 100 %). V/I are 12-bit ADC counts.
 
 #### 4. Flash and stream logs
 
@@ -145,3 +157,7 @@ over RTT.
 | 31  | GPIO26  | ADC_PWR         | ADC0 — power measurement      |
 | 32  | GPIO27  | ADC_VOUT        | ADC1 — Vout measurement       |
 | 34  | GPIO28  | ADC_Input_Curr  | ADC2 — input current          |
+
+## Script Test
+
+![Simple Usage](script_test.png)

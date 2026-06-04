@@ -17,10 +17,10 @@ class SpiMcuSource(SignalSource):
     """SignalSource backed by the RP2040 Pico over SPI (HIL mode).
 
     The Pico firmware acts as SPI slave on SPI1 (GPIO10-13).
-    Every ``write()`` call sends a 6-byte full-duplex frame:
+    Every ``write()`` call sends a 12-byte full-duplex frame:
 
-        MOSI (RPi → Pico):  [ DUTY_H | DUTY_L | 0x00 | 0x00 | 0x00 | 0x00 ]
-        MISO (Pico → RPi):  [ 0x00   | 0x00   | V_H  | V_L  | I_H  | I_L  ]
+        MOSI (RPi → Pico):  [ DUTY_H | DUTY_L | 0x00 … 0x00 ]  (12 bytes)
+        MISO (Pico → RPi):  [ V_H    | V_L    | I_H  | I_L  | 0x00 … 0x00 ]
 
     The duty cycle is a u16 (0 = 0 %, 65535 = 100 %).
     V and I are 12-bit ADC counts converted to physical units via the
@@ -35,13 +35,13 @@ class SpiMcuSource(SignalSource):
                 src.write(ctl.step(v, i))
     """
 
-    _FRAME_LEN = 6
+    _FRAME_LEN = 12
 
     def __init__(
         self,
         bus: int = 0,
         device: int = 0,
-        speed_hz: int = 1_000_000,
+        speed_hz: int = 4_000_000,
         mode: int = 0,
         v_scale: float = 3.3 / 4095.0,
         i_scale: float = 3.3 / 4095.0,
@@ -87,10 +87,10 @@ class SpiMcuSource(SignalSource):
 
     def _transact(self, duty: float) -> tuple[float, float]:
         duty_u16 = max(0, min(65535, round(duty * 65535)))
-        tx = [duty_u16 >> 8, duty_u16 & 0xFF, 0, 0, 0, 0]
-        rx = self._spi.xfer2(tx)
-        v_raw = (rx[2] << 8) | rx[3]
-        i_raw = (rx[4] << 8) | rx[5]
+        tx = [duty_u16 >> 8, duty_u16 & 0xFF] + [0] * 10
+        rx = self._spi.xfer2(list(tx))
+        v_raw = (rx[0] << 8) | rx[1]
+        i_raw = (rx[2] << 8) | rx[3]
         return (
             v_raw * self._v_scale + self._v_offset,
             i_raw * self._i_scale + self._i_offset,
