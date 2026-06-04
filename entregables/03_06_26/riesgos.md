@@ -18,8 +18,8 @@ header-includes:
   - \usepackage{booktabs}
   - \usepackage{longtable}
   - \usepackage{array}
+  - \PassOptionsToPackage{table}{xcolor}
   - \usepackage{colortbl}
-  - \usepackage[table]{xcolor}
   - \usepackage{titling}
   - \pretitle{\begin{center}\includegraphics[width=3.2cm]{../logo_UTN.pdf}\\[1em]\LARGE}
   - \posttitle{\par\end{center}\vskip 0.5em}
@@ -60,90 +60,113 @@ posteriores.
 
 \vspace{0.5em}
 
-\begin{longtable}{>{\bfseries}p{0.8cm} p{2.2cm} p{6.5cm} p{3.8cm}}
+\renewcommand{\arraystretch}{1.6}
+\begin{longtable}{>{\bfseries}p{0.8cm} p{2.4cm} p{6.2cm} p{3.8cm}}
 \toprule
 \textbf{ID} & \textbf{Categoría} & \textbf{Descripción} & \textbf{Origen} \\
 \midrule
 \endhead
-\bottomrule
+\midrule
 \endfoot
+\bottomrule
+\endlastfoot
 
-R01 & Cronograma & Atraso en cierre de decisiones de hardware (FET, gate driver, sensor de
-corriente, frecuencia de conmutación) impide enrutar la PCB antes del hito de fabricación
-(semana 6). & Decisiones abiertas a semana 4; cuatro variables interrelacionadas sin responsable
-único. \\[8pt]
+R01 & Cronograma &
+Atraso en cierre de decisiones de hardware (gate driver, sensor de corriente, frecuencia de
+conmutación) impide enrutar la PCB antes del hito de fabricación (semana 6). &
+Decisiones abiertas a semana 5; variables interrelacionadas sin responsable único. \\
+\midrule
 
-R02 & Hardware & El MOSFET seleccionado, o el gate driver asociado, tienen tiempo de entrega
+R02 & Hardware &
+El MOSFET seleccionado, o el gate driver asociado, tienen tiempo de entrega
 (\textit{lead time}) superior a 3 semanas, retrasando el ensamblado y la calibración. &
-Mercado de componentes de potencia; discontinuaciones frecuentes y stock limitado en
-distribuidores locales. \\[8pt]
+Mercado de componentes de potencia; stock limitado en distribuidores locales. \\
+\midrule
 
-R03 & Hardware & La topología SEPIC diseñada no cumple las especificaciones de rizado de
-corriente o tensión en el rango de irradiancia de trabajo, lo que obliga a rediseñar el
-esquemático tras la fabricación. & Brecha entre simulación en LTspice (componentes ideales) y
-comportamiento real de inductores y capacitores de alta frecuencia. \\[8pt]
+R03 & Hardware &
+La topología SEPIC no cumple las especificaciones de rizado de corriente o tensión en el
+rango de irradiancia de trabajo, obligando a rediseñar el esquemático tras la fabricación. &
+Brecha entre simulación LTspice (componentes ideales) y comportamiento real de inductores
+y capacitores de alta frecuencia. \\
+\midrule
 
-R04 & Hardware & El layout de la PCB introduce acoples parásitos (inductancias de pista,
-capacitancias de plano) que desestabilizan el lazo de control a la frecuencia de conmutación
-elegida. & Falta de experiencia previa del equipo en diseño de PCB de potencia a alta
-frecuencia; sin revisión externa del layout. \\[8pt]
+R04 & Hardware &
+El layout de la PCB introduce acoples parásitos (inductancias de pista, capacitancias de
+plano) que desestabilizan el lazo de control a la frecuencia de conmutación elegida. &
+Sin experiencia previa en PCB de potencia a alta frecuencia; sin revisión externa del
+layout. \\
+\midrule
 
-R05 & Firmware & El cambio no planeado de C a Rust en el firmware del RP2040 incrementa la
-curva de aprendizaje y reduce la disponibilidad de ejemplos de referencia para el Pico SDK en
-ese lenguaje. & Decisión técnica tomada en el transcurso del Bloque 1 sin evaluación formal de
-impacto en cronograma. \\[8pt]
+R05 & Firmware &
+El cambio de C a Rust en el firmware del RP2040 incrementa la curva de aprendizaje y
+reduce la disponibilidad de ejemplos de referencia en el ecosistema Pico. &
+Decisión tomada en el Bloque 1 sin evaluación formal de impacto en cronograma. \\
+\midrule
 
-R06 & Firmware & La programación del bloque PIO del RP2040 para SPI slave presenta errores
-sutiles de temporización o sincronización que no son detectables sin hardware real, bloqueando
-la integración HIL hasta el Bloque 3. & Complejidad inherente al modelo de programación PIO
-(máquina de estados con instrucciones limitadas); ecosistema de depuración en Rust menos maduro
-que en C. \\[8pt]
+R06 & Firmware &
+La programación del bloque PIO del RP2040 para SPI slave puede presentar errores sutiles
+de temporización no detectables sin hardware real, bloqueando la integración HIL. &
+Complejidad del modelo PIO (máquina de estados, instrucciones limitadas); depuración en
+Rust menos madura que en C. \\
+\midrule
 
-R07 & Firmware & El algoritmo MPPT final (fuzzy logic, PSO o variante propia) no entra en el
-presupuesto de recursos del RP2040 ($\le 16$ KB de flash, $\le 4$ KB de RAM, $\le 1$ ms por
-paso de control), requiriendo simplificación que compromete la contribución al paper. &
-Restricción de recursos definida en el plan; los algoritmos avanzados tienen complejidad
-computacional y huella de memoria no evaluada empíricamente en el target. \\[8pt]
+R07 & Firmware &
+El algoritmo MPPT final no entra en el presupuesto del RP2040
+($\le 16\,\text{KB}$ flash, $\le 4\,\text{KB}$ RAM, $\le 1\,\text{ms}$ por paso),
+comprometiendo la contribución embebida del paper. &
+Huella de memoria y latencia de los algoritmos avanzados no evaluada aún en el target
+real. \\
+\midrule
 
-R08 & Integración & La brecha entre el modelo de simulación (IdealSingleDiode + SEPIC ideal) y
-el sistema real supera la tolerancia aceptable ($> 5\%$ de error en eficiencia de seguimiento),
-invalidando las comparaciones del paper que combinan resultados simulados y medidos. &
-Simplificaciones del modelo: sin pérdidas de conmutación, sin resistencias parásitas de
-inductores, sin variación de temperatura de junction. \\[8pt]
+R08 & Integración &
+La brecha entre el modelo de simulación y el sistema real supera la tolerancia aceptable
+($> 5\%$ de error en eficiencia de seguimiento), invalidando las comparaciones del paper. &
+Modelo ideal sin pérdidas de conmutación, sin resistencias parásitas de inductores ni
+variación de temperatura de junction. \\
+\midrule
 
-R09 & Integración & El protocolo SPI entre la Raspberry Pi 5 (maestro Python) y el RP2040
-(esclavo Rust/PIO) introduce latencias variables o pérdida de tramas bajo carga, corrompiendo
-el lazo de control HIL en tiempo real. & Mezcla de dos stacks de software heterogéneos (CPython
-con \texttt{spidev} y Rust bare-metal); la sincronización depende de temporizadores de ambos
-extremos. \\[8pt]
+R09 & Integración &
+El protocolo SPI entre la Raspberry Pi 5 (maestro Python) y el RP2040 (esclavo Rust/PIO)
+introduce latencias variables o pérdida de tramas que corrompen el lazo HIL. &
+Stacks heterogéneos (CPython + \texttt{spidev} vs.\ Rust bare-metal); sincronización
+dependiente de temporizadores de ambos extremos. \\
+\midrule
 
-R10 & Cronograma & Caída de disponibilidad de un integrante en el camino crítico (enfermedad,
-obligaciones laborales o académicas) durante el Bloque 3 o 4, cuando convergen los tres
-streams. & Equipo de tres personas con 6 h/semana nominales y sin redundancia de conocimiento
-en hardware de potencia ni en firmware embebido. \\[8pt]
+R10 & Cronograma &
+Caída de disponibilidad de un integrante en el camino crítico durante los Bloques 3 o 4,
+cuando convergen los tres streams. &
+Equipo de tres personas, 6\,h/semana nominales, sin redundancia de conocimiento en
+hardware de potencia ni en firmware embebido. \\
+\midrule
 
-R11 & Cronograma & El hito HIL extremo a extremo (semana 16) no se alcanza por acumulación de
-atrasos en los streams B y C, forzando que el paper se entregue como contribución solo
-simulación. & Dependencia secuencial: PCB fabricada $\to$ ensamblado $\to$ calibración $\to$
-integración SPI $\to$ HIL. Cualquier nodo en la cadena puede bloquear el siguiente. \\[8pt]
+R11 & Cronograma &
+El hito HIL extremo a extremo (semana 16) no se alcanza por acumulación de atrasos en los
+streams B y C, forzando un paper de contribución solo-simulación. &
+Cadena secuencial: PCB $\to$ ensamblado $\to$ calibración $\to$ SPI $\to$ HIL. Cualquier
+nodo bloquea el siguiente. \\
+\midrule
 
-R13 & Académico & Una publicación concurrente (\textit{scooping}) presenta resultados similares
-en comparación de algoritmos MPPT embebidos sobre microcontroladores de bajo costo antes de la
-defensa, reduciendo la novedad del trabajo. & Área activa de investigación; el enfoque (Python
-SDK + HIL en Pico con RP2040) es reproducible con equipamiento de bajo costo, favoreciendo la
-competencia académica. \\[8pt]
+R13 & Académico &
+Una publicación concurrente (\textit{scooping}) presenta resultados similares sobre
+algoritmos MPPT embebidos en microcontroladores de bajo costo antes de la defensa. &
+Área activa de investigación; el enfoque (Python SDK + HIL en RP2040) es reproducible con
+equipamiento accesible. \\
+\midrule
 
-R14 & Externo & La Raspberry Pi Pico (RP2040) presenta una errata conocida en el ADC que
-requiere workarounds específicos en el firmware, con riesgo de que nuevas erratas aparezcan
-durante el desarrollo. & El RP2040 tiene erratas documentadas (ADC); el ecosistema Rust para
-este chip es más reciente y puede exponer incompatibilidades no documentadas. \\[8pt]
+R14 & Externo &
+El RP2040 presenta erratas conocidas en el ADC que requieren workarounds en el firmware;
+pueden aparecer incompatibilidades adicionales con el ecosistema Rust. &
+Erratas documentadas (ADC); ecosystem Rust para RP2040 más reciente que el SDK en C. \\
+\midrule
 
-R15 & Externo & El proveedor de fabricación de PCB introduce tiempos de entrega más largos de
-los esperados o rechaza el diseño por DRC, retrasando el inicio del Bloque 3. & Dependencia de
-un proveedor externo sin contrato formal; experiencia limitada del equipo con los DRC del
-fabricante específico. \\[8pt]
+R15 & Externo &
+El fabricante de PCB rechaza el diseño por DRC o extiende el plazo de entrega, retrasando
+el inicio del Bloque 3. &
+Dependencia de proveedor externo sin contrato formal; experiencia limitada del equipo con
+los DRC del fabricante. \\
 
 \end{longtable}
+\renewcommand{\arraystretch}{1.0}
 
 ---
 
@@ -151,35 +174,10 @@ fabricante específico. \\[8pt]
 
 ### 3.1 Escala y criterios
 
-La probabilidad y el impacto se evalúan en una escala entera de 1 a 5. La tabla siguiente
-define los criterios cualitativos utilizados para la asignación:
-
-\vspace{0.5em}
-
-\renewcommand{\arraystretch}{1.4}
-\begin{tabular}{>{\bfseries}p{1.2cm} p{5.5cm} p{5.5cm}}
-\toprule
-\textbf{Nivel} & \textbf{Probabilidad} & \textbf{Impacto} \\
-\midrule
-1 & Muy improbable ($< 10\%$): condición teórica sin evidencia de materialización. &
-Mínimo: retraso $< 3$ días o rework de un módulo aislado sin efecto en hitos. \\[8pt]
-2 & Improbable ($10\text{--}25\%$): posible en condiciones adversas, con historial
-escaso. & Menor: retraso de 1 semana o degradación parcial de una métrica del paper. \\[8pt]
-3 & Probable ($25\text{--}50\%$): ocurrencia observada en proyectos similares sin
-mitigación activa. & Moderado: retraso de 2--3 semanas o pérdida de un entregable secundario. \\[8pt]
-4 & Muy probable ($50\text{--}75\%$): tendencia clara o condición estructural
-presente en el proyecto. & Alto: desplazamiento de un hito duro o degradación significativa
-del paper. \\[8pt]
-5 & Casi seguro ($> 75\%$): materialización esperada si no se actúa. &
-Crítico: pérdida del HIL, caída del paper a solo-simulación, o defensa comprometida. \\[8pt]
-\bottomrule
-\end{tabular}
-\renewcommand{\arraystretch}{1.0}
-
-\vspace{0.5em}
-
-El nivel de riesgo agregado se define por el score $S = P \times I$ según los umbrales:
-$S \le 3$ $\to$ Bajo; $4 \le S \le 7$ $\to$ Medio; $8 \le S \le 14$ $\to$ Alto; $S \ge 15$ $\to$ Crítico.
+Probabilidad e impacto se califican de 1 (mínimo) a 5 (máximo). El score $S = P \times I$
+determina el nivel: $S \le 3$ Bajo; $4$--$7$ Medio; $8$--$14$ Alto; $S \ge 15$ Crítico.
+Impacto 5 corresponde a pérdida del HIL o caída del paper a solo-simulación; probabilidad 5
+indica materialización esperada sin acción activa.
 
 \vspace{0.5em}
 
@@ -271,139 +269,38 @@ color de cada celda refleja el nivel de riesgo agregado según los umbrales defi
 
 ---
 
-## 4. Análisis detallado de riesgos críticos y altos de mayor score
+## 4. Análisis de riesgos críticos
 
-### 4.1 R01 — Decisiones de hardware abiertas a dos semanas del hito de fabricación (Score 20 — Crítico)
+### 4.1 R01 — Decisiones de hardware abiertas (Score 20 — Crítico)
 
-Al cierre del Bloque 1, tres variables de diseño del convertidor SEPIC permanecen sin resolver:
-el gate driver del MOSFET seleccionado, el sensor de corriente (INA226 integrado vs. shunt más
-amplificador de instrumentación discreto) y la frecuencia de conmutación objetivo. Estas
-variables son interdependientes: la frecuencia de conmutación determina las pérdidas en el
-transistor y condiciona la selección del gate driver; el sensor de corriente define la topología
-de medición y el ruteo de la PCB. Resolver una variable en el orden incorrecto puede requerir
-revisar las anteriores.
+Al cierre del Bloque 1, el gate driver del MOSFET, el sensor de corriente y la frecuencia de
+conmutación permanecen sin definir. Estas variables son interdependientes: la frecuencia
+determina las pérdidas en el transistor y condiciona el gate driver; el sensor define el ruteo
+de la PCB. Si no se cierran antes del fin de la semana 5, el Gerber no puede enviarse a tiempo
+(el fabricante requiere 7--10 días hábiles), lo que desplaza en cascada el inicio del Bloque 3
+y pone en riesgo el Hito 2 (HIL, semana 16). La acción más efectiva no es técnica sino
+organizativa: convocar una sesión de trabajo con agenda y BOM como entregable concreto.
 
-La probabilidad de materialización es alta (P = 4) porque la dinámica de trabajo en equipo con
-disponibilidad limitada (6 h/semana nominales) hace que este tipo de decisiones multi-variable se
-postergue de forma natural hasta que se percibe la presión del hito. El impacto es máximo (I = 5)
-porque si las decisiones no se cierran antes del fin de la semana 5, el diseñador de PCB no puede
-completar el enrutado en tiempo: el tiempo mínimo de fabricación del proveedor es de 7--10 días
-hábiles, lo que significa que el archivo Gerber debe enviarse no más tarde del inicio de la semana
-6. Un atraso de incluso tres días en el cierre de las decisiones se convierte directamente en un
-atraso de dos semanas en la entrega del PCB fabricado, cascadeando al hito HIL de la semana 16.
+### 4.2 R11 — Hito HIL no alcanzado en semana 16 (Score 20 — Crítico)
 
-El riesgo se agrava por la ausencia de un proceso formal de toma de decisiones: no hay una reunión
-convocada, no hay criterios de evaluación documentados para la selección del FET y no hay una
-persona designada como responsable de decisión final. En la práctica, esto significa que la
-decisión puede seguir abierta hasta que alguien perciba la urgencia, con las consecuencias ya
-descritas. La acción de mitigación más efectiva en este momento no es técnica sino organizativa:
-fijar una sesión de trabajo con agenda y entregable concreto antes de que finalice la semana 4.
+El HIL es el hito que convierte el trabajo en un demostrador físico validado; sin él, el paper
+cae a contribución solo-simulación. La probabilidad (P = 4) surge de la cadena secuencial que lo
+precede: PCB fabricada $\to$ ensamblado $\to$ calibración $\to$ integración SPI $\to$ lazo HIL.
+Cada eslabón tiene su propio riesgo (R01, R02, R04, R06, R09), y la falla en cualquiera bloquea
+el siguiente. La herramienta de control más efectiva es definir un hito intermedio en semana 12
+(PCB calibrada, SPI validado punto a punto) que permita activar el plan de contingencia con
+margen suficiente.
 
-### 4.2 R11 — Hito HIL extremo a extremo no alcanzado en semana 16 (Score 20 — Crítico)
+### 4.3 R07 — Algoritmo MPPT no entra en el presupuesto del RP2040 (Score 15 — Crítico)
 
-El hito de Hardware-in-the-Loop (HIL) en la semana 16 es el segundo hito duro del proyecto y el
-más estratégico desde el punto de vista académico: es el que convierte al trabajo de una
-contribución de simulación pura en un demostrador físico validado. Si este hito falla, el paper
-debe ser reformulado para presentar únicamente resultados de simulación, perdiendo la contribución
-experimental que diferencia al trabajo de proyectos previos similares en el mismo campo.
-
-La probabilidad de no alcanzar el hito (P = 4) surge de la cadena de dependencias secuenciales
-que lo preceden: PCB fabricada $\to$ ensamblado y soldado $\to$ calibración de la cadena de
-medición $\to$ integración del protocolo SPI $\to$ prueba de lazo cerrado HIL. Cada eslabón tiene
-su propio riesgo (R01, R02, R03, R04, R06, R09) y el hito HIL es el resultado de que todos ellos
-se resuelvan correctamente en secuencia. La probabilidad compuesta de que la cadena completa no
-falle en ningún nodo es notablemente menor que la probabilidad de éxito de cada eslabón de forma
-individual. Con seis eslabones y probabilidades de fallo individuales de entre el 25 y el 50\%,
-la cadena entera es frágil por construcción.
-
-El impacto es máximo (I = 5) y doble: técnico y académico. Técnicamente, sin HIL no hay
-validación experimental de los algoritmos en el MCU target, y por tanto no hay datos reales para
-la tabla comparativa central del paper. Académicamente, el tribunal espera un demostrador físico
-como parte de una tesis de Ingeniería Electrónica: una defensa basada exclusivamente en
-simulación tiene un riesgo significativo de recibir observaciones que exijan trabajo adicional
-antes de la aprobación, extendiendo el proyecto más allá del horizonte previsto. La definición de
-un hito intermedio en semana 12 (PCB calibrada y SPI validado punto a punto sin lazo MPPT) es la
-herramienta de monitoreo más efectiva para detectar a tiempo si la cadena está en riesgo.
-
-### 4.3 R07 — Algoritmo MPPT no entra en el presupuesto de recursos del RP2040 (Score 15 — Crítico)
-
-El plan establece como restricción de diseño embebido que el algoritmo MPPT final ocupe como
-máximo 16 KB de flash, 4 KB de RAM, y ejecute un paso de control en no más de 1 ms con el RP2040
-corriendo a 150 MHz. Estas cifras son generosas para un algoritmo P\&O simple, pero pueden
-resultar restrictivas para los algoritmos avanzados que constituyen la contribución principal del
-trabajo: lógica difusa (requiere tablas de membresía y un motor de inferencia), PSO (requiere
-mantener el estado de múltiples partículas en memoria) o un algoritmo propio con mayor
-complejidad estructural.
-
-La probabilidad de materialización (P = 3) es moderada porque no se ha realizado aún ningún
-perfilado de recursos en el target real. En simulación Python, los algoritmos corren sin
-restricción de memoria o tiempo; la reimplementación en Rust embebido puede revelar que
-estructuras de datos que son triviales en Python (diccionarios, listas dinámicas, closures)
-requieren un diseño explícito en Rust \texttt{no\_std} que incrementa tanto la complejidad como
-el tamaño del binario compilado. El impacto es máximo (I = 5) porque si el algoritmo de mayor
-complejidad no puede embeberse, el MCU solo puede correr P\&O, que es la línea de base y no el
-resultado novedoso: el paper perdería su contribución embebida principal, que es precisamente el
-elemento diferenciador frente a trabajos previos.
-
-El agravante específico del ecosistema Rust en bare-metal es relevante aquí: la librería estándar
-de Rust no está disponible en \texttt{no\_std}, lo que elimina colecciones dinámicas y obliga a
-estructuras estáticas de tamaño fijo. Un algoritmo PSO con N partículas en Python puede
-implementarse con una lista de largo variable; en Rust bare-metal requiere un array estático de N
-fijo, con N determinado en tiempo de compilación. La elección de N tiene impacto directo en el
-presupuesto de RAM, y la elección de N demasiado conservadora puede limitar la calidad de la
-búsqueda del MPP. La acción de mitigación recomendada es construir un benchmark de recursos en
-el RP2040 tan pronto como el hardware esté disponible, sin esperar a la integración completa del
-lazo de control.
-
-### 4.4 R05 — Curva de aprendizaje Rust en firmware del RP2040 (Score 12 — Alto)
-
-El cambio de lenguaje de firmware de C (Pico SDK estándar) a Rust no fue parte del plan original
-y se materializó durante el Bloque 1. Rust es un lenguaje con una curva de aprendizaje
-significativamente más pronunciada que C para programación embebida: el modelo de ownership y
-borrowing, la ausencia de \texttt{std}, el ecosistema \texttt{embassy} o \texttt{rp-hal} para el
-RP2040, y las herramientas de depuración (probe-rs, defmt) requieren una inversión de tiempo que
-no fue presupuestada en el cronograma. La buena noticia es que el scaffolding actual de SPI slave
-con PIO es evidencia concreta de que el equipo puede avanzar en este ecosistema; el riesgo no es
-de bloqueo total sino de velocidad reducida en tareas que se subestiman.
-
-El impacto concreto (I = 3) es que tareas que en C tomarían un día de trabajo pueden tomar tres
-o cuatro días en Rust para alguien sin experiencia previa en lenguaje embebido: configurar el
-linker script, entender los traits de hal, depurar con probe-rs en lugar de OpenOCD, y aprovechar
-el PIO desde Rust (que requiere el crate \texttt{pio} y macros específicas de ensamblador PIO). La
-integración completa del lazo de control (ADC + PWM + SPI + algoritmo MPPT) en un solo binario
-\texttt{no\_std} es un desafío de mayor complejidad que el scaffolding actual, y puede consumir
-tiempo no presupuestado del Bloque 3 si no se gestiona activamente.
-
-### 4.5 R06 — Bug de temporización en el bloque PIO para SPI slave (Score 12 — Alto)
-
-El bloque PIO del RP2040 es una de las características más potentes pero también más complejas del
-chip: permite implementar protocolos digitales personalizados con precisión de ciclo de reloj
-mediante un conjunto reducido de instrucciones (jmp, wait, in, out, set, mov, push, pull). La
-implementación de un SPI slave con PIO requiere gestionar la polaridad de reloj, la fase de
-muestreo, el tamaño de palabra y la sincronización con el DMA o las interrupciones del procesador
-principal, todo ello en un programa de máximo 32 instrucciones por bloque PIO.
-
-Los errores de temporización en este contexto son difíciles de detectar sin hardware real: en
-simulación o con lógica analizadora de software, las interacciones entre el reloj del maestro SPI
-(Raspberry Pi 5, ejecutando \texttt{spidev} sobre Linux), los ciclos de respuesta del PIO, y las
-interrupciones del sistema operativo del maestro pueden resultar en pérdida de bits o
-desincronización de trama que solo aparece bajo condiciones de carga o con ciertos patrones de
-datos. El scaffolding actual muestra que la estructura básica está en marcha, pero la validación
-completa requiere la integración con el maestro Python y pruebas de estrés que no pueden
-realizarse sin el hardware completo ensamblado. La detección tardía de este tipo de bug,
-después del Bloque 3, puede consumir tiempo crítico del Bloque 4.
-
-### 4.6 R15 — Rechazo o demora del fabricante de PCB (Score 12 — Alto)
-
-La cadena crítica de los streams B y C comienza en el envío de los archivos Gerber al fabricante
-de PCB. Si el fabricante rechaza el diseño por violaciones de las reglas de diseño propias del
-proceso de fabricación (anchuras mínimas de pista, separaciones, tamaño mínimo de via, copper
-coverage para procesos de 2 capas), o si su tiempo de producción se extiende más allá de lo
-previsto (feriados nacionales, falla de equipamiento, alta carga de pedidos), el inicio del Bloque
-3 se desplaza directamente. Un rechazo DRC implica un ciclo de corrección más reenvío que puede
-consumir entre 3 y 7 días adicionales, mientras que un tiempo de entrega extendido no es
-controlable una vez enviado el pedido. La ejecución del DRC del fabricante sobre el diseño KiCad
-antes de exportar los Gerbers es la acción de mitigación más efectiva y de menor costo.
+El presupuesto de diseño embebido es $\le 16\,\text{KB}$ flash, $\le 4\,\text{KB}$ RAM,
+$\le 1\,\text{ms}$ por paso. Estas cifras son holgadas para P\&O simple, pero los algoritmos
+avanzados (lógica difusa, PSO) requieren tablas de membresía o estado de múltiples partículas
+que en Rust \texttt{no\_std} deben ser estructuras estáticas de tamaño fijo, determinado en
+tiempo de compilación. Si el algoritmo objetivo no cabe, el MCU solo puede correr P\&O, que es
+la línea de base y no el resultado diferenciador del paper. La mitigación es ejecutar un
+benchmark de recursos (\texttt{cargo size} + SysTick) en el RP2040 real en cuanto el hardware
+esté disponible, sin esperar la integración completa del lazo.
 
 ---
 
@@ -426,131 +323,82 @@ fecha límite y el indicador que confirma que la acción fue exitosa. Los riesgo
 \endfoot
 
 R01 & Evitar &
-(1) Convocar reunión de decisión técnica antes del fin de la semana 4.
-(2) Documentar criterios de selección FET: pérdidas de conmutación, disponibilidad, costo,
-footprint.
-(3) Designar a B como responsable de decisión final con capacidad de desempate.
-(4) Cerrar todas las decisiones de componentes en una única sesión de trabajo conjunta. &
-B & Sem. 5 (día 1) &
-Commit en KiCad con BOM completa y todos los valores de componentes definidos. \\[8pt]
+Convocar reunión de decisión técnica antes del fin de la sem. 5; cerrar BOM completa en
+una sesión (gate driver, sensor de corriente, frecuencia de conmutación). &
+B & Sem. 5 &
+BOM completa en KiCad con todos los valores definidos. \\[8pt]
 
 R02 & Mitigar &
-(1) Antes de cerrar la decisión de FET, verificar stock en Mouser, Digi-Key y LCSC para los
-candidatos finalistas.
-(2) Seleccionar el componente con stock $\ge 10$ unidades y entrega $\le 5$ días hábiles.
-(3) Identificar un componente de respaldo compatible en footprint.
-(4) Realizar el pedido el mismo día que se aprueba el esquemático final. &
+Verificar stock y lead time en Mouser/Digi-Key/LCSC para los candidatos; realizar el pedido
+el mismo día que se aprueba el esquemático. &
 B & Sem. 5 &
-Componente principal y respaldo con stock confirmado; pedido realizado antes del fin de sem. 5. \\[8pt]
+Pedido confirmado con entrega $\le 5$ días hábiles. \\[8pt]
 
 R03 & Mitigar &
-(1) Completar la simulación LTspice del SEPIC con modelos SPICE de los componentes reales
-(incluyendo ESR de capacitores y DCR de inductores).
-(2) Definir criterios de aceptación cuantitativos: rizado de tensión $< 2\%$, rizado de
-corriente $< 30\%$, eficiencia $> 85\%$ en punto nominal.
-(3) Documentar resultados de simulación como adjunto al PR de fabricación. &
+Simular el SEPIC en LTspice con modelos reales (ESR de capacitores, DCR de inductores);
+documentar criterios de aceptación (rizado $< 2\%$, eficiencia $> 85\%$). &
 B & Sem. 6 &
 Reporte LTspice con parámetros reales adjunto al PR de fabricación. \\[8pt]
 
 R04 & Mitigar &
-(1) Seguir guías de layout para potencia: planos de ground separados, retorno de corriente de
-conmutación en loop mínimo, vias térmicas bajo el FET.
-(2) Completar un checklist estándar de integridad de señal antes de exportar Gerbers.
-(3) Solicitar revisión del layout a un docente del laboratorio de electrónica de potencia si
-es posible antes del envío. &
+Seguir guías de layout de potencia (loop de conmutación mínimo, plano de retorno limpio);
+completar checklist de integridad de señal antes de exportar Gerbers. &
 B & Sem. 6 &
-Checklist completado; comentarios de revisión incorporados y documentados en el PR. \\[8pt]
+Checklist completado y documentado en el PR. \\[8pt]
 
-R05 & Aceptar / Mitigar &
-(1) Aceptar el cambio a Rust como decisión definitiva y no revertir a C.
-(2) Dedicar la semana 5 a completar el scaffolding básico: ADC, PWM y SPI en un único binario
-funcional (sin algoritmo MPPT).
-(3) Documentar en el repositorio las decisiones de arquitectura Rust (crates, linker script,
-probe-rs setup) para reducir fricción futura.
-(4) Usar los ejemplos del crate \texttt{rp2040-hal} como referencia canónica. &
+R05 & Aceptar &
+Completar el scaffolding ADC + PWM + SPI en un único binario funcional; documentar la
+arquitectura Rust (crates, linker script, probe-rs) en el repositorio. &
 C & Sem. 7 &
-Binario compilable con ADC + PWM + SPI funcionando en el RP2040 real, verificado con
-analizador lógico. \\[8pt]
+Binario con ADC + PWM + SPI corriendo en el RP2040 real. \\[8pt]
 
 R06 & Mitigar &
-(1) Desarrollar un banco de prueba del PIO usando el segundo núcleo del RP2040 como generador
-de reloj SPI maestro simulado, eliminando la dependencia del hardware externo.
-(2) Agregar trazas \texttt{defmt} para registrar cada transición relevante de la máquina PIO.
-(3) Una vez disponible el hardware (sem. 9+), realizar prueba de estrés: 10.000 transacciones
-SPI consecutivas con datos aleatorios y verificar integridad byte a byte. &
+Usar el segundo núcleo del RP2040 como generador de reloj SPI simulado para validar el PIO
+sin hardware externo; prueba de estrés de 10.000 transacciones al tener hardware (sem. 9). &
 C & Sem. 9 &
-10.000 transacciones SPI sin errores de framing, resultado documentado en el repositorio. \\[8pt]
+10.000 transacciones SPI sin errores de framing. \\[8pt]
 
 R07 & Mitigar &
-(1) Implementar el algoritmo más complejo (fuzzy o PSO) en Rust \texttt{no\_std} en el Bloque
-4, antes del Bloque 5.
-(2) Medir huella de flash y RAM con \texttt{cargo size} y tiempo de ejecución con SysTick antes
-de integrar al lazo.
-(3) Si el algoritmo excede el presupuesto, definir una versión reducida (N fijo en PSO,
-tabla de membresía de resolución reducida en fuzzy) que cumpla las restricciones.
-(4) Documentar el trade-off en el paper como análisis de desempeño embebido. &
+Medir huella de flash/RAM con \texttt{cargo size} y latencia con SysTick en el Bloque 4;
+si excede el presupuesto, definir versión reducida y documentar el trade-off en el paper. &
 C + A & Sem. 16 &
-Algoritmo corriendo en RP2040 con flash $\le 16$ KB, RAM $\le 4$ KB, paso $\le 1$ ms. \\[8pt]
+Algoritmo en RP2040: flash $\le 16$ KB, RAM $\le 4$ KB, paso $\le 1$ ms. \\[8pt]
 
 R08 & Mitigar &
-(1) Incorporar al modelo de simulación las pérdidas de conmutación del FET real
-($R_{ds(on)}$, $Q_{sw}$ del datasheet) y la DCR del inductor elegido.
-(2) Definir una tolerancia de aceptación formal: error $< 5\%$ en eficiencia de seguimiento
-entre simulación y medición real.
-(3) Si la brecha supera el umbral, reportarla cuantitativamente en el paper como resultado
-(la cuantificación del error de modelo es en sí misma una contribución). &
+Incorporar $R_{ds(on)}$ y DCR del inductor al modelo de simulación; definir tolerancia formal
+de $< 5\%$ de error en eficiencia de seguimiento entre simulación y banco real. &
 A + B & Sem. 14 &
-Tabla comparativa simulación vs. real con error relativo documentado en el draft del paper. \\[8pt]
+Tabla comparativa sim vs.\ real con error relativo en el draft del paper. \\[8pt]
 
 R09 & Mitigar &
-(1) Definir un protocolo SPI con trama de longitud fija y campo de checksum CRC-8 para
-detectar corrupción en tiempo real.
-(2) Implementar un mecanismo de re-sincronización en el esclavo (reinicio del bloque PIO
-tras N bytes sin trama válida).
-(3) Limitar la frecuencia de muestreo del lazo HIL a 1 kHz inicialmente y aumentar
-gradualmente con medición de latencia. &
+Diseñar trama SPI de longitud fija con checksum CRC-8; implementar re-sincronización en el
+esclavo; limitar la frecuencia del lazo HIL a 1 kHz inicialmente. &
 A + C & Sem. 13 &
-Lazo HIL ejecutando 1000 ciclos de control sin pérdida de trama; latencia máxima $< 1$ ms. \\[8pt]
+1000 ciclos HIL sin pérdida de trama; latencia $< 1$ ms. \\[8pt]
 
 R10 & Mitigar &
-(1) Documentar el conocimiento de hardware de potencia y firmware embebido en el repositorio
-(decisiones de diseño, setup de herramientas, procedimiento de calibración).
-(2) Establecer plan de contingencia: si B cae más de 2 semanas, A asume revisión del layout
-con soporte asíncrono de B.
-(3) Mantener el roadmap actualizado con avance real semanal visible para los tres
-integrantes. &
+Documentar setup de herramientas y decisiones de diseño en el repositorio; definir plan de
+contingencia si un integrante del camino crítico cae más de 2 semanas. &
 Todos & Sem. 8 &
-Documentación de setup y procedimientos completa; roadmap actualizado con avance real sem. 8. \\[8pt]
+Documentación de setup completa en el repositorio. \\[8pt]
 
 R11 & Mitigar &
-(1) Definir hito intermedio en semana 12 (fin del Bloque 3): PCB calibrada y protocolo SPI
-validado punto a punto.
-(2) Si en semana 12 no se alcanza el hito intermedio, activar plan de contingencia: paper
-reformulado como contribución simulación + arquitectura HIL sin resultados experimentales.
-(3) Comunicar al director de tesis el estado real del proyecto en semana 12 sin demora. &
+Definir hito intermedio en sem. 12 (PCB calibrada, SPI validado punto a punto); si no se
+alcanza, activar modo degradado: paper solo-simulación con arquitectura HIL documentada. &
 Todos & Sem. 12 &
-Hito intermedio sem. 12 alcanzado: medición de tensión/corriente real desde Python sobre el
-hardware físico. \\[8pt]
+Medición de V/I real desde Python sobre el hardware físico. \\[8pt]
 
 R14 & Mitigar &
-(1) Revisar la lista completa de erratas del RP2040 (documento oficial Raspberry Pi) antes
-de diseñar el firmware de ADC.
-(2) Implementar el workaround documentado para la errata del ADC (evitar canal flotante
-adyacente al canal activo) desde el inicio del desarrollo.
-(3) Cubrir el ADC con pruebas de regresión que validen la calibración tras cada cambio
-significativo de firmware. &
+Revisar erratas del RP2040 antes de diseñar el firmware de ADC; implementar el workaround
+(evitar canal flotante adyacente) desde el inicio del desarrollo. &
 C & Sem. 5 &
-Código de ADC con workaround implementado y comentado; lista de erratas revisada. \\[8pt]
+Código de ADC con workaround implementado y comentado. \\[8pt]
 
-R15 & Evitar / Mitigar &
-(1) Ejecutar el DRC del fabricante (JLCPCB o PCBWay según la elección del equipo) sobre
-el diseño KiCad antes de exportar Gerbers.
-(2) Usar el plugin de validación de fabricabilidad de KiCad (Fabrication Toolkit).
-(3) Enviar el pedido con opción de entrega express si el tiempo estándar supera 10 días hábiles.
-(4) Tener identificado un segundo proveedor de respaldo con tiempo de entrega comparable. &
+R15 & Evitar &
+Ejecutar el DRC del fabricante sobre el diseño KiCad antes de exportar Gerbers; tener
+identificado un segundo proveedor de respaldo. &
 B & Sem. 6 &
-DRC sin errores; pedido enviado antes del fin de sem. 6 con confirmación de plazo $\le 10$
-días hábiles. \\[8pt]
+DRC sin errores; pedido enviado con plazo $\le 10$ días hábiles confirmado. \\[8pt]
 
 \end{longtable}
 
