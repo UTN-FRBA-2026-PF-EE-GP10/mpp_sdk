@@ -105,13 +105,16 @@ def main():
     ax.patch.set_visible(False)
     ax.grid(True, alpha=0.3)
 
-    # ── Right panel: power vs time ───────────────────────────────────────────
-    ax_t.axhline(p_mpp, color="k", lw=1, ls="--", label=f"global MPP ({p_mpp:.2f} W)")
-    ax_t.set_title("Power vs time")
+    # ── Right panel: distance from MPP vs time (log) ─────────────────────────
+    # Plotting the power *loss* P_mpp − P on a log axis makes both the
+    # convergence transient (large) and the steady-state ripple (the small
+    # oscillating floor) visible at once — a linear power axis hides the ripple.
+    ax_t.set_title("Distance from MPP vs time")
     ax_t.set_xlabel("Time [ms]")
-    ax_t.set_ylabel("Power [W]")
-    ax_t.set_ylim(0, p_curve.max() * 1.25)
-    ax_t.grid(True, alpha=0.3)
+    ax_t.set_ylabel(r"$P_\mathrm{mpp} - P$  [W]")
+    ax_t.set_yscale("log")
+    ax_t.set_ylim(1e-3, p_curve.max() * 1.5)
+    ax_t.grid(True, alpha=0.3, which="both")
 
     runners, dots, trails, time_lines = [], [], [], []
     p_hist: list[list[float]] = []
@@ -149,7 +152,8 @@ def main():
             arr = np.asarray(runner.trail)
             trail.set_data(arr[:, 0], arr[:, 1])
             dot.set_data([v], [p])
-            p_hist[k].append(p)
+            # distance from the global MPP, floored so the log axis stays finite
+            p_hist[k].append(max(p_mpp - p, 1e-3))
             t_line.set_data(t_hist, p_hist[k])
             artists += [trail, dot, t_line]
         # grow the time axis as the run advances
