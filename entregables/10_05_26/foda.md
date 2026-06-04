@@ -26,7 +26,7 @@ El proyecto `mpp-sdk` da soporte a una tesis de Ingeniería Electrónica
 sobre seguimiento del punto de máxima potencia (MPPT) en sistemas
 fotovoltaicos. La entrega final consta de cuatro componentes: la
 biblioteca en Python, un paper con el estudio comparativo, un
-demostrador físico (Raspberry Pi 5 + Raspberry Pi Pico 2 / RP2350
+demostrador físico (Raspberry Pi 5 + Raspberry Pi Pico / RP2040
 comunicados por SPI + etapa SEPIC + panel pequeño) y un **algoritmo
 final embebido en el microcontrolador**, validado punto a punto
 contra la referencia en Python.
@@ -66,11 +66,11 @@ driver*) y medición antes de pasar al diseño del circuito impreso.
   $V_\text{mpp}$ del panel esté por encima o por debajo de la
   tensión de carga sin cambiar la arquitectura, lo cual es ideal
   para un demostrador académico con un rango amplio de irradiancia.
-- **Microcontrolador ya seleccionado: Raspberry Pi Pico 2 (RP2350).**
+- **Microcontrolador ya seleccionado: Raspberry Pi Pico (RP2040).**
   La decisión está cerrada y elimina una variable importante del
   esquemático: PWM por hardware con bajo *jitter*, SDK en C bien
-  soportado, doble núcleo Cortex-M33, 520 KB de SRAM y 4 MB de
-  *flash*. Holgado frente al presupuesto del algoritmo a embarcar
+  soportado, doble núcleo Cortex-M0+, 264 KB de SRAM y 2 MB de
+  *flash* (QSPI externo en la placa Pico). Holgado frente al presupuesto del algoritmo a implementar
   ($\le 16~\text{KB}$ de *flash*, $\le 4~\text{KB}$ de RAM,
   $\le 1~\text{ms}$ por paso de control).
 - **Acceso a los laboratorios de la facultad.** Disponibilidad de
@@ -111,7 +111,7 @@ driver*) y medición antes de pasar al diseño del circuito impreso.
   Sesga el trabajo hacia métodos de paso fijo y de poco estado
   interno, que son los más fáciles de analizar y defender en la
   tesis.
-- **Componentes accesibles.** El RP2350 ya está fijado y es de bajo
+- **Componentes accesibles.** El RP2040 ya está fijado y es de bajo
   costo; los sensores INA226 y *shunt* + amplificador de
   instrumentación están en stock; los transistores GaN y SiC en
   encapsulado TO-220 / DPAK son piezas comunes.
@@ -168,7 +168,7 @@ driver*) y medición antes de pasar al diseño del circuito impreso.
 - **Restricción de tiempo real en el lazo de control.** Linux en
   espacio de usuario sobre la Raspberry Pi 5 no garantiza el tiempo
   real necesario para PWM en el rango de kHz; el lazo rápido vive en
-  el RP2350 por diseño. Si el RP2350 quedara subdimensionado para
+  el RP2040 por diseño. Si el RP2040 quedara subdimensionado para
   algún algoritmo en particular, se reescala el algoritmo, no el
   chip.
 - **Pérdida de novedad (*Scooping*) por publicaciones concurrentes.**
@@ -202,7 +202,7 @@ Las acciones de mayor apalancamiento durante el bloque actual son:
    propio se atrasa.
 4. **Atar cada decisión de hardware a una métrica del SDK**: estado
    en bytes, microsegundos por paso, *flash* y RAM consumidos. De
-   esa forma, la elección del algoritmo a embarcar cae alineada con
+   esa forma, la elección del algoritmo a implementar cae alineada con
    el diseño físico.
 
 \bigskip

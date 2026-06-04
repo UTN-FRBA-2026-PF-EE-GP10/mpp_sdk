@@ -43,7 +43,7 @@ sentido temporal y por *streams* horizontales:
 
 - **Stream A — SDK e integración.** Código en Python, paper, CI.
 - **Stream B — Banco de pruebas.** Esquemático, PCB, ensayos en banco.
-- **Stream C — Hardware/Firmware.** Raspberry Pi Pico 2 (RP2350), HIL y
+- **Stream C — Hardware/Firmware.** Raspberry Pi Pico (RP2040), HIL y
   embebido del algoritmo final.
 
 Las flechas continuas son dependencias dentro de un mismo *stream*.
@@ -100,7 +100,7 @@ duros; el bloque en amarillo es la posición actual del proyecto.
 \node[block] (a3) at (3, 2) {Adaptador \\ pvlib \\ integrado};
 \node[block] (a4) at (4, 2) {Sim + HIL en \\ banco comp.; \\ figs prelim.};
 \node[block] (a5) at (5, 2) {Global-MPPT; \\ 1as figuras \\ del paper};
-\node[block] (a6) at (6, 2) {Algoritmo a \\ embarcar; \\ figuras fijas};
+\node[block] (a6) at (6, 2) {Algoritmo a \\ implementar; \\ figuras fijas};
 \node[block] (a7) at (7, 2) {Paper: borrador \\ $\to$ revisión \\ $\to$ pulido};
 
 % --- Fila B: Hardware ---
@@ -113,7 +113,7 @@ duros; el bloque en amarillo es la posición actual del proyecto.
 \node[block] (b7) at (7, 1) {Capítulo HW + \\ BOM + \\ calibración};
 
 % --- Fila C: Firmware ---
-\node[block] (c1) at (1, 0) {Encendido RP2350; \\ ADC/PWM/SPI \\ (esqueleto)};
+\node[block] (c1) at (1, 0) {Encendido RP2040; \\ ADC/PWM/SPI \\ (esqueleto)};
 \node[block] (c2) at (2, 0) {Protocolo SPI \\ cerrado; \\ HIL en lazo loc.};
 \node[block] (c3) at (3, 0) {Jitter ADC/PWM \\ medido; SPI \\ a Pi vivo};
 \node[hard]  (c4) at (4, 0) {Fase 5a: \\ HIL extremo \\ a extremo};
@@ -156,7 +156,7 @@ duros; el bloque en amarillo es la posición actual del proyecto.
     \tikz \fill[yellow!35, draw=orange!85] (0,0) rectangle (0.4,0.25); & Posición actual \\
     \tikz \fill[blue!5, draw=black!60] (0,0) rectangle (0.4,0.25); & Entregable regular \\
     \tikz[baseline=0pt] \draw[-{Stealth[length=2mm]}, thick, black!65] (0,0.1) -- (0.5,0.1); & Dependencia dentro del mismo stream \\
-    \tikz[baseline=0pt] \draw[-{Stealth[length=2mm]}, dashed, very thick, teal!75!black] (0,0.1) -- (0.5,0.1); & Acople A$\leftrightarrow$C: protocolo SPI (Pi $\leftrightarrow$ RP2350) \\
+    \tikz[baseline=0pt] \draw[-{Stealth[length=2mm]}, dashed, very thick, teal!75!black] (0,0.1) -- (0.5,0.1); & Acople A$\leftrightarrow$C: protocolo SPI (Pi $\leftrightarrow$ RP2040) \\
     \tikz[baseline=0pt] \draw[-{Stealth[length=2mm]}, dashed, very thick, magenta!75!black] (0,0.1) -- (0.5,0.1); & Acople A$\leftrightarrow$C: embebido del algoritmo Python $\to$ MCU \\
     \end{tabular}%
   };
@@ -170,14 +170,14 @@ duros; el bloque en amarillo es la posición actual del proyecto.
 
 ## 3. Entregables por bloque
 
-| Bloque | Entregable A (SDK)                            | Entregable B (Banco de pruebas)                        | Entregable C (Hardware/Firmware, RP2350)             |
+| Bloque | Entregable A (SDK)                            | Entregable B (Banco de pruebas)                        | Entregable C (Hardware/Firmware, RP2040)             |
 |-------:|-----------------------------------------------|---------------------------------------------------------|------------------------------------------------------|
 | 1      | `lossy.py`, `array.py`, esqueleto del adaptador `pvlib` | Esquemático v1, BOM, FET y controlador de compuerta | Esqueleto de ADC, PWM y SPI esclavo                  |
 | 2      | InCond, P\&O adaptativo, banco de comparación (esqueleto) | PCB v1, **fab. por sem 6**, pedido de componentes  | Protocolo SPI cerrado, HIL en lazo local             |
 | 3      | Adaptador `pvlib` integrado                   | PCB ensamblada, ADC calibrado                           | Jitter medido, enlace a la Pi vivo                   |
 | 4      | Simulación + HIL en el banco de comparación   | Cadena de medición validada vs osciloscopio             | **Fase 5a — HIL extremo a extremo [OK]**             |
 | 5      | Un Global-MPPT + primeras figuras del paper   | Verificación cruzada HW vs sim                          | Inicio del embebido Python $\to$ MCU                 |
-| 6      | Decisión del algoritmo a embarcar             | Ensayo con panel real (objetivo extendido)              | **Fase 5b — algoritmo embebido en el MCU [OK]**      |
+| 6      | Decisión del algoritmo a implementar             | Ensayo con panel real (objetivo extendido)              | **Fase 5b — algoritmo embebido en el MCU [OK]**      |
 | 7      | Paper: borrador $\to$ pulido                  | Capítulo de hardware + BOM + calibración                | Capítulo de firmware + reporte de recursos           |
 
 ## 4. Principales desafíos a resolver
@@ -195,7 +195,7 @@ duros; el bloque en amarillo es la posición actual del proyecto.
 3. **Medición de tensión y corriente.** Sensor INA226 (I²C,
    integrado) o *shunt* + amplificador de instrumentación. Definir
    el lado del *shunt* (alto o bajo) y su impacto sobre el ADC del
-   RP2350.
+   RP2040.
 4. **Frecuencia de conmutación.** Compromiso entre tamaño de los
    inductores $L_1$, $L_2$ y del capacitor de acople $C_a$ del SEPIC,
    y pérdidas de conmutación. Una vez fijada, se cierran los valores
@@ -219,7 +219,7 @@ duros; el bloque en amarillo es la posición actual del proyecto.
 3. **Calibración de la cadena de medición.** Escala y desviación
    (*offset*) del ADC, valor real del *shunt*, ancho de banda del
    *front-end*. Es necesaria antes de comparar contra simulación.
-4. **Diseño del protocolo SPI (Pi $\leftrightarrow$ RP2350).** Roles
+4. **Diseño del protocolo SPI (Pi $\leftrightarrow$ RP2040).** Roles
    de maestro y esclavo, formato de trama, frecuencia de muestreo,
    semántica del *watchdog* y del paro suave (*soft-stop*).
    Documentar en `data/hardware/spi_protocol.md` apenas se
@@ -231,7 +231,7 @@ duros; el bloque en amarillo es la posición actual del proyecto.
 
 ## 4.3 Bloques 5–6 — embebido del algoritmo en el MCU
 
-1. **Embebido del algoritmo en el RP2350.** Reescribir P\&O o InCond
+1. **Embebido del algoritmo en el RP2040.** Reescribir P\&O o InCond
    en C (Pi Pico SDK) o MicroPython, respetando el presupuesto:
 
    $$\text{flash} \le 16~\text{KB}, \quad
