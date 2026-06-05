@@ -2530,13 +2530,7 @@
 		(uuid "30596ce9-ae8b-4980-8cb1-83e6fc0b7964")
 	)
 	(junction
-		(at 110.49 69.85)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "38e943a9-a03e-45b3-9dc1-4fd9681c606e")
-	)
-	(junction
-		(at 172.72 36.83)
+		(at 173.99 36.83)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "406d7352-a0f5-40b4-9c82-b095757094c3")
@@ -2584,7 +2578,7 @@
 		(uuid "712f2d4f-f955-4b5f-b36f-0cfae3770228")
 	)
 	(junction
-		(at 111.76 38.1)
+		(at 113.03 38.1)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "71333150-a2f7-461a-afcc-409ebdecc9df")
@@ -2596,7 +2590,7 @@
 		(uuid "7be69be2-9372-4705-86ae-590bac00cf3b")
 	)
 	(junction
-		(at 170.18 48.26)
+		(at 171.45 48.26)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "812bcba2-cd41-4a92-9f1a-3e2bbc3aeb15")
@@ -2608,22 +2602,10 @@
 		(uuid "8b3dd8ff-42d9-4843-8556-341c78086e5d")
 	)
 	(junction
-		(at 171.45 68.58)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "8c04499c-1ef3-4a40-b29f-94becdf6c854")
-	)
-	(junction
 		(at 154.94 153.67)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "915e2535-3751-462a-9229-cd35b31d6853")
-	)
-	(junction
-		(at 173.99 58.42)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "a1af7e0c-d3d2-4884-a339-4b17aeba381e")
 	)
 	(junction
 		(at 76.2 143.51)
@@ -2638,7 +2620,7 @@
 		(uuid "a8243ec1-6350-4d2a-b271-a168ff1baf5a")
 	)
 	(junction
-		(at 113.03 49.53)
+		(at 114.3 49.53)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "a9286ef6-b6f8-4d2e-8f54-c08e022e5925")
@@ -2662,7 +2644,7 @@
 		(uuid "b0b0018b-a1d3-4529-9c26-df5e423e407f")
 	)
 	(junction
-		(at 109.22 49.53)
+		(at 110.49 49.53)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "b5c5e3d2-5037-4273-9630-0efad75bf6ad")
@@ -2680,13 +2662,13 @@
 		(uuid "bcf90142-ce51-486f-9b8f-1f32fe46b179")
 	)
 	(junction
-		(at 109.22 59.69)
+		(at 110.49 59.69)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "c07f0491-f025-46b3-8c6f-30b92485e9a6")
 	)
 	(junction
-		(at 173.99 48.26)
+		(at 175.26 48.26)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "c3f0fe24-eb31-4a98-bee0-def2109e792f")
@@ -2696,12 +2678,6 @@
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "c6748a83-29a4-421d-a2a9-1659a0c0dee1")
-	)
-	(junction
-		(at 113.03 59.69)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "d13ad325-18c1-4554-904a-872b756b27e6")
 	)
 	(junction
 		(at 170.18 125.73)
@@ -2716,7 +2692,7 @@
 		(uuid "de6e1c8d-99cb-47fb-9b66-2704236d387e")
 	)
 	(junction
-		(at 170.18 58.42)
+		(at 171.45 58.42)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "e36f50b9-9f64-4078-b5d7-2ce3f2d771fe")
@@ -2769,7 +2745,7 @@
 	)
 	(wire
 		(pts
-			(xy 172.72 36.83) (xy 173.99 36.83)
+			(xy 173.99 36.83) (xy 175.26 36.83)
 		)
 		(stroke
 			(width 0)
@@ -2799,7 +2775,7 @@
 	)
 	(wire
 		(pts
-			(xy 170.18 36.83) (xy 172.72 36.83)
+			(xy 171.45 36.83) (xy 173.99 36.83)
 		)
 		(stroke
 			(width 0)
@@ -2829,7 +2805,7 @@
 	)
 	(wire
 		(pts
-			(xy 109.22 59.69) (xy 113.03 59.69)
+			(xy 110.49 59.69) (xy 114.3 59.69)
 		)
 		(stroke
 			(width 0)
@@ -2869,7 +2845,7 @@
 	)
 	(wire
 		(pts
-			(xy 170.18 58.42) (xy 173.99 58.42)
+			(xy 171.45 58.42) (xy 175.26 58.42)
 		)
 		(stroke
 			(width 0)
@@ -2919,7 +2895,7 @@
 	)
 	(wire
 		(pts
-			(xy 170.18 48.26) (xy 173.99 48.26)
+			(xy 171.45 48.26) (xy 175.26 48.26)
 		)
 		(stroke
 			(width 0)
@@ -2929,7 +2905,7 @@
 	)
 	(wire
 		(pts
-			(xy 170.18 39.37) (xy 170.18 36.83)
+			(xy 171.45 39.37) (xy 171.45 36.83)
 		)
 		(stroke
 			(width 0)
@@ -2959,7 +2935,7 @@
 	)
 	(wire
 		(pts
-			(xy 113.03 38.1) (xy 113.03 39.37)
+			(xy 114.3 38.1) (xy 114.3 39.37)
 		)
 		(stroke
 			(width 0)
@@ -2999,16 +2975,6 @@
 	)
 	(wire
 		(pts
-			(xy 171.45 68.58) (xy 170.18 68.58)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "329e990b-7172-44bd-a098-41a262596327")
-	)
-	(wire
-		(pts
 			(xy 127 133.35) (xy 128.27 133.35)
 		)
 		(stroke
@@ -3019,7 +2985,7 @@
 	)
 	(wire
 		(pts
-			(xy 170.18 48.26) (xy 170.18 46.99)
+			(xy 171.45 48.26) (xy 171.45 46.99)
 		)
 		(stroke
 			(width 0)
@@ -3049,17 +3015,7 @@
 	)
 	(wire
 		(pts
-			(xy 171.45 68.58) (xy 171.45 72.39)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "3b539689-4456-4964-8385-0a3fbbf2c579")
-	)
-	(wire
-		(pts
-			(xy 109.22 50.8) (xy 109.22 49.53)
+			(xy 110.49 50.8) (xy 110.49 49.53)
 		)
 		(stroke
 			(width 0)
@@ -3089,23 +3045,13 @@
 	)
 	(wire
 		(pts
-			(xy 170.18 59.69) (xy 170.18 58.42)
+			(xy 171.45 59.69) (xy 171.45 58.42)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
 		(uuid "432c37b5-a122-4d2c-859a-a4e6a03ee7d1")
-	)
-	(wire
-		(pts
-			(xy 109.22 69.85) (xy 109.22 68.58)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "4658d9a4-7024-42d6-9874-04406191c0c0")
 	)
 	(wire
 		(pts
@@ -3119,7 +3065,7 @@
 	)
 	(wire
 		(pts
-			(xy 109.22 60.96) (xy 109.22 59.69)
+			(xy 110.49 60.96) (xy 110.49 59.69)
 		)
 		(stroke
 			(width 0)
@@ -3179,7 +3125,7 @@
 	)
 	(wire
 		(pts
-			(xy 173.99 36.83) (xy 173.99 38.1)
+			(xy 175.26 36.83) (xy 175.26 38.1)
 		)
 		(stroke
 			(width 0)
@@ -3199,7 +3145,7 @@
 	)
 	(wire
 		(pts
-			(xy 109.22 49.53) (xy 109.22 48.26)
+			(xy 110.49 49.53) (xy 110.49 48.26)
 		)
 		(stroke
 			(width 0)
@@ -3249,7 +3195,7 @@
 	)
 	(wire
 		(pts
-			(xy 109.22 26.67) (xy 111.76 26.67)
+			(xy 110.49 26.67) (xy 113.03 26.67)
 		)
 		(stroke
 			(width 0)
@@ -3269,7 +3215,7 @@
 	)
 	(wire
 		(pts
-			(xy 111.76 26.67) (xy 111.76 27.94)
+			(xy 113.03 26.67) (xy 113.03 27.94)
 		)
 		(stroke
 			(width 0)
@@ -3379,7 +3325,7 @@
 	)
 	(wire
 		(pts
-			(xy 110.49 69.85) (xy 110.49 72.39)
+			(xy 110.49 68.58) (xy 110.49 72.39)
 		)
 		(stroke
 			(width 0)
@@ -3429,16 +3375,6 @@
 	)
 	(wire
 		(pts
-			(xy 173.99 68.58) (xy 171.45 68.58)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "7da0e8ca-085a-40df-b353-c9932c14f927")
-	)
-	(wire
-		(pts
 			(xy 194.31 142.24) (xy 200.66 142.24)
 		)
 		(stroke
@@ -3466,16 +3402,6 @@
 			(type default)
 		)
 		(uuid "8575f6ee-cb61-4d2b-a9de-567e8e774083")
-	)
-	(wire
-		(pts
-			(xy 113.03 69.85) (xy 110.49 69.85)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "86a26153-2803-4941-9492-8de1ee04e332")
 	)
 	(wire
 		(pts
@@ -3599,7 +3525,7 @@
 	)
 	(wire
 		(pts
-			(xy 109.22 49.53) (xy 113.03 49.53)
+			(xy 110.49 49.53) (xy 114.3 49.53)
 		)
 		(stroke
 			(width 0)
@@ -3619,7 +3545,7 @@
 	)
 	(wire
 		(pts
-			(xy 167.64 26.67) (xy 172.72 26.67)
+			(xy 168.91 26.67) (xy 173.99 26.67)
 		)
 		(stroke
 			(width 0)
@@ -3689,7 +3615,7 @@
 	)
 	(wire
 		(pts
-			(xy 109.22 38.1) (xy 111.76 38.1)
+			(xy 110.49 38.1) (xy 113.03 38.1)
 		)
 		(stroke
 			(width 0)
@@ -3799,7 +3725,7 @@
 	)
 	(wire
 		(pts
-			(xy 109.22 40.64) (xy 109.22 38.1)
+			(xy 110.49 40.64) (xy 110.49 38.1)
 		)
 		(stroke
 			(width 0)
@@ -3929,7 +3855,7 @@
 	)
 	(wire
 		(pts
-			(xy 111.76 38.1) (xy 113.03 38.1)
+			(xy 113.03 38.1) (xy 114.3 38.1)
 		)
 		(stroke
 			(width 0)
@@ -3969,7 +3895,7 @@
 	)
 	(wire
 		(pts
-			(xy 170.18 49.53) (xy 170.18 48.26)
+			(xy 171.45 49.53) (xy 171.45 48.26)
 		)
 		(stroke
 			(width 0)
@@ -3979,7 +3905,7 @@
 	)
 	(wire
 		(pts
-			(xy 170.18 68.58) (xy 170.18 67.31)
+			(xy 171.45 67.31) (xy 171.45 72.39)
 		)
 		(stroke
 			(width 0)
@@ -4049,7 +3975,7 @@
 	)
 	(wire
 		(pts
-			(xy 170.18 58.42) (xy 170.18 57.15)
+			(xy 171.45 58.42) (xy 171.45 57.15)
 		)
 		(stroke
 			(width 0)
@@ -4069,7 +3995,7 @@
 	)
 	(wire
 		(pts
-			(xy 109.22 59.69) (xy 109.22 58.42)
+			(xy 110.49 59.69) (xy 110.49 58.42)
 		)
 		(stroke
 			(width 0)
@@ -4126,16 +4052,6 @@
 			(type default)
 		)
 		(uuid "fb5a3b6c-108b-4279-a941-cb3c85290bd9")
-	)
-	(wire
-		(pts
-			(xy 110.49 69.85) (xy 109.22 69.85)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "fff43def-d3ec-425b-afc0-e0ac104da062")
 	)
 	(label "SPI_MISO"
 		(at 54.61 71.12 0)
@@ -4259,7 +4175,7 @@
 	)
 	(hierarchical_label "VPWR"
 		(shape input)
-		(at 109.22 26.67 180)
+		(at 110.49 26.67 180)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -4369,7 +4285,7 @@
 	)
 	(hierarchical_label "VOUT"
 		(shape input)
-		(at 167.64 26.67 180)
+		(at 168.91 26.67 180)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -4979,7 +4895,7 @@
 	)
 	(symbol
 		(lib_id "Jumper:Jumper_2_Open")
-		(at 113.03 54.61 90)
+		(at 114.3 54.61 90)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -4990,7 +4906,7 @@
 		(fields_autoplaced yes)
 		(uuid "1c8810a8-f66a-46d3-b747-a49ccf72b0d4")
 		(property "Reference" "JP7"
-			(at 114.3 53.3399 90)
+			(at 115.57 53.3399 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5002,7 +4918,7 @@
 			)
 		)
 		(property "Value" "Jumper_2_Open"
-			(at 114.3 55.8799 90)
+			(at 115.57 55.8799 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5014,7 +4930,7 @@
 			)
 		)
 		(property "Footprint" "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical"
-			(at 113.03 54.61 0)
+			(at 114.3 54.61 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5025,7 +4941,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 113.03 54.61 0)
+			(at 114.3 54.61 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5036,7 +4952,7 @@
 			)
 		)
 		(property "Description" "Jumper, 2-pole, open"
-			(at 113.03 54.61 0)
+			(at 114.3 54.61 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5047,7 +4963,7 @@
 			)
 		)
 		(property "LCSC Part" ""
-			(at 113.03 54.61 90)
+			(at 114.3 54.61 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5058,7 +4974,7 @@
 			)
 		)
 		(property "KLC_S3.3" ""
-			(at 113.03 54.61 90)
+			(at 114.3 54.61 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5069,7 +4985,7 @@
 			)
 		)
 		(property "KLC_S5.1" ""
-			(at 113.03 54.61 90)
+			(at 114.3 54.61 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5096,7 +5012,7 @@
 	)
 	(symbol
 		(lib_id "Jumper:Jumper_2_Open")
-		(at 172.72 31.75 90)
+		(at 173.99 31.75 90)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -5107,7 +5023,7 @@
 		(fields_autoplaced yes)
 		(uuid "1db0a415-b680-4e66-a7c8-862b10f0debe")
 		(property "Reference" "JP10"
-			(at 173.99 30.4799 90)
+			(at 175.26 30.4799 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5119,7 +5035,7 @@
 			)
 		)
 		(property "Value" "Jumper_2_Open"
-			(at 173.99 33.0199 90)
+			(at 175.26 33.0199 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5131,7 +5047,7 @@
 			)
 		)
 		(property "Footprint" "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical"
-			(at 172.72 31.75 0)
+			(at 173.99 31.75 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5142,7 +5058,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 172.72 31.75 0)
+			(at 173.99 31.75 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5153,7 +5069,7 @@
 			)
 		)
 		(property "Description" "Jumper, 2-pole, open"
-			(at 172.72 31.75 0)
+			(at 173.99 31.75 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5164,7 +5080,7 @@
 			)
 		)
 		(property "LCSC Part" ""
-			(at 172.72 31.75 90)
+			(at 173.99 31.75 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5175,7 +5091,7 @@
 			)
 		)
 		(property "KLC_S3.3" ""
-			(at 172.72 31.75 90)
+			(at 173.99 31.75 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5186,7 +5102,7 @@
 			)
 		)
 		(property "KLC_S5.1" ""
-			(at 172.72 31.75 90)
+			(at 173.99 31.75 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5213,7 +5129,7 @@
 	)
 	(symbol
 		(lib_id "Device:R_US")
-		(at 109.22 54.61 0)
+		(at 110.49 54.61 0)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -5224,7 +5140,7 @@
 		(fields_autoplaced yes)
 		(uuid "1e28ec47-9b90-4f76-8080-a214d35603a0")
 		(property "Reference" "R12"
-			(at 111.76 53.3399 0)
+			(at 113.03 53.3399 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5236,7 +5152,7 @@
 			)
 		)
 		(property "Value" "75K 1% 0805"
-			(at 111.76 55.8799 0)
+			(at 113.03 55.8799 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -5247,7 +5163,7 @@
 			)
 		)
 		(property "Footprint" "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
-			(at 110.236 54.864 90)
+			(at 111.506 54.864 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5258,7 +5174,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 109.22 54.61 0)
+			(at 110.49 54.61 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5269,7 +5185,7 @@
 			)
 		)
 		(property "Description" "Resistor, US symbol"
-			(at 109.22 54.61 0)
+			(at 110.49 54.61 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5280,7 +5196,7 @@
 			)
 		)
 		(property "LCSC Part" ""
-			(at 109.22 54.61 0)
+			(at 110.49 54.61 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5291,7 +5207,7 @@
 			)
 		)
 		(property "KLC_S3.3" ""
-			(at 109.22 54.61 0)
+			(at 110.49 54.61 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5302,7 +5218,7 @@
 			)
 		)
 		(property "KLC_S5.1" ""
-			(at 109.22 54.61 0)
+			(at 110.49 54.61 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5560,123 +5476,6 @@
 		)
 	)
 	(symbol
-		(lib_id "Jumper:Jumper_2_Open")
-		(at 113.03 64.77 90)
-		(unit 1)
-		(body_style 1)
-		(exclude_from_sim no)
-		(in_bom no)
-		(on_board yes)
-		(in_pos_files yes)
-		(dnp no)
-		(fields_autoplaced yes)
-		(uuid "24ab317d-aced-491f-83a1-cd50379c6ea9")
-		(property "Reference" "JP11"
-			(at 114.3 63.4999 90)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify right)
-			)
-		)
-		(property "Value" "Jumper_2_Open"
-			(at 114.3 66.0399 90)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify right)
-			)
-		)
-		(property "Footprint" "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical"
-			(at 113.03 64.77 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Datasheet" ""
-			(at 113.03 64.77 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Description" "Jumper, 2-pole, open"
-			(at 113.03 64.77 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "LCSC Part" ""
-			(at 113.03 64.77 90)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "KLC_S3.3" ""
-			(at 113.03 64.77 90)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "KLC_S5.1" ""
-			(at 113.03 64.77 90)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(pin "1"
-			(uuid "fdafc513-9d28-4f30-821c-8c80e40f6252")
-		)
-		(pin "2"
-			(uuid "adbd9521-bf7c-4c00-b4b6-b9adb2103ad7")
-		)
-		(instances
-			(project "Proyecto0.1V"
-				(path "/257f01da-4494-42ea-a5fc-9e4852f30220/a8a3aad8-fdfd-4d36-9b0c-6ce454cbfe0d"
-					(reference "JP11")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
 		(lib_id "power:+3.3V")
 		(at 101.6 64.77 0)
 		(unit 1)
@@ -5835,7 +5634,7 @@
 	)
 	(symbol
 		(lib_id "Jumper:Jumper_2_Open")
-		(at 173.99 53.34 90)
+		(at 175.26 53.34 90)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -5846,7 +5645,7 @@
 		(fields_autoplaced yes)
 		(uuid "316ea05d-76cb-40d4-baab-c4d20cd54d08")
 		(property "Reference" "JP13"
-			(at 175.26 52.0699 90)
+			(at 176.53 52.0699 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5858,7 +5657,7 @@
 			)
 		)
 		(property "Value" "Jumper_2_Open"
-			(at 175.26 54.6099 90)
+			(at 176.53 54.6099 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5870,7 +5669,7 @@
 			)
 		)
 		(property "Footprint" "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical"
-			(at 173.99 53.34 0)
+			(at 175.26 53.34 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5881,7 +5680,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 173.99 53.34 0)
+			(at 175.26 53.34 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5892,7 +5691,7 @@
 			)
 		)
 		(property "Description" "Jumper, 2-pole, open"
-			(at 173.99 53.34 0)
+			(at 175.26 53.34 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5903,7 +5702,7 @@
 			)
 		)
 		(property "LCSC Part" ""
-			(at 173.99 53.34 90)
+			(at 175.26 53.34 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5914,7 +5713,7 @@
 			)
 		)
 		(property "KLC_S3.3" ""
-			(at 173.99 53.34 90)
+			(at 175.26 53.34 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5925,7 +5724,7 @@
 			)
 		)
 		(property "KLC_S5.1" ""
-			(at 173.99 53.34 90)
+			(at 175.26 53.34 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6334,7 +6133,7 @@
 	)
 	(symbol
 		(lib_id "Jumper:Jumper_2_Open")
-		(at 113.03 44.45 90)
+		(at 114.3 44.45 90)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -6345,7 +6144,7 @@
 		(fields_autoplaced yes)
 		(uuid "4cc616c5-3315-49d4-987d-5d8de4c10eb4")
 		(property "Reference" "JP6"
-			(at 114.3 43.1799 90)
+			(at 115.57 43.1799 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6357,7 +6156,7 @@
 			)
 		)
 		(property "Value" "Jumper_2_Open"
-			(at 114.3 45.7199 90)
+			(at 115.57 45.7199 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6369,7 +6168,7 @@
 			)
 		)
 		(property "Footprint" "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical"
-			(at 113.03 44.45 0)
+			(at 114.3 44.45 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6380,7 +6179,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 113.03 44.45 0)
+			(at 114.3 44.45 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6391,7 +6190,7 @@
 			)
 		)
 		(property "Description" "Jumper, 2-pole, open"
-			(at 113.03 44.45 0)
+			(at 114.3 44.45 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6402,7 +6201,7 @@
 			)
 		)
 		(property "LCSC Part" ""
-			(at 113.03 44.45 90)
+			(at 114.3 44.45 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6413,7 +6212,7 @@
 			)
 		)
 		(property "KLC_S3.3" ""
-			(at 113.03 44.45 90)
+			(at 114.3 44.45 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6424,7 +6223,7 @@
 			)
 		)
 		(property "KLC_S5.1" ""
-			(at 113.03 44.45 90)
+			(at 114.3 44.45 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6444,123 +6243,6 @@
 			(project "Proyecto0.1V"
 				(path "/257f01da-4494-42ea-a5fc-9e4852f30220/a8a3aad8-fdfd-4d36-9b0c-6ce454cbfe0d"
 					(reference "JP6")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
-		(lib_id "Jumper:Jumper_2_Open")
-		(at 173.99 63.5 90)
-		(unit 1)
-		(body_style 1)
-		(exclude_from_sim no)
-		(in_bom no)
-		(on_board yes)
-		(in_pos_files yes)
-		(dnp no)
-		(fields_autoplaced yes)
-		(uuid "58a8d072-db2f-44d2-8c8d-6a5980fd3adf")
-		(property "Reference" "JP14"
-			(at 175.26 62.2299 90)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify right)
-			)
-		)
-		(property "Value" "Jumper_2_Open"
-			(at 175.26 64.7699 90)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify right)
-			)
-		)
-		(property "Footprint" "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical"
-			(at 173.99 63.5 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Datasheet" ""
-			(at 173.99 63.5 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Description" "Jumper, 2-pole, open"
-			(at 173.99 63.5 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "LCSC Part" ""
-			(at 173.99 63.5 90)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "KLC_S3.3" ""
-			(at 173.99 63.5 90)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "KLC_S5.1" ""
-			(at 173.99 63.5 90)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(pin "1"
-			(uuid "fb063435-f3a8-425f-8d57-f72688938d37")
-		)
-		(pin "2"
-			(uuid "da0ddc6c-fd29-4974-8047-cef0651f397b")
-		)
-		(instances
-			(project "Proyecto0.1V"
-				(path "/257f01da-4494-42ea-a5fc-9e4852f30220/a8a3aad8-fdfd-4d36-9b0c-6ce454cbfe0d"
-					(reference "JP14")
 					(unit 1)
 				)
 			)
@@ -6761,7 +6443,7 @@
 	)
 	(symbol
 		(lib_id "Device:R_US")
-		(at 170.18 63.5 0)
+		(at 171.45 63.5 0)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -6772,7 +6454,7 @@
 		(fields_autoplaced yes)
 		(uuid "71e310e9-0087-4fd7-8d89-cd12002991d7")
 		(property "Reference" "R30"
-			(at 172.72 62.2299 0)
+			(at 173.99 62.2299 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6784,7 +6466,7 @@
 			)
 		)
 		(property "Value" "75K 1% 0805"
-			(at 172.72 64.7699 0)
+			(at 173.99 64.7699 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -6795,7 +6477,7 @@
 			)
 		)
 		(property "Footprint" "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
-			(at 171.196 63.754 90)
+			(at 172.466 63.754 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6806,7 +6488,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 170.18 63.5 0)
+			(at 171.45 63.5 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6817,7 +6499,7 @@
 			)
 		)
 		(property "Description" "Resistor, US symbol"
-			(at 170.18 63.5 0)
+			(at 171.45 63.5 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6828,7 +6510,7 @@
 			)
 		)
 		(property "LCSC Part" ""
-			(at 170.18 63.5 0)
+			(at 171.45 63.5 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6839,7 +6521,7 @@
 			)
 		)
 		(property "KLC_S3.3" ""
-			(at 170.18 63.5 0)
+			(at 171.45 63.5 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6850,7 +6532,7 @@
 			)
 		)
 		(property "KLC_S5.1" ""
-			(at 170.18 63.5 0)
+			(at 171.45 63.5 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7300,7 +6982,7 @@
 	)
 	(symbol
 		(lib_id "Jumper:Jumper_2_Open")
-		(at 111.76 33.02 90)
+		(at 113.03 33.02 90)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -7311,7 +6993,7 @@
 		(fields_autoplaced yes)
 		(uuid "95bba9de-3e66-4d2c-becd-535ff6fff8a7")
 		(property "Reference" "JP9"
-			(at 113.03 31.7499 90)
+			(at 114.3 31.7499 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7323,7 +7005,7 @@
 			)
 		)
 		(property "Value" "Jumper_2_Open"
-			(at 113.03 34.2899 90)
+			(at 114.3 34.2899 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7335,7 +7017,7 @@
 			)
 		)
 		(property "Footprint" "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical"
-			(at 111.76 33.02 0)
+			(at 113.03 33.02 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7346,7 +7028,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 111.76 33.02 0)
+			(at 113.03 33.02 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7357,7 +7039,7 @@
 			)
 		)
 		(property "Description" "Jumper, 2-pole, open"
-			(at 111.76 33.02 0)
+			(at 113.03 33.02 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7368,7 +7050,7 @@
 			)
 		)
 		(property "LCSC Part" ""
-			(at 111.76 33.02 90)
+			(at 113.03 33.02 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7379,7 +7061,7 @@
 			)
 		)
 		(property "KLC_S3.3" ""
-			(at 111.76 33.02 90)
+			(at 113.03 33.02 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7390,7 +7072,7 @@
 			)
 		)
 		(property "KLC_S5.1" ""
-			(at 111.76 33.02 90)
+			(at 113.03 33.02 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7866,7 +7548,7 @@
 	)
 	(symbol
 		(lib_id "Device:R_US")
-		(at 109.22 44.45 0)
+		(at 110.49 44.45 0)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -7877,7 +7559,7 @@
 		(fields_autoplaced yes)
 		(uuid "b814cc6e-36f8-42a7-8dbc-ebc7b9dbcaa2")
 		(property "Reference" "R13"
-			(at 111.76 43.1799 0)
+			(at 113.03 43.1799 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7889,7 +7571,7 @@
 			)
 		)
 		(property "Value" "75K 1% 0805"
-			(at 111.76 45.7199 0)
+			(at 113.03 45.7199 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -7900,7 +7582,7 @@
 			)
 		)
 		(property "Footprint" "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
-			(at 110.236 44.704 90)
+			(at 111.506 44.704 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7911,7 +7593,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 109.22 44.45 0)
+			(at 110.49 44.45 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7922,7 +7604,7 @@
 			)
 		)
 		(property "Description" "Resistor, US symbol"
-			(at 109.22 44.45 0)
+			(at 110.49 44.45 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7933,7 +7615,7 @@
 			)
 		)
 		(property "LCSC Part" ""
-			(at 109.22 44.45 0)
+			(at 110.49 44.45 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7944,7 +7626,7 @@
 			)
 		)
 		(property "KLC_S3.3" ""
-			(at 109.22 44.45 0)
+			(at 110.49 44.45 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7955,7 +7637,7 @@
 			)
 		)
 		(property "KLC_S5.1" ""
-			(at 109.22 44.45 0)
+			(at 110.49 44.45 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8233,7 +7915,7 @@
 	)
 	(symbol
 		(lib_id "Device:R_US")
-		(at 170.18 43.18 0)
+		(at 171.45 43.18 0)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -8244,7 +7926,7 @@
 		(fields_autoplaced yes)
 		(uuid "c148a387-418f-4df4-9675-3d03f960e397")
 		(property "Reference" "R16"
-			(at 172.72 41.9099 0)
+			(at 173.99 41.9099 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8256,7 +7938,7 @@
 			)
 		)
 		(property "Value" "75K 1% 0805"
-			(at 172.72 44.4499 0)
+			(at 173.99 44.4499 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -8267,7 +7949,7 @@
 			)
 		)
 		(property "Footprint" "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
-			(at 171.196 43.434 90)
+			(at 172.466 43.434 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8278,7 +7960,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 170.18 43.18 0)
+			(at 171.45 43.18 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8289,7 +7971,7 @@
 			)
 		)
 		(property "Description" "Resistor, US symbol"
-			(at 170.18 43.18 0)
+			(at 171.45 43.18 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8300,7 +7982,7 @@
 			)
 		)
 		(property "LCSC Part" ""
-			(at 170.18 43.18 0)
+			(at 171.45 43.18 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8311,7 +7993,7 @@
 			)
 		)
 		(property "KLC_S3.3" ""
-			(at 170.18 43.18 0)
+			(at 171.45 43.18 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8322,7 +8004,7 @@
 			)
 		)
 		(property "KLC_S5.1" ""
-			(at 170.18 43.18 0)
+			(at 171.45 43.18 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8931,7 +8613,7 @@
 	)
 	(symbol
 		(lib_id "Device:R_US")
-		(at 170.18 53.34 0)
+		(at 171.45 53.34 0)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -8942,7 +8624,7 @@
 		(fields_autoplaced yes)
 		(uuid "d63ead09-27fe-45c8-979f-1e01c7eb0fc4")
 		(property "Reference" "R17"
-			(at 172.72 52.0699 0)
+			(at 173.99 52.0699 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8954,7 +8636,7 @@
 			)
 		)
 		(property "Value" "75K 1% 0805"
-			(at 172.72 54.6099 0)
+			(at 173.99 54.6099 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -8965,7 +8647,7 @@
 			)
 		)
 		(property "Footprint" "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
-			(at 171.196 53.594 90)
+			(at 172.466 53.594 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8976,7 +8658,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 170.18 53.34 0)
+			(at 171.45 53.34 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8987,7 +8669,7 @@
 			)
 		)
 		(property "Description" "Resistor, US symbol"
-			(at 170.18 53.34 0)
+			(at 171.45 53.34 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8998,7 +8680,7 @@
 			)
 		)
 		(property "LCSC Part" ""
-			(at 170.18 53.34 0)
+			(at 171.45 53.34 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9009,7 +8691,7 @@
 			)
 		)
 		(property "KLC_S3.3" ""
-			(at 170.18 53.34 0)
+			(at 171.45 53.34 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9020,7 +8702,7 @@
 			)
 		)
 		(property "KLC_S5.1" ""
-			(at 170.18 53.34 0)
+			(at 171.45 53.34 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9047,7 +8729,7 @@
 	)
 	(symbol
 		(lib_id "Jumper:Jumper_2_Open")
-		(at 173.99 43.18 90)
+		(at 175.26 43.18 90)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -9058,7 +8740,7 @@
 		(fields_autoplaced yes)
 		(uuid "d9c9ac64-eeaf-4580-ab98-93aa08b9ddf3")
 		(property "Reference" "JP8"
-			(at 175.26 41.9099 90)
+			(at 176.53 41.9099 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9070,7 +8752,7 @@
 			)
 		)
 		(property "Value" "Jumper_2_Open"
-			(at 175.26 44.4499 90)
+			(at 176.53 44.4499 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9082,7 +8764,7 @@
 			)
 		)
 		(property "Footprint" "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical"
-			(at 173.99 43.18 0)
+			(at 175.26 43.18 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9093,7 +8775,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 173.99 43.18 0)
+			(at 175.26 43.18 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9104,7 +8786,7 @@
 			)
 		)
 		(property "Description" "Jumper, 2-pole, open"
-			(at 173.99 43.18 0)
+			(at 175.26 43.18 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9115,7 +8797,7 @@
 			)
 		)
 		(property "LCSC Part" ""
-			(at 173.99 43.18 90)
+			(at 175.26 43.18 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9126,7 +8808,7 @@
 			)
 		)
 		(property "KLC_S3.3" ""
-			(at 173.99 43.18 90)
+			(at 175.26 43.18 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9137,7 +8819,7 @@
 			)
 		)
 		(property "KLC_S5.1" ""
-			(at 173.99 43.18 90)
+			(at 175.26 43.18 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9811,7 +9493,7 @@
 	)
 	(symbol
 		(lib_id "Device:R_US")
-		(at 109.22 64.77 0)
+		(at 110.49 64.77 0)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -9822,7 +9504,7 @@
 		(fields_autoplaced yes)
 		(uuid "fee7a5ce-2362-44e5-a0b4-a97155972a21")
 		(property "Reference" "R14"
-			(at 111.76 63.4999 0)
+			(at 113.03 63.4999 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9834,7 +9516,7 @@
 			)
 		)
 		(property "Value" "75K 1% 0805"
-			(at 111.76 66.0399 0)
+			(at 113.03 66.0399 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -9845,7 +9527,7 @@
 			)
 		)
 		(property "Footprint" "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
-			(at 110.236 65.024 90)
+			(at 111.506 65.024 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9856,7 +9538,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 109.22 64.77 0)
+			(at 110.49 64.77 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9867,7 +9549,7 @@
 			)
 		)
 		(property "Description" "Resistor, US symbol"
-			(at 109.22 64.77 0)
+			(at 110.49 64.77 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9878,7 +9560,7 @@
 			)
 		)
 		(property "LCSC Part" ""
-			(at 109.22 64.77 0)
+			(at 110.49 64.77 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9889,7 +9571,7 @@
 			)
 		)
 		(property "KLC_S3.3" ""
-			(at 109.22 64.77 0)
+			(at 110.49 64.77 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9900,7 +9582,7 @@
 			)
 		)
 		(property "KLC_S5.1" ""
-			(at 109.22 64.77 0)
+			(at 110.49 64.77 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
