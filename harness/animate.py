@@ -57,15 +57,21 @@ def parse_args():
     return ap.parse_args()
 
 
-def build_string(g1: float, g2: float) -> PvString:
-    """Two Hissuma panels in series at the given per-panel irradiances."""
-    return PvString(
+def build_panel(g1: float, g2: float) -> TabulatedPanel:
+    """Two Hissuma panels in series, tabulated for fast (interp-only) lookups.
+
+    Returns a ``TabulatedPanel`` so all downstream use (display curve, MPP,
+    dynamic source) is pure ``np.interp`` — no per-point pvlib/bisection in the
+    interactive hot path.
+    """
+    string = PvString(
         [
             PvlibPanelModel.hissuma_psf10mono(irradiance=g1),
             PvlibPanelModel.hissuma_psf10mono(irradiance=g2),
         ],
         samples=SCAN_SAMPLES,
     )
+    return TabulatedPanel(string, n=SCAN_SAMPLES)
 
 
 class Runner:
@@ -114,8 +120,10 @@ def main():
     g1_0, g2_0 = 1000.0, (400.0 if args.shade else 1000.0)
 
     # Mutable environment state shared with the animation closure.
-    env = {"panel": build_string(g1_0, g2_0)}
-    tab = TabulatedPanel(env["panel"], n=SCAN_SAMPLES)
+    # `dirty`/`reset` are deferred flags so slider drags collapse to one rebuild
+    # per frame instead of one per event (the source of the lag).
+    tab = build_panel(g1_0, g2_0)
+    env = {"panel": tab, "g": (g1_0, g2_0), "dirty": False, "reset": False}
 
     fig, (ax, ax_t) = plt.subplots(1, 2, figsize=(15, 7))
     fig.subplots_adjust(left=0.07, right=0.93, top=0.9, bottom=0.28, wspace=0.32)
@@ -175,14 +183,18 @@ def main():
     mpp = {"v": 0.0, "p": 1.0}
 
     def refresh_curve():
-        """Recompute the reference P-V / I-V curves and the global MPP."""
+        """Recompute the reference P-V / I-V curves and the global MPP.
+
+        Uses the tabulated panel, so every call is vectorized ``np.interp`` —
+        cheap enough to run inline in the animation loop.
+        """
         v, i = env["panel"].iv_curve(n=400)
         p = v * i
         pv_line.set_data(v, p)
         iv_line.set_data(v, i)
-        v_mpp, _, p_mpp = env["panel"].mpp()
-        mpp_marker.set_data([v_mpp], [p_mpp])
-        mpp["v"], mpp["p"] = v_mpp, p_mpp
+        k = int(np.argmax(p))
+        mpp_marker.set_data([v[k]], [p[k]])
+        mpp["v"], mpp["p"] = float(v[k]), float(p[k])
         ax.set_xlim(0, v[-1] * 1.05)
         ax.set_ylim(0, max(p.max() * 1.25, 1e-3))
         ax_iv.set_ylim(0, max(i.max() * 1.25, 1e-3))
@@ -202,27 +214,38 @@ def main():
     s_g2 = Slider(ax_g2, "G2 [W/m²]", 100, 1000, valinit=g2_0, valstep=50)
     b_reset = Button(ax_reset, "Reset")
 
+    # Defer the heavy rebuild: slider callbacks only flag intent, so a burst of
+    # drag events collapses to a single rebuild on the next animation frame.
     def on_irradiance(_val):
-        env["panel"] = build_string(s_g1.val, s_g2.val)
-        new_tab = TabulatedPanel(env["panel"], n=SCAN_SAMPLES)
-        for r in runners:
-            r.set_panel(new_tab)  # keep state → watch algorithms re-track
-        refresh_curve()
-        clear_histories()
-        frame_offset["n"] = 0
+        env["g"] = (s_g1.val, s_g2.val)
+        env["dirty"] = True
 
     def on_reset(_event):
-        new_tab = TabulatedPanel(env["panel"], n=SCAN_SAMPLES)
-        for r in runners:
-            r.reset(new_tab)
-        clear_histories()
-        frame_offset["n"] = 0
+        env["reset"] = True
 
     s_g1.on_changed(on_irradiance)
     s_g2.on_changed(on_irradiance)
     b_reset.on_clicked(on_reset)
 
+    def apply_pending():
+        """Process deferred slider / reset requests, at most once per frame."""
+        if env["dirty"]:
+            env["panel"] = build_panel(*env["g"])
+            for r in runners:
+                r.set_panel(env["panel"])  # keep state → watch algorithms re-track
+            refresh_curve()
+            clear_histories()
+            frame_offset["n"] = 0
+            env["dirty"] = False
+        if env["reset"]:
+            for r in runners:
+                r.reset(env["panel"])
+            clear_histories()
+            frame_offset["n"] = 0
+            env["reset"] = False
+
     def update(frame):
+        apply_pending()
         artists = []
         frame_offset["n"] += 1
         t_ms = frame_offset["n"] * args.speed * CONTROL_PERIOD_MS
