@@ -151,7 +151,7 @@ def main():
     ax_t.set_title("Tracking efficiency vs time")
     ax_t.set_xlabel("Time [ms]")
     ax_t.set_ylabel(r"$\eta = P / P_\mathrm{mpp}$  [%]")
-    ax_t.set_ylim(80, 101)
+    ax_t.set_ylim(80, 101)  # auto-rescaled each frame to fit the data
     ax_t.grid(True, alpha=0.3)
 
     runners, dots, trails, time_lines = [], [], [], []
@@ -262,6 +262,9 @@ def main():
             t_line.set_data(t_hist[-len(p_hist[k]) :], p_hist[k])
             artists += [trail, dot, t_line]
         ax_t.set_xlim(0, max(t_ms, 1))
+        # auto-rescale the efficiency axis to fit the data (with headroom to 100 %)
+        lo = min((min(h) for h in p_hist if h), default=80.0)
+        ax_t.set_ylim(max(0.0, np.floor(lo / 5) * 5 - 2), 101)
         txt = [f"t = {t_ms:.0f} ms   MPP = {p_mpp:.2f} W @ {mpp['v']:.1f} V"]
         for (label, _, _), runner in zip(ALGORITHMS, runners, strict=True):
             _v, p = runner.trail[-1]
