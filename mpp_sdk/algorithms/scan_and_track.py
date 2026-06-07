@@ -60,6 +60,8 @@ class ScanAndTrack(MPPTAlgorithm):
             raise ValueError(f"need 0 <= min_duty < max_duty <= 1; got {min_duty=}, {max_duty=}")
         if not (math.isfinite(scan_step) and scan_step > 0):
             raise ValueError(f"scan_step must be a finite positive number; got {scan_step=}")
+        if not (math.isfinite(track_step) and track_step > 0):
+            raise ValueError(f"track_step must be a finite positive number; got {track_step=}")
         if rescan_period is not None and rescan_period <= 0:
             raise ValueError(f"rescan_period must be positive or None; got {rescan_period=}")
         self._min = min_duty

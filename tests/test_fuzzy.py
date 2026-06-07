@@ -7,7 +7,7 @@ import pytest
 import mpp_sdk
 from mpp_sdk.algorithms.fuzzy import FuzzyLogic, _memberships
 
-pvlib = pytest.importorskip("pvlib", reason="pvlib extra not installed")  # noqa: E402
+pytest.importorskip("pvlib", reason="pvlib extra not installed")  # noqa: E402
 
 from mpp_sdk.models.pvlib_adapter import PvlibPanelModel  # noqa: E402
 

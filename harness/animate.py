@@ -1,6 +1,6 @@
 """Live animated MPPT comparison with interactive shading controls.
 
-Four MPPT algorithms run side by side against the dynamic (capacitor) source.
+The registered MPPT algorithms run side by side against the dynamic (capacitor) source.
 Left panel: operating point climbing the P-V curve (with the I-V curve in grey).
 Right panel: tracking efficiency vs time.
 

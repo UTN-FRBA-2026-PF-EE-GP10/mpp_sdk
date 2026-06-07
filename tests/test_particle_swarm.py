@@ -5,7 +5,7 @@ import pytest
 import mpp_sdk
 from mpp_sdk.algorithms.particle_swarm import ParticleSwarm
 
-pvlib = pytest.importorskip("pvlib", reason="pvlib extra not installed")  # noqa: E402
+pytest.importorskip("pvlib", reason="pvlib extra not installed")  # noqa: E402
 
 from mpp_sdk.models.pvlib_adapter import PvlibPanelModel  # noqa: E402
 from mpp_sdk.models.string import PvString  # noqa: E402

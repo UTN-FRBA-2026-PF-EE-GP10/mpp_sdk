@@ -48,10 +48,12 @@ point.
 3. **Fuzzy logic** — a *local* tracker with a graduated step. Included to show
    the speed/oscillation trade-off can be eased without a panel model. It is
    **not** global, and saying so plainly is part of the contribution.
-4. **Scan-and-track (planned)** — the genuine **global** MPPT method, needed to
-   escape the local maxima that partial shading creates. Chosen over PSO
-   because it is easier to bound in static RAM and to defend mathematically —
-   both matter for the MCU port.
+4. **Scan-and-track** and **Particle Swarm Optimization** — the genuine
+   **global** MPPT methods, needed to escape the local maxima that partial
+   shading creates. Scan-and-track is deterministic and the easiest to bound in
+   static RAM and defend mathematically; PSO is the popular population-based
+   alternative. Both ship so the paper can compare them, but scan-and-track is
+   the leading candidate for the MCU port.
 
 The ordering matters: each algorithm needs at least one predecessor to compare
 against, and the metrics only become clear once several controllers run side by

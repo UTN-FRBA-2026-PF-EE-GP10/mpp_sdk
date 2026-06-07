@@ -68,6 +68,8 @@ class ParticleSwarm(MPPTAlgorithm):
             raise ValueError(f"n_particles must be >= 2; got {n_particles=}")
         if max_iterations < 1:
             raise ValueError(f"max_iterations must be >= 1; got {max_iterations=}")
+        if not (math.isfinite(track_step) and track_step > 0):
+            raise ValueError(f"track_step must be a finite positive number; got {track_step=}")
         self._min = min_duty
         self._max = max_duty
         self._w = inertia

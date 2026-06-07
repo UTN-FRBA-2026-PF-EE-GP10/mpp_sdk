@@ -7,7 +7,7 @@ canonical shading patterns, per the AGENTS.md convention for array models.
 import numpy as np
 import pytest
 
-pvlib = pytest.importorskip("pvlib", reason="pvlib extra not installed")  # noqa: E402
+pytest.importorskip("pvlib", reason="pvlib extra not installed")  # noqa: E402
 
 from mpp_sdk.models.pvlib_adapter import PvlibPanelModel  # noqa: E402
 from mpp_sdk.models.string import PvString  # noqa: E402
