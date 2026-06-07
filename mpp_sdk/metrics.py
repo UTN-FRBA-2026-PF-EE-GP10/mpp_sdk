@@ -27,7 +27,36 @@ __all__ = [
     "overshoot",
     "trap_depth",
     "summarize",
+    "METHODOLOGY_WARNING",
+    "print_methodology_warning",
 ]
+
+METHODOLOGY_WARNING = """\
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  ⚠  PRELIMINARY METRICS — THE COMPARISON IS NOT YET VALID  ⚠                  ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║  These numbers do NOT yet measure tracking performance correctly. Treat them  ║
+║  as a smoke test, not a result. More investigation is needed before any        ║
+║  conclusion is drawn for the paper.                                            ║
+║                                                                                ║
+║  Known issues:                                                                  ║
+║   • Measured from a FIXED start in STEADY conditions — this rewards luck in     ║
+║     the initial operating point, not real tracking ability.                    ║
+║   • Under arbitrary irradiance changes, some (possibly all) algorithms fail     ║
+║     to re-acquire the MPP — this is not captured here.                          ║
+║   • In full sun every algorithm should sit at ~100 % (ripple-limited and        ║
+║     negligible), so this scenario does not discriminate between them.           ║
+║                                                                                ║
+║  A valid efficiency measurement must be DYNAMIC, over a cyclic irradiance       ║
+║  profile, e.g.:  full sun → panel A shaded → full → panel B shaded →            ║
+║  both shaded → full → (repeat).  Tracking efficiency = captured energy /        ║
+║  ideal energy integrated over the whole profile.                               ║
+╚══════════════════════════════════════════════════════════════════════════════╝"""
+
+
+def print_methodology_warning() -> None:
+    """Print the big preliminary-metrics warning banner (see ``METHODOLOGY_WARNING``)."""
+    print(METHODOLOGY_WARNING)
 
 
 def _as_array(power: Sequence[float]) -> np.ndarray:

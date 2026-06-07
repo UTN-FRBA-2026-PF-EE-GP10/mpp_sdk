@@ -53,6 +53,7 @@ def main() -> None:
     fig.suptitle("Static MPPT comparison — final operating point", fontweight="bold")
     colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
 
+    mpp_sdk.metrics.print_methodology_warning()
     print(f"\n{'Scenario':<32}{'Algorithm':<10}{'V [V]':<9}{'P [W]':<9}{'η':<8}")
     print("-" * 68)
 

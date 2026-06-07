@@ -61,6 +61,7 @@ def main() -> None:
     colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
     time_ms = np.arange(N_STEPS) * CONTROL_PERIOD_MS
 
+    mpp_sdk.metrics.print_methodology_warning()
     header = (
         f"\n{'Scenario':<26}{'Algorithm':<12}{'η energy':<10}"
         f"{'η final':<10}{'settle [ms]':<13}{'ripple [W]':<11}"
