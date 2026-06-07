@@ -8,6 +8,7 @@ also expose them, so either of these is fine:
     from mpp_sdk.algorithms import PerturbAndObserve
 """
 
+from . import metrics
 from .algorithms.base import MPPTAlgorithm
 from .algorithms.fuzzy import FuzzyLogic
 from .algorithms.incremental_conductance import IncrementalConductance
@@ -43,5 +44,6 @@ __all__ = [
     "TabulatedPanel",
     "LivePanelView",
     "plot_iv_with_operating_point",
+    "metrics",
     "__version__",
 ]

@@ -61,8 +61,12 @@ def main() -> None:
     colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
     time_ms = np.arange(N_STEPS) * CONTROL_PERIOD_MS
 
-    print(f"\n{'Scenario':<32}{'Algorithm':<10}{'η final (last 100)':<20}")
-    print("-" * 62)
+    header = (
+        f"\n{'Scenario':<26}{'Algorithm':<12}{'η energy':<10}"
+        f"{'η final':<10}{'settle [ms]':<13}{'ripple [W]':<11}"
+    )
+    print(header)
+    print("-" * len(header))
 
     for ax, (title, panel_fn) in zip(axes, SCENARIOS, strict=True):
         panel = panel_fn()
@@ -71,8 +75,13 @@ def main() -> None:
         for (label, cls), color in zip(ALGORITHMS, colors, strict=False):
             powers = run(cls, panel_fn())
             ax.plot(time_ms, powers, label=label, color=color, lw=1.2)
-            eta = powers[-100:].mean() / p_mpp
-            print(f"{title:<32}{label:<10}{eta * 100:6.2f} %")
+            m = mpp_sdk.metrics.summarize(powers, p_mpp, dt=CONTROL_PERIOD_MS, last_n=100)
+            settle = "—" if m["settling_time"] is None else f"{m['settling_time']:.0f}"
+            print(
+                f"{title:<26}{label:<12}{m['tracking_efficiency'] * 100:6.2f} %  "
+                f"{m['final_efficiency'] * 100:6.2f} %  {settle:>9}    "
+                f"{m['steady_state_ripple']:8.3f}"
+            )
         ax.set_title(title)
         ax.set_xlabel("Time [ms]")
         ax.set_ylabel("Power [W]")
