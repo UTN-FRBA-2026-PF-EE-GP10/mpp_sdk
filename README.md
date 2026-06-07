@@ -12,8 +12,8 @@ hardware-abstraction seam so the same controller code drives a simulation
 today and a real SEPIC converter on a Raspberry Pi 5 tomorrow.
 
 See [`AGENTS.md`](./AGENTS.md) for architectural pillars and contribution
-guidelines, [`PLAN.md`](./PLAN.md) for the full roadmap and viability
-assessment, and [`CHANGELOG.md`](./CHANGELOG.md) for what has shipped.
+guidelines, and [`PLAN.md`](./PLAN.md) for the full roadmap and viability
+assessment.
 
 ## Why
 

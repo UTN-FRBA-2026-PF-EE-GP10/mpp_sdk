@@ -252,16 +252,6 @@ Mechanisms:
 
 ## Process expectations for agents
 
-- **Update `CHANGELOG.md` for every user-visible change.** Use Keep-a-Changelog
-  format under `[Unreleased]`. The maintainer rolls versions.
-- **Keep CHANGELOG entries compact.** Each entry describes *the state of the
-  repo at that version*, not a transcript of every doc edit, refactor, or
-  intermediate revision. Aim for a handful of bullets per release; collapse
-  related changes into a single line. Before a release is tagged, prune
-  `[Unreleased]` so it reads like a snapshot, not a session log — until we
-  push, the changelog is editable and should be edited rather than appended
-  to. The git log is the place for per-commit detail; the CHANGELOG is the
-  place for *what's new since the last version*.
 - **Read this file before making structural changes.** If a change conflicts
   with a pillar above, surface that explicitly in the PR description.
 - **Prefer additive PRs.** Ship a new model alongside the old; deprecate

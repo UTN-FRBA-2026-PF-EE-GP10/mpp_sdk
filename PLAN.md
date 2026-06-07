@@ -170,7 +170,7 @@ has **shipped *and* been independently verified**.
 - `PerturbAndObserve` controller (sign-corrected for SEPIC duty cycle;
   same sign as a boost so boost-based papers port unchanged).
 - Live I-V / P-V view (`LivePanelView`) driven by `FuncAnimation`.
-- `AGENTS.md` (architectural pillars), `CHANGELOG.md`, this `PLAN.md`.
+- `AGENTS.md` (architectural pillars) and this `PLAN.md`.
 
 ### Phase 2 — Realistic models
 
