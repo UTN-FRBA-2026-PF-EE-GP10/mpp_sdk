@@ -45,6 +45,7 @@ ALGORITHMS = [
     ("InCond", mpp_sdk.IncrementalConductance, "tab:red"),
     ("Fuzzy", mpp_sdk.FuzzyLogic, "tab:green"),
     ("Scan&Track", mpp_sdk.ScanAndTrack, "tab:purple"),
+    ("PSO", mpp_sdk.ParticleSwarm, "tab:orange"),
 ]
 
 

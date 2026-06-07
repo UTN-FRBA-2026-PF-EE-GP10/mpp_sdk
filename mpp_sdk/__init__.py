@@ -12,6 +12,7 @@ from . import metrics
 from .algorithms.base import MPPTAlgorithm
 from .algorithms.fuzzy import FuzzyLogic
 from .algorithms.incremental_conductance import IncrementalConductance
+from .algorithms.particle_swarm import ParticleSwarm
 from .algorithms.perturb_observe import PerturbAndObserve
 from .algorithms.scan_and_track import ScanAndTrack
 from .converters.sepic import SEPICConverter
@@ -31,6 +32,7 @@ __all__ = [
     "MPPTAlgorithm",
     "FuzzyLogic",
     "IncrementalConductance",
+    "ParticleSwarm",
     "PerturbAndObserve",
     "ScanAndTrack",
     "SEPICConverter",

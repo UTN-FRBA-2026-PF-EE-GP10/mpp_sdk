@@ -36,6 +36,7 @@ ALGORITHMS = [
     ("InCond", mpp_sdk.IncrementalConductance),
     ("Fuzzy", mpp_sdk.FuzzyLogic),
     ("Scan&Track", mpp_sdk.ScanAndTrack),
+    ("PSO", mpp_sdk.ParticleSwarm),
 ]
 
 SCENARIOS = [
