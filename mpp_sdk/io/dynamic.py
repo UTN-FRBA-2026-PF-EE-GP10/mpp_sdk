@@ -67,6 +67,17 @@ class DynamicSimulatedSource(SignalSource):
         self._v = v
         self._i = float(self._panel.current(v))
 
+    def set_panel(self, panel: PanelModel) -> None:
+        """Swap the panel model in place, keeping the dynamic state (V, duty).
+
+        Lets a caller change irradiance / shading live and watch the controller
+        re-track the new operating point. The terminal voltage is clamped to the
+        new open-circuit voltage.
+        """
+        self._panel = panel
+        self._v = min(self._v, panel.open_circuit_voltage)
+        self._i = float(panel.current(self._v))
+
     def read(self) -> tuple[float, float]:
         return self._v, self._i
 

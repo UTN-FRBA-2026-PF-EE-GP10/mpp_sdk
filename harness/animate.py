@@ -1,18 +1,21 @@
-"""Live animated MPPT comparison — watch algorithms climb the P-V curve.
+"""Live animated MPPT comparison with interactive shading controls.
 
-Two algorithms run side by side against the dynamic (capacitor) source. Each
-frame advances a few control steps, so you watch the operating point slew and
-the MPPT converge in slow motion. Pick the scenario (full sun or partial
-shade) on the command line.
+Four MPPT algorithms run side by side against the dynamic (capacitor) source.
+Left panel: operating point climbing the P-V curve (with the I-V curve in grey).
+Right panel: tracking efficiency vs time.
+
+Interactive controls (bottom of the window):
+  - **G1, G2 sliders** — per-panel irradiance [W/m²]. Lower one panel to shade
+    it; the P-V curve grows a second peak and you watch each algorithm respond
+    live. Equal values = full sun.
+  - **Reset button** — restart all algorithms from the initial duty.
 
 Run with::
 
-    uv run harness/animate.py                 # full sun
-    uv run harness/animate.py --shade          # partial shade (two-peak P-V)
-    uv run harness/animate.py --shade --speed 1   # one control step per frame
-    uv run harness/animate.py --shade --duty 0.1  # start from the Voc side
-                                                  # (watch P&O get trapped on the
-                                                  #  local peak under shade)
+    uv run harness/animate.py                      # full sun (G1=G2=1000)
+    uv run harness/animate.py --shade              # start shaded (G2=400)
+    uv run harness/animate.py --duty 0.1           # start from the Voc side
+    uv run harness/animate.py --interval 60 --speed 1   # slow motion
 
 Close the window to stop.
 """
@@ -22,16 +25,20 @@ import argparse
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.animation import FuncAnimation
+from matplotlib.widgets import Button, Slider
 
 import mpp_sdk
-from harness.panel_config import (
-    CONTROL_PERIOD_MS,
-    make_dynamic_source,
-    series_string,
-    shaded_string,
+from harness.panel_config import CONTROL_PERIOD_MS
+from mpp_sdk import (
+    DynamicSimulatedSource,
+    PvlibPanelModel,
+    PvString,
+    SEPICConverter,
+    TabulatedPanel,
 )
 
 TRAIL = 60  # operating-point trail length
+SCAN_SAMPLES = 240  # per-panel I-V samples (lower = snappier sliders)
 
 ALGORITHMS = [
     ("P&O", mpp_sdk.PerturbAndObserve, "tab:blue"),
@@ -43,27 +50,56 @@ ALGORITHMS = [
 
 def parse_args():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--shade", action="store_true", help="partial-shade scenario")
-    ap.add_argument(
-        "--duty",
-        type=float,
-        default=0.5,
-        help="initial duty cycle (low → start near Voc, high → start near Vsc)",
-    )
+    ap.add_argument("--shade", action="store_true", help="start shaded (G2=400 W/m²)")
+    ap.add_argument("--duty", type=float, default=0.5, help="initial duty cycle")
     ap.add_argument("--speed", type=int, default=2, help="control steps advanced per frame")
     ap.add_argument("--interval", type=int, default=30, help="ms between frames (higher = slower)")
     return ap.parse_args()
 
 
+def build_string(g1: float, g2: float) -> PvString:
+    """Two Hissuma panels in series at the given per-panel irradiances."""
+    return PvString(
+        [
+            PvlibPanelModel.hissuma_psf10mono(irradiance=g1),
+            PvlibPanelModel.hissuma_psf10mono(irradiance=g2),
+        ],
+        samples=SCAN_SAMPLES,
+    )
+
+
 class Runner:
     """One algorithm + dynamic source, advanced step by step."""
 
-    def __init__(self, ctl_cls, panel_fn, initial_duty):
-        self.src = make_dynamic_source(panel=panel_fn(), initial_duty=initial_duty)
+    def __init__(self, ctl_cls, panel, initial_duty):
+        self._ctl_cls = ctl_cls
+        self._duty0 = initial_duty
         self.ctl = ctl_cls(initial_duty=initial_duty)
+        self.src = DynamicSimulatedSource(
+            panel=panel,
+            converter=SEPICConverter(),
+            load_resistance=10.0,
+            initial_duty=initial_duty,
+            dt=CONTROL_PERIOD_MS * 1e-3,
+        )
         self.trail: list[tuple[float, float]] = []
 
+    def set_panel(self, panel):
+        self.src.set_panel(panel)
+
+    def reset(self, panel):
+        self.ctl = self._ctl_cls(initial_duty=self._duty0)
+        self.src = DynamicSimulatedSource(
+            panel=panel,
+            converter=SEPICConverter(),
+            load_resistance=10.0,
+            initial_duty=self._duty0,
+            dt=CONTROL_PERIOD_MS * 1e-3,
+        )
+        self.trail.clear()
+
     def advance(self, n: int):
+        v = i = 0.0
         for _ in range(n):
             v, i = self.src.read()
             self.src.write(self.ctl.step(v, i))
@@ -75,41 +111,34 @@ class Runner:
 
 def main():
     args = parse_args()
-    panel_fn = shaded_string if args.shade else series_string
-    title = "Partial shade (1000, 400 W/m²)" if args.shade else "Full sun (1000, 1000 W/m²)"
+    g1_0, g2_0 = 1000.0, (400.0 if args.shade else 1000.0)
 
-    # Reference P-V curve and global MPP (accurate model, sampled once).
-    ref = panel_fn()
-    v_curve, i_curve = ref.iv_curve(n=400)
-    p_curve = v_curve * i_curve
-    v_mpp, _, p_mpp = ref.mpp()
+    # Mutable environment state shared with the animation closure.
+    env = {"panel": build_string(g1_0, g2_0)}
+    tab = TabulatedPanel(env["panel"], n=SCAN_SAMPLES)
 
-    fig, (ax, ax_t) = plt.subplots(1, 2, figsize=(15, 6), constrained_layout=True)
-    fig.suptitle(f"Live MPPT — {title}", fontweight="bold")
+    fig, (ax, ax_t) = plt.subplots(1, 2, figsize=(15, 7))
+    fig.subplots_adjust(left=0.07, right=0.93, top=0.9, bottom=0.28, wspace=0.32)
+    fig.suptitle("Live MPPT — interactive shading", fontweight="bold")
 
-    # ── Left panel: P-V curve with moving operating points ───────────────────
+    # ── Left panel: P-V curve + I-V backdrop ─────────────────────────────────
     ax_iv = ax.twinx()
-    ax_iv.plot(v_curve, i_curve, color="grey", lw=1.2, ls="--", alpha=0.6, zorder=0)
+    v_curve, i_curve = env["panel"].iv_curve(n=400)
+    (iv_line,) = ax_iv.plot(v_curve, i_curve, color="grey", lw=1.2, ls="--", alpha=0.6, zorder=0)
     ax_iv.set_ylabel("Current [A]", color="grey")
     ax_iv.tick_params(axis="y", labelcolor="grey")
-    ax_iv.set_ylim(0, i_curve.max() * 1.25)
 
-    ax.plot(v_curve, p_curve, "k-", lw=1.5, zorder=1, label="P-V curve")
-    ax.plot(v_mpp, p_mpp, "k*", ms=16, zorder=2, label=f"global MPP ({p_mpp:.2f} W)")
+    (pv_line,) = ax.plot(v_curve, v_curve * i_curve, "k-", lw=1.5, zorder=1, label="P-V curve")
+    (mpp_marker,) = ax.plot([], [], "k*", ms=16, zorder=2, label="global MPP")
     ax.plot([], [], color="grey", ls="--", alpha=0.6, label="I-V curve")
     ax.set_title("Operating point on P-V curve")
     ax.set_xlabel("Voltage [V]")
     ax.set_ylabel("Power [W]")
-    ax.set_xlim(0, v_curve[-1] * 1.05)
-    ax.set_ylim(0, p_curve.max() * 1.25)
-    ax.set_zorder(ax_iv.get_zorder() + 1)  # keep P-V markers above the I-V backdrop
+    ax.set_zorder(ax_iv.get_zorder() + 1)
     ax.patch.set_visible(False)
     ax.grid(True, alpha=0.3)
 
     # ── Right panel: tracking efficiency vs time ─────────────────────────────
-    # η = P / P_mpp in %. The y-axis is zoomed near 100 % so the steady-state
-    # ripple is visible (a full 0–Pmpp power axis would hide it), while trapped
-    # algorithms sit clearly lower (e.g. ~89 % on the local maximum).
     ax_t.axhline(100.0, color="k", lw=1, ls="--", label="global MPP (100 %)")
     ax_t.set_title("Tracking efficiency vs time")
     ax_t.set_xlabel("Time [ms]")
@@ -120,11 +149,12 @@ def main():
     runners, dots, trails, time_lines = [], [], [], []
     p_hist: list[list[float]] = []
     t_hist: list[float] = []
-    for label, cls, color in ALGORITHMS:
-        runners.append(Runner(cls, panel_fn, args.duty))
+    frame_offset = {"n": 0}  # frame counter base, reset when env changes
+    for _label, cls, color in ALGORITHMS:
+        runners.append(Runner(cls, tab, args.duty))
         (trail_line,) = ax.plot([], [], "-", color=color, alpha=0.4, lw=1, zorder=3)
-        (dot,) = ax.plot([], [], "o", color=color, ms=12, zorder=4, label=label)
-        (t_line,) = ax_t.plot([], [], "-", color=color, lw=1.4, label=label)
+        (dot,) = ax.plot([], [], "o", color=color, ms=12, zorder=4, label=_label)
+        (t_line,) = ax_t.plot([], [], "-", color=color, lw=1.4, label=_label)
         trails.append(trail_line)
         dots.append(dot)
         time_lines.append(t_line)
@@ -136,16 +166,68 @@ def main():
         "",
         transform=ax.transAxes,
         va="top",
-        fontsize=10,
+        fontsize=9,
         bbox=dict(boxstyle="round,pad=0.4", facecolor="white", alpha=0.8, edgecolor="none"),
     )
-    ax.legend(loc="lower right")
-    ax_t.legend(loc="lower right", fontsize=9)
+    ax.legend(loc="lower right", fontsize=8)
+    ax_t.legend(loc="lower right", fontsize=8)
+
+    mpp = {"v": 0.0, "p": 1.0}
+
+    def refresh_curve():
+        """Recompute the reference P-V / I-V curves and the global MPP."""
+        v, i = env["panel"].iv_curve(n=400)
+        p = v * i
+        pv_line.set_data(v, p)
+        iv_line.set_data(v, i)
+        v_mpp, _, p_mpp = env["panel"].mpp()
+        mpp_marker.set_data([v_mpp], [p_mpp])
+        mpp["v"], mpp["p"] = v_mpp, p_mpp
+        ax.set_xlim(0, v[-1] * 1.05)
+        ax.set_ylim(0, max(p.max() * 1.25, 1e-3))
+        ax_iv.set_ylim(0, max(i.max() * 1.25, 1e-3))
+
+    def clear_histories():
+        t_hist.clear()
+        for h in p_hist:
+            h.clear()
+
+    refresh_curve()
+
+    # ── Interactive widgets ──────────────────────────────────────────────────
+    ax_g1 = fig.add_axes([0.10, 0.13, 0.55, 0.03])
+    ax_g2 = fig.add_axes([0.10, 0.08, 0.55, 0.03])
+    ax_reset = fig.add_axes([0.78, 0.09, 0.1, 0.05])
+    s_g1 = Slider(ax_g1, "G1 [W/m²]", 100, 1000, valinit=g1_0, valstep=50)
+    s_g2 = Slider(ax_g2, "G2 [W/m²]", 100, 1000, valinit=g2_0, valstep=50)
+    b_reset = Button(ax_reset, "Reset")
+
+    def on_irradiance(_val):
+        env["panel"] = build_string(s_g1.val, s_g2.val)
+        new_tab = TabulatedPanel(env["panel"], n=SCAN_SAMPLES)
+        for r in runners:
+            r.set_panel(new_tab)  # keep state → watch algorithms re-track
+        refresh_curve()
+        clear_histories()
+        frame_offset["n"] = 0
+
+    def on_reset(_event):
+        new_tab = TabulatedPanel(env["panel"], n=SCAN_SAMPLES)
+        for r in runners:
+            r.reset(new_tab)
+        clear_histories()
+        frame_offset["n"] = 0
+
+    s_g1.on_changed(on_irradiance)
+    s_g2.on_changed(on_irradiance)
+    b_reset.on_clicked(on_reset)
 
     def update(frame):
         artists = []
-        t_ms = frame * args.speed * CONTROL_PERIOD_MS
+        frame_offset["n"] += 1
+        t_ms = frame_offset["n"] * args.speed * CONTROL_PERIOD_MS
         t_hist.append(t_ms)
+        p_mpp = mpp["p"]
         for k, (runner, dot, trail, t_line) in enumerate(
             zip(runners, dots, trails, time_lines, strict=True)
         ):
@@ -153,14 +235,13 @@ def main():
             arr = np.asarray(runner.trail)
             trail.set_data(arr[:, 0], arr[:, 1])
             dot.set_data([v], [p])
-            p_hist[k].append(p / p_mpp * 100.0)  # tracking efficiency [%]
-            t_line.set_data(t_hist, p_hist[k])
+            p_hist[k].append(p / p_mpp * 100.0)
+            t_line.set_data(t_hist[-len(p_hist[k]) :], p_hist[k])
             artists += [trail, dot, t_line]
-        # grow the time axis as the run advances
         ax_t.set_xlim(0, max(t_ms, 1))
-        txt = [f"t = {t_ms:.0f} ms"]
+        txt = [f"t = {t_ms:.0f} ms   MPP = {p_mpp:.2f} W @ {mpp['v']:.1f} V"]
         for (label, _, _), runner in zip(ALGORITHMS, runners, strict=True):
-            v, p = runner.trail[-1]
+            _v, p = runner.trail[-1]
             txt.append(f"{label}: {p:5.2f} W  ({p / p_mpp * 100:5.1f}%)")
         readout.set_text("\n".join(txt))
         artists.append(readout)
