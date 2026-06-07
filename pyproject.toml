@@ -24,6 +24,11 @@ dev = [
     "ruff>=0.6",
     "pre-commit>=4",
 ]
+# Docs site (MkDocs Material). `uv run --group docs mkdocs serve`.
+docs = [
+    "mkdocs-material>=9.5",
+    "pymdown-extensions>=10",
+]
 
 [tool.ruff]
 line-length = 100

@@ -1,0 +1,56 @@
+name: docs
+
+# Production: rebuild and publish on every push to main.
+# Staging: build a per-PR preview and comment its link on the PR.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, closed]
+
+permissions:
+  contents: write        # push the built site to the gh-pages branch
+  pull-requests: write   # post/update the preview-link comment
+
+concurrency:
+  group: docs-${{ github.event.pull_request.number || 'main' }}
+  cancel-in-progress: true
+
+jobs:
+  # ── Production deploy (push to main → site root) ─────────────────────────────
+  production:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - run: pip install mkdocs-material pymdown-extensions
+      - run: mkdocs build --strict --site-dir site
+      - uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./site
+          keep_files: true   # preserve pr-preview/ deployed by PR builds
+
+  # ── PR preview / staging (deploy to pr-preview/pr-N + comment link) ─────────
+  preview:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        if: github.event.action != 'closed'
+        with:
+          python-version: "3.x"
+      - run: pip install mkdocs-material pymdown-extensions
+        if: github.event.action != 'closed'
+      - run: mkdocs build --strict --site-dir site
+        if: github.event.action != 'closed'
+      - uses: rossjrw/pr-preview-action@v1
+        with:
+          source-dir: ./site
+          preview-branch: gh-pages
+          umbrella-dir: pr-preview

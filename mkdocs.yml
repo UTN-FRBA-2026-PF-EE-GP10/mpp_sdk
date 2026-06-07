@@ -1,0 +1,54 @@
+site_name: mpp-sdk docs
+site_description: MPPT algorithm SDK — references, rationale, and general information
+site_url: https://utn-frba-2026-pf-ee-gp10.github.io/mpp_sdk/
+repo_url: https://github.com/UTN-FRBA-2026-PF-EE-GP10/mpp_sdk
+repo_name: mpp-sdk
+docs_dir: docs
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - search.suggest
+
+nav:
+  - Home: index.md
+  - General Information: general_information.md
+  - Rationale: rationale.md
+  - Algorithms:
+      - Perturb & Observe: algorithms/perturb_observe.md
+      - Incremental Conductance: algorithms/incremental_conductance.md
+      - Fuzzy Logic: algorithms/fuzzy_logic.md
+      - Scan-and-Track: algorithms/scan_and_track.md
+      - Particle Swarm: algorithms/particle_swarm.md
+
+markdown_extensions:
+  - admonition
+  - footnotes
+  - toc:
+      permalink: true
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - pymdownx.arithmatex:
+      generic: true
+
+extra_javascript:
+  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/UTN-FRBA-2026-PF-EE-GP10/mpp_sdk
