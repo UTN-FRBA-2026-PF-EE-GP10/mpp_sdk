@@ -1,262 +1,160 @@
 # AGENTS.md
 
 Guidelines for AI coding agents (and humans) contributing to **mpp-sdk**.
+Read this before any structural change.
 
 ## What this project is
 
 `mpp-sdk` is a Python SDK for designing, comparing, and (eventually) deploying
 Maximum Power Point Tracking (MPPT) algorithms for photovoltaic systems. The
-roadmap is:
+same controller code runs in simulation today and on a real **SEPIC** converter
+tomorrow, driven by a **Raspberry Pi 5 + RP2040 (Pi Pico)** over SPI. The
+RP2040 (firmware in **Rust**) drives the power stage and is the final deployment
+target for the chosen algorithm — the thesis's headline deliverable.
 
-1. Build solar panel models of increasing fidelity — single-diode → losses →
-   temperature/irradiance → measured curves.
-2. Build a library of MPPT algorithms (P&O, InCond, fuzzy, ML, …) with a
-   uniform interface.
-3. Provide a hardware-abstraction seam so the same algorithm code can drive a
-   simulation **or** a real DC-DC converter (the project ships a **SEPIC**,
-   chosen so the panel can sit on either side of the load voltage) on a
-   Raspberry Pi 5 + a small intermediary microcontroller (Pi Pico / ESP32
-   under evaluation, talking SPI). The MCU drives the power stage and
-   isolates it from the Pi; once an algorithm has been validated against the
-   framework it is ported to the MCU itself, which is the project's
-   headline deliverable.
+For the why behind the design, see `docs/rationale.md`; for the system overview
+and PV theory, `docs/general_information.md`; for the roadmap, `PLAN.md`.
 
 ## Architectural pillars
 
-The codebase is organised around four orthogonal concerns. Keep them decoupled.
+Four orthogonal concerns. Keep them decoupled.
 
 ```text
 mpp_sdk/
-├── models/         # Solar-panel I-V models           (PanelModel ABC)
-├── converters/     # Power-stage models               (SEPICConverter, …)
-├── algorithms/     # MPPT controllers                 (MPPTAlgorithm ABC)
-├── io/             # Hardware-abstraction layer       (SignalSource ABC)
+├── models/         # Solar-panel I-V models   (PanelModel ABC)
+├── converters/     # Power-stage models       (SEPICConverter)
+├── algorithms/     # MPPT controllers         (MPPTAlgorithm ABC)
+├── io/             # Hardware-abstraction     (SignalSource ABC)
+├── metrics.py      # Comparison metrics
 └── visualization.py
 ```
 
 Hard rules:
 
-- **Algorithms never import models or converters.** They consume `(V, I)` from
-  a `SignalSource` and emit a duty cycle. This is the seam that lets the same
-  algorithm run in simulation and on a Raspberry Pi.
+- **Algorithms never import models or converters.** They consume `(V, I)` from a
+  `SignalSource` and emit a duty cycle `D`. This seam is what lets the same
+  algorithm run in simulation and on hardware.
 - **Models never know about converters or algorithms.** A `PanelModel` answers
-  one question only: *given a terminal voltage (and my internal state), what
-  current do I deliver?*
-- **The simulator is the glue.** `SimulatedSource` composes a panel + converter
-  - load behind a `SignalSource` so algorithms can be exercised offline.
+  one question: *given a terminal voltage (and my internal state), what current
+  do I deliver?*
+- **The source is the glue.** `SimulatedSource` / `DynamicSimulatedSource`
+  compose panel + converter + load behind a `SignalSource` so algorithms run
+  offline.
 
 ## Modelling conventions
 
-- **Control variable** is the converter duty cycle, `D ∈ (D_min, D_max)`
-  (the SDK ships a SEPIC by default; the same `D` interface fits other
-  topologies). MPPT algorithms in this SDK return `D`, never `V_ref` or
-  `I_ref`.
-- **Measured quantities** are panel terminal voltage `V` and panel output
-  current `I` only. Algorithms must not consume irradiance, temperature, or
-  model parameters directly — those exist in the *model*, not in the
-  controller's state.
-- **Richer models depend on more than (V, I).** A temperature-aware model has
-  e.g. `model.temperature` and `model.irradiance` as mutable attributes; the
-  simulation loop updates them over time. The `current(V)` interface stays
-  uniform — environmental state lives on the model instance.
-- **Converter sign convention used in this repo (SEPIC):**
-  - `V_out = V_in · D / (1 − D)`.
-  - Reflected resistance: `R_in = R_load · ((1 − D) / D)²`, monotonically
-      decreasing in `D` over `(0, 1)`.
-  - Increasing `D` ⇒ lower reflected resistance ⇒ **lower** panel terminal
-      voltage. (The plain boost has the same sign — algorithms ported from
-      boost-based papers do not need a sign change.)
-  - When porting algorithms from papers that use `V_ref` as the control
-      variable, **flip the sign** when translating to `D`.
-- **Vectorisation:** model `current()` accepts arrays *and* scalars. Use
-  `numpy.asarray` to broadcast.
+- **Control variable** is the converter duty cycle `D ∈ (D_min, D_max)`.
+  Algorithms return `D`, never `V_ref` or `I_ref`.
+- **Measured quantities** are panel terminal voltage `V` and current `I` only.
+  Algorithms must not read irradiance, temperature, or model parameters — those
+  live on the *model* (e.g. mutable `model.irradiance`, `model.temperature`),
+  updated by the simulation loop. The `current(V)` interface stays uniform.
+- **SEPIC sign convention:** `V_out = V_in · D/(1−D)`; reflected resistance
+  `R_in = R_load · ((1−D)/D)²`, decreasing in `D`. So **raising `D` lowers the
+  panel voltage** (same sign as a boost). Porting an algorithm written in terms
+  of `V_ref`? Flip the sign when mapping to `D`.
+- **Vectorisation:** model `current()` accepts arrays *and* scalars
+  (`numpy.asarray`).
 
-## Roadmap of model fidelity
+## Models (`mpp_sdk/models/`)
 
-The model layer is split into two tracks: a small set of **in-tree,
-pedagogical** models (the ideal single-diode and a single-diode with
-losses), and a **pvlib-backed adapter** for everything beyond that.
-The split is intentional: pvlib is the canonical Python implementation of
-PV physics, well-validated and widely cited, and we should not reinvent it.
+In-tree, pedagogical (no optional deps):
 
-### In-tree (pedagogical, transparent)
+- `IdealSingleDiode` — shipped. Explicit closed-form `I(V)`, no losses/temp.
+- `SingleDiodeWithLosses` — *planned*. Adds `R_s`/`R_sh`; implicit `I(V)` solved
+  with a hand-rolled Newton/bisection (the point is to *show* the solver).
 
-These exist so a reader can step through the equations without leaving the
-repo, and so the SDK installs and runs without optional dependencies.
+Via the pvlib adapter (optional `mpp-sdk[pvlib]`):
 
-1. **Ideal single-diode** — *shipped* in `models/ideal.py` as
-   `IdealSingleDiode`. `I = I_ph − I_0·(exp(V / (n·V_t)) − 1)`. No losses,
-   no temperature dependence; explicit closed-form `I(V)`.
-2. **Single-diode with losses** — *planned* as `models/lossy.py` /
-   `SingleDiodeWithLosses`. Adds series resistance `R_s` and shunt
-   resistance `R_sh`. `I(V)` becomes implicit; solve with hand-rolled
-   Newton-Raphson or bisection (the point is to *show* the solver, not to
-   beat pvlib's).
+- `PvlibPanelModel` — shipped. Wraps pvlib's De Soto single-diode behind
+  `PanelModel`; temperature/irradiance aware. `from_datasheet(...)` fits
+  parameters; `hissuma_psf10mono(...)` is the project's panel.
 
-### Via pvlib adapter (`models/pvlib_adapter.py`, optional dep)
+Composition and helpers:
 
-Anything that needs validated PV physics — temperature / irradiance
-dependence, two-diode / `bishop88` reverse-bias for partial-shading
-analysis, parameter extraction from datasheets, or the CEC module
-database — is implemented by wrapping pvlib behind a `PvlibPanelModel`
-that subclasses `PanelModel`. Because the adapter satisfies the
-`PanelModel` interface, the rest of the SDK (`SimulatedSource`,
-algorithms, visualisation, `PanelArray`) consumes it identically.
+- `PvString` — shipped. N panels in series with bypass diodes; per-panel
+  irradiance gives a multi-modal P-V curve (the motivation for global MPPT).
+- `TabulatedPanel` — shipped. Caches any model's I-V curve onto a grid for fast
+  repeated lookups (makes the dynamic/animated harness tractable).
 
-When adding a new in-tree model, also add a smoke test that pins its MPP
-at standard test conditions to within tolerance — and, where relevant,
-cross-check against the pvlib adapter at the same operating point as a
-sanity check on both implementations.
+A new model ships with a smoke test pinning its MPP (and, for arrays, the count
+/ location of local maxima) at known conditions.
 
-### Composition: arrays, bypass diodes, shading
+## Algorithms (`mpp_sdk/algorithms/`)
 
-This axis is **orthogonal** to single-module fidelity. A `PanelArray` is
-itself a `PanelModel` and composes other `PanelModel`s in series and/or
-parallel topologies (S, P, SP, TCT, BL); per-panel (or per-substring)
-bypass diodes clamp negative voltages when the string current exceeds a
-panel's photocurrent. Partial shading is modelled by setting different
-per-panel irradiance / photocurrent.
+All implement `MPPTAlgorithm.step(V, I) -> D` and own their state.
 
-Because a `PanelArray` *is* a `PanelModel`, the rest of the SDK
-(`SimulatedSource`, algorithms, visualization) consumes it identically —
-`current(V)`, `iv_curve()`, `mpp()` all just work, and the resulting I-V
-curve naturally becomes multi-modal under non-uniform shading. That
-multi-modal P-V is the motivation for the Global-MPPT family of
-algorithms (PSO, scanning, hybrid) in the algorithm roadmap. A new array
-or shading model should add a smoke test that pins the count and
-approximate locations of the local maxima for a canonical shading
-pattern.
+- `PerturbAndObserve`, `IncrementalConductance`, `FuzzyLogic` — local trackers.
+- `ScanAndTrack`, `ParticleSwarm` — global MPPT (escape local maxima under
+  partial shading).
+- *Planned:* adaptive-step P&O; an own model-informed candidate scan; later, a
+  data-driven baseline.
 
-## Roadmap of algorithms
-
-- **Perturb & Observe** — *shipped*. Fixed-step P&O, sign-corrected for
-  SEPIC (and boost) duty-cycle control.
-- **Incremental Conductance** — first variant beyond P&O.
-- **Adaptive-step P&O / variable-step InCond** — improve speed/accuracy
-  tradeoff.
-- **Fuzzy / sliding-mode / model-predictive** — research-grade controllers.
-- **Global MPPT** — particle-swarm, periodic full-range scan with local
-  refinement, two-stage scan-and-track. These exist to escape the local
-  maxima introduced by bypass diodes under partial shading; they are the
-  algorithmic counterpart to the array / shading models above.
-- **Data-driven** — neural / RL once measured curves are available.
-
-All algorithms implement `MPPTAlgorithm.step(V, I) -> D` and own their internal
-state.
+**Algorithms must stay portable to a Pico-class MCU.** Keep `step` dependency-free
+(no numpy/scipy/pandas inside it), state small (a handful of scalars), and prefer
+fixed-step / branch-light variants. Models, sources, harness, and visualisation
+live on the Pi and are *not* bound by this — only the algorithm leaves.
 
 ## Coding conventions
 
-- Python `>= 3.14`. Type hints on all public APIs.
-- Subpackages re-export their main classes via `__init__.py`. The top-level
-  `mpp_sdk/__init__.py` re-exports the most-used symbols.
-- `numpy` is fine everywhere. `scipy` only when a hand-rolled bisection or
-  Newton step is awkward.
-- **Heavy / optional imports stay inside the function (or module) that needs
-  them.** `matplotlib` lives inside the visualization functions; `pvlib`
-  (when the adapter lands) lives inside `mpp_sdk/models/pvlib_adapter.py`;
-  any hardware-only libraries (`spidev`, etc.) live inside the eventual
-  `mpp_sdk/io/spi_mcu.py`. All of these are gated behind optional
-  dependency groups in `pyproject.toml` (`mpp-sdk[pvlib]`,
-  `mpp-sdk[hardware]`). Importing the SDK with the base install must not
-  pull any of them.
-- Comments only when the *why* is non-obvious. Don't restate the code. Public
-  classes get a short docstring.
-- **Algorithms must stay portable to a Pico-class MCU.** The thesis ends with
-  the chosen algorithm running on a small microcontroller (Pi Pico / ESP32).
-  When implementing an `MPPTAlgorithm`, keep its `step` method
-  dependency-free (no `numpy` / `scipy` / `pandas` *inside the step*), keep
-  its state small (a handful of scalars), and prefer fixed-step / branch-light
-  variants. A Python implementation that quietly relies on `numpy`
-  vectorisation will be painful to port; surface the dependency early and
-  refactor before merging. Models, simulators, and visualisations are *not*
-  bound by this constraint — they live on the Pi, only the algorithm leaves.
-- Tests with `pytest` under `tests/` (not yet — add the directory when the
-  second model lands so the regression infrastructure has something to anchor
-  on).
+- Python `>= 3.14`. Type hints on public APIs.
+- Subpackages re-export their main classes; the top-level `__init__.py`
+  re-exports the most-used symbols.
+- `numpy` everywhere; `scipy` only when a hand-rolled solver is awkward.
+- **Heavy / optional imports stay inside the function or module that needs them**
+  (`matplotlib` in visualisation, `pvlib` in the adapter, `spidev` in
+  `io/spi_mcu.py`), gated behind optional groups (`mpp-sdk[pvlib]`,
+  `mpp-sdk[hardware]`). The base install must not pull any of them.
+- Comments only when the *why* is non-obvious. Public classes get a docstring.
+- Tests with `pytest` under `tests/` — one per module, exercising the public API
+  in isolation; pvlib-dependent tests `importorskip` it.
 
 ## Hardware target (future)
 
-The eventual platform is a **Raspberry Pi 5 + intermediary microcontroller**
-topology, not a bare Pi.
+**Raspberry Pi 5 + RP2040.** The Pi 5 hosts the SDK, harness, and (in HIL mode)
+the algorithm; it is not responsible for hard-real-time signals. The RP2040
+(firmware in **Rust**, `rp2040-hal`) drives the board: ADC sense for `(V, I)`,
+hardware PWM for the SEPIC switch, SPI-slave to the Pi. It isolates the
+fast-switching side *and* is the deployment target.
 
-- The Pi 5 hosts the SDK, the comparison harness, and (in HIL mode) the
-  algorithm itself. It is *not* responsible for hard-real-time signals.
-- A small MCU (candidates under evaluation: **Raspberry Pi Pico / RP2040** and
-  **ESP32**) drives the power-electronics board: ADC sense for `(V, I)`,
-  hardware PWM for the SEPIC switch, and SPI-slave to the Pi. The
-  MCU isolates the fast-switching / high-current side from the Pi *and*
-  doubles as the deployment target for the algorithm itself once it has been
-  validated.
+Two phases (see `PLAN.md` Phase 5):
 
-The hardware shim lands in two phases (see `PLAN.md` Phase 5):
+1. **HIL bringup.** A Pi-side `SpiMcuSource(SignalSource)` (under `mpp_sdk/io/`,
+   gated by `mpp-sdk[hardware]`) wraps the SPI protocol; the firmware is a dumb
+   I/O proxy. The algorithm still lives on the Pi.
+2. **Deployed mode.** The validated algorithm is ported to RP2040 firmware and
+   cross-validated against the Python reference on recorded `(V, I, D)` traces.
 
-1. **HIL bringup.** A Pi-side `SpiMcuSource(SignalSource)` under `mpp_sdk/io/`
-   wraps the SPI protocol; the MCU firmware is a dumb I/O proxy (set duty,
-   read sample, watchdog). The algorithm still lives on the Pi.
-2. **Deployed mode.** The validated algorithm is ported from Python to MCU
-   firmware (C with the Pi Pico SDK or ESP-IDF; MicroPython / CircuitPython
-   for prototyping). The Pi is reduced to monitoring and configuration. The
-   ported firmware is cross-validated against the Python reference
-   point-by-point on recorded `(V, I, D)` traces.
-
-The Pi-side source will:
-
-- Live under `mpp_sdk/io/` as `SpiMcuSource(SignalSource)`.
-- Be guarded by an optional dependency group (`mpp-sdk[hardware]`) so the SDK
-  still installs cleanly on a development laptop.
-- Expose calibration parameters (ADC scale / offset, sense-resistor value,
-  PWM frequency, soft duty-cycle limits, SPI clock, watchdog timeout).
-
-The MCU firmware itself lives in a sibling directory or repository per chip,
-not under `mpp_sdk/`.
-
-**Algorithms must not need any code changes** when switching from
-`SimulatedSource` to `SpiMcuSource`, or when their Python implementation is
-ported to MCU firmware. If a change to the algorithm API is required to
-support either, that change belongs in the base class first.
+MCU firmware lives in a sibling directory/repo, not under `mpp_sdk/`.
+**Switching `SimulatedSource` → `SpiMcuSource`, or porting an algorithm to
+firmware, must need no algorithm code changes.** If it does, fix the base class
+first.
 
 ## What not to commit
 
-This repo is (or will be made) public. Keep the following out of the tree,
-the commit messages, and the docs:
+This repo is public. Keep out of the tree, commit messages, and docs:
 
-- **Credentials of any kind.** API keys, tokens, passwords, SSH keys, Wi-Fi
-  credentials baked into firmware, supplier-portal cookies, license keys.
-- **Personal and institutional metadata.** Lab / workplace network paths,
-  internal hostnames or URLs, supplier-account usernames, GPS coordinates
-  of test sites, panel serial numbers tied to a known location. Commit
-  authors should use a no-reply email (the maintainer already does); other
-  contributors should pick the name they want in history before their
-  first commit.
-- **Embedded metadata in binary files.** When committing photos, scope
-  captures, or oscilloscope screenshots, strip:
-  - EXIF / camera GPS from photos (`exiftool -all= file.jpg` or similar).
-  - Serial numbers, IP addresses, hostnames written into instrument
-      captures by the scope itself.
-- **Datasheets, third-party schematics, or proprietary panel models** that
-  the project has not been licensed to redistribute. Cite by reference.
-- **Raw measurement files with location / serial metadata** that has not
-  been scrubbed. Measured data lives under `data/` with a `data/README.md`
-  documenting what was scrubbed and how.
+- **Credentials of any kind** (keys, tokens, passwords, Wi-Fi creds in firmware).
+- **Personal / institutional metadata** (lab network paths, internal hostnames,
+  GPS of test sites, serial numbers tied to a location). Use a no-reply commit
+  email.
+- **Embedded binary metadata** — strip EXIF/GPS from photos
+  (`exiftool -all=`) and serials/IPs from scope captures.
+- **Datasheets / third-party schematics / proprietary panel models** not
+  licensed for redistribution — cite by reference.
+- **Raw measurement files** with unscrubbed location/serial metadata. Measured
+  data lives under `data/` with a `data/README.md` documenting the scrub.
 
-Mechanisms:
+`.gitignore` covers the obvious patterns; grep the staged diff for `API_KEY`,
+`password`, `token`, `secret` before committing. If a secret lands in history,
+rotate it, then rewrite history with `git filter-repo` and force-push.
 
-- `.gitignore` covers the obvious patterns (`.env`, `*.key`, `*.pem`,
-  `secrets.*`, `credentials.*`). Extend it as new tools land.
-- Before each commit, grep the staged diff for obvious markers
-  (`API_KEY`, `password`, `token`, `secret`) unless the line is clearly
-  an example or a docstring.
-- If sensitive information ever lands in history, treat it as a security
-  incident: rotate the credential first, then rewrite history with
-  `git filter-repo` (after coordinating with the team) and force-push.
+## Process expectations
 
-## Process expectations for agents
-
-- **Read this file before making structural changes.** If a change conflicts
-  with a pillar above, surface that explicitly in the PR description.
-- **Prefer additive PRs.** Ship a new model alongside the old; deprecate
-  before removing.
-- **Demos are living documentation.** When you add a feature, add or update a
-  demo that exercises it end-to-end with a plot. The canonical quickstart is
-  `main.py`; variants and comparisons go under `examples/`. If you change a
-  default, run the demo and verify the plot still tells the right story.
+- **Read this file before structural changes.** If a change conflicts with a
+  pillar above, surface it explicitly.
+- **Prefer additive changes.** Ship a new model/algorithm alongside the old;
+  deprecate before removing.
+- **Demos and the harness are living documentation.** When you add an algorithm,
+  add it to the comparison harness (`harness/`) and, where useful, a demo under
+  `examples/`. The canonical quickstart is `main.py`.

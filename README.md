@@ -41,9 +41,9 @@ cross-paper comparisons and sim-to-real validation hard to reproduce
    *and* gives us the natural deployment target: once an algorithm has
    been validated against the framework, it is ported to the MCU and
    re-run end-to-end against the same physical rig.
-4. **A reproducible comparison harness** — EN 50530 dynamic profiles,
-   shared metrics (tracking efficiency, settling time, steady-state
-   oscillation, step response), and paper figures regenerated from code.
+4. **A reproducible comparison harness** — dynamic irradiance profiles, shared
+   metrics (tracking efficiency, settling time, steady-state oscillation, trap
+   depth), and paper figures regenerated from code.
 
 > **The end deliverable of the thesis is an MCU-deployable algorithm
 > that fits comfortably inside a Pico-class chip yet performs
@@ -108,11 +108,15 @@ operating-point trajectory.
 
 ```text
 mpp_sdk/
-├── models/         # Solar panel I-V models  (PanelModel ABC + IdealSingleDiode)
+├── models/         # Solar panel I-V models  (PanelModel ABC; ideal, pvlib, string, tabulated)
 ├── converters/     # Power-stage models      (SEPICConverter)
-├── algorithms/     # MPPT controllers        (MPPTAlgorithm ABC + PerturbAndObserve)
-├── io/             # Hardware-abstraction    (SignalSource ABC + SimulatedSource)
+├── algorithms/     # MPPT controllers        (MPPTAlgorithm ABC; P&O, InCond, fuzzy, scan, PSO)
+├── io/             # Hardware-abstraction    (SignalSource ABC; simulated, dynamic)
+├── metrics.py      # Comparison metrics
 └── visualization.py
+
+harness/            # Algorithm comparison scripts (static, dynamic, live)
+docs/               # Algorithm references, rationale, general information
 ```
 
 The control variable is always the SEPIC **duty cycle**; the
@@ -158,75 +162,55 @@ authoritative implementation.
 
 ## Roadmap
 
-Short list of what's next. The full plan — phases, milestones, verification
+What's shipped and what's next. The full plan — phases, milestones, verification
 expectations, contributor liability, and LLM-usage policy — lives in
 [`PLAN.md`](./PLAN.md).
 
-### Models — single module (in-tree, pedagogical)
+### Models
 
-- [ ] `SingleDiodeWithLosses` — single-diode with `R_s` / `R_sh`
-      (implicit I-V, hand-rolled Newton or bisection)
-
-### Models — via `PvlibPanelModel` adapter (optional `mpp-sdk[pvlib]`)
-
-- [ ] `PvlibPanelModel(PanelModel)` skeleton wrapping pvlib's
-      `singlediode` and `bishop88` paths
-- [ ] Temperature- and irradiance-aware single-diode via pvlib's
-      `calcparams_cec` / `calcparams_desoto`
-- [ ] Partial-shading / reverse-bias via pvlib's `bishop88` family
-- [ ] CEC-module-database-backed lookups and / or user-supplied
-      measured I-V tables under `data/`
-
-### Models — arrays and shading
-
-- [ ] Multi-panel `PanelArray(PanelModel)` composing modules in
-      series / parallel topologies (S, P, SP, TCT, BL)
-- [ ] Bypass diodes per panel or per substring
-- [ ] Partial-shading scenarios — non-uniform per-panel irradiance
-      yielding multi-modal P-V curves
+- [x] `IdealSingleDiode` — explicit closed-form I(V) (in-tree, pedagogical)
+- [x] `PvlibPanelModel` — pvlib De Soto adapter, temperature/irradiance aware
+      (optional `mpp-sdk[pvlib]`); `from_datasheet` + `hissuma_psf10mono`
+- [x] `PvString` — series panels with bypass diodes → multi-modal P-V curves
+- [x] `TabulatedPanel` — cached I-V curve for fast repeated lookups
+- [ ] `SingleDiodeWithLosses` — in-tree `R_s` / `R_sh` (implicit I-V)
 
 ### Algorithms
 
-- [ ] Incremental Conductance (fixed and variable step)
-- [ ] Adaptive-step P&O
-- [ ] Fuzzy-logic and sliding-mode controllers
-- [ ] Model-predictive controller
-- [ ] Global MPPT for multi-modal P-V curves under partial shading
-      (particle-swarm, periodic scan + local refinement, hybrid)
+- [x] Perturb & Observe
+- [x] Incremental Conductance
+- [x] Fuzzy-logic (local tracker)
+- [x] Scan-and-track (global MPPT)
+- [x] Particle Swarm Optimization (global MPPT)
+- [ ] Adaptive-step P&O; own model-informed candidate scan
 - [ ] Data-driven / RL baseline
 
 ### Comparison harness
 
-- [ ] Standardized dynamic profiles (e.g. EN 50530)
-- [ ] Tracking-efficiency, settling-time, steady-state-oscillation, and
-      step-response metrics
-- [ ] Auto-generated tables and plots consumed directly by the paper
+- [x] Static, dynamic, and live interactive (`harness/`)
+- [x] Preliminary metrics — tracking efficiency, settling time, ripple, overshoot,
+      trap depth (`mpp_sdk.metrics`)
+- [ ] Cyclic irradiance profile for a valid dynamic efficiency measurement
+- [ ] Auto-generated paper figures
 
-### Hardware
+### Hardware (future — see [`PLAN.md`](./PLAN.md))
 
-The power-electronics board is driven by a small **microcontroller**
-(Raspberry Pi Pico / RP2040), connected to the Raspberry Pi 5 over SPI. The MCU isolates the
-fast-switching / high-current side from the Pi *and* doubles as the
-deployment target for the final algorithm.
+The power stage is driven by an **RP2040 (Pi Pico, firmware in Rust)** connected
+to the Raspberry Pi 5 over SPI. The MCU isolates the fast-switching side *and* is
+the deployment target for the final algorithm.
 
-- [ ] `SpiMcuSource(SignalSource)` — Pi-side wrapper that sends a duty
-      cycle and reads `(V, I)` from the MCU over SPI
-- [ ] MCU firmware (HIL mode): ADC sense + hardware-PWM drive + SPI
-      slave; in this mode the MCU is an I/O proxy and the algorithm
-      still runs on the Pi in Python. SPI-slave scaffold with PIO done ✓.
-- [ ] Calibration procedure (ADC scale / offset, INA226 gain, PWM
-      frequency, soft duty-cycle limits)
-- [ ] Algorithm port from Python to the MCU (deployed mode): Rust with
-      `rp2040-hal` ✓ (language resolved)
-- [ ] Cross-validation: deployed-MCU vs Pi-driven-Python on the same
-      physical rig, same load profile, same recorded V/I/D traces
+- [x] SPI-slave firmware scaffold (PIO)
+- [ ] `SpiMcuSource(SignalSource)` — Pi-side SPI wrapper (`mpp-sdk[hardware]`)
+- [ ] MCU firmware (HIL mode): ADC + PWM + SPI-slave as an I/O proxy
+- [ ] Calibration (ADC scale/offset, INA226 gain, PWM freq, duty limits)
+- [ ] Algorithm port to RP2040 + cross-validation against the Python reference
 - [ ] Bench and outdoor validation against the simulator
 
 ### Infrastructure
 
-- [ ] `tests/` with unit + integration tests for every pillar
+- [x] `tests/` — unit tests per pillar (`pytest`)
 - [ ] CI workflow (`uv sync`, `pytest`, demo smoke run)
-- [ ] `data/` directory with provenanced benchmark profiles and panel curves
+- [ ] `data/` — provenanced benchmark profiles and panel curves
 
 ## Context
 
