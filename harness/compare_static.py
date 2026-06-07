@@ -29,6 +29,7 @@ ALGORITHMS = [
     ("P&O", mpp_sdk.PerturbAndObserve),
     ("InCond", mpp_sdk.IncrementalConductance),
     ("Fuzzy", mpp_sdk.FuzzyLogic),
+    ("Scan&Track", mpp_sdk.ScanAndTrack),
 ]
 
 SCENARIOS = [

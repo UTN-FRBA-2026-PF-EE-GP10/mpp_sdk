@@ -12,6 +12,7 @@ from .algorithms.base import MPPTAlgorithm
 from .algorithms.fuzzy import FuzzyLogic
 from .algorithms.incremental_conductance import IncrementalConductance
 from .algorithms.perturb_observe import PerturbAndObserve
+from .algorithms.scan_and_track import ScanAndTrack
 from .converters.sepic import SEPICConverter
 from .io.base import SignalSource
 from .io.dynamic import DynamicSimulatedSource
@@ -30,6 +31,7 @@ __all__ = [
     "FuzzyLogic",
     "IncrementalConductance",
     "PerturbAndObserve",
+    "ScanAndTrack",
     "SEPICConverter",
     "SignalSource",
     "SimulatedSource",

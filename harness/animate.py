@@ -37,6 +37,7 @@ ALGORITHMS = [
     ("P&O", mpp_sdk.PerturbAndObserve, "tab:blue"),
     ("InCond", mpp_sdk.IncrementalConductance, "tab:red"),
     ("Fuzzy", mpp_sdk.FuzzyLogic, "tab:green"),
+    ("Scan&Track", mpp_sdk.ScanAndTrack, "tab:purple"),
 ]
 
 
