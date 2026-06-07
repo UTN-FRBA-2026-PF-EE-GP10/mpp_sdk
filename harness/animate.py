@@ -39,6 +39,10 @@ from mpp_sdk import (
 
 TRAIL = 60  # operating-point trail length
 SCAN_SAMPLES = 240  # per-panel I-V samples (lower = snappier sliders)
+# pvlib's De Soto model divides by irradiance (R_sh ∝ 1/G), so G=0 is undefined.
+# Map a slider value of 0 ("panel off") to a tiny irradiance: the panel produces
+# ~no current and its bypass diode drops it out of the string — effectively off.
+G_OFF_FLOOR = 1.0  # W/m²
 
 ALGORITHMS = [
     ("P&O", mpp_sdk.PerturbAndObserve, "tab:blue"),
@@ -67,8 +71,8 @@ def build_panel(g1: float, g2: float) -> TabulatedPanel:
     """
     string = PvString(
         [
-            PvlibPanelModel.hissuma_psf10mono(irradiance=g1),
-            PvlibPanelModel.hissuma_psf10mono(irradiance=g2),
+            PvlibPanelModel.hissuma_psf10mono(irradiance=max(g1, G_OFF_FLOOR)),
+            PvlibPanelModel.hissuma_psf10mono(irradiance=max(g2, G_OFF_FLOOR)),
         ],
         samples=SCAN_SAMPLES,
     )
@@ -211,8 +215,8 @@ def main():
     ax_g1 = fig.add_axes([0.10, 0.13, 0.55, 0.03])
     ax_g2 = fig.add_axes([0.10, 0.08, 0.55, 0.03])
     ax_reset = fig.add_axes([0.78, 0.09, 0.1, 0.05])
-    s_g1 = Slider(ax_g1, "G1 [W/m²]", 100, 1000, valinit=g1_0, valstep=50)
-    s_g2 = Slider(ax_g2, "G2 [W/m²]", 100, 1000, valinit=g2_0, valstep=50)
+    s_g1 = Slider(ax_g1, "G1 [W/m²]", 0, 1000, valinit=g1_0, valstep=50)
+    s_g2 = Slider(ax_g2, "G2 [W/m²]", 0, 1000, valinit=g2_0, valstep=50)
     b_reset = Button(ax_reset, "Reset")
 
     # Defer the heavy rebuild: slider callbacks only flag intent, so a burst of
@@ -251,7 +255,7 @@ def main():
         frame_offset["n"] += 1
         t_ms = frame_offset["n"] * args.speed * CONTROL_PERIOD_MS
         t_hist.append(t_ms)
-        p_mpp = mpp["p"]
+        p_mpp = max(mpp["p"], 1e-9)  # guard: both panels off → MPP ≈ 0
         for k, (runner, dot, trail, t_line) in enumerate(
             zip(runners, dots, trails, time_lines, strict=True)
         ):
