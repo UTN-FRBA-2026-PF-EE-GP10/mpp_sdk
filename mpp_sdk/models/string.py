@@ -41,6 +41,10 @@ class PvString(PanelModel):
     ) -> None:
         if not panels:
             raise ValueError("PvString needs at least one panel")
+        if samples < 2:
+            raise ValueError(f"samples must be >= 2; got {samples}")
+        if bypass_drop < 0:
+            raise ValueError(f"bypass_drop must be >= 0; got {bypass_drop}")
         self._panels = list(panels)
         self._vd = bypass_drop
         # Per-panel inverse tables: current (ascending) → voltage.

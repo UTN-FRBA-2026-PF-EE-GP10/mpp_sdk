@@ -1,5 +1,7 @@
 """Dynamic software ``SignalSource`` with first-order capacitor dynamics."""
 
+import math
+
 from ..converters.sepic import SEPICConverter
 from ..models.base import PanelModel
 from .base import SignalSource
@@ -43,6 +45,10 @@ class DynamicSimulatedSource(SignalSource):
             raise ValueError(f"load_resistance must be > 0; got {load_resistance!r}")
         if capacitance <= 0.0:
             raise ValueError(f"capacitance must be > 0; got {capacitance!r}")
+        if not (math.isfinite(dt) and dt > 0.0):
+            raise ValueError(f"dt must be a finite positive number; got {dt!r}")
+        if substeps < 1:
+            raise ValueError(f"substeps must be >= 1; got {substeps!r}")
         self._panel = panel
         self._converter = converter
         self._load = load_resistance
@@ -58,12 +64,13 @@ class DynamicSimulatedSource(SignalSource):
         """Integrate the capacitor ODE over one control period."""
         r_eff = self._converter.reflected_resistance(duty, self._load)
         h = self._dt / self._substeps
+        voc = self._panel.open_circuit_voltage  # constant over the control period
         v = self._v
         for _ in range(self._substeps):
             i_panel = float(self._panel.current(v))
             dvdt = (i_panel - v / r_eff) / self._cap
             v += dvdt * h
-            v = max(0.0, min(v, self._panel.open_circuit_voltage))
+            v = max(0.0, min(v, voc))
         self._v = v
         self._i = float(self._panel.current(v))
 

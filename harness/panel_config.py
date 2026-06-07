@@ -40,28 +40,13 @@ STC_TEMPERATURE: float = 25.0  # °C
 def series_string(
     irradiance: float = STC_IRRADIANCE,
     temperature: float = STC_TEMPERATURE,
-) -> PvlibPanelModel:
-    """Two Hissuma PSF10MONO panels wired in series.
+) -> PvString:
+    """Two Hissuma PSF10MONO panels wired in series (uniform irradiance).
 
-    A series string doubles all voltage-related De Soto parameters
-    (V_oc, V_mp, a_ref, R_s, R_sh_ref) while current parameters stay
-    unchanged (I_sc, I_mp, I_L_ref, I_o_ref, alpha_sc).
-
-    Returns a ``PvlibPanelModel`` representing the string as a single
-    equivalent module. Use ``PvString`` (Phase 2) once partial-shading
-    simulation is needed.
+    Both panels at the same irradiance → a single-peak P-V curve. For partial
+    shading use :func:`shaded_string`.
     """
-    single = PvlibPanelModel.hissuma_psf10mono()
-    return PvlibPanelModel(
-        I_L_ref=single._I_L_ref,
-        I_o_ref=single._I_o_ref,  # Voc/a_ref unchanged → I_o unchanged
-        R_s=single._R_s * 2,
-        R_sh_ref=single._R_sh_ref * 2,
-        a_ref=single._a_ref * 2,  # proportional to N_s
-        alpha_sc=single._alpha_sc,  # series → same current coefficient
-        irradiance=irradiance,
-        temperature=temperature,
-    )
+    return shaded_string((irradiance, irradiance), temperature=temperature)
 
 
 def shaded_string(

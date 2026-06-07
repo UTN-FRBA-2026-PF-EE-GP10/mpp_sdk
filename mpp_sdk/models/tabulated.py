@@ -19,6 +19,8 @@ class TabulatedPanel(PanelModel):
     """
 
     def __init__(self, panel: PanelModel, n: int = 800) -> None:
+        if n < 2:
+            raise ValueError(f"n must be >= 2; got {n}")
         v, i = panel.iv_curve(n=n)
         self._v = np.asarray(v, dtype=float)
         self._i = np.asarray(i, dtype=float)

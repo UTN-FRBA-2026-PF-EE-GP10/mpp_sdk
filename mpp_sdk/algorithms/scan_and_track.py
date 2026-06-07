@@ -32,6 +32,12 @@ class ScanAndTrack(MPPTAlgorithm):
 
     Parameters
     ----------
+    initial_duty :
+        Accepted only for interface uniformity with the local trackers (so the
+        harness can construct every algorithm the same way). A global scan starts
+        from its own grid and explores the whole range, so the start point does
+        not bias the result; it is merely the duty reported by ``duty`` before the
+        first ``step``.
     scan_step :
         Duty increment during the scan. Smaller ⇒ finer (won't miss a narrow
         peak) but a longer scan.

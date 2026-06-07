@@ -32,6 +32,11 @@ class ParticleSwarm(MPPTAlgorithm):
 
     Parameters
     ----------
+    initial_duty :
+        Accepted only for interface uniformity with the local trackers. The swarm
+        is seeded across the whole duty range, so the start point does not bias
+        the search; it is merely the duty reported by ``duty`` before the first
+        ``step``.
     n_particles :
         Swarm size. More ⇒ more reliable global search, longer per iteration.
     inertia, cognitive, social :

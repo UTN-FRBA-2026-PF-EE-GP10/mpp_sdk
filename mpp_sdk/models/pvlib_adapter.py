@@ -113,6 +113,12 @@ class PvlibPanelModel(PanelModel):
             Number of cells in series in the module.
         """
         _require_pvlib()
+        if not (0.0 < i_mp < i_sc):
+            raise ValueError(f"need 0 < i_mp < i_sc; got {i_mp=}, {i_sc=}")
+        if not (0.0 < v_mp < v_oc):
+            raise ValueError(f"need 0 < v_mp < v_oc; got {v_mp=}, {v_oc=}")
+        if cells_in_series < 1:
+            raise ValueError(f"cells_in_series must be >= 1; got {cells_in_series}")
         # Estimate a_ref from the simplified 3-parameter diode model
         # I_mp = I_ph * (1 - exp((Vmp - Voc) / a))  →  a = (Voc-Vmp) / -ln(1-Imp/Isc)
         a_est = (v_oc - v_mp) / (-math.log(1.0 - i_mp / i_sc))
