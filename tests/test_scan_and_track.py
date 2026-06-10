@@ -108,6 +108,64 @@ def test_switches_to_track_after_scan():
 
 
 # ------------------------------------------------------------------
+# Re-acquisition after a shading change (change-detection restart)
+# ------------------------------------------------------------------
+
+
+def _full_string():
+    return PvString(
+        [
+            PvlibPanelModel.hissuma_psf10mono(irradiance=1000.0),
+            PvlibPanelModel.hissuma_psf10mono(irradiance=1000.0),
+        ]
+    )
+
+
+def _run_dynamic(src, ctl, steps):
+    """Drive the dynamic source; return whether a (re)scan was seen running."""
+    scanned = False
+    for _ in range(steps):
+        v, i = src.read()
+        src.write(ctl.step(v, i))
+        scanned = scanned or ctl.scanning
+    return scanned
+
+
+def _make_dynamic(panel, initial_duty):
+    return mpp_sdk.DynamicSimulatedSource(
+        panel=mpp_sdk.TabulatedPanel(panel),
+        converter=mpp_sdk.SEPICConverter(),
+        load_resistance=10.0,
+        initial_duty=initial_duty,
+    )
+
+
+def test_reacquires_global_mpp_after_shading_change():
+    shaded = mpp_sdk.TabulatedPanel(_shaded_string())
+    ctl = ScanAndTrack(initial_duty=0.5)
+    src = _make_dynamic(_full_string(), ctl.duty)
+    _run_dynamic(src, ctl, 600)
+    assert not ctl.scanning  # converged on the full-sun MPP
+
+    src.set_panel(shaded)
+    rescanned = _run_dynamic(src, ctl, 800)
+    assert rescanned  # the power change triggered a fresh scan
+    v, i = src.read()
+    assert (v * i) / shaded.mpp()[2] > 0.95
+
+
+def test_restart_disabled_never_rescans():
+    ctl = ScanAndTrack(initial_duty=0.5, restart_threshold=None)
+    src = _make_dynamic(_full_string(), ctl.duty)
+    _run_dynamic(src, ctl, 600)
+    assert not ctl.scanning
+
+    src.set_panel(mpp_sdk.TabulatedPanel(_shaded_string()))
+    rescanned = _run_dynamic(src, ctl, 800)
+    assert not rescanned  # the old behaviour: track-only after the first scan
+
+
+# ------------------------------------------------------------------
 # Interface
 # ------------------------------------------------------------------
 

@@ -210,9 +210,8 @@ composes any module above and the rest of the SDK consumes it identically.
       solves the common string current. Per-panel irradiance produces the
       multi-modal P-V curve (motivation for the global MPPT in Phase 3).
       Parallel / SP / TCT / BL topologies remain future work.
-- [ ] Dedicated smoke test pinning the count / location of local maxima for
-      canonical shading patterns. *(Gap: `PvString` is currently only exercised
-      indirectly by the global-MPPT tests.)*
+- [x] Dedicated smoke test pinning the count / location of local maxima for
+      canonical shading patterns (`tests/test_string.py`).
 
 ### Phase 3 — Algorithm zoo
 
@@ -253,11 +252,13 @@ measurement**):
 
 Still to do:
 
-- [ ] **Cyclic irradiance profile** (full → A shaded → full → B shaded → both →
+- [x] **Cyclic irradiance profile** (full → A shaded → full → B shaded → both →
       full) and energy-integrated efficiency over it — the valid dynamic
-      measurement. Plus a fixed test-case bank: cold start, ramps, steps, noise.
-- [ ] **Partial-shading bank metrics**: global-MPP success rate, time-to-global,
-      worst-case trap depth across patterns.
+      measurement (`harness/compare_cyclic.py`, `metrics.energy_efficiency`).
+- [ ] Fixed test-case bank: cold start, ramps, steps, noise.
+- [ ] **Partial-shading bank metrics**: global-MPP success rate and
+      time-to-global ship with the cyclic harness; worst-case trap depth
+      *across patterns* waits on the 2/3/4-peak shading bank.
 - [ ] **Robustness**: `η` vs measurement-noise level and vs sample rate.
 - [ ] **Implementation-cost** (binding for the MCU port): state size in bytes,
       per-step compute, code size after the port.
