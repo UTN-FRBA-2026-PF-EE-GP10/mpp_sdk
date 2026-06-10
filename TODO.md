@@ -18,11 +18,14 @@
 
 ## Next
 
-- [ ] `NoisySource` — a `SignalSource` wrapper injecting V/I measurement noise
-      (the architectural home for the noise test case; keeps it out of the
-      harness and the algorithms). Noise is the most likely thing to pull the
-      clean-sim numbers apart and it stress-tests the restart detector's
-      debounce for real.
+- [x] `NoisySource` — a `SignalSource` wrapper injecting seeded Gaussian V/I
+      noise (`mpp_sdk/io/noisy.py`), plus `harness/compare_noise.py` (η and
+      trap count vs noise level on the cyclic schedule). It pulled the
+      clean-sim numbers apart as hoped: at 0.5 % FS the fixed-step locals
+      collapse (P&O 56 % η), at 1 % they random-walk (19 %) while the global
+      trackers hold 60–64 %; Fuzzy is markedly more noise-robust than
+      P&O/InCond up to 1 %. No false restarts observed (debounce holds).
+      Strong motivation for adaptive-step P&O and the own algorithm.
 - [ ] **`rescan_period` sweep** — η energy and trapped count vs
       `rescan_period` ∈ {250, 500, 1000, 2000, off} on the cyclic schedule,
       paired with the expected-loss derivation of the optimal period (search
@@ -41,8 +44,9 @@
       cannot.
 - [ ] Harness test cases: cold start, irradiance ramp, step, measurement noise
       *(isolated cold start, steps and the Voc-side trap now live in
-      `harness/compare_bank.py`; quantized ramps are mixed into the cyclic
-      schedule but missing as an isolated case; noise missing entirely)*
+      `harness/compare_bank.py`; noise sweeps in `harness/compare_noise.py`;
+      quantized ramps are mixed into the cyclic schedule but missing as an
+      isolated case)*
 - [ ] **Sim-to-real comparison protocol** - the cyclic harness is the sim-only
       ranking tool; replication on PLECS / the bench uses the fixed test-case
       bank (`harness/compare_bank.py`: cold start, cover-on step, cover-off

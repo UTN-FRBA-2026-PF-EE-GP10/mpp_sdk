@@ -267,7 +267,8 @@ Still to do:
 - [ ] **Partial-shading bank metrics**: global-MPP success rate and
       time-to-global ship with the cyclic harness; worst-case trap depth
       *across patterns* waits on the 2/3/4-peak shading bank.
-- [ ] **Robustness**: `η` vs measurement-noise level and vs sample rate.
+- [ ] **Robustness**: `η` vs measurement-noise level ✓
+      (`harness/compare_noise.py` via `NoisySource`); vs sample rate pending.
 - [ ] **Implementation-cost** (binding for the MCU port): state size in bytes,
       per-step compute, code size after the port.
 - [ ] Auto-generated result tables and figures consumed directly by the paper.
