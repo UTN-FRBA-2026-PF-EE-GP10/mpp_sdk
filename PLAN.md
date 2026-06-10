@@ -82,7 +82,7 @@ has shipped *and* been independently verified per the rules in
 | Block             | Weeks | A — SDK & integration                                                    | B — hardware                                              | C — firmware                                                  |
 | ----------------- | ----- | ------------------------------------------------------------------------ | --------------------------------------------------------- | ------------------------------------------------------------- |
 | **Foundation** ✓  | 1–4   | Phase 2 in-tree (`lossy`, `array`); `pvlib_adapter` skeleton             | Topology ✓; MOSFET + gate-driver ✓; INA226 + op-amps ✓; SEPIC in PLECS ✓; PCB design closed ✓ | MCU bringup (RP2040, Rust) ✓; SPI-slave skeleton with PIO ✓ |
-| **Sim & SPI**     | 5–8   | Phase 3: P&O variants + InCond; harness scaffold; `SpiMcuSource` skeleton | PCB layout v1; **fab order by week 6**; long-lead parts in | SPI protocol locked; loopback HIL working in software         |
+| **Sim & SPI** ✓   | 5–8   | Phase 3: P&O variants + InCond ✓; harness scaffold ✓; `SpiMcuSource` skeleton ✓ | PCB layout v1 ✓; **fab order by week 6** ✓ (at fab 2026-06-10); long-lead parts in ✓ (all components bought) | SPI protocol locked; loopback HIL working in software ✓ (#10) |
 | **Hardware up**   | 9–12  | First sim-only comparison results; pvlib adapter integrated              | PCB assembly; bringup; ADC calibration                    | ADC / PWM jitter measurement; SPI link to Pi alive            |
 | **HIL milestone** | 13–16 | Sim + HIL numbers in the harness                                         | Bench: sense path validated against scope                 | **Phase 5a done** — HIL end-to-end with Python algorithm      |
 | **Algo push**     | 17–20 | Add one Global-MPPT method; first paper figures                          | Hardware-vs-sim cross-check at multiple operating points  | Begin algorithm port to MCU (deployed mode)                   |
@@ -92,6 +92,10 @@ has shipped *and* been independently verified per the rules in
 **Two hard milestones drive everything else:**
 
 1. **PCB to fab by end of week 6.** Hardware slip here cascades.
+   ✓ **Met (2026-06-10):** PCB sent to the manufacturer, all components
+   purchased. Assembly, soldering and bench checks estimated at ~2 weeks
+   after boards arrive, so board-level firmware bringup (Phase 5a) starts
+   late June / mid July — inside the Hardware-up block (weeks 9–12).
 2. **HIL working by end of week 16.** If HIL is not running by then,
    *deployed mode* is at risk and the paper falls back to a
    simulation-only contribution.
