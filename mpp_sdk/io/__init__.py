@@ -8,9 +8,16 @@ reads ADC channels and writes a hardware-PWM duty cycle.
 
 from .base import SignalSource
 from .dynamic import DynamicSimulatedSource
+from .noisy import NoisySource
 from .simulated import SimulatedSource
 
-__all__ = ["SignalSource", "SimulatedSource", "DynamicSimulatedSource", "SpiMcuSource"]
+__all__ = [
+    "SignalSource",
+    "SimulatedSource",
+    "DynamicSimulatedSource",
+    "NoisySource",
+    "SpiMcuSource",
+]
 
 
 def __getattr__(name: str):

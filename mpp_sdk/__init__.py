@@ -18,6 +18,7 @@ from .algorithms.scan_and_track import ScanAndTrack
 from .converters.sepic import SEPICConverter
 from .io.base import SignalSource
 from .io.dynamic import DynamicSimulatedSource
+from .io.noisy import NoisySource
 from .io.simulated import SimulatedSource
 from .models.base import PanelModel
 from .models.ideal import IdealSingleDiode
@@ -39,6 +40,7 @@ __all__ = [
     "SignalSource",
     "SimulatedSource",
     "DynamicSimulatedSource",
+    "NoisySource",
     "PanelModel",
     "IdealSingleDiode",
     "PvlibPanelModel",
