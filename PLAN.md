@@ -122,7 +122,8 @@ become "future work" in the paper and re-open after v1 ships.
 
 - **Two-diode model in-tree** — `bishop88` via the pvlib adapter
   covers the use case.
-- **Fuzzy / sliding-mode / model-predictive** controllers.
+- **Sliding-mode / model-predictive** controllers. (Fuzzy was listed here
+  originally but shipped in Phase 3 and is in the v1 scope above.)
 - **Data-driven / RL** baseline.
 - **More than one Global-MPPT variant.**
 - **Empirical-model library from large datasets** — one panel's swept
@@ -255,7 +256,10 @@ Still to do:
 - [x] **Cyclic irradiance profile** (full → A shaded → full → B shaded → both →
       full) and energy-integrated efficiency over it — the valid dynamic
       measurement (`harness/compare_cyclic.py`, `metrics.energy_efficiency`).
-- [ ] Fixed test-case bank: cold start, ramps, steps, noise.
+- [ ] Fixed test-case bank — mostly shipped in `harness/compare_bank.py`
+      (cold start, cover-on/off steps, steady shade, Voc-side trap, with
+      (t, V, I, D) trace dumps for sim-to-real replay); still missing
+      isolated ramps and measurement noise.
 - [ ] **Partial-shading bank metrics**: global-MPP success rate and
       time-to-global ship with the cyclic harness; worst-case trap depth
       *across patterns* waits on the 2/3/4-peak shading bank.
