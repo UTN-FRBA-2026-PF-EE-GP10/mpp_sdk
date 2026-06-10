@@ -636,6 +636,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#restart-on-shading-change" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Restart on shading change
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#trade-offs" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -764,6 +775,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#restart-on-shading-change" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Restart on shading change
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#trade-offs" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -854,6 +876,21 @@ the global MPP.</p>
 has converged. Control is handed to a local <code>PerturbAndObserve</code> seeded at <span class="arithmatex">\(g\)</span>,
 which refines the operating point and keeps steady-state oscillation low — PSO
 alone would keep jittering as particles never fully stop.</p>
+<h2 id="restart-on-shading-change">Restart on shading change<a class="headerlink" href="#restart-on-shading-change" title="Permanent link">&para;</a></h2>
+<p>Once handed off, the controller is a plain P&amp;O and cannot escape a local
+maximum when the shading pattern changes. A <code>PowerChangeDetector</code> (on by
+default) watches <span class="arithmatex">\(P = V\,I\)</span> during tracking: a sustained relative change
+beyond <code>restart_threshold</code> re-seeds the particles evenly across the duty
+range — stale personal/global bests are forgotten, not reused — and re-runs
+the whole search. This is the <span class="arithmatex">\(|\Delta P|/P\)</span> restart condition from the
+PSO-MPPT literature [Liu et al. 2012]. The detector arms only once the power
+is stable after hand-off, so the converter's own settling transient cannot
+trigger a restart loop.</p>
+<p>The detector is blind to one case: a shading change that relocates the
+global peak while barely moving the tracked power (e.g. the shade swapping
+from one panel to the other). The optional <code>rescan_period</code> re-runs the
+search every <span class="arithmatex">\(N\)</span> tracking steps as a backstop, at the price of the search's
+energy cost each period — the same knob <code>ScanAndTrack</code> has.</p>
 <h2 id="trade-offs">Trade-offs<a class="headerlink" href="#trade-offs" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>Swarm size / iterations:</strong> larger ⇒ more reliable global capture but a
@@ -866,8 +903,15 @@ alone would keep jittering as particles never fully stop.</p>
 </ul>
 <h2 id="implementation">Implementation<a class="headerlink" href="#implementation" title="Permanent link">&para;</a></h2>
 <p><code>mpp_sdk.ParticleSwarm(initial_duty, n_particles, inertia, cognitive, social,
-max_iterations, track_step, seed, …)</code>. A fixed <code>seed</code> makes runs reproducible,
-as required by the project's reproducibility policy.</p>
+max_iterations, track_step, seed, restart_threshold, restart_samples,
+rescan_period, …)</code>. A fixed <code>seed</code> makes runs reproducible, as required by
+the project's reproducibility policy.</p>
+<p>Swarm size matters more than it looks on a real (or dynamic-simulated) rig:
+each particle's fitness is measured one control period after commanding it,
+while the input capacitor is still slewing, so the first (coarse-scan)
+iteration sees lag-corrupted powers. On the 2-panel Hissuma rig at a 1 kHz
+loop, 6 particles locate the global basin for only ~60 % of seeds after a
+shading change; 8 particles are reliable.</p>
 <h2 id="references">References<a class="headerlink" href="#references" title="Permanent link">&para;</a></h2>
 <p>Kennedy &amp; Eberhart (1995), <em>Particle swarm optimization</em>, ICNN. Miyatake et al.
 (2011), <em>MPPT of multiple PV arrays: a PSO approach</em>, IEEE TAES. Liu et al.

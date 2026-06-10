@@ -825,12 +825,30 @@ powers are recorded with one step of latency.</p>
 with a small step <span class="arithmatex">\(\Delta D_\text{track}\ll\Delta D_\text{scan}\)</span>. This refines
 the operating point onto the exact peak and keeps steady-state oscillation low.</p>
 <h2 id="re-scanning">Re-scanning<a class="headerlink" href="#re-scanning" title="Permanent link">&para;</a></h2>
-<p>The shading pattern changes over the day, moving the global peak. An optional
-periodic re-scan every <span class="arithmatex">\(M\)</span> control steps re-acquires it:</p>
+<p>The shading pattern changes over the day, moving the global peak. Without a
+re-acquisition mechanism the controller is a plain P&amp;O after the first scan
+and stays trapped on whatever peak the change leaves it on. Two mechanisms
+are available:</p>
+<ul>
+<li><strong>Change-detection restart</strong> (on by default): a <code>PowerChangeDetector</code>
+  watches <span class="arithmatex">\(P = V\,I\)</span> during Stage 2 and restarts Stage 1 when the power moves
+  by more than <code>restart_threshold</code> (relative) for <code>restart_samples</code>
+  consecutive steps — the <span class="arithmatex">\(|\Delta P|/P\)</span> condition used by PSO-MPPT
+  restart schemes. The detector arms itself only once the power is stable
+  after hand-off, so the converter's own settling transient (the scan ends at
+  <span class="arithmatex">\(D_\max\)</span> with the input capacitor drained — at low irradiance the recharge
+  is panel-current-limited and spans many control periods) cannot trigger a
+  spurious restart loop. Its reference follows the power while it stays
+  in-band, so it fires on <em>steps</em>, not on slow drifts the tracker follows
+  anyway.</li>
+<li><strong>Periodic re-scan</strong> every <span class="arithmatex">\(M\)</span> control steps (<code>rescan_period</code>, off by
+  default):</li>
+</ul>
 <div class="arithmatex">\[\text{if } (\text{steps since last scan}) \ge M \;\Rightarrow\; \text{restart Stage 1}.\]</div>
-<p>There is a trade-off: frequent re-scans track moving shade better but spend more
-time off-MPP during each sweep. Production schemes trigger a re-scan only when a
-sudden power drop is detected; the periodic version here is the simplest variant.</p>
+<p>The periodic variant is the safety net for the one case the detector cannot
+see: a new, higher peak appearing elsewhere while the tracked power barely
+moves. Frequent re-scans track moving shade better but spend more time
+off-MPP during each sweep.</p>
 <h2 id="trade-offs">Trade-offs<a class="headerlink" href="#trade-offs" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong><span class="arithmatex">\(\Delta D_\text{scan}\)</span>:</strong> finer ⇒ won't miss a narrow global peak, but a
@@ -841,8 +859,9 @@ sudden power drop is detected; the periodic version here is the simplest variant
 </ul>
 <h2 id="implementation">Implementation<a class="headerlink" href="#implementation" title="Permanent link">&para;</a></h2>
 <p><code>mpp_sdk.ScanAndTrack(initial_duty, scan_step, track_step, min_duty, max_duty,
-rescan_period)</code>. State is one power array of length <span class="arithmatex">\(N{+}1\)</span> plus the embedded
-P&amp;O — small and bounded, suitable for the MCU port.</p>
+rescan_period, restart_threshold, restart_samples)</code>. State is one power array
+of length <span class="arithmatex">\(N{+}1\)</span> plus the embedded P&amp;O and the four-scalar restart detector —
+small and bounded, suitable for the MCU port.</p>
 <h2 id="references">References<a class="headerlink" href="#references" title="Permanent link">&para;</a></h2>
 <p>Patel &amp; Agarwal (2008), <em>MPPT scheme for PV systems operating under partially
 shaded conditions</em>, IEEE TIE. Kobayashi et al. (2006), two-stage global
