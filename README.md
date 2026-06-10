@@ -115,7 +115,7 @@ mpp_sdk/
 ├── metrics.py      # Comparison metrics
 └── visualization.py
 
-harness/            # Algorithm comparison scripts (static, dynamic, live)
+harness/            # Comparison scripts (static, dynamic, live, cyclic ranking, sim-to-real bank)
 docs/               # Algorithm references, rationale, general information
 ```
 
@@ -192,6 +192,8 @@ expectations, contributor liability, and LLM-usage policy — lives in
       trap depth (`mpp_sdk.metrics`)
 - [x] Cyclic irradiance profile for a valid dynamic efficiency measurement
       (`harness/compare_cyclic.py`, `metrics.energy_efficiency`)
+- [x] Fixed sim-to-real test-case bank (`harness/compare_bank.py`) with
+      (t, V, I, D) trace dumps for PLECS / bench replay
 - [ ] Auto-generated paper figures
 
 ### Hardware (future — see [`PLAN.md`](./PLAN.md))
