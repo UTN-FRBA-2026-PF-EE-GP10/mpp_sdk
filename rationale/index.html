@@ -16,7 +16,7 @@
         <link rel="prev" href="../general_information/">
       
       
-        <link rel="next" href="../algorithms/perturb_observe/">
+        <link rel="next" href="../methodology/">
       
       
         
@@ -431,6 +431,28 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#why-a-restart-policy-instead-of-a-smarter-detector" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why a restart policy instead of a smarter detector
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-noise-lives-in-a-source-wrapper" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why noise lives in a source wrapper
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#why-tabulated-panels-in-the-harness" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -466,6 +488,33 @@
   
   
   
+    <li class="md-nav__item">
+      <a href="../methodology/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Methodology
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
     
     
     
@@ -480,10 +529,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
         
           
-          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
             
   
   
@@ -501,8 +550,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -756,6 +805,28 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#why-a-restart-policy-instead-of-a-smarter-detector" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why a restart policy instead of a smarter detector
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-noise-lives-in-a-source-wrapper" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why noise lives in a source wrapper
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#why-tabulated-panels-in-the-harness" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -860,6 +931,24 @@ and how it oscillates, the source models the SEPIC input capacitor:</p>
 is left to PLECS, which simulates the converter cycle by cycle. The two are
 complementary: the SDK validates the <strong>algorithm</strong>, PLECS validates the
 <strong>hardware</strong>.</p>
+<h2 id="why-a-restart-policy-instead-of-a-smarter-detector">Why a restart policy instead of a smarter detector<a class="headerlink" href="#why-a-restart-policy-instead-of-a-smarter-detector" title="Permanent link">&para;</a></h2>
+<p>Once a global tracker hands off to its local stage it is blind to new
+peaks, so <em>something</em> must decide when to search again. We use two
+deliberately simple mechanisms (see <code>methodology.md</code>): a step detector on
+<span class="arithmatex">\(|\Delta P|/P\)</span> for abrupt changes, and a periodic re-search for everything
+the detector cannot see (slow ramps, power-preserving peak moves). The
+split is honest about information: with only <span class="arithmatex">\((V, I)\)</span> at one operating
+point, gradual curve reshaping is <em>provably</em> invisible, so the right tool
+is a bounded-cost backstop, not a cleverer detector. Both mechanisms are a
+few scalars of state, which keeps them inside the MCU portability budget.</p>
+<h2 id="why-noise-lives-in-a-source-wrapper">Why noise lives in a source wrapper<a class="headerlink" href="#why-noise-lives-in-a-source-wrapper" title="Permanent link">&para;</a></h2>
+<p>Measurement noise belongs to the acquisition chain, not to the plant or
+the controller. <code>NoisySource</code> wraps any <code>SignalSource</code> and perturbs only
+what the controller <em>sees</em>, which keeps models and algorithms free of
+noise flags and makes the noise level an explicit, seeded experiment
+parameter. The same wrapper later doubles as a bench sanity check: measure
+the real sense chain's sigma, run the harness at that level, and the
+simulated degradation should bracket the measured one.</p>
 <h2 id="why-tabulated-panels-in-the-harness">Why tabulated panels in the harness<a class="headerlink" href="#why-tabulated-panels-in-the-harness" title="Permanent link">&para;</a></h2>
 <p><code>PvString</code> solves a nested bisection through a pvlib-backed solver — far too
 slow to call thousands of times in a dynamic run. <code>TabulatedPanel</code> samples the

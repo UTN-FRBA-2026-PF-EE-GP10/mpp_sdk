@@ -466,6 +466,33 @@
   
   
   
+    <li class="md-nav__item">
+      <a href="../methodology/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Methodology
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
     
     
     
@@ -480,10 +507,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
         
           
-          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
             
   
   
@@ -501,8 +528,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -914,9 +941,14 @@ hide the effect.</p>
 <div class="highlight"><pre><span></span><code>uv<span class="w"> </span>sync<span class="w"> </span>--extra<span class="w"> </span>pvlib<span class="w">            </span><span class="c1"># install with the pvlib adapter</span>
 uv<span class="w"> </span>run<span class="w"> </span>harness/compare_static.py<span class="w"> </span><span class="c1"># full-sun vs partial-shade comparison</span>
 uv<span class="w"> </span>run<span class="w"> </span>harness/animate.py<span class="w"> </span>--shade<span class="w"> </span>--duty<span class="w"> </span><span class="m">0</span>.1<span class="w">   </span><span class="c1"># watch the local-maximum trap</span>
+uv<span class="w"> </span>run<span class="w"> </span>harness/compare_cyclic.py<span class="w"> </span><span class="c1"># the ranking measurement (chaotic shading)</span>
+uv<span class="w"> </span>run<span class="w"> </span>harness/compare_bank.py<span class="w">   </span><span class="c1"># the sim-to-real test-case bank</span>
+uv<span class="w"> </span>run<span class="w"> </span>harness/compare_noise.py<span class="w">  </span><span class="c1"># robustness vs measurement noise</span>
 uv<span class="w"> </span>run<span class="w"> </span>pytest<span class="w"> </span>-q<span class="w">                 </span><span class="c1"># run the test suite</span>
 </code></pre></div>
-<p>See <code>docs/algorithms/</code> for one-page references on each MPPT method and
+<p>Every <code>compare_*</code> script prints a "how to read the metrics" guide before
+its table. See <code>docs/methodology.md</code> for the full measurement methodology,
+<code>docs/algorithms/</code> for one-page references on each MPPT method, and
 <code>docs/rationale.md</code> for the design decisions behind the project.</p>
 
 
