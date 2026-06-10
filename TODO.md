@@ -45,8 +45,27 @@
 - [ ] Own algorithm — model-informed candidate scan (peaks near k·V_mp), aimed
       at minimal MCU cost
 - [ ] Harness test cases: cold start, irradiance ramp, step, measurement noise
-      *(cold start, steps and quantized ramps are now mixed into the cyclic
-      schedule; still missing as isolated cases, and noise entirely)*
+      *(isolated cold start, steps and the Voc-side trap now live in
+      `harness/compare_bank.py`; quantized ramps are mixed into the cyclic
+      schedule but missing as an isolated case; noise missing entirely)*
+- [ ] **Sim-to-real comparison protocol** - the cyclic harness is the sim-only
+      ranking tool; replication on PLECS / the bench uses the fixed test-case
+      bank (`harness/compare_bank.py`: cold start, cover-on step, cover-off
+      step, steady shade, Voc-side shade trap; dumps (t, V, I, D) trace CSVs;
+      `scripts/export_iv_plecs.py` (WIP) exports the panel curves for the
+      PLECS lookup table) compared in three layers:
+      1. plant vs plant: same recorded duty sequence open-loop into the
+         Python source and the PLECS switched model, compare V(t)/I(t)
+         (validates `DynamicSimulatedSource`; panel enters PLECS as a
+         lookup-table current source exported from pvlib);
+      2. controller vs controller: replay recorded (V, I) traces through the
+         Python reference and the PLECS C-Script / MCU port, compare the
+         emitted duty sequences point by point (deterministic algorithms
+         only);
+      3. closed loop: same bank in each environment, compare the metrics
+         table within documented tolerances.
+      Bench ground truth for P_mpp: a calibration duty sweep with the
+      condition held, before each test case (the rig is its own instrument).
 - [ ] `NoisySource` — a `SignalSource` wrapper injecting V/I measurement noise
       (the architectural home for the noise test case; keeps it out of the
       harness and the algorithms)
