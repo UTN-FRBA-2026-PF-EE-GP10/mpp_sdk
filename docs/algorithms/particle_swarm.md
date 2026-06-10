@@ -56,6 +56,24 @@ has converged. Control is handed to a local `PerturbAndObserve` seeded at $g$,
 which refines the operating point and keeps steady-state oscillation low — PSO
 alone would keep jittering as particles never fully stop.
 
+## Restart on shading change
+
+Once handed off, the controller is a plain P&O and cannot escape a local
+maximum when the shading pattern changes. A `PowerChangeDetector` (on by
+default) watches $P = V\,I$ during tracking: a sustained relative change
+beyond `restart_threshold` re-seeds the particles evenly across the duty
+range — stale personal/global bests are forgotten, not reused — and re-runs
+the whole search. This is the $|\Delta P|/P$ restart condition from the
+PSO-MPPT literature [Liu et al. 2012]. The detector arms only once the power
+is stable after hand-off, so the converter's own settling transient cannot
+trigger a restart loop.
+
+The detector is blind to one case: a shading change that relocates the
+global peak while barely moving the tracked power (e.g. the shade swapping
+from one panel to the other). The optional `rescan_period` re-runs the
+search every $N$ tracking steps as a backstop, at the price of the search's
+energy cost each period — the same knob `ScanAndTrack` has.
+
 ## Trade-offs
 
 - **Swarm size / iterations:** larger ⇒ more reliable global capture but a
@@ -69,8 +87,16 @@ alone would keep jittering as particles never fully stop.
 ## Implementation
 
 `mpp_sdk.ParticleSwarm(initial_duty, n_particles, inertia, cognitive, social,
-max_iterations, track_step, seed, …)`. A fixed `seed` makes runs reproducible,
-as required by the project's reproducibility policy.
+max_iterations, track_step, seed, restart_threshold, restart_samples,
+rescan_period, …)`. A fixed `seed` makes runs reproducible, as required by
+the project's reproducibility policy.
+
+Swarm size matters more than it looks on a real (or dynamic-simulated) rig:
+each particle's fitness is measured one control period after commanding it,
+while the input capacitor is still slewing, so the first (coarse-scan)
+iteration sees lag-corrupted powers. On the 2-panel Hissuma rig at a 1 kHz
+loop, 6 particles locate the global basin for only ~60 % of seeds after a
+shading change; 8 particles are reliable.
 
 ## References
 

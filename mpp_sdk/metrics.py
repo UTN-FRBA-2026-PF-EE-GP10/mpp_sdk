@@ -21,6 +21,7 @@ import numpy as np
 
 __all__ = [
     "tracking_efficiency",
+    "energy_efficiency",
     "final_efficiency",
     "settling_time",
     "steady_state_ripple",
@@ -51,6 +52,10 @@ METHODOLOGY_WARNING = """\
 ║  profile, e.g.:  full sun → panel A shaded → full → panel B shaded →            ║
 ║  both shaded → full → (repeat).  Tracking efficiency = captured energy /        ║
 ║  ideal energy integrated over the whole profile.                               ║
+║                                                                                ║
+║  That measurement exists now: run `harness/compare_cyclic.py`, which scores     ║
+║  each algorithm with `metrics.energy_efficiency` against the time-varying      ║
+║  global MPP. Prefer its numbers over the ones printed here.                    ║
 ╚══════════════════════════════════════════════════════════════════════════════╝"""
 
 
@@ -80,6 +85,25 @@ def tracking_efficiency(power: Sequence[float], p_mpp: float) -> float:
     if p_mpp <= 0:
         raise ValueError("p_mpp must be > 0")
     return float(p.mean() / p_mpp)
+
+
+def energy_efficiency(power: Sequence[float], p_mpp: float | Sequence[float]) -> float:
+    r"""Captured / ideal energy with a (possibly time-varying) MPP reference.
+
+    $$\eta_E = \frac{\sum_k P_k}{\sum_k P_{\text{mpp},k}}.$$
+
+    This is the valid dynamic measurement the methodology warning asks for:
+    ``p_mpp`` may be an array giving the ideal (global-MPP) power at *every
+    step* — e.g. a staircase following a cyclic shading profile — so the
+    controller is graded on the energy it captured out of the energy that was
+    actually available at each instant. With a scalar ``p_mpp`` it reduces to
+    :func:`tracking_efficiency`.
+    """
+    p = _as_array(power)
+    ref = np.broadcast_to(np.asarray(p_mpp, dtype=float), p.shape)
+    if not np.all(ref > 0):
+        raise ValueError("p_mpp must be > 0 everywhere")
+    return float(p.sum() / ref.sum())
 
 
 def final_efficiency(power: Sequence[float], p_mpp: float, last_n: int = 100) -> float:

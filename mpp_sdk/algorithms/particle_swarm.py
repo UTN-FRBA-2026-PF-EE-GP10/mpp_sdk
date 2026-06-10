@@ -5,6 +5,7 @@ import random
 
 from .base import MPPTAlgorithm
 from .perturb_observe import PerturbAndObserve
+from .restart import PowerChangeDetector
 
 
 class ParticleSwarm(MPPTAlgorithm):
@@ -28,6 +29,12 @@ class ParticleSwarm(MPPTAlgorithm):
     range, so the first iteration doubles as a coarse scan that locates the
     global peak's basin.
 
+    Once handed off, a change-detection restart (on by default) watches the
+    tracked power: if it moves by more than ``restart_threshold`` the shading
+    pattern changed, so the swarm is re-seeded across the full range and the
+    global search re-runs. Without this the controller is a plain P&O after
+    convergence and stays trapped on whatever peak the change left it on.
+
     State is ``~4·n_particles`` floats — tiny, MCU-friendly for small swarms.
 
     Parameters
@@ -47,6 +54,17 @@ class ParticleSwarm(MPPTAlgorithm):
         Step size of the P&O tracker used after convergence.
     seed :
         RNG seed for reproducible runs (PLAN requires fixed seeds).
+    restart_threshold :
+        Relative power change ``|ΔP|/P`` during tracking that re-seeds the
+        swarm and re-runs the global search. ``None`` disables it.
+    restart_samples :
+        Consecutive out-of-band samples required before restarting (debounce
+        against measurement noise).
+    rescan_period :
+        Re-run the global search every N tracking steps. ``None`` disables
+        it. This is the safety net for the one change the restart detector
+        cannot see: a new, higher peak appearing elsewhere while the tracked
+        power barely moves.
     """
 
     def __init__(
@@ -61,6 +79,9 @@ class ParticleSwarm(MPPTAlgorithm):
         min_duty: float = 0.05,
         max_duty: float = 0.95,
         seed: int = 0,
+        restart_threshold: float | None = 0.2,
+        restart_samples: int = 3,
+        rescan_period: int | None = None,
     ) -> None:
         if not 0.0 <= min_duty < max_duty <= 1.0:
             raise ValueError(f"need 0 <= min_duty < max_duty <= 1; got {min_duty=}, {max_duty=}")
@@ -70,6 +91,9 @@ class ParticleSwarm(MPPTAlgorithm):
             raise ValueError(f"max_iterations must be >= 1; got {max_iterations=}")
         if not (math.isfinite(track_step) and track_step > 0):
             raise ValueError(f"track_step must be a finite positive number; got {track_step=}")
+        if rescan_period is not None and rescan_period <= 0:
+            raise ValueError(f"rescan_period must be positive or None; got {rescan_period=}")
+        self._rescan_period = rescan_period
         self._min = min_duty
         self._max = max_duty
         self._w = inertia
@@ -78,13 +102,28 @@ class ParticleSwarm(MPPTAlgorithm):
         self._max_iter = max_iterations
         self._track_step = track_step
         self._rng = random.Random(seed)
+        self._n = n_particles
+        self._detector = (
+            None
+            if restart_threshold is None
+            else PowerChangeDetector(threshold=restart_threshold, samples=restart_samples)
+        )
 
-        # Particles spread evenly across the range → first pass is a coarse scan.
-        span = max_duty - min_duty
-        self._x = [min_duty + span * (k + 0.5) / n_particles for k in range(n_particles)]
-        self._v = [0.0] * n_particles
+        self._seed_swarm()
+        self._duty = self._x[0]
+
+    def _seed_swarm(self) -> None:
+        """(Re)spread particles evenly across the duty range and clear all bests.
+
+        The even spread makes the first iteration a coarse scan that locates
+        the global peak's basin — both on construction and on a restart after
+        a shading change (stale bests must be forgotten, not reused).
+        """
+        span = self._max - self._min
+        self._x = [self._min + span * (k + 0.5) / self._n for k in range(self._n)]
+        self._v = [0.0] * self._n
         self._pbest_x = list(self._x)
-        self._pbest_f = [-math.inf] * n_particles
+        self._pbest_f = [-math.inf] * self._n
         self._gbest_x = self._x[0]
         self._gbest_f = -math.inf
 
@@ -93,7 +132,9 @@ class ParticleSwarm(MPPTAlgorithm):
         self._eval_idx = 0
         self._pending: int | None = None
         self._iteration = 0
-        self._duty = self._x[0]
+        self._steps_tracking = 0
+        if self._detector is not None:
+            self._detector.reset()
 
     def _update_swarm(self) -> None:
         for k in range(len(self._x)):
@@ -107,6 +148,16 @@ class ParticleSwarm(MPPTAlgorithm):
             self._x[k] = max(self._min, min(self._max, self._x[k] + self._v[k]))
 
     def step(self, voltage: float, current: float) -> float:
+        if not self._optimizing:
+            self._steps_tracking += 1
+            rescan_due = (
+                self._rescan_period is not None and self._steps_tracking >= self._rescan_period
+            )
+            if rescan_due or (
+                self._detector is not None and self._detector.update(voltage * current)
+            ):
+                self._seed_swarm()  # shading changed (or backstop expired) — re-search
+
         if self._optimizing:
             # The measurement belongs to the previously commanded particle.
             if self._pending is not None:

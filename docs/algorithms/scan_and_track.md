@@ -45,14 +45,31 @@ the operating point onto the exact peak and keeps steady-state oscillation low.
 
 ## Re-scanning
 
-The shading pattern changes over the day, moving the global peak. An optional
-periodic re-scan every $M$ control steps re-acquires it:
+The shading pattern changes over the day, moving the global peak. Without a
+re-acquisition mechanism the controller is a plain P&O after the first scan
+and stays trapped on whatever peak the change leaves it on. Two mechanisms
+are available:
+
+- **Change-detection restart** (on by default): a `PowerChangeDetector`
+  watches $P = V\,I$ during Stage 2 and restarts Stage 1 when the power moves
+  by more than `restart_threshold` (relative) for `restart_samples`
+  consecutive steps — the $|\Delta P|/P$ condition used by PSO-MPPT
+  restart schemes. The detector arms itself only once the power is stable
+  after hand-off, so the converter's own settling transient (the scan ends at
+  $D_\max$ with the input capacitor drained — at low irradiance the recharge
+  is panel-current-limited and spans many control periods) cannot trigger a
+  spurious restart loop. Its reference follows the power while it stays
+  in-band, so it fires on *steps*, not on slow drifts the tracker follows
+  anyway.
+- **Periodic re-scan** every $M$ control steps (`rescan_period`, off by
+  default):
 
 $$\text{if } (\text{steps since last scan}) \ge M \;\Rightarrow\; \text{restart Stage 1}.$$
 
-There is a trade-off: frequent re-scans track moving shade better but spend more
-time off-MPP during each sweep. Production schemes trigger a re-scan only when a
-sudden power drop is detected; the periodic version here is the simplest variant.
+The periodic variant is the safety net for the one case the detector cannot
+see: a new, higher peak appearing elsewhere while the tracked power barely
+moves. Frequent re-scans track moving shade better but spend more time
+off-MPP during each sweep.
 
 ## Trade-offs
 
@@ -65,8 +82,9 @@ sudden power drop is detected; the periodic version here is the simplest variant
 ## Implementation
 
 `mpp_sdk.ScanAndTrack(initial_duty, scan_step, track_step, min_duty, max_duty,
-rescan_period)`. State is one power array of length $N{+}1$ plus the embedded
-P&O — small and bounded, suitable for the MCU port.
+rescan_period, restart_threshold, restart_samples)`. State is one power array
+of length $N{+}1$ plus the embedded P&O and the four-scalar restart detector —
+small and bounded, suitable for the MCU port.
 
 ## References
 

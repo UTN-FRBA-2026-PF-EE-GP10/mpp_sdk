@@ -190,7 +190,8 @@ expectations, contributor liability, and LLM-usage policy — lives in
 - [x] Static, dynamic, and live interactive (`harness/`)
 - [x] Preliminary metrics — tracking efficiency, settling time, ripple, overshoot,
       trap depth (`mpp_sdk.metrics`)
-- [ ] Cyclic irradiance profile for a valid dynamic efficiency measurement
+- [x] Cyclic irradiance profile for a valid dynamic efficiency measurement
+      (`harness/compare_cyclic.py`, `metrics.energy_efficiency`)
 - [ ] Auto-generated paper figures
 
 ### Hardware (future — see [`PLAN.md`](./PLAN.md))

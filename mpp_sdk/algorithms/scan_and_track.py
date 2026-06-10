@@ -4,6 +4,7 @@ import math
 
 from .base import MPPTAlgorithm
 from .perturb_observe import PerturbAndObserve
+from .restart import PowerChangeDetector
 
 
 class ScanAndTrack(MPPTAlgorithm):
@@ -15,8 +16,13 @@ class ScanAndTrack(MPPTAlgorithm):
     the power at each point, then **jumping to the global peak** and handing off
     to a local tracker (P&O) for fine, low-ripple steady-state operation.
 
-    Optionally it re-scans every ``rescan_period`` steps so it re-acquires the
-    global MPP after the shading pattern changes.
+    Two re-acquisition mechanisms cover changing conditions. A
+    change-detection restart (on by default) re-scans as soon as the tracked
+    power moves by more than ``restart_threshold`` — the shading pattern
+    changed, so the old global peak is stale. A periodic re-scan every
+    ``rescan_period`` steps (off by default) is a belt-and-braces fallback for
+    changes the detector cannot see (e.g. a new, higher peak appearing
+    elsewhere while the tracked power stays put).
 
     Phases
     ------
@@ -45,6 +51,12 @@ class ScanAndTrack(MPPTAlgorithm):
         Step size of the P&O tracker used after the scan.
     rescan_period :
         Re-scan every N steps to follow changing shade. ``None`` disables it.
+    restart_threshold :
+        Relative power change ``|ΔP|/P`` during TRACK that triggers an
+        immediate re-scan (change-detection restart). ``None`` disables it.
+    restart_samples :
+        Consecutive out-of-band samples required before restarting (debounce
+        against measurement noise).
     """
 
     def __init__(
@@ -55,6 +67,8 @@ class ScanAndTrack(MPPTAlgorithm):
         min_duty: float = 0.05,
         max_duty: float = 0.95,
         rescan_period: int | None = None,
+        restart_threshold: float | None = 0.2,
+        restart_samples: int = 3,
     ) -> None:
         if not 0.0 <= min_duty < max_duty <= 1.0:
             raise ValueError(f"need 0 <= min_duty < max_duty <= 1; got {min_duty=}, {max_duty=}")
@@ -69,6 +83,11 @@ class ScanAndTrack(MPPTAlgorithm):
         self._scan_step = scan_step
         self._track_step = track_step
         self._rescan_period = rescan_period
+        self._detector = (
+            None
+            if restart_threshold is None
+            else PowerChangeDetector(threshold=restart_threshold, samples=restart_samples)
+        )
 
         self._scan_duties = self._build_scan_grid()
         self._begin_scan()
@@ -85,9 +104,20 @@ class ScanAndTrack(MPPTAlgorithm):
         self._pending: float | None = None
         self._powers: list[float] = []
         self._tracker: PerturbAndObserve | None = None
+        if self._detector is not None:
+            self._detector.reset()
 
     def step(self, voltage: float, current: float) -> float:
         self._steps_since_scan += 1
+
+        if not self._scanning:
+            rescan_due = (
+                self._rescan_period is not None and self._steps_since_scan >= self._rescan_period
+            )
+            if rescan_due or (
+                self._detector is not None and self._detector.update(voltage * current)
+            ):
+                self._begin_scan()
 
         if self._scanning:
             # The measurement we just received belongs to the previously
@@ -115,15 +145,6 @@ class ScanAndTrack(MPPTAlgorithm):
             self._steps_since_scan = 0
             self._duty = best_duty
             return best_duty
-
-        # TRACK phase — optionally trigger a periodic re-scan.
-        if self._rescan_period is not None and self._steps_since_scan >= self._rescan_period:
-            self._begin_scan()
-            d = self._scan_duties[0]
-            self._pending = d
-            self._scan_idx = 1
-            self._duty = d
-            return d
 
         self._duty = self._tracker.step(voltage, current)
         return self._duty

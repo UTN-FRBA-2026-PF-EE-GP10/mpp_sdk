@@ -43,6 +43,38 @@ def test_final_efficiency_ignores_transient():
 
 
 # ------------------------------------------------------------------
+# energy efficiency (time-varying reference)
+# ------------------------------------------------------------------
+
+
+def test_energy_efficiency_scalar_matches_tracking_efficiency():
+    p = list(np.linspace(0, 10, 50)) + [10.0] * 50
+    assert metrics.energy_efficiency(p, 10.0) == pytest.approx(metrics.tracking_efficiency(p, 10.0))
+
+
+def test_energy_efficiency_time_varying_reference():
+    # 5 W captured of 10 W available, then 10 W of 20 W → 15/30 overall
+    p = [5.0] * 10 + [10.0] * 10
+    ref = [10.0] * 10 + [20.0] * 10
+    assert metrics.energy_efficiency(p, ref) == pytest.approx(0.5)
+
+
+def test_energy_efficiency_perfect_over_profile():
+    ref = [10.0] * 10 + [4.0] * 10 + [10.0] * 10
+    assert metrics.energy_efficiency(ref, ref) == pytest.approx(1.0)
+
+
+def test_energy_efficiency_nonpositive_reference_raises():
+    with pytest.raises(ValueError):
+        metrics.energy_efficiency([1.0, 2.0], [10.0, 0.0])
+
+
+def test_energy_efficiency_length_mismatch_raises():
+    with pytest.raises(ValueError):
+        metrics.energy_efficiency([1.0, 2.0, 3.0], [10.0, 10.0])
+
+
+# ------------------------------------------------------------------
 # settling time
 # ------------------------------------------------------------------
 
