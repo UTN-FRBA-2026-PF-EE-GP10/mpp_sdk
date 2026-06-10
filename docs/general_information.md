@@ -114,8 +114,13 @@ $I_\text{sc} \approx 0.79$ A — the SEPIC is designed for $\le 40$ V, $\le 1$ A
 uv sync --extra pvlib            # install with the pvlib adapter
 uv run harness/compare_static.py # full-sun vs partial-shade comparison
 uv run harness/animate.py --shade --duty 0.1   # watch the local-maximum trap
+uv run harness/compare_cyclic.py # the ranking measurement (chaotic shading)
+uv run harness/compare_bank.py   # the sim-to-real test-case bank
+uv run harness/compare_noise.py  # robustness vs measurement noise
 uv run pytest -q                 # run the test suite
 ```
 
-See `docs/algorithms/` for one-page references on each MPPT method and
+Every `compare_*` script prints a "how to read the metrics" guide before
+its table. See `docs/methodology.md` for the full measurement methodology,
+`docs/algorithms/` for one-page references on each MPPT method, and
 `docs/rationale.md` for the design decisions behind the project.

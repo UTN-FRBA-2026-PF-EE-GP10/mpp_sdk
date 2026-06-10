@@ -73,6 +73,28 @@ is left to PLECS, which simulates the converter cycle by cycle. The two are
 complementary: the SDK validates the **algorithm**, PLECS validates the
 **hardware**.
 
+## Why a restart policy instead of a smarter detector
+
+Once a global tracker hands off to its local stage it is blind to new
+peaks, so *something* must decide when to search again. We use two
+deliberately simple mechanisms (see `methodology.md`): a step detector on
+$|\Delta P|/P$ for abrupt changes, and a periodic re-search for everything
+the detector cannot see (slow ramps, power-preserving peak moves). The
+split is honest about information: with only $(V, I)$ at one operating
+point, gradual curve reshaping is *provably* invisible, so the right tool
+is a bounded-cost backstop, not a cleverer detector. Both mechanisms are a
+few scalars of state, which keeps them inside the MCU portability budget.
+
+## Why noise lives in a source wrapper
+
+Measurement noise belongs to the acquisition chain, not to the plant or
+the controller. `NoisySource` wraps any `SignalSource` and perturbs only
+what the controller *sees*, which keeps models and algorithms free of
+noise flags and makes the noise level an explicit, seeded experiment
+parameter. The same wrapper later doubles as a bench sanity check: measure
+the real sense chain's sigma, run the harness at that level, and the
+simulated degradation should bracket the measured one.
+
 ## Why tabulated panels in the harness
 
 `PvString` solves a nested bisection through a pvlib-backed solver — far too

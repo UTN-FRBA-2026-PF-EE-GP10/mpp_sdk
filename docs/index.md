@@ -9,6 +9,9 @@ Tracking** (MPPT) algorithms for photovoltaic systems.
   four SDK pillars, minimum PV theory, what pvlib contributes, and why the
   panels are wired in series.
 - **[Rationale](rationale.md)** — the design decisions behind the project.
+- **[Methodology](methodology.md)** — how the harnesses measure MPPT
+  performance, what each metric means, the restart trigger policy, noise
+  robustness, and the sim-to-real (PLECS / bench) comparison protocol.
 
 ## Algorithm references
 
