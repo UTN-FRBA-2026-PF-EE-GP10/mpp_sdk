@@ -2251,7 +2251,7 @@
 			)
 			(embedded_fonts no)
 		)
-		(symbol "LED:WS2812"
+		(symbol "LED:WS2812B"
 			(pin_names
 				(offset 0.254)
 			)
@@ -2271,7 +2271,7 @@
 					(justify right bottom)
 				)
 			)
-			(property "Value" "WS2812"
+			(property "Value" "WS2812B"
 				(at 1.27 -5.715 0)
 				(show_name no)
 				(do_not_autoplace no)
@@ -2282,7 +2282,7 @@
 					(justify left top)
 				)
 			)
-			(property "Footprint" "LED_SMD:LED_WS2812_PLCC6_5.0x5.0mm_P1.6mm"
+			(property "Footprint" "LED_SMD:LED_WS2812B_PLCC4_5.0x5.0mm_P3.2mm"
 				(at 1.27 -7.62 0)
 				(show_name no)
 				(do_not_autoplace no)
@@ -2294,7 +2294,7 @@
 					(justify left top)
 				)
 			)
-			(property "Datasheet" "https://cdn-shop.adafruit.com/datasheets/WS2812.pdf"
+			(property "Datasheet" "https://cdn-shop.adafruit.com/datasheets/WS2812B.pdf"
 				(at 2.54 -9.525 0)
 				(show_name no)
 				(do_not_autoplace no)
@@ -2328,7 +2328,7 @@
 					)
 				)
 			)
-			(property "ki_fp_filters" "LED*WS2812*PLCC*5.0x5.0mm*P1.6mm*"
+			(property "ki_fp_filters" "LED*WS2812*PLCC*5.0x5.0mm*P3.2mm*"
 				(at 0 0 0)
 				(show_name no)
 				(do_not_autoplace no)
@@ -2339,7 +2339,7 @@
 					)
 				)
 			)
-			(symbol "WS2812_0_0"
+			(symbol "WS2812B_0_0"
 				(text "RGB"
 					(at 2.286 -4.191 0)
 					(effects
@@ -2349,7 +2349,7 @@
 					)
 				)
 			)
-			(symbol "WS2812_0_1"
+			(symbol "WS2812B_0_1"
 				(polyline
 					(pts
 						(xy 1.27 -2.54) (xy 1.778 -2.54)
@@ -2446,11 +2446,11 @@
 					)
 				)
 			)
-			(symbol "WS2812_1_1"
-				(pin output line
-					(at 7.62 0 180)
+			(symbol "WS2812B_1_1"
+				(pin power_in line
+					(at 0 7.62 270)
 					(length 2.54)
-					(name "DOUT"
+					(name "VDD"
 						(effects
 							(font
 								(size 1.27 1.27)
@@ -2465,10 +2465,10 @@
 						)
 					)
 				)
-				(pin input line
-					(at -7.62 0 0)
+				(pin output line
+					(at 7.62 0 180)
 					(length 2.54)
-					(name "DIN"
+					(name "DOUT"
 						(effects
 							(font
 								(size 1.27 1.27)
@@ -2476,61 +2476,6 @@
 						)
 					)
 					(number "2"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-				)
-				(pin power_in line
-					(at 0 7.62 270)
-					(length 2.54)
-					(name "VCC"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "3"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-				)
-				(pin no_connect line
-					(at 5.08 2.54 180)
-					(length 2.54)
-					(hide yes)
-					(name "NC"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "4"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-				)
-				(pin power_in line
-					(at -2.54 7.62 270)
-					(length 2.54)
-					(name "VDD"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "5"
 						(effects
 							(font
 								(size 1.27 1.27)
@@ -2548,7 +2493,25 @@
 							)
 						)
 					)
-					(number "6"
+					(number "3"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin input line
+					(at -7.62 0 0)
+					(length 2.54)
+					(name "DIN"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "4"
 						(effects
 							(font
 								(size 1.27 1.27)
@@ -4710,10 +4673,10 @@
 		(uuid "ab3d8a2d-e9a3-4a58-99f9-3789565f49d4")
 	)
 	(junction
-		(at 154.94 95.25)
+		(at 168.91 80.01)
 		(diameter 0)
 		(color 0 0 0 0)
-		(uuid "1081f931-342f-4c4b-b377-79c6bf1516fd")
+		(uuid "1148e88c-37b3-4542-916e-ef8db445fd84")
 	)
 	(junction
 		(at 213.36 24.13)
@@ -4746,12 +4709,6 @@
 		(uuid "4c36bc6e-b48d-45ac-949f-47922ba1ec41")
 	)
 	(junction
-		(at 154.94 80.01)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "5dfb4af1-4b93-4a79-a814-d9d09a90cf9e")
-	)
-	(junction
 		(at 199.39 80.01)
 		(diameter 0)
 		(color 0 0 0 0)
@@ -4764,28 +4721,10 @@
 		(uuid "6d80cba7-0d5a-4937-b775-1d760b5bc5ab")
 	)
 	(junction
-		(at 171.45 95.25)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "6e98b77c-4a47-4ba9-bf1e-01c9c5129bff")
-	)
-	(junction
-		(at 187.96 80.01)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "70756a95-59d4-4f33-a808-da18f73b2e25")
-	)
-	(junction
 		(at 68.58 34.29)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "75027a5f-6f18-4109-9e7a-220a3db772ca")
-	)
-	(junction
-		(at 138.43 80.01)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "77c84e05-4f46-417f-9c6b-f8e957bd619a")
 	)
 	(junction
 		(at 209.55 95.25)
@@ -4794,16 +4733,16 @@
 		(uuid "7d8a58ce-1110-40d8-b479-65ff01f51a86")
 	)
 	(junction
-		(at 171.45 80.01)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "8c5f8b3f-d551-436b-a66b-8e28a760df46")
-	)
-	(junction
 		(at 199.39 95.25)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "96e64248-75ba-4774-b714-7864a44bc35f")
+	)
+	(junction
+		(at 153.67 80.01)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "99b2ac51-83d0-4813-9774-bb5577b8a09e")
 	)
 	(junction
 		(at 92.71 116.84)
@@ -4812,22 +4751,34 @@
 		(uuid "9e754141-188b-406d-b795-062e8e8918ed")
 	)
 	(junction
-		(at 187.96 95.25)
+		(at 153.67 95.25)
 		(diameter 0)
 		(color 0 0 0 0)
-		(uuid "b846ef1a-5641-4263-87b7-a45687fff7a0")
+		(uuid "ab241366-9a0e-432e-b7fb-1d275331194c")
 	)
 	(junction
-		(at 185.42 80.01)
+		(at 138.43 80.01)
 		(diameter 0)
 		(color 0 0 0 0)
-		(uuid "b92889fe-6d1a-4aeb-973d-a3f90a646c50")
+		(uuid "b0e7750d-87bb-44d9-9d3b-a2b8ae04a837")
 	)
 	(junction
 		(at 204.47 80.01)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "b9f2e12c-6b13-4e69-88c5-6ab7889ffd81")
+	)
+	(junction
+		(at 184.15 95.25)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "bbf90d61-872a-4612-8969-e97d2b7fb4b3")
+	)
+	(junction
+		(at 168.91 95.25)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "bf4bad5d-8fed-4c39-82a5-5ae799e7c372")
 	)
 	(junction
 		(at 195.58 95.25)
@@ -4842,16 +4793,16 @@
 		(uuid "de1ddc7a-8eab-45d9-bd64-d7d11f7f307b")
 	)
 	(junction
+		(at 184.15 80.01)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "ea37c1ad-1591-4048-bd75-2e126ff570ac")
+	)
+	(junction
 		(at 30.48 116.84)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "ef2ddb20-19c3-44a2-aea9-481665baf68f")
-	)
-	(junction
-		(at 168.91 80.01)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "f0141780-ae78-4b99-8312-2d8731924c1f")
 	)
 	(junction
 		(at 134.62 31.75)
@@ -4884,8 +4835,8 @@
 		(uuid "906aacc7-13d9-4b7a-9068-f28db4418363")
 	)
 	(no_connect
-		(at 195.58 87.63)
-		(uuid "aacd7559-4d8f-4722-8200-fee1c114bd7d")
+		(at 193.04 87.63)
+		(uuid "9256628c-85f3-4f67-b6a8-776d6d508a58")
 	)
 	(wire
 		(pts
@@ -4979,6 +4930,16 @@
 	)
 	(wire
 		(pts
+			(xy 184.15 95.25) (xy 195.58 95.25)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "0e616a5e-e2e2-4ce2-ae88-d6e0ebd19dee")
+	)
+	(wire
+		(pts
 			(xy 134.62 31.75) (xy 137.16 31.75)
 		)
 		(stroke
@@ -5019,16 +4980,6 @@
 	)
 	(wire
 		(pts
-			(xy 187.96 95.25) (xy 195.58 95.25)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "1190f4b9-850b-48d9-8769-83e7cc761a83")
-	)
-	(wire
-		(pts
 			(xy 36.83 99.06) (xy 45.72 99.06)
 		)
 		(stroke
@@ -5036,6 +4987,26 @@
 			(type default)
 		)
 		(uuid "11ebcc75-e75b-48e9-a554-266c86848af6")
+	)
+	(wire
+		(pts
+			(xy 168.91 80.01) (xy 184.15 80.01)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "13345fb4-f7ec-4fdc-be1b-4da7d6923b2b")
+	)
+	(wire
+		(pts
+			(xy 168.91 95.25) (xy 184.15 95.25)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "13449f90-17cb-46f7-822d-85820a37f912")
 	)
 	(wire
 		(pts
@@ -5089,16 +5060,6 @@
 	)
 	(wire
 		(pts
-			(xy 138.43 80.01) (xy 152.4 80.01)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "1ccbcf5b-3077-4813-bf8e-29aba043ea62")
-	)
-	(wire
-		(pts
 			(xy 30.48 116.84) (xy 35.56 116.84)
 		)
 		(stroke
@@ -5116,16 +5077,6 @@
 			(type default)
 		)
 		(uuid "1f9ca208-19d3-45f9-af08-2e40189dfe92")
-	)
-	(wire
-		(pts
-			(xy 171.45 80.01) (xy 185.42 80.01)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "203fa5eb-9c58-42cd-a22c-5a53a852c490")
 	)
 	(wire
 		(pts
@@ -5219,16 +5170,6 @@
 	)
 	(wire
 		(pts
-			(xy 179.07 87.63) (xy 180.34 87.63)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "30d7c168-57e9-442c-b283-657afc8c91d6")
-	)
-	(wire
-		(pts
 			(xy 266.7 31.75) (xy 265.43 31.75)
 		)
 		(stroke
@@ -5269,26 +5210,6 @@
 	)
 	(wire
 		(pts
-			(xy 187.96 80.01) (xy 199.39 80.01)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "39594361-d6dd-4bb5-9e23-158ca28431d6")
-	)
-	(wire
-		(pts
-			(xy 154.94 80.01) (xy 168.91 80.01)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "3a8d36c9-64fb-4657-b49e-4a12c327737a")
-	)
-	(wire
-		(pts
 			(xy 264.16 68.58) (xy 266.7 68.58)
 		)
 		(stroke
@@ -5309,6 +5230,16 @@
 	)
 	(wire
 		(pts
+			(xy 153.67 95.25) (xy 168.91 95.25)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "4110fe65-f19d-4989-af6d-344d9d95d9bd")
+	)
+	(wire
+		(pts
 			(xy 134.62 41.91) (xy 134.62 43.18)
 		)
 		(stroke
@@ -5316,6 +5247,16 @@
 			(type default)
 		)
 		(uuid "42d84810-3e21-4f04-8f64-b30c421ef4b5")
+	)
+	(wire
+		(pts
+			(xy 153.67 80.01) (xy 168.91 80.01)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "440a3026-86dc-4f79-812a-ea221428841d")
 	)
 	(wire
 		(pts
@@ -5399,16 +5340,6 @@
 	)
 	(wire
 		(pts
-			(xy 168.91 80.01) (xy 171.45 80.01)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "5ce0cf32-0f0b-4ff9-964c-18c4a2c3c51a")
-	)
-	(wire
-		(pts
 			(xy 91.44 106.68) (xy 95.25 106.68)
 		)
 		(stroke
@@ -5456,16 +5387,6 @@
 			(type default)
 		)
 		(uuid "61b94d04-ae79-49d3-ad42-c52f262abe83")
-	)
-	(wire
-		(pts
-			(xy 146.05 87.63) (xy 147.32 87.63)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "62cb6e42-7d09-48ee-9e2d-377614c1b7ae")
 	)
 	(wire
 		(pts
@@ -5789,13 +5710,13 @@
 	)
 	(wire
 		(pts
-			(xy 185.42 80.01) (xy 187.96 80.01)
+			(xy 138.43 80.01) (xy 152.4 80.01)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "9de00a8f-0a8f-4ae6-a0af-9bc8e781b746")
+		(uuid "9ed1a6ea-41ff-46fc-a3cb-5e63103c0d2d")
 	)
 	(wire
 		(pts
@@ -5889,7 +5810,7 @@
 	)
 	(wire
 		(pts
-			(xy 138.43 95.25) (xy 154.94 95.25)
+			(xy 138.43 95.25) (xy 153.67 95.25)
 		)
 		(stroke
 			(width 0)
@@ -5926,16 +5847,6 @@
 			(type default)
 		)
 		(uuid "b5e629d6-ce9d-4726-afa5-3f3bc9eed91d")
-	)
-	(wire
-		(pts
-			(xy 154.94 95.25) (xy 171.45 95.25)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "b8b9868d-9c5b-4b0b-a2a5-06b25fe5b9b1")
 	)
 	(wire
 		(pts
@@ -6029,7 +5940,7 @@
 	)
 	(wire
 		(pts
-			(xy 152.4 80.01) (xy 154.94 80.01)
+			(xy 152.4 80.01) (xy 153.67 80.01)
 		)
 		(stroke
 			(width 0)
@@ -6066,6 +5977,16 @@
 			(type default)
 		)
 		(uuid "cd929ac7-e6a4-4590-9781-4f0a2ea62dab")
+	)
+	(wire
+		(pts
+			(xy 184.15 80.01) (xy 199.39 80.01)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "ce1bd7e8-3462-4acc-b5d6-4d2a23e4c8a4")
 	)
 	(wire
 		(pts
@@ -6156,16 +6077,6 @@
 			(type default)
 		)
 		(uuid "dbb67aa8-a121-4fb6-89f9-1d39625a3329")
-	)
-	(wire
-		(pts
-			(xy 171.45 95.25) (xy 187.96 95.25)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "dbe48cd9-87df-4098-b5c7-d292dcc47de6")
 	)
 	(wire
 		(pts
@@ -6289,16 +6200,6 @@
 	)
 	(wire
 		(pts
-			(xy 162.56 87.63) (xy 163.83 87.63)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "f37e0ccd-6e96-49bd-8488-75a6e1943aff")
-	)
-	(wire
-		(pts
 			(xy 36.83 101.6) (xy 45.72 101.6)
 		)
 		(stroke
@@ -6306,6 +6207,16 @@
 			(type default)
 		)
 		(uuid "f7d19a4b-7cad-4c28-9d07-af447eefe03b")
+	)
+	(wire
+		(pts
+			(xy 191.77 87.63) (xy 193.04 87.63)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "fd5d4b1f-9710-4d14-8acd-936a99077c7e")
 	)
 	(label "I2C_SCL"
 		(at 36.83 93.98 0)
@@ -7355,7 +7266,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
+		(property "Footprint" "Resistor_SMD:R_0805_2012Metric"
 			(at 72.644 159.766 90)
 			(hide yes)
 			(show_name no)
@@ -7517,6 +7428,94 @@
 		)
 	)
 	(symbol
+		(lib_id "LED:WS2812B")
+		(at 153.67 87.63 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom no)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "04d32f1b-3dd5-4321-b90f-48a2911701fc")
+		(property "Reference" "D20"
+			(at 165.1 81.2098 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "WS2812B"
+			(at 165.1 83.7498 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "LED_SMD:LED_WS2812B_PLCC4_5.0x5.0mm_P3.2mm"
+			(at 154.94 95.25 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+			)
+		)
+		(property "Datasheet" "https://cdn-shop.adafruit.com/datasheets/WS2812B.pdf"
+			(at 156.21 97.155 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+			)
+		)
+		(property "Description" "RGB LED with integrated controller"
+			(at 153.67 87.63 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "4"
+			(uuid "57db3a5e-f978-4c43-8a95-af27ddec7d54")
+		)
+		(pin "1"
+			(uuid "bed667ad-c3c5-44a3-8efb-ad204d857561")
+		)
+		(pin "2"
+			(uuid "0beb6bba-25df-4fa7-84c8-36eba77dca7e")
+		)
+		(pin "3"
+			(uuid "9d912277-47e0-47bf-97a7-a4a6130a8c79")
+		)
+		(instances
+			(project "Proyecto0.1V"
+				(path "/257f01da-4494-42ea-a5fc-9e4852f30220/2902952b-fa40-456d-8b60-80e373d320b4"
+					(reference "D20")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
 		(lib_id "Device:R_US")
 		(at 72.39 153.67 90)
 		(mirror x)
@@ -7550,7 +7549,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
+		(property "Footprint" "Resistor_SMD:R_0805_2012Metric"
 			(at 72.644 154.686 90)
 			(hide yes)
 			(show_name no)
@@ -7665,7 +7664,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
+		(property "Footprint" "Resistor_SMD:R_0805_2012Metric"
 			(at 251.714 102.616 90)
 			(hide yes)
 			(show_name no)
@@ -7927,7 +7926,7 @@
 				(justify left)
 			)
 		)
-		(property "Value" "SW_SPST"
+		(property "Value" "1TS009A-1800-5000-CT"
 			(at 137.16 38.0999 90)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7962,6 +7961,17 @@
 		)
 		(property "Description" "Single Pole Single Throw (SPST) switch"
 			(at 134.62 36.83 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "LCSC Part" "C319409"
+			(at 134.62 36.83 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8020,7 +8030,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
+		(property "Footprint" "Resistor_SMD:R_0805_2012Metric"
 			(at 72.644 175.006 90)
 			(hide yes)
 			(show_name no)
@@ -8297,100 +8307,6 @@
 		)
 	)
 	(symbol
-		(lib_id "LED:WS2812")
-		(at 187.96 87.63 0)
-		(unit 1)
-		(body_style 1)
-		(exclude_from_sim no)
-		(in_bom no)
-		(on_board yes)
-		(in_pos_files yes)
-		(dnp no)
-		(fields_autoplaced yes)
-		(uuid "21e599cc-66a1-4248-8426-2aabb830aee2")
-		(property "Reference" "D15"
-			(at 198.12 81.2098 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Value" "WS2812"
-			(at 198.12 83.7498 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Footprint" "LED_SMD:LED_WS2812_PLCC6_5.0x5.0mm_P1.6mm"
-			(at 189.23 95.25 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left top)
-			)
-		)
-		(property "Datasheet" "https://cdn-shop.adafruit.com/datasheets/WS2812.pdf"
-			(at 190.5 97.155 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left top)
-			)
-		)
-		(property "Description" "RGB LED with integrated controller"
-			(at 187.96 87.63 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(pin "6"
-			(uuid "b6341f2b-5e85-42d4-9ecf-762ae218e2ab")
-		)
-		(pin "4"
-			(uuid "c90a88b7-edb6-4587-926d-2d8e2ccf6f51")
-		)
-		(pin "5"
-			(uuid "2de053c6-cba0-4c90-9f12-9831e34569d2")
-		)
-		(pin "1"
-			(uuid "5f84e079-8e78-4b71-95db-82e05bc51f0e")
-		)
-		(pin "2"
-			(uuid "29591aee-c96f-42bb-a580-ba00cbf5a79e")
-		)
-		(pin "3"
-			(uuid "33fd64c6-99c6-4c7d-812b-6e5e805719c1")
-		)
-		(instances
-			(project "Proyecto0.1V"
-				(path "/257f01da-4494-42ea-a5fc-9e4852f30220/2902952b-fa40-456d-8b60-80e373d320b4"
-					(reference "D15")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
 		(lib_id "power:GNDA")
 		(at 246.38 104.14 270)
 		(mirror x)
@@ -8491,7 +8407,7 @@
 				(justify left)
 			)
 		)
-		(property "Value" "1nF 1KV X7R 1206"
+		(property "Value" "1nF 10% 1KV X7R 1206"
 			(at 34.29 124.4599 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8502,7 +8418,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Capacitor_SMD:C_1206_3216Metric_Pad1.33x1.80mm_HandSolder"
+		(property "Footprint" "Capacitor_SMD:C_1206_3216Metric"
 			(at 31.4452 127 0)
 			(hide yes)
 			(show_name no)
@@ -8545,100 +8461,6 @@
 			(project "Proyecto0.1V"
 				(path "/257f01da-4494-42ea-a5fc-9e4852f30220/2902952b-fa40-456d-8b60-80e373d320b4"
 					(reference "C25")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
-		(lib_id "LED:WS2812")
-		(at 138.43 87.63 0)
-		(unit 1)
-		(body_style 1)
-		(exclude_from_sim no)
-		(in_bom no)
-		(on_board yes)
-		(in_pos_files yes)
-		(dnp no)
-		(fields_autoplaced yes)
-		(uuid "33a9d985-8999-49ce-9cae-3f07f58650f3")
-		(property "Reference" "D7"
-			(at 148.59 81.2098 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Value" "WS2812"
-			(at 148.59 83.7498 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Footprint" "LED_SMD:LED_WS2812_PLCC6_5.0x5.0mm_P1.6mm"
-			(at 139.7 95.25 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left top)
-			)
-		)
-		(property "Datasheet" "https://cdn-shop.adafruit.com/datasheets/WS2812.pdf"
-			(at 140.97 97.155 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left top)
-			)
-		)
-		(property "Description" "RGB LED with integrated controller"
-			(at 138.43 87.63 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(pin "6"
-			(uuid "c6ca08f9-5739-4dbd-bb28-954d9bcf1737")
-		)
-		(pin "4"
-			(uuid "7e6f279d-ab39-49f4-89ed-1d0cc4644d6d")
-		)
-		(pin "5"
-			(uuid "65e1e841-103d-401a-ba02-537d2a799395")
-		)
-		(pin "1"
-			(uuid "4e45f5a5-fbca-41c1-a63b-c595ae9054d3")
-		)
-		(pin "2"
-			(uuid "358b388a-b5b7-4a5a-9a2d-a884e2b0954a")
-		)
-		(pin "3"
-			(uuid "445b5a2f-ab15-4ad6-91bc-5f8d2ff3343c")
-		)
-		(instances
-			(project "Proyecto0.1V"
-				(path "/257f01da-4494-42ea-a5fc-9e4852f30220/2902952b-fa40-456d-8b60-80e373d320b4"
-					(reference "D7")
 					(unit 1)
 				)
 			)
@@ -8837,7 +8659,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
+		(property "Footprint" "Resistor_SMD:R_0805_2012Metric"
 			(at 39.624 117.856 90)
 			(hide yes)
 			(show_name no)
@@ -8952,7 +8774,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
+		(property "Footprint" "Resistor_SMD:R_0805_2012Metric"
 			(at 218.186 30.226 90)
 			(hide yes)
 			(show_name no)
@@ -9067,7 +8889,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
+		(property "Footprint" "Resistor_SMD:R_0805_2012Metric"
 			(at 72.644 164.846 90)
 			(hide yes)
 			(show_name no)
@@ -9171,7 +8993,7 @@
 				(justify left)
 			)
 		)
-		(property "Value" "BAT54S"
+		(property "Value" "BAT54SLT1G"
 			(at 55.88 49.5299 90)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9347,100 +9169,6 @@
 		)
 	)
 	(symbol
-		(lib_id "LED:WS2812")
-		(at 171.45 87.63 0)
-		(unit 1)
-		(body_style 1)
-		(exclude_from_sim no)
-		(in_bom no)
-		(on_board yes)
-		(in_pos_files yes)
-		(dnp no)
-		(fields_autoplaced yes)
-		(uuid "49982ab4-4e3b-4078-9470-858521c292ff")
-		(property "Reference" "D14"
-			(at 181.61 81.2098 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Value" "WS2812"
-			(at 181.61 83.7498 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Footprint" "LED_SMD:LED_WS2812_PLCC6_5.0x5.0mm_P1.6mm"
-			(at 172.72 95.25 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left top)
-			)
-		)
-		(property "Datasheet" "https://cdn-shop.adafruit.com/datasheets/WS2812.pdf"
-			(at 173.99 97.155 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left top)
-			)
-		)
-		(property "Description" "RGB LED with integrated controller"
-			(at 171.45 87.63 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(pin "6"
-			(uuid "e9de1acc-b690-4215-82da-d43730ae80da")
-		)
-		(pin "4"
-			(uuid "b7db8377-398d-41f0-87f7-e2bc31c31471")
-		)
-		(pin "5"
-			(uuid "da7e572a-461a-45ca-8f81-2e01c3d03474")
-		)
-		(pin "1"
-			(uuid "1adbe6ed-ed92-42cf-a967-375a81528d7d")
-		)
-		(pin "2"
-			(uuid "03abcc16-fe98-45fb-bc28-74b88fc59cb3")
-		)
-		(pin "3"
-			(uuid "0ccc23a4-97dc-4920-9504-4da094c58347")
-		)
-		(instances
-			(project "Proyecto0.1V"
-				(path "/257f01da-4494-42ea-a5fc-9e4852f30220/2902952b-fa40-456d-8b60-80e373d320b4"
-					(reference "D14")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
 		(lib_id "power:GNDA")
 		(at 260.35 55.88 270)
 		(mirror x)
@@ -9585,6 +9313,17 @@
 				)
 			)
 		)
+		(property "LCSC Part" "C1975211"
+			(at 264.16 146.05 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
 		(pin "4"
 			(uuid "4589035d-262f-4f7b-b2ab-6486808507f7")
 		)
@@ -9607,6 +9346,94 @@
 			(project "Proyecto0.1V"
 				(path "/257f01da-4494-42ea-a5fc-9e4852f30220/2902952b-fa40-456d-8b60-80e373d320b4"
 					(reference "U10")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "LED:WS2812B")
+		(at 138.43 87.63 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom no)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "4e057ba4-2d66-432f-a72b-996095f65c01")
+		(property "Reference" "D19"
+			(at 149.86 81.2098 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "WS2812B"
+			(at 149.86 83.7498 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "LED_SMD:LED_WS2812B_PLCC4_5.0x5.0mm_P3.2mm"
+			(at 139.7 95.25 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+			)
+		)
+		(property "Datasheet" "https://cdn-shop.adafruit.com/datasheets/WS2812B.pdf"
+			(at 140.97 97.155 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+			)
+		)
+		(property "Description" "RGB LED with integrated controller"
+			(at 138.43 87.63 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "4"
+			(uuid "23591284-d91d-452d-8ac7-53415ddb81ef")
+		)
+		(pin "1"
+			(uuid "4c2b1839-2406-4a24-b3f7-d4fba90bc519")
+		)
+		(pin "2"
+			(uuid "804d7973-ae8b-4beb-9b71-3a2edf702aa0")
+		)
+		(pin "3"
+			(uuid "88996e04-12eb-4e52-b85b-88b0329817c5")
+		)
+		(instances
+			(project "Proyecto0.1V"
+				(path "/257f01da-4494-42ea-a5fc-9e4852f30220/2902952b-fa40-456d-8b60-80e373d320b4"
+					(reference "D19")
 					(unit 1)
 				)
 			)
@@ -9763,100 +9590,6 @@
 			(project "Proyecto0.1V"
 				(path "/257f01da-4494-42ea-a5fc-9e4852f30220/2902952b-fa40-456d-8b60-80e373d320b4"
 					(reference "#PWR066")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
-		(lib_id "LED:WS2812")
-		(at 154.94 87.63 0)
-		(unit 1)
-		(body_style 1)
-		(exclude_from_sim no)
-		(in_bom no)
-		(on_board yes)
-		(in_pos_files yes)
-		(dnp no)
-		(fields_autoplaced yes)
-		(uuid "547dda67-7493-4589-a4bc-6ff9b12c01e6")
-		(property "Reference" "D8"
-			(at 165.1 81.2098 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Value" "WS2812"
-			(at 165.1 83.7498 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Footprint" "LED_SMD:LED_WS2812_PLCC6_5.0x5.0mm_P1.6mm"
-			(at 156.21 95.25 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left top)
-			)
-		)
-		(property "Datasheet" "https://cdn-shop.adafruit.com/datasheets/WS2812.pdf"
-			(at 157.48 97.155 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left top)
-			)
-		)
-		(property "Description" "RGB LED with integrated controller"
-			(at 154.94 87.63 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(pin "6"
-			(uuid "e287bfaf-c170-4102-9eed-bee4490438fe")
-		)
-		(pin "4"
-			(uuid "216d085f-0498-46f9-bca5-b97252793184")
-		)
-		(pin "5"
-			(uuid "5a40bc83-f885-4d5a-abbf-f848c537acb3")
-		)
-		(pin "1"
-			(uuid "30cb624b-2594-4ec3-a215-f049db880fa3")
-		)
-		(pin "2"
-			(uuid "c4ed4883-0eac-4cdb-bde4-f7a4c47c4b66")
-		)
-		(pin "3"
-			(uuid "9c90e66c-5c51-43ed-9a02-53b79efe944b")
-		)
-		(instances
-			(project "Proyecto0.1V"
-				(path "/257f01da-4494-42ea-a5fc-9e4852f30220/2902952b-fa40-456d-8b60-80e373d320b4"
-					(reference "D8")
 					(unit 1)
 				)
 			)
@@ -10055,7 +9788,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
+		(property "Footprint" "Resistor_SMD:R_0805_2012Metric"
 			(at 72.644 169.926 90)
 			(hide yes)
 			(show_name no)
@@ -10373,6 +10106,94 @@
 		)
 	)
 	(symbol
+		(lib_id "LED:WS2812B")
+		(at 168.91 87.63 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom no)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "65308a17-8aaa-42a1-a6bc-8cbe52c11970")
+		(property "Reference" "D21"
+			(at 180.34 81.2098 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "WS2812B"
+			(at 180.34 83.7498 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "LED_SMD:LED_WS2812B_PLCC4_5.0x5.0mm_P3.2mm"
+			(at 170.18 95.25 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+			)
+		)
+		(property "Datasheet" "https://cdn-shop.adafruit.com/datasheets/WS2812B.pdf"
+			(at 171.45 97.155 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+			)
+		)
+		(property "Description" "RGB LED with integrated controller"
+			(at 168.91 87.63 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "4"
+			(uuid "e0ad724a-489d-4d42-bc1c-024715539303")
+		)
+		(pin "1"
+			(uuid "7f1117d0-5f51-42eb-84d2-07253fbafb70")
+		)
+		(pin "2"
+			(uuid "3c9eb1f3-13b9-4074-aa3b-0ba5b72050f9")
+		)
+		(pin "3"
+			(uuid "cfac301b-d109-4c91-a99e-7ae67dfacaaa")
+		)
+		(instances
+			(project "Proyecto0.1V"
+				(path "/257f01da-4494-42ea-a5fc-9e4852f30220/2902952b-fa40-456d-8b60-80e373d320b4"
+					(reference "D21")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
 		(lib_id "power:+3.3V")
 		(at 152.4 80.01 0)
 		(mirror y)
@@ -10518,6 +10339,17 @@
 				)
 			)
 		)
+		(property "LCSC Part" "C1975211"
+			(at 139.7 146.05 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
 		(pin "4"
 			(uuid "24eb49e9-ed41-4804-ba2e-61178c98add8")
 		)
@@ -10612,6 +10444,17 @@
 				)
 			)
 		)
+		(property "LCSC Part" "C1975211"
+			(at 217.17 146.05 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
 		(pin "4"
 			(uuid "d6165306-2fc7-4f1d-b3c6-c40a7ad13138")
 		)
@@ -10673,7 +10516,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
+		(property "Footprint" "Resistor_SMD:R_0805_2012Metric"
 			(at 58.674 167.386 90)
 			(hide yes)
 			(show_name no)
@@ -10789,7 +10632,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Capacitor_SMD:C_0805_2012Metric_Pad1.18x1.45mm_HandSolder"
+		(property "Footprint" "Capacitor_SMD:C_0805_2012Metric"
 			(at 200.3552 91.44 0)
 			(hide yes)
 			(show_name no)
@@ -11090,7 +10933,7 @@
 				(justify right)
 			)
 		)
-		(property "Value" "Red Led 0805"
+		(property "Value" "YLED0805 Red"
 			(at 167.64 36.322 90)
 			(hide yes)
 			(show_name no)
@@ -11102,7 +10945,7 @@
 				(justify right)
 			)
 		)
-		(property "Footprint" "LED_SMD:LED_0805_2012Metric_Pad1.15x1.40mm_HandSolder"
+		(property "Footprint" "LED_SMD:LED_0805_2012Metric"
 			(at 184.15 31.75 0)
 			(hide yes)
 			(show_name no)
@@ -11228,7 +11071,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
+		(property "Footprint" "Resistor_SMD:R_0805_2012Metric"
 			(at 58.674 152.146 90)
 			(hide yes)
 			(show_name no)
@@ -11376,6 +11219,17 @@
 				)
 			)
 		)
+		(property "LCSC Part" "C1975211"
+			(at 177.8 146.05 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
 		(pin "4"
 			(uuid "48c0519c-510c-454a-85e4-2c63bd4a50b0")
 		)
@@ -11505,7 +11359,7 @@
 				(justify left)
 			)
 		)
-		(property "Value" "SW_SPST"
+		(property "Value" "1TS009A-1800-5000-CT"
 			(at 154.94 38.0999 90)
 			(show_name no)
 			(do_not_autoplace no)
@@ -11540,6 +11394,17 @@
 		)
 		(property "Description" "Single Pole Single Throw (SPST) switch"
 			(at 152.4 36.83 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "LCSC Part" "C319409"
+			(at 152.4 36.83 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -11599,7 +11464,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Capacitor_SMD:C_0805_2012Metric_Pad1.18x1.45mm_HandSolder"
+		(property "Footprint" "Capacitor_SMD:C_0805_2012Metric"
 			(at 210.5152 91.44 0)
 			(hide yes)
 			(show_name no)
@@ -11807,7 +11672,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Capacitor_SMD:C_0805_2012Metric_Pad1.18x1.45mm_HandSolder"
+		(property "Footprint" "Capacitor_SMD:C_0805_2012Metric"
 			(at 215.5952 91.44 0)
 			(hide yes)
 			(show_name no)
@@ -12113,7 +11978,7 @@
 				)
 			)
 		)
-		(property "LCSC Part" "C42431836"
+		(property "LCSC Part" ""
 			(at 29.21 64.77 0)
 			(hide yes)
 			(show_name no)
@@ -12198,7 +12063,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
+		(property "Footprint" "Resistor_SMD:R_0805_2012Metric"
 			(at 183.134 23.114 90)
 			(hide yes)
 			(show_name no)
@@ -12313,7 +12178,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
+		(property "Footprint" "Resistor_SMD:R_0805_2012Metric"
 			(at 251.714 94.996 90)
 			(hide yes)
 			(show_name no)
@@ -12428,7 +12293,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
+		(property "Footprint" "Resistor_SMD:R_0805_2012Metric"
 			(at 251.714 100.076 90)
 			(hide yes)
 			(show_name no)
@@ -12690,7 +12555,7 @@
 				(justify left)
 			)
 		)
-		(property "Value" "BAT54S"
+		(property "Value" "BAT54SLT1G"
 			(at 81.28 46.9901 90)
 			(show_name no)
 			(do_not_autoplace no)
@@ -12820,7 +12685,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
+		(property "Footprint" "Resistor_SMD:R_0805_2012Metric"
 			(at 58.674 157.226 90)
 			(hide yes)
 			(show_name no)
@@ -12896,6 +12761,94 @@
 			(project "Proyecto0.1V"
 				(path "/257f01da-4494-42ea-a5fc-9e4852f30220/2902952b-fa40-456d-8b60-80e373d320b4"
 					(reference "R35")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "LED:WS2812B")
+		(at 184.15 87.63 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom no)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "b523d91d-8e12-498d-83da-7d4f92773d5d")
+		(property "Reference" "D22"
+			(at 195.58 81.2098 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "WS2812B"
+			(at 195.58 83.7498 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "LED_SMD:LED_WS2812B_PLCC4_5.0x5.0mm_P3.2mm"
+			(at 185.42 95.25 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+			)
+		)
+		(property "Datasheet" "https://cdn-shop.adafruit.com/datasheets/WS2812B.pdf"
+			(at 186.69 97.155 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+			)
+		)
+		(property "Description" "RGB LED with integrated controller"
+			(at 184.15 87.63 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "4"
+			(uuid "1a72d6e4-0b38-41ad-b08d-944f4e71fd07")
+		)
+		(pin "1"
+			(uuid "4dbc2b35-6825-4c12-9f0e-63dc7da4d66f")
+		)
+		(pin "2"
+			(uuid "509d625f-136c-45df-b345-1dce856d472a")
+		)
+		(pin "3"
+			(uuid "0973168e-8edb-441b-9c10-459c73b0428c")
+		)
+		(instances
+			(project "Proyecto0.1V"
+				(path "/257f01da-4494-42ea-a5fc-9e4852f30220/2902952b-fa40-456d-8b60-80e373d320b4"
+					(reference "D22")
 					(unit 1)
 				)
 			)
@@ -13094,7 +13047,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
+		(property "Footprint" "Resistor_SMD:R_0805_2012Metric"
 			(at 58.674 162.306 90)
 			(hide yes)
 			(show_name no)
@@ -13209,7 +13162,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
+		(property "Footprint" "Resistor_SMD:R_0805_2012Metric"
 			(at 214.376 30.226 90)
 			(hide yes)
 			(show_name no)
@@ -13324,7 +13277,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
+		(property "Footprint" "Resistor_SMD:R_0805_2012Metric"
 			(at 251.714 97.536 90)
 			(hide yes)
 			(show_name no)
@@ -13518,7 +13471,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Capacitor_SMD:C_0805_2012Metric_Pad1.18x1.45mm_HandSolder"
+		(property "Footprint" "Capacitor_SMD:C_0805_2012Metric"
 			(at 205.4352 91.44 0)
 			(hide yes)
 			(show_name no)
@@ -13956,7 +13909,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
+		(property "Footprint" "Resistor_SMD:R_0805_2012Metric"
 			(at 133.604 25.654 90)
 			(hide yes)
 			(show_name no)
@@ -14309,7 +14262,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
+		(property "Footprint" "Resistor_SMD:R_0805_2012Metric"
 			(at 58.674 172.466 90)
 			(hide yes)
 			(show_name no)
@@ -14424,7 +14377,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
+		(property "Footprint" "Resistor_SMD:R_0805_2012Metric"
 			(at 151.384 25.654 90)
 			(hide yes)
 			(show_name no)

@@ -5,6 +5,241 @@
 	(uuid "36b4c9de-3b2e-4c65-afda-43323a57ebbb")
 	(paper "A4")
 	(lib_symbols
+		(symbol "Connector:Barrel_Jack_MountingPin"
+			(pin_names
+				(hide yes)
+			)
+			(exclude_from_sim no)
+			(in_bom yes)
+			(on_board yes)
+			(in_pos_files yes)
+			(duplicate_pin_numbers_are_jumpers no)
+			(property "Reference" "J"
+				(at 0 5.334 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Value" "Barrel_Jack_MountingPin"
+				(at 1.27 -6.35 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(justify left)
+				)
+			)
+			(property "Footprint" ""
+				(at 1.27 -1.016 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Datasheet" ""
+				(at 1.27 -1.016 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Description" "DC Barrel Jack with a mounting pin"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "ki_keywords" "DC power barrel jack connector"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "ki_fp_filters" "BarrelJack*"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(symbol "Barrel_Jack_MountingPin_0_1"
+				(rectangle
+					(start -5.08 3.81)
+					(end 5.08 -3.81)
+					(stroke
+						(width 0.254)
+						(type default)
+					)
+					(fill
+						(type background)
+					)
+				)
+				(polyline
+					(pts
+						(xy -3.81 -2.54) (xy -2.54 -2.54) (xy -1.27 -1.27) (xy 0 -2.54) (xy 2.54 -2.54) (xy 5.08 -2.54)
+					)
+					(stroke
+						(width 0.254)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(arc
+					(start -3.302 1.905)
+					(mid -3.9343 2.54)
+					(end -3.302 3.175)
+					(stroke
+						(width 0.254)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(arc
+					(start -3.302 1.905)
+					(mid -3.9343 2.54)
+					(end -3.302 3.175)
+					(stroke
+						(width 0.254)
+						(type default)
+					)
+					(fill
+						(type outline)
+					)
+				)
+				(rectangle
+					(start 3.683 3.175)
+					(end -3.302 1.905)
+					(stroke
+						(width 0.254)
+						(type default)
+					)
+					(fill
+						(type outline)
+					)
+				)
+				(polyline
+					(pts
+						(xy 5.08 2.54) (xy 3.81 2.54)
+					)
+					(stroke
+						(width 0.254)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+			)
+			(symbol "Barrel_Jack_MountingPin_1_1"
+				(polyline
+					(pts
+						(xy -1.016 -4.572) (xy 1.016 -4.572)
+					)
+					(stroke
+						(width 0.1524)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(text "Mounting"
+					(at 0 -4.191 0)
+					(effects
+						(font
+							(size 0.381 0.381)
+						)
+					)
+				)
+				(pin passive line
+					(at 7.62 2.54 180)
+					(length 2.54)
+					(name ""
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at 7.62 -2.54 180)
+					(length 2.54)
+					(name ""
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at 0 -7.62 90)
+					(length 3.048)
+					(name "MountPin"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "MP"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+			)
+			(embedded_fonts no)
+		)
 		(symbol "Connector_Generic:Conn_01x02"
 			(pin_names
 				(offset 1.016)
@@ -2088,7 +2323,7 @@
 		(at 74.93 81.28)
 		(diameter 0)
 		(color 0 0 0 0)
-		(uuid "3a3a5022-0fb2-469d-98ed-187cd27783c9")
+		(uuid "2e81bcc3-74a9-4e70-8573-39c80f2fee30")
 	)
 	(junction
 		(at 87.63 81.28)
@@ -2113,6 +2348,12 @@
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "7e8b88cf-1477-45dd-97b7-da98c2e758a4")
+	)
+	(junction
+		(at 74.93 86.36)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "885857aa-ff2b-43c1-bd0e-ac5c646649ee")
 	)
 	(junction
 		(at 59.69 114.3)
@@ -2175,19 +2416,13 @@
 		(uuid "d407075b-c614-4164-823b-eced55c624f7")
 	)
 	(junction
-		(at 76.2 78.74)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "d7d7d917-dffc-422c-98f0-021de41c1552")
-	)
-	(junction
 		(at 125.73 132.08)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "e3c9aa06-adb0-4811-b4d8-d4ebcdb6ab3c")
 	)
 	(junction
-		(at 88.9 78.74)
+		(at 88.9 76.2)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "e5eed03c-6352-47ae-aba2-912c25ca234d")
@@ -2216,6 +2451,16 @@
 		(color 0 0 0 0)
 		(uuid "f8f7eced-f457-4043-a18e-1ab6cf3c6470")
 	)
+	(junction
+		(at 76.2 76.2)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "ff16e07c-4016-452c-9366-ea8c6276bb8a")
+	)
+	(no_connect
+		(at 91.44 120.65)
+		(uuid "e452f904-ab6e-49a6-ad60-0b51bad5de96")
+	)
 	(wire
 		(pts
 			(xy 139.7 114.3) (xy 139.7 119.38)
@@ -2238,6 +2483,16 @@
 	)
 	(wire
 		(pts
+			(xy 74.93 86.36) (xy 74.93 81.28)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "02bc560f-a7d5-4cb4-b9a2-60b00df668b3")
+	)
+	(wire
+		(pts
 			(xy 139.7 127) (xy 139.7 132.08)
 		)
 		(stroke
@@ -2245,6 +2500,16 @@
 			(type default)
 		)
 		(uuid "03b12ac3-d8c0-48be-8b22-a86996d59f47")
+	)
+	(wire
+		(pts
+			(xy 114.3 57.15) (xy 114.3 58.42)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "07e0ffce-dc9d-4b0b-bfa7-61bd49488ff0")
 	)
 	(wire
 		(pts
@@ -2265,6 +2530,16 @@
 			(type default)
 		)
 		(uuid "0e30db6f-92be-4a15-87d7-2eabd1aaba76")
+	)
+	(wire
+		(pts
+			(xy 67.31 86.36) (xy 74.93 86.36)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "1154ae2f-b3e0-428f-ad33-799512552643")
 	)
 	(wire
 		(pts
@@ -2358,7 +2633,7 @@
 	)
 	(wire
 		(pts
-			(xy 76.2 78.74) (xy 74.93 78.74)
+			(xy 76.2 76.2) (xy 74.93 76.2)
 		)
 		(stroke
 			(width 0)
@@ -2508,7 +2783,7 @@
 	)
 	(wire
 		(pts
-			(xy 76.2 69.85) (xy 76.2 78.74)
+			(xy 76.2 71.12) (xy 76.2 76.2)
 		)
 		(stroke
 			(width 0)
@@ -2548,7 +2823,7 @@
 	)
 	(wire
 		(pts
-			(xy 74.93 86.36) (xy 74.93 81.28)
+			(xy 74.93 90.17) (xy 74.93 86.36)
 		)
 		(stroke
 			(width 0)
@@ -2598,23 +2873,13 @@
 	)
 	(wire
 		(pts
-			(xy 77.47 78.74) (xy 76.2 78.74)
+			(xy 77.47 76.2) (xy 76.2 76.2)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
 		(uuid "ae51f1f9-4fe0-45b1-abd1-b8bd2342a488")
-	)
-	(wire
-		(pts
-			(xy 72.39 86.36) (xy 74.93 86.36)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "aede6b36-7c5b-4544-9442-40e1a853f0b1")
 	)
 	(wire
 		(pts
@@ -2658,7 +2923,7 @@
 	)
 	(wire
 		(pts
-			(xy 76.2 50.8) (xy 76.2 62.23)
+			(xy 76.2 62.23) (xy 76.2 63.5)
 		)
 		(stroke
 			(width 0)
@@ -2668,7 +2933,7 @@
 	)
 	(wire
 		(pts
-			(xy 88.9 78.74) (xy 95.25 78.74)
+			(xy 88.9 76.2) (xy 95.25 76.2)
 		)
 		(stroke
 			(width 0)
@@ -2688,7 +2953,7 @@
 	)
 	(wire
 		(pts
-			(xy 87.63 78.74) (xy 88.9 78.74)
+			(xy 87.63 76.2) (xy 88.9 76.2)
 		)
 		(stroke
 			(width 0)
@@ -2789,7 +3054,7 @@
 	)
 	(hierarchical_label "GNDA"
 		(shape output)
-		(at 72.39 86.36 270)
+		(at 74.93 90.17 270)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -2811,7 +3076,7 @@
 	)
 	(hierarchical_label "+12V"
 		(shape output)
-		(at 95.25 78.74 0)
+		(at 95.25 76.2 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -2853,7 +3118,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
+		(property "Footprint" "Resistor_SMD:R_0805_2012Metric"
 			(at 126.746 118.364 90)
 			(hide yes)
 			(show_name no)
@@ -2967,7 +3232,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Capacitor_SMD:C_0805_2012Metric_Pad1.18x1.45mm_HandSolder"
+		(property "Footprint" "Capacitor_SMD:C_0805_2012Metric"
 			(at 133.0452 127 0)
 			(hide yes)
 			(show_name no)
@@ -3365,7 +3630,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Capacitor_SMD:C_0805_2012Metric_Pad1.18x1.45mm_HandSolder"
+		(property "Footprint" "Capacitor_SMD:C_0805_2012Metric"
 			(at 106.68 115.8748 0)
 			(hide yes)
 			(show_name no)
@@ -3435,7 +3700,7 @@
 				(justify right)
 			)
 		)
-		(property "Value" "Red Led 0805"
+		(property "Value" "YLED0805 Red"
 			(at 114.554 87.122 90)
 			(show_name no)
 			(do_not_autoplace no)
@@ -3446,7 +3711,7 @@
 				(justify right)
 			)
 		)
-		(property "Footprint" "LED_SMD:LED_0805_2012Metric_Pad1.15x1.40mm_HandSolder"
+		(property "Footprint" "LED_SMD:LED_0805_2012Metric"
 			(at 129.54 83.82 0)
 			(hide yes)
 			(show_name no)
@@ -3617,89 +3882,6 @@
 		)
 	)
 	(symbol
-		(lib_id "Connector_Generic:Conn_01x02")
-		(at 69.85 78.74 0)
-		(mirror y)
-		(unit 1)
-		(body_style 1)
-		(exclude_from_sim no)
-		(in_bom no)
-		(on_board yes)
-		(in_pos_files yes)
-		(dnp no)
-		(fields_autoplaced yes)
-		(uuid "33d2e5d5-1c84-4706-9b8a-4063e9f9e726")
-		(property "Reference" "J12"
-			(at 67.31 78.7399 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Value" "Conn_01x02"
-			(at 67.31 81.2799 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Footprint" "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical"
-			(at 69.85 78.74 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Datasheet" ""
-			(at 69.85 78.74 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Description" "Generic connector, single row, 01x02, script generated (kicad-library-utils/schlib/autogen/connector/)"
-			(at 69.85 78.74 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(pin "2"
-			(uuid "bc52689b-f9c6-496c-b471-53afd55439dc")
-		)
-		(pin "1"
-			(uuid "061878b6-566c-402d-8276-9fc15b1f2ca2")
-		)
-		(instances
-			(project "Proyecto0.1V"
-				(path "/257f01da-4494-42ea-a5fc-9e4852f30220/ba9b2b3f-e3b6-4cb5-9007-eb4acf7b6ea0"
-					(reference "J12")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
 		(lib_id "Device:L")
 		(at 114.3 114.3 90)
 		(unit 1)
@@ -3721,7 +3903,7 @@
 				)
 			)
 		)
-		(property "Value" "2.2uH 3A"
+		(property "Value" "XFL4020-222MEC"
 			(at 114.3 111.76 90)
 			(show_name no)
 			(do_not_autoplace no)
@@ -3870,7 +4052,7 @@
 	)
 	(symbol
 		(lib_id "Jumper:Jumper_2_Open")
-		(at 82.55 78.74 0)
+		(at 82.55 76.2 0)
 		(mirror y)
 		(unit 1)
 		(body_style 1)
@@ -3882,7 +4064,7 @@
 		(fields_autoplaced yes)
 		(uuid "3d33c7de-f6bd-4113-a186-7ff80484a826")
 		(property "Reference" "JP16"
-			(at 82.55 72.39 0)
+			(at 82.55 69.85 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -3892,7 +4074,7 @@
 			)
 		)
 		(property "Value" "Jumper_2_Open"
-			(at 82.55 74.93 0)
+			(at 82.55 72.39 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -3902,7 +4084,7 @@
 			)
 		)
 		(property "Footprint" "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical"
-			(at 82.55 78.74 0)
+			(at 82.55 76.2 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -3913,7 +4095,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 82.55 78.74 0)
+			(at 82.55 76.2 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -3924,7 +4106,7 @@
 			)
 		)
 		(property "Description" "Jumper, 2-pole, open"
-			(at 82.55 78.74 0)
+			(at 82.55 76.2 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -3982,7 +4164,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Capacitor_SMD:C_0805_2012Metric_Pad1.18x1.45mm_HandSolder"
+		(property "Footprint" "Capacitor_SMD:C_0805_2012Metric"
 			(at 60.6552 127 0)
 			(hide yes)
 			(show_name no)
@@ -4190,6 +4372,89 @@
 		)
 	)
 	(symbol
+		(lib_id "Connector:Barrel_Jack_MountingPin")
+		(at 67.31 78.74 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom no)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "61482aed-2719-4216-ac00-a9ff18319159")
+		(property "Reference" "J9"
+			(at 67.31 69.85 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "Barrel_Jack_MountingPin"
+			(at 67.31 72.39 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Connector_BarrelJack:BarrelJack_GCT_DCJ200-10-A_Horizontal"
+			(at 68.58 79.756 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 68.58 79.756 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "DC Barrel Jack with a mounting pin"
+			(at 67.31 78.74 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "2"
+			(uuid "6181eb51-ccf4-4b28-85ed-f6c4ab842957")
+		)
+		(pin "MP"
+			(uuid "0c178d6e-8345-442c-a701-d617a67fc66d")
+		)
+		(pin "1"
+			(uuid "192e9e5c-87de-47b4-95a0-2c9973087405")
+		)
+		(instances
+			(project "Proyecto0.1V"
+				(path "/257f01da-4494-42ea-a5fc-9e4852f30220/ba9b2b3f-e3b6-4cb5-9007-eb4acf7b6ea0"
+					(reference "J9")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
 		(lib_id "Device:R_US")
 		(at 76.2 118.11 0)
 		(unit 1)
@@ -4222,7 +4487,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
+		(property "Footprint" "Resistor_SMD:R_0805_2012Metric"
 			(at 77.216 118.364 90)
 			(hide yes)
 			(show_name no)
@@ -4325,7 +4590,7 @@
 				(justify right)
 			)
 		)
-		(property "Value" "Red Led 0805"
+		(property "Value" "YLED0805 Red"
 			(at 142.24 86.6774 90)
 			(show_name no)
 			(do_not_autoplace no)
@@ -4336,7 +4601,7 @@
 				(justify right)
 			)
 		)
-		(property "Footprint" "LED_SMD:LED_0805_2012Metric_Pad1.15x1.40mm_HandSolder"
+		(property "Footprint" "LED_SMD:LED_0805_2012Metric"
 			(at 138.43 83.82 0)
 			(hide yes)
 			(show_name no)
@@ -4508,7 +4773,7 @@
 	)
 	(symbol
 		(lib_id "power:+12V")
-		(at 88.9 78.74 0)
+		(at 88.9 76.2 0)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -4519,7 +4784,7 @@
 		(fields_autoplaced yes)
 		(uuid "8861cdff-51e7-4874-a8b5-ffec96d8b6f1")
 		(property "Reference" "#PWR016"
-			(at 88.9 82.55 0)
+			(at 88.9 80.01 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -4530,7 +4795,7 @@
 			)
 		)
 		(property "Value" "+12V"
-			(at 88.9 73.66 0)
+			(at 88.9 71.12 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -4540,7 +4805,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 88.9 78.74 0)
+			(at 88.9 76.2 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -4551,7 +4816,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 88.9 78.74 0)
+			(at 88.9 76.2 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -4562,7 +4827,7 @@
 			)
 		)
 		(property "Description" "Power symbol creates a global label with name \"+12V\""
-			(at 88.9 78.74 0)
+			(at 88.9 76.2 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -4699,7 +4964,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Capacitor_SMD:C_1210_3225Metric_Pad1.33x2.70mm_HandSolder"
+		(property "Footprint" "Capacitor_SMD:C_1210_3225Metric"
 			(at 68.2752 127 0)
 			(hide yes)
 			(show_name no)
@@ -4780,7 +5045,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Capacitor_SMD:C_1210_3225Metric_Pad1.33x2.70mm_HandSolder"
+		(property "Footprint" "Capacitor_SMD:C_1210_3225Metric"
 			(at 148.2852 127 0)
 			(hide yes)
 			(show_name no)
@@ -4987,6 +5252,89 @@
 		)
 	)
 	(symbol
+		(lib_id "Connector_Generic:Conn_01x02")
+		(at 109.22 54.61 0)
+		(mirror y)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom no)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "9b09ac96-539b-40b6-8092-415559efe414")
+		(property "Reference" "J12"
+			(at 106.68 54.6099 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "Conn_01x02"
+			(at 106.68 57.1499 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical"
+			(at 109.22 54.61 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 109.22 54.61 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Generic connector, single row, 01x02, script generated (kicad-library-utils/schlib/autogen/connector/)"
+			(at 109.22 54.61 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "2"
+			(uuid "4c64c69f-0521-41bd-95d6-f55e43e93c4d")
+		)
+		(pin "1"
+			(uuid "24b64b85-9a32-46e7-bcf1-4a4a22c44a20")
+		)
+		(instances
+			(project "Proyecto0.1V"
+				(path "/257f01da-4494-42ea-a5fc-9e4852f30220/ba9b2b3f-e3b6-4cb5-9007-eb4acf7b6ea0"
+					(reference "J12")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
 		(lib_id "power:+12V")
 		(at 129.54 69.85 0)
 		(unit 1)
@@ -5097,7 +5445,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
+		(property "Footprint" "Resistor_SMD:R_0805_2012Metric"
 			(at 130.556 73.914 90)
 			(hide yes)
 			(show_name no)
@@ -5190,7 +5538,7 @@
 		(dnp no)
 		(uuid "af651a0f-602a-41b2-b3eb-509d6f22aa2a")
 		(property "Reference" "NT3"
-			(at 89.662 79.248 0)
+			(at 89.662 76.708 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -5291,7 +5639,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
+		(property "Footprint" "Resistor_SMD:R_0805_2012Metric"
 			(at 126.746 128.524 90)
 			(hide yes)
 			(show_name no)
@@ -5405,7 +5753,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Capacitor_SMD:C_1210_3225Metric_Pad1.33x2.70mm_HandSolder"
+		(property "Footprint" "Capacitor_SMD:C_1210_3225Metric"
 			(at 140.6652 127 0)
 			(hide yes)
 			(show_name no)
@@ -5486,7 +5834,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
+		(property "Footprint" "Resistor_SMD:R_0805_2012Metric"
 			(at 139.446 73.914 90)
 			(hide yes)
 			(show_name no)
@@ -5562,6 +5910,84 @@
 			(project "Proyecto0.1V"
 				(path "/257f01da-4494-42ea-a5fc-9e4852f30220/ba9b2b3f-e3b6-4cb5-9007-eb4acf7b6ea0"
 					(reference "R40")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "power:+12V")
+		(at 114.3 54.61 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "cb00a276-b0b1-4500-9902-a64c1e6d2d47")
+		(property "Reference" "#PWR013"
+			(at 114.3 58.42 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "+12V"
+			(at 114.3 49.53 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 114.3 54.61 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 114.3 54.61 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Power symbol creates a global label with name \"+12V\""
+			(at 114.3 54.61 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "f67a4125-b500-45bb-bb75-ed99cf85180a")
+		)
+		(instances
+			(project "Proyecto0.1V"
+				(path "/257f01da-4494-42ea-a5fc-9e4852f30220/ba9b2b3f-e3b6-4cb5-9007-eb4acf7b6ea0"
+					(reference "#PWR013")
 					(unit 1)
 				)
 			)
@@ -5670,7 +6096,7 @@
 				)
 			)
 		)
-		(property "Value" "AP62250WU"
+		(property "Value" "AP62250WU-7"
 			(at 88.9 109.22 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5680,7 +6106,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Package_TO_SOT_SMD:TSOT-23-6_HandSoldering"
+		(property "Footprint" "Package_TO_SOT_SMD:TSOT-23-6"
 			(at 88.9 107.95 0)
 			(hide yes)
 			(show_name no)
@@ -5703,6 +6129,17 @@
 			)
 		)
 		(property "Description" "2.5A, 1.3MHz Buck DC/DC Converter, 4.2V-18V input voltage, 0.8V-7V adjustable output voltage, TSOT-23-6"
+			(at 88.9 116.84 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "LCSC Part" "C5184228"
 			(at 88.9 116.84 0)
 			(hide yes)
 			(show_name no)
@@ -5742,7 +6179,7 @@
 	)
 	(symbol
 		(lib_id "Diode:SMAJ14A")
-		(at 76.2 66.04 90)
+		(at 76.2 67.31 90)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -5753,7 +6190,7 @@
 		(fields_autoplaced yes)
 		(uuid "d72d2705-1c6c-42db-8980-04cfdba8b037")
 		(property "Reference" "D18"
-			(at 78.74 64.7699 90)
+			(at 78.74 66.0399 90)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -5764,7 +6201,7 @@
 			)
 		)
 		(property "Value" "SMAJ14A"
-			(at 78.74 67.3099 90)
+			(at 78.74 68.5799 90)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -5775,7 +6212,7 @@
 			)
 		)
 		(property "Footprint" "Diode_SMD:D_SMA"
-			(at 81.28 66.04 0)
+			(at 81.28 67.31 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5786,7 +6223,7 @@
 			)
 		)
 		(property "Datasheet" "https://www.littelfuse.com/media?resourcetype=datasheets&itemid=75e32973-b177-4ee3-a0ff-cedaf1abdb93&filename=smaj-datasheet"
-			(at 76.2 67.31 0)
+			(at 76.2 68.58 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5797,7 +6234,18 @@
 			)
 		)
 		(property "Description" "400W unidirectional Transient Voltage Suppressor, 14.0Vr, SMA(DO-214AC)"
-			(at 76.2 66.04 0)
+			(at 76.2 67.31 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "LCSC Part" "C99286"
+			(at 76.2 67.31 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5901,6 +6349,84 @@
 		)
 	)
 	(symbol
+		(lib_id "power:GNDA")
+		(at 114.3 58.42 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "f251a919-5137-40a8-b6e5-d2dadf007e81")
+		(property "Reference" "#PWR017"
+			(at 114.3 64.77 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "GNDA"
+			(at 114.3 63.5 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 114.3 58.42 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 114.3 58.42 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Power symbol creates a global label with name \"GNDA\" , analog ground"
+			(at 114.3 58.42 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "aad10a9a-3e36-485e-a44d-d5e9c7b93959")
+		)
+		(instances
+			(project "Proyecto0.1V"
+				(path "/257f01da-4494-42ea-a5fc-9e4852f30220/ba9b2b3f-e3b6-4cb5-9007-eb4acf7b6ea0"
+					(reference "#PWR017")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
 		(lib_id "Mechanical:MountingHole_Pad")
 		(at 102.87 83.82 0)
 		(mirror x)
@@ -5981,7 +6507,7 @@
 	)
 	(symbol
 		(lib_id "power:GNDA")
-		(at 76.2 50.8 180)
+		(at 76.2 62.23 180)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -5992,7 +6518,7 @@
 		(fields_autoplaced yes)
 		(uuid "f8e98c0b-7fad-47c2-8978-dfa112baca62")
 		(property "Reference" "#PWR04"
-			(at 76.2 44.45 0)
+			(at 76.2 55.88 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6003,7 +6529,7 @@
 			)
 		)
 		(property "Value" "GNDA"
-			(at 76.2 45.72 0)
+			(at 76.2 57.15 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -6013,7 +6539,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 76.2 50.8 0)
+			(at 76.2 62.23 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6024,7 +6550,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 76.2 50.8 0)
+			(at 76.2 62.23 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6035,7 +6561,7 @@
 			)
 		)
 		(property "Description" "Power symbol creates a global label with name \"GNDA\" , analog ground"
-			(at 76.2 50.8 0)
+			(at 76.2 62.23 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
