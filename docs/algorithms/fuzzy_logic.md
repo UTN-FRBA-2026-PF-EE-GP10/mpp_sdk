@@ -69,4 +69,6 @@ ranges.
 
 ## References
 
-Esram & Chapman (2007), *Comparison of PV array MPPT techniques*, IEEE TEC.
+- **[Subudhi & Pradhan 2013]** Subudhi, B., & Pradhan, R. (2013). *A
+  comparative study on maximum power point tracking techniques for
+  photovoltaic power systems.* IEEE Transactions on Sustainable Energy.

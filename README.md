@@ -24,7 +24,7 @@ closed-loop algorithms that decide where on the I-V curve to operate.
 Most MPPT comparison work in the literature uses MATLAB / Simulink with
 code that is rarely released and per-paper bespoke metrics, which makes
 cross-paper comparisons and sim-to-real validation hard to reproduce
-[Esram & Chapman 2007; Subudhi & Pradhan 2013].
+[Subudhi & Pradhan 2013].
 
 `mpp-sdk` is built to close that gap with four concrete contributions:
 
@@ -265,10 +265,6 @@ as algorithms and models land.
 
 ### Panel modelling
 
-- **[Bishop 1988]** Bishop, J. W. (1988). *Computer simulation of the
-  effects of electrical mismatches in photovoltaic cell interconnection
-  circuits.* Solar Cells, **25**(1), 73–89. (Origin of the reverse-bias
-  / breakdown model that pvlib's `bishop88` is named after.)
 - **[De Soto et al. 2006]** De Soto, W., Klein, S. A., & Beckman, W. A.
   (2006). *Improvement and validation of a model for photovoltaic array
   performance.* Solar Energy, **80**(1), 78–88. (Single-diode model
@@ -276,10 +272,11 @@ as algorithms and models land.
 
 ### MPPT algorithm reviews and canonical methods
 
-- **[Esram & Chapman 2007]** Esram, T., & Chapman, P. L. (2007).
-  *Comparison of photovoltaic array maximum power point tracking
-  techniques.* IEEE Transactions on Energy Conversion, **22**(2),
-  439–449. (Canonical MPPT review.)
+- **[Andriniriniaimalaza et al. 2025]** Andriniriniaimalaza, F. P., Murad,
+  N. M., Balan, G., Bilal, H., Randriatefison, N., Khoodaruth, A.,
+  Andrianirina, C. B., & Ravelo, B. (2025). *Hybrid Fuzzy Logic and
+  Shading-Aware Particle Swarm Optimization for Dynamic Photovoltaic
+  Shading Faults Mitigation.* arXiv. <https://doi.org/10.48550/arXiv.2512.08419>
 - **[Subudhi & Pradhan 2013]** Subudhi, B., & Pradhan, R. (2013). *A
   comparative study on maximum power point tracking techniques for
   photovoltaic power systems.* IEEE Transactions on Sustainable Energy,
