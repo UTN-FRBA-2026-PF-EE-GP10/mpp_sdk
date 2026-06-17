@@ -290,6 +290,10 @@ as algorithms and models land.
   Vitelli, M. (2005). *Optimization of perturb and observe maximum
   power point tracking method.* IEEE Transactions on Power Electronics,
   **20**(4), 963–973. (P&O step-size design.)
+- **[Kobayashi et al. 2006]** Kobayashi, K., Takano, I., & Sawada, Y.
+  (2006). *A study of a two stage maximum power point tracking control of
+  a photovoltaic system under partially shaded insolation conditions.*
+  Solar Energy Materials and Solar Cells, **90**(18), 2975–2988.
 
 ### Partial shading and Global MPPT
 

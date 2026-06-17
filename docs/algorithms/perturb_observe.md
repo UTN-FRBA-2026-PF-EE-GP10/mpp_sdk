@@ -63,4 +63,6 @@ Fixed step, minimal state (last $V$, last $P$), one branch — ideal for an MCU.
 
 ## References
 
-Femia et al. (2005), *Optimization of perturb and observe MPPT*, IEEE TPEL.
+Femia et al. (2005), *Optimization of perturb and observe MPPT*, IEEE TPEL. Ahmed
+& Salam (2015), *An Improved Method to Predict the Position of Maximum Power Point
+During Partial Shading for PV Arrays*, IEEE TII.

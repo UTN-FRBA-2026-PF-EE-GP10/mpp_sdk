@@ -89,5 +89,6 @@ small and bounded, suitable for the MCU port.
 ## References
 
 Patel & Agarwal (2008), *MPPT scheme for PV systems operating under partially
-shaded conditions*, IEEE TIE. Kobayashi et al. (2006), two-stage global
-tracking. Ahmed & Salam (2014), improved scan-and-track.
+shaded conditions*, IEEE TIE. Dolara et al. (2016), *A novel MPPT algorithm
+for photovoltaic systems under dynamic partial shading — Recurrent scan and
+track method*, IEEE ICRERA.
