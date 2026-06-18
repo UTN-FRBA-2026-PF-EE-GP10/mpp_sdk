@@ -7,8 +7,10 @@
 > algorithms (P&O, InCond, Fuzzy, Scan&Track, PSO) with a uniform restart
 > policy (`PowerChangeDetector` + periodic `rescan_period`), dynamic source,
 > comparison harnesses (static / dynamic / animated / **cyclic ranking** /
-> **sim-to-real test bank** with trace dumps), metrics incl. the
-> energy-integrated `energy_efficiency(P, P_mpp_t)`, algorithm docs.
+> **sim-to-real test bank** with trace dumps / **noise sweep** / **rescan
+> sweep** / **PSO seed stats**, plus a headless `snapshot.py` still of the
+> live view), metrics incl. the energy-integrated
+> `energy_efficiency(P, P_mpp_t)`, algorithm docs.
 > Findings so far live in `docs/algorithms/` (PSO needs 8 particles under
 > measurement lag and mis-converges from a cold start under shade; local
 > trackers trap at 44–67 % of available power; the trigger policy moves the
@@ -26,13 +28,19 @@
       trackers hold 60–64 %; Fuzzy is markedly more noise-robust than
       P&O/InCond up to 1 %. No false restarts observed (debounce holds).
       Strong motivation for adaptive-step P&O and the own algorithm.
-- [ ] **`rescan_period` sweep** — η energy and trapped count vs
-      `rescan_period` ∈ {250, 500, 1000, 2000, off} on the cyclic schedule,
-      paired with the expected-loss derivation of the optimal period (search
-      energy tax per period vs expected trapped time). Turns the trigger
-      policy into a derived-then-measured paper figure.
-- [ ] Seed statistics for stochastic algorithms — run PSO over N seeds and
-      report mean ± std, not a single seed-0 trace (PLAN reproducibility rule)
+- [x] **`rescan_period` sweep** (`harness/compare_rescan.py`) — η energy and
+      trapped count vs `rescan_period` ∈ {250, 500, 1000, 2000, off} for the
+      global trackers on the cyclic schedule, plus the expected-loss model
+      L(P) = A/P + B·P (search tax A measured in a steady-sun calibration,
+      trap exposure B from the backstop-off run, mean plateau length D). The
+      derived optimum P* = sqrt(A/B) ≈ 1034 steps lands on the empirical best
+      (Scan&Track η peaks at 95.0 % at period 1000); over-frequent re-scanning
+      (250) actually traps *more* often. Derived-then-measured paper figure.
+- [x] Seed statistics for stochastic algorithms (`harness/compare_seeds.py`) —
+      PSO over 30 seeds reports mean ± std (η 93.9 % ± 0.7, trapped 7.9 ± 1.7)
+      vs the deterministic Scan&Track (95.0 %, 5 traps), which beats PSO's mean
+      and trap count with zero variance. Reinforces Scan&Track as the MCU
+      candidate.
 
 ## Backlog (simulation)
 
