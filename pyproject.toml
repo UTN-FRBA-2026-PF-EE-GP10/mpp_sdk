@@ -48,6 +48,7 @@ ignore = []
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["E501"]  # tests can have long descriptive lines
+"entregables/*" = ["E501"]  # slide/paper generators have long prose strings
 
 [tool.ruff.format]
 quote-style = "double"
