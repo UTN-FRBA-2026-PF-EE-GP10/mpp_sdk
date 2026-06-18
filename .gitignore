@@ -32,3 +32,4 @@ htmlcov/
 # The .svg sources are committed; PDFs are an artifact.
 entregables/**/*.pdf
 harness/output/
+entregables/**/*.pptx
