@@ -102,4 +102,6 @@ shading change; 8 particles are reliable.
 
 Kennedy & Eberhart (1995), *Particle swarm optimization*, ICNN. Miyatake et al.
 (2011), *MPPT of multiple PV arrays: a PSO approach*, IEEE TAES. Liu et al.
-(2012), *A PSO-based MPPT for PV under partial shading*, IEEE TEC.
+(2012), *A PSO-based MPPT for PV under partial shading*, IEEE TEC. Dolara et al.
+(2018), *An Evolutionary-Based MPPT Algorithm for Photovoltaic Systems under
+Dynamic Partial Shading*, Applied Sciences.
