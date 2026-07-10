@@ -6,10 +6,18 @@
 > report - do not improvise. When done, update the status row for this plan
 > in `improve/2026-07-06/plans/README.md`.
 >
-> **Drift check (run first)**: `git diff --stat 6af6609..HEAD -- firmware/`
+> **Drift check (run first)**: `git diff --stat c647b61..HEAD -- firmware/`
 > If any in-scope file changed since this plan was written, compare the
 > "Current state" excerpts against the live code before proceeding; on a
 > mismatch, treat it as a STOP condition.
+>
+> **Prerequisites - confirm BEFORE starting**: (1) network access to the
+> INA229 datasheet (<https://www.ti.com/lit/ds/symlink/ina229.pdf>) - the
+> register constants in step 3 must be verified against it and cannot be
+> verified offline; (2) a channel to the operator for the R_shunt value
+> (step 1). Missing either one is an immediate STOP - report it as
+> "blocked: missing prerequisite" rather than starting steps 2-4 on
+> unverified constants.
 
 ## Status
 
@@ -19,7 +27,7 @@
   HIL measurement)
 - **Depends on**: none (independent of plans 001-004)
 - **Category**: direction / feature
-- **Planned at**: commit `6af6609`, 2026-07-06
+- **Planned at**: commit `c647b61`, 2026-07-06 (amended after cold-read review)
 
 ## Why this matters
 
@@ -66,11 +74,13 @@ Pico -> Pi frame, preserving the Pi-side `SpiMcuSource` contract.
   spawner.spawn(spi_slave_pio::spi_pio_task(sm, dma_ch).unwrap());
   ```
 
-  Note the `.unwrap()` placement inside `spawn(...)` - if `cargo build`
-  complains when you touch these lines, the conventional embassy form is
-  `spawner.spawn(task(...)).unwrap()`; fixing the two spawn lines is in
-  scope (firmware CI builds `--release` on `firmware/**` changes, so the
-  current form evidently compiles today).
+  Note the `.unwrap()` placement inside `spawn(...)` - the idiomatic
+  embassy form is `spawner.spawn(task(...)).unwrap()`, and `.unwrap()` on a
+  `SpawnToken` normally does not compile. Do not assume either way: run
+  `cargo build --release` FIRST on the untouched tree to learn the actual
+  baseline. If it fails on these lines, fixing them to the idiomatic form
+  is in scope and should be your first commit; if it builds, change them
+  anyway when you rewire the spawns in step 4.
 
 - `src/spi_slave_pio.rs:98-159` - the consumer of the measurements:
   `build_tx_frame(v: u16, i: u16)` packs big-endian u16 V then u16 I into a

@@ -144,14 +144,14 @@ For `DynamicSimulatedSource`:
    (assert monotone approach: `abs(v_1 - v_static) > abs(v_200 - v_static)`).
    Get `v_static` from a `SimulatedSource` with the same panel/duty.
 4. `set_panel` clamps to the new Voc: run to steady state, then
-   `set_panel(TabulatedPanel(panel, n=100))` with a panel whose Voc is lower
-   than the current terminal voltage; assert
-   `read()[0] <= new_panel.open_circuit_voltage`. (Easiest low-Voc panel:
-   `IdealSingleDiode` constructed with a smaller open-circuit voltage if the
-   constructor exposes it - check `mpp_sdk/models/ideal.py`; otherwise scale
-   via a small inline `PanelModel` subclass wrapping `IdealSingleDiode` and
-   dividing its voltage. Inspect `mpp_sdk/models/ideal.py` before writing
-   this test and use whatever parameter it actually has.)
+   `set_panel(low_voc_panel)` with a panel whose Voc is lower than the
+   current terminal voltage; assert
+   `read()[0] <= low_voc_panel.open_circuit_voltage`. Build the low-Voc
+   panel as `IdealSingleDiode(cells_in_series=30)`: the constructor
+   (`mpp_sdk/models/ideal.py:26-33`) has no Voc parameter, but Voc scales
+   linearly with `cells_in_series` (default 60), so 30 cells gives half the
+   default Voc. Assert the precondition explicitly in the test:
+   `low_voc_panel.open_circuit_voltage < src.read()[0]` before the swap.
 
 **Verify**: `uv run pytest tests/test_sources.py -q` -> all pass.
 
@@ -190,10 +190,10 @@ follows `tests/test_incond.py`; no pvlib import anywhere in these files.
 - A decision-table test contradicts the docstring contract in
   `perturb_observe.py:17-27`: that would be a sign-convention bug affecting
   every published result. Report immediately.
-- `mpp_sdk/models/ideal.py` has no way to build a lower-Voc panel and the
-  inline-subclass fallback in the `set_panel` test (Step 2,
-  DynamicSimulatedSource item 4) feels ambiguous - report instead of
-  inventing model physics.
+- The `set_panel` clamping test's precondition fails
+  (`IdealSingleDiode(cells_in_series=30).open_circuit_voltage` is NOT below
+  the steady-state terminal voltage at duty 0.5) - report the observed
+  voltages instead of hunting for other parameters.
 
 ## Maintenance notes
 

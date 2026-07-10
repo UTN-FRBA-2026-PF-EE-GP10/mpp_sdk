@@ -19,6 +19,8 @@ checks, `pip-audit` / `cargo audit` runs.
 | 004 | Consolidate harness scripts onto harness/common.py | P2 | M | 002, 003 | TODO |
 | 005 | Firmware INA229 driver (real V/I acquisition) | P1 | L | - | TODO |
 | 006 | Fix sensing-chain docs drift (INA226 -> INA229, frame size) | P3 | S | - | TODO |
+| 007 | Document restart policy + rescan/seed findings in docs/ | P2 | M | merge of `e77ca9a` | TODO |
+| 008 | Retire TODO.md into PLAN.md / AGENTS.md / docs | P3 | S-M | 007, merge of `e77ca9a` | TODO |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) |
 REJECTED (with one-line rationale).
@@ -32,11 +34,34 @@ REJECTED (with one-line rationale).
 - 005 and 006 are independent of the Python-side plans; 005 is the
   operator's active work area. 005 and 006 both touch
   `firmware/README.md` - land in either order, rebase the second.
-- At planning time, local branch `feat/rescan-sweep-seed-stats` (commit
-  `e77ca9a`, unpushed) adds `harness/compare_rescan.py` and
-  `harness/compare_seeds.py`, which import from `harness.compare_cyclic`.
-  Merge it before executing 004; 004 keeps those imports working via
-  re-exports.
+- Branch `feat/rescan-sweep-seed-stats` (commit `e77ca9a`, pushed to
+  origin, PR pending merge at last update) adds `harness/compare_rescan.py`
+  and `harness/compare_seeds.py`, which import from
+  `harness.compare_cyclic`. Merge it before executing 004 (which keeps
+  those imports working via re-exports); 007 and 008 hard-require the
+  merge (they document and then retire content that lands with it).
+- 008 must run after 007: deleting TODO.md before the findings land in
+  `docs/` loses them.
+
+## Amendment log
+
+- 2026-07-06 (same day, after a fresh-context cold-read review of plans
+  001-006): drift bases and planned-at for 005/006 moved to `c647b61`
+  (commit that named the chip selects in `firmware/README.md`); 006 got an
+  exact INA226-mention inventory (fix vs leave); 004 got the per-scenario
+  `initial_duty` (`d0`) requirement spelled out and a sharper done
+  criterion; 003's low-Voc panel recipe made concrete
+  (`IdealSingleDiode(cells_in_series=30)`); 002's step-1 verify notes
+  pytest exit code 5; 005 got explicit prerequisites (datasheet access,
+  R_shunt from the operator). Plans 007/008 added.
+
+## Decisions recorded
+
+- TODO.md retirement (plan 008) is an operator decision. The advisor's
+  recommendation was to keep TODO.md as the living research roadmap (it is
+  also recon input for future audits); the operator chose to consolidate
+  into PLAN.md/AGENTS.md/docs instead. Future audits should read PLAN.md's
+  Roadmap as the intent document once 008 lands.
 
 ## Findings considered and rejected
 

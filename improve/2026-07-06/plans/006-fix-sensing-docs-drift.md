@@ -6,7 +6,8 @@
 > report - do not improvise. When done, update the status row for this plan
 > in `improve/2026-07-06/plans/README.md`.
 >
-> **Drift check (run first)**: `git diff --stat 6af6609..HEAD -- docs/general_information.md firmware/README.md`
+> **Drift check (run first)**:
+> `git diff --stat c647b61..HEAD -- docs/general_information.md firmware/README.md README.md PLAN.md`
 > If any in-scope file changed since this plan was written, compare the
 > "Current state" excerpts against the live code before proceeding; on a
 > mismatch, treat it as a STOP condition.
@@ -19,7 +20,7 @@
 - **Depends on**: none (coordinate with plan 005, which edits
   firmware/README.md too - land this before or rebase after)
 - **Category**: docs
-- **Planned at**: commit `6af6609`, 2026-07-06
+- **Planned at**: commit `c647b61`, 2026-07-06 (amended after cold-read review)
 
 ## Why this matters
 
@@ -47,11 +48,21 @@ Two confirmed drifts:
    DUTY_L / V_H, V_L, I_H, I_L) is correct; only the length and the "4
    bytes" wording are stale.
 
-Also check while in there (verify, then fix or leave):
+Complete inventory of `INA226` mentions outside `entregables/` (verified at
+planning time) with the decision already made for each - follow it exactly:
 
-- `grep -rn "INA226" docs/ README.md PLAN.md mkdocs.yml` for any other
-  mention. Do NOT edit anything under `entregables/` (frozen deliverables,
-  point-in-time documents) even if it says INA226.
+| Location | Text (abridged) | Action |
+|----------|-----------------|--------|
+| `docs/general_information.md:40` | "reads voltage and current (INA226 + op-amps)" | FIX (board identity drift) |
+| `README.md:208` | "Calibration (ADC scale/offset, INA226 gain, ...)" | FIX (refers to the actual board: INA229) |
+| `PLAN.md:66` | "component selection (... INA226 + op-amps OK ...)" | FIX (the selected part is INA229 + INA281) |
+| `PLAN.md:84` | "INA226 + op-amps OK" (Foundation status row) | FIX (same drift) |
+| `PLAN.md:116` | "V/I sense via INA226 + op-amps OK" | FIX (same drift) |
+| `PLAN.md:661` | "use commodity parts (INA226 or ...)" | LEAVE (generic design alternative for a scaled-up rig, not this board) |
+| `PLAN.md:694` | "current sensor (shunt + INA226 vs Hall-effect)" | LEAVE (design-alternatives discussion) |
+
+Do NOT edit anything under `entregables/` (frozen deliverables,
+point-in-time documents) even if it says INA226.
 
 ## Commands you will need
 
@@ -67,8 +78,8 @@ Also check while in there (verify, then fix or leave):
 
 - `docs/general_information.md`
 - `firmware/README.md`
-- Other `docs/*.md`, `README.md`, `PLAN.md` lines surfaced by the grep, if
-  clearly the same drift
+- `README.md` (line 208 only) and `PLAN.md` (lines 66, 84, 116 only) - per
+  the inventory table in "Current state"
 
 **Out of scope** (do NOT touch):
 
@@ -102,14 +113,21 @@ bytes, ...)" to "(12 bytes, ...)" and extend the byte table to show bytes
 `spi_slave_pio.rs:100-108` and `mpp_sdk/io/spi_mcu.py:21-24`.
 
 **Verify**: `grep -n "4 bytes" firmware/README.md` -> no matches;
-`grep -n "12" firmware/README.md` shows the updated heading.
+`grep -n "12 bytes" firmware/README.md` -> hits the protocol heading.
 
-### Step 3: Sweep remaining mentions and build the docs
+### Step 3: Fix the remaining enumerated mentions and build the docs
 
-Work through the grep list from "Commands"; fix only clear instances of the
-same two drifts. Then run the markdown lint and `mkdocs build --strict`.
+Apply the FIX rows of the inventory table in "Current state":
+`README.md:208` (INA226 gain -> INA229 calibration / INA281 gain) and
+`PLAN.md:66`, `:84`, `:116` (INA226 + op-amps -> INA229 + INA281). Leave
+`PLAN.md:661` and `:694` untouched. Then run the markdown lint and
+`mkdocs build --strict`.
 
-**Verify**: both commands exit 0.
+**Verify**:
+`grep -rn "INA226" docs/ README.md PLAN.md firmware/README.md` returns
+exactly two hits: `PLAN.md:661` and `PLAN.md:694` (line numbers may shift
+slightly; the two surviving mentions are the design-alternative ones).
+Both build commands exit 0.
 
 ## Test plan
 
@@ -117,8 +135,10 @@ Docs-only; the verification greps and the strict mkdocs build are the test.
 
 ## Done criteria
 
-- [ ] No "INA226" outside `entregables/` and git history
+- [ ] `grep -rn "INA226" docs/ README.md PLAN.md firmware/README.md` leaves
+      only the two design-alternative mentions (PLAN.md ~661 and ~694)
 - [ ] `firmware/README.md` frame section says 12 bytes and matches the code
+      (`grep -n "12 bytes" firmware/README.md` hits the protocol heading)
 - [ ] `uv run --group docs mkdocs build --strict` exit 0
 - [ ] Only documentation files modified (`git status`)
 - [ ] `improve/2026-07-06/plans/README.md` status row updated

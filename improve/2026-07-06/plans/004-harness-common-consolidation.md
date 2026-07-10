@@ -188,7 +188,19 @@ Module with docstring, containing:
    `DynamicSimulatedSource` exactly as `compare_cyclic.run` does
    (`load_resistance=10.0`, `dt=CONTROL_PERIOD_MS * 1e-3`, first schedule
    entry's panel) - via `make_dynamic_source(..., tabulate=False)` from
-   step 1. When noise stds are nonzero, wrap in
+   step 1 (that helper already fixes `dt` to `CONTROL_PERIOD_MS * 1e-3`
+   internally and takes `initial_duty` as a parameter - pass it through).
+
+   **`initial_duty` is NOT a constant across callers**: cyclic/noise use the
+   module-level `INITIAL_DUTY = 0.5`, but `compare_bank` passes each
+   scenario's own start duty `d0` (0.5 or 0.15, see `compare_bank.py:58-64`
+   and the call at `:177-186`). `run_schedule` must apply the SAME value to
+   both the source construction and `make_ctl(...)`, exactly as every
+   current loop does. Getting this wrong breaks the byte-identical
+   requirement on the `shade trap` scenario specifically (its whole point
+   is the 0.15 start).
+
+   When noise stds are nonzero, wrap in
    `NoisySource(inner, v_std=..., i_std=..., seed=...)` and feed the
    controller the noisy reading while recording the true one, exactly as
    `compare_noise.run` (:94-121) does. Schedule entries are
@@ -286,8 +298,9 @@ diffs ARE the safety net. If plan 002 is not merged yet, STOP.
 ## Done criteria
 
 - [ ] `harness/common.py` exists; roster/loop/conditions defined once
-- [ ] `grep -rn "ALGORITHMS = \[" harness/` matches at most re-export
-      assignments, not five independent literals
+- [ ] `grep -rn "PerturbAndObserve\|ParticleSwarm" harness/*.py` shows
+      constructor calls only inside `harness/common.py` (plus imports);
+      no script builds the roster from classes directly anymore
 - [ ] All golden-output diffs empty (list them in your report)
 - [ ] `uv run pytest -q` all pass; lint and format clean
 - [ ] `improve/2026-07-06/plans/README.md` status row updated

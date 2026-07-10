@@ -124,8 +124,12 @@ from harness.compare_cyclic import (  # noqa: E402
 )
 ```
 
-**Verify**: `uv run pytest tests/test_harness_cyclic.py -q` collects 0 tests,
-exits without import errors.
+**Verify**: `uv run pytest tests/test_harness_cyclic.py -q` reports
+`no tests ran` with NO import errors. Note: pytest exits with code 5 when a
+file collects zero tests - that is the expected result at this step, not a
+failure. (`numpy` in the skeleton is used from step 5 on, for the synthetic
+power traces via `np.full` / `np.concatenate`; if you finish earlier steps
+first, ruff will flag it F401 until step 5 lands - commit only at the end.)
 
 ### Step 2: make_profile tests
 
