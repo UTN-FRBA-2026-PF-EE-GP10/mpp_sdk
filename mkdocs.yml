@@ -35,6 +35,7 @@ nav:
       - Fuzzy Logic: algorithms/fuzzy_logic.md
       - Scan-and-Track: algorithms/scan_and_track.md
       - Particle Swarm: algorithms/particle_swarm.md
+      - Restart policy: algorithms/restart_policy.md
 
 markdown_extensions:
   - admonition

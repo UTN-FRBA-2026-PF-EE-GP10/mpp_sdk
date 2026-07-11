@@ -72,7 +72,8 @@ The detector is blind to one case: a shading change that relocates the
 global peak while barely moving the tracked power (e.g. the shade swapping
 from one panel to the other). The optional `rescan_period` re-runs the
 search every $N$ tracking steps as a backstop, at the price of the search's
-energy cost each period — the same knob `ScanAndTrack` has.
+energy cost each period — the same knob `ScanAndTrack` has. See
+`restart_policy.md` for the derivation behind the deployed period.
 
 ## Trade-offs
 
@@ -97,6 +98,13 @@ while the input capacitor is still slewing, so the first (coarse-scan)
 iteration sees lag-corrupted powers. On the 2-panel Hissuma rig at a 1 kHz
 loop, 6 particles locate the global basin for only ~60 % of seeds after a
 shading change; 8 particles are reliable.
+
+Because the swarm's convergence depends on the RNG stream, `harness/compare_seeds.py`
+runs PSO (8 particles) over 30 seeds on the cyclic schedule: eta energy
+93.9 % +/- 0.7 and 7.9 +/- 1.7 trapped plateaus, against the deterministic
+Scan&Track at 95.0 % eta and 5 traps with zero variance. Scan&Track beats
+PSO's mean on both metrics with no seed dependence, which makes it the
+stronger MCU deployment candidate.
 
 ## References
 
