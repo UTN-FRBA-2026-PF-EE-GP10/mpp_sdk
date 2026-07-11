@@ -17,7 +17,7 @@ checks, `pip-audit` / `cargo audit` runs.
 | 002 | Characterization tests for cyclic-harness profile machinery | P1 | S-M | 001 | DONE |
 | 003 | Unit tests for P&O, simulated sources, TabulatedPanel | P2 | S-M | - | DONE |
 | 004 | Consolidate harness scripts onto harness/common.py | P2 | M | 002, 003 | DONE |
-| 005 | Firmware INA229 driver (real V/I acquisition) | P1 | L | - | TODO |
+| 005 | Firmware INA229 driver (real V/I acquisition) | P1 | L | - | BLOCKED (no hardware on this machine — steps 1-4 complete, step 5 on-target bring-up pending) |
 | 006 | Fix sensing-chain docs drift (INA226 -> INA229, frame size) | P3 | S | - | DONE |
 | 007 | Document restart policy + rescan/seed findings in docs/ | P2 | M | merge of `e77ca9a` | DONE |
 | 008 | Retire TODO.md into PLAN.md / AGENTS.md / docs | P3 | S-M | 007, merge of `e77ca9a` | DONE |
