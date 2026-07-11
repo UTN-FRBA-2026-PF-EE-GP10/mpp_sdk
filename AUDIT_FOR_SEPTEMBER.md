@@ -131,7 +131,9 @@ Flag **CRITICAL** if no candidate exists by week 20 (it was due week
 
 **Question: did the simulation track deliver the items queued in June?**
 
-Expected by week 16 (all were in `TODO.md` *Next* / *Backlog* in June):
+Expected by week 16 (all were in `TODO.md` *Next* / *Backlog* in June;
+TODO.md has since been retired - the open backlog now lives in `PLAN.md`
+*Roadmap*, the findings in `docs/`):
 
 - `NoisySource` + noise-robustness numbers.
 - `rescan_period` sweep (the trigger-policy figure).
