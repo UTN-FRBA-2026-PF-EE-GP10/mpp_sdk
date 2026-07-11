@@ -21,6 +21,8 @@ the grading curve are identical by construction.
 | `compare_cyclic.py` | Which algorithm is better under realistic, changing shading? | No, and it does not need to be (sim-only ranking) |
 | `compare_bank.py` | Does the simulation predict reality? | Yes: five simple scenarios, one shade cloth |
 | `compare_noise.py` | How fast does each algorithm degrade with measurement noise? | Indirectly (the bench has a fixed noise floor) |
+| `compare_rescan.py` | What is the right rescan period? | No (sim-only, feeds the trigger-policy figure) |
+| `compare_seeds.py` | How seed-sensitive is the stochastic tracker? | No (sim-only) |
 
 The split matters: a rich, chaotic, seeded schedule is ideal for *ranking*
 but impossible to reproduce with a real sun, while bench scenarios must be
@@ -75,7 +77,10 @@ both fed only by $(V, I)$:
 Measured on the cyclic schedule: local trackers trap in roughly half the
 shaded plateaus at 44-67 % of available power; the configured global
 trackers cut traps to a handful at the price of up to ~1 s re-acquisition
-when only the backstop can free them.
+when only the backstop can free them. The deployed period (1000 steps) is
+not a guess: an expected-loss model derives an optimum $P^\star \approx
+1034$ that lands on the empirically measured best (eta peaks at 95.0 % at
+period 1000) - see `algorithms/restart_policy.md` for the full derivation.
 
 ## Measurement noise
 
@@ -134,3 +139,5 @@ Every stochastic element is seeded: the cyclic schedule, the PSO swarm,
 the noise stream. Re-running any harness reproduces its numbers exactly;
 changing a seed is a deliberate, visible act. This is a PLAN-level rule
 because every figure in the paper must be regenerable from a command.
+Stochastic algorithms are reported as mean +/- std over 30 seeds
+(`compare_seeds.py`), never a single seed.

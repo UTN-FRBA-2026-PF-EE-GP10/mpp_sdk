@@ -71,6 +71,12 @@ see: a new, higher peak appearing elsewhere while the tracked power barely
 moves. Frequent re-scans track moving shade better but spend more time
 off-MPP during each sweep.
 
+A sweep of `rescan_period` on the cyclic schedule (`harness/compare_rescan.py`)
+shows eta energy peaking at 95.0 % at period 1000, matching the derived
+optimum $P^\star \approx 1034$ from an expected-loss model; period 250
+actually traps *more* often, not less, since each extra sweep is itself a
+window for a mid-scan change. See `restart_policy.md` for the full model.
+
 ## Trade-offs
 
 - **$\Delta D_\text{scan}$:** finer ⇒ won't miss a narrow global peak, but a
