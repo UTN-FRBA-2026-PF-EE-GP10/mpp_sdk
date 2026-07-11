@@ -887,8 +887,10 @@ swapped.</p>
   operating point. SEPIC is chosen because the panel MPP voltage can sit
   <strong>above or below</strong> the load voltage without changing topology.</li>
 <li><strong>RP2040 (Raspberry Pi Pico):</strong> drives the converter PWM, reads voltage and
-  current (INA226 + op-amps), and talks to the Pi over SPI. Firmware is in
-  <strong>Rust</strong>. It is also the deployment target for the final algorithm.</li>
+  current (INA229 power monitor over SPI, plus an INA281 sense amplifier into
+  the on-chip ADC as an analog cross-check), and talks to the Pi over SPI.
+  Firmware is in <strong>Rust</strong>. It is also the deployment target for the final
+  algorithm.</li>
 <li><strong>Raspberry Pi 5:</strong> hosts the Python SDK and the algorithm during
   hardware-in-the-loop (HIL) testing.</li>
 </ul>
