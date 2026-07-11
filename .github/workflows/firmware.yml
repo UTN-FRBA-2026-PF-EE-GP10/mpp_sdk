@@ -27,11 +27,18 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: thumbv6m-none-eabi
+          components: rustfmt
 
       - name: Cache cargo registry and build artefacts
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: firmware/pipico_board
 
+      - name: Format check
+        run: cargo fmt --check
+
       - name: Build (release)
         run: cargo build --release
+
+      - name: Build (release, sim-adc)
+        run: cargo build --release --features sim-adc
