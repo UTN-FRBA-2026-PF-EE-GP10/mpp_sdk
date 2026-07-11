@@ -74,12 +74,12 @@ RPi4/RPi400/RPi5) SPI0 master to the Pico SPI1 pins:
 
 Pico pins 14–18 are adjacent on the left side of the board (USB connector facing up).
 
-**Frame protocol** (4 bytes, Mode 0, MSB-first, CS held low for entire frame):
+**Frame protocol** (12 bytes, Mode 0, MSB-first, CS held low for entire frame):
 
-| Direction      | Byte 0  | Byte 1  | Byte 2 | Byte 3 |
-|----------------|---------|---------|--------|--------|
-| MOSI (RPi→Pico)| DUTY_H  | DUTY_L  | 0x00   | 0x00   |
-| MISO (Pico→RPi)| V_H     | V_L     | I_H    | I_L    |
+| Direction      | Byte 0  | Byte 1  | Byte 2 | Byte 3 | Bytes 4-11    |
+|----------------|---------|---------|--------|--------|---------------|
+| MOSI (RPi→Pico)| DUTY_H  | DUTY_L  | 0x00   | 0x00   | 0x00 padding  |
+| MISO (Pico→RPi)| V_H     | V_L     | I_H    | I_L    | 0x00 padding  |
 
 DUTY is a u16 (0 = 0 %, 65535 = 100 %). V/I are 12-bit ADC counts.
 

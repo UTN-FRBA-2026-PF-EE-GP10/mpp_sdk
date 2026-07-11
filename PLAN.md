@@ -63,7 +63,7 @@ author for each stream; the team meets weekly to cross-pollinate.
   `SpiMcuSource`, paper drafting, CI / reproducibility. Heavy LLM
   assistance expected and welcome here.
 - **Person B — Power-electronics hardware lead.** Schematic and PCB
-  (KiCad), component selection (MOSFET ✓, gate driver ✓, INA226 + op-amps ✓, V/I
+  (KiCad), component selection (MOSFET ✓, gate driver ✓, INA229 + INA281 ✓, V/I
   sense), BOM, assembly, bench bringup, calibration, hardware chapter
   of the paper.
 - **Person C — Embedded firmware lead.** RP2040 bringup (Rust, `rp2040-hal`),
@@ -81,7 +81,7 @@ has shipped *and* been independently verified per the rules in
 
 | Block             | Weeks | A — SDK & integration                                                    | B — hardware                                              | C — firmware                                                  |
 | ----------------- | ----- | ------------------------------------------------------------------------ | --------------------------------------------------------- | ------------------------------------------------------------- |
-| **Foundation** ✓  | 1–4   | Phase 2 in-tree (`lossy`, `array`); `pvlib_adapter` skeleton             | Topology ✓; MOSFET + gate-driver ✓; INA226 + op-amps ✓; SEPIC in PLECS ✓; PCB design closed ✓ | MCU bringup (RP2040, Rust) ✓; SPI-slave skeleton with PIO ✓ |
+| **Foundation** ✓  | 1–4   | Phase 2 in-tree (`lossy`, `array`); `pvlib_adapter` skeleton             | Topology ✓; MOSFET + gate-driver ✓; INA229 + INA281 ✓; SEPIC in PLECS ✓; PCB design closed ✓ | MCU bringup (RP2040, Rust) ✓; SPI-slave skeleton with PIO ✓ |
 | **Sim & SPI** ✓   | 5–8   | Phase 3: P&O variants + InCond ✓; harness scaffold ✓; `SpiMcuSource` skeleton ✓ | PCB layout v1 ✓; **fab order by week 6** ✓ (at fab 2026-06-10); long-lead parts in ✓ (all components bought) | SPI protocol locked; loopback HIL working in software ✓ (#10) |
 | **Hardware up**   | 9–12  | First sim-only comparison results; pvlib adapter integrated              | PCB assembly; bringup; ADC calibration                    | ADC / PWM jitter measurement; SPI link to Pi alive            |
 | **HIL milestone** | 13–16 | Sim + HIL numbers in the harness                                         | Bench: sense path validated against scope                 | **Phase 5a done** — HIL end-to-end with Python algorithm      |
@@ -113,7 +113,7 @@ has shipped *and* been independently verified per the rules in
 - Algorithm-focused comparison harness with the metrics listed in
   Phase 4 below — no inverter-efficiency / EN-50530 work in v1.
 - Custom board: **SEPIC** stage (simulated in PLECS ✓), MOSFET + gate driver ✓,
-  V/I sense via INA226 + op-amps ✓, MCU
+  V/I sense via INA229 + INA281 ✓, MCU
   section, SPI to Pi, basic protections.
 - MCU firmware: HIL mode + the chosen algorithm in deployed mode.
 - Hardware-vs-simulation comparison; resource-budget report.
