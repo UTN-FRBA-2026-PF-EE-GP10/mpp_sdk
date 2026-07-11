@@ -13,7 +13,7 @@ checks, `pip-audit` / `cargo audit` runs.
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
-| 001 | Make CI run the pvlib-dependent tests | P1 | S | - | TODO |
+| 001 | Make CI run the pvlib-dependent tests | P1 | S | - | DONE |
 | 002 | Characterization tests for cyclic-harness profile machinery | P1 | S-M | 001 | TODO |
 | 003 | Unit tests for P&O, simulated sources, TabulatedPanel | P2 | S-M | - | TODO |
 | 004 | Consolidate harness scripts onto harness/common.py | P2 | M | 002, 003 | TODO |
