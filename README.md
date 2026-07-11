@@ -205,7 +205,7 @@ the deployment target for the final algorithm.
 - [x] SPI-slave firmware scaffold (PIO)
 - [ ] `SpiMcuSource(SignalSource)` — Pi-side SPI wrapper (`mpp-sdk[hardware]`)
 - [ ] MCU firmware (HIL mode): ADC + PWM + SPI-slave as an I/O proxy
-- [ ] Calibration (ADC scale/offset, INA226 gain, PWM freq, duty limits)
+- [ ] Calibration (ADC scale/offset, INA229 calibration / INA281 gain, PWM freq, duty limits)
 - [ ] Algorithm port to RP2040 + cross-validation against the Python reference
 - [ ] Bench and outdoor validation against the simulator
 
