@@ -10,31 +10,29 @@
       
       
       
-        <link rel="canonical" href="https://utn-frba-2026-pf-ee-gp10.github.io/mpp_sdk/methodology/">
+        <link rel="canonical" href="https://utn-frba-2026-pf-ee-gp10.github.io/mpp_sdk/algorithms/restart_policy/">
       
       
-        <link rel="prev" href="../rationale/">
+        <link rel="prev" href="../particle_swarm/">
       
-      
-        <link rel="next" href="../algorithms/perturb_observe/">
       
       
         
       
       
-      <link rel="icon" href="../assets/images/favicon.png">
+      <link rel="icon" href="../../assets/images/favicon.png">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
     
     
       
-        <title>Methodology - mpp-sdk docs</title>
+        <title>Restart Policy (Global MPPT re-triggering) - mpp-sdk docs</title>
       
     
     
-      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
       
         
-        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
       
       
 
@@ -53,7 +51,7 @@
       
     
     
-    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
 
@@ -78,7 +76,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#comparison-methodology" class="md-skip">
+        <a href="#why-a-trigger-policy" class="md-skip">
           Skip to content
         </a>
       
@@ -94,7 +92,7 @@
 
 <header class="md-header md-header--shadow" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href=".." title="mpp-sdk docs" class="md-header__button md-logo" aria-label="mpp-sdk docs" data-md-component="logo">
+    <a href="../.." title="mpp-sdk docs" class="md-header__button md-logo" aria-label="mpp-sdk docs" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -114,7 +112,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Methodology
+              Restart Policy (Global MPPT re-triggering)
             
           </span>
         </div>
@@ -232,7 +230,7 @@
 
 <nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href=".." title="mpp-sdk docs" class="md-nav__button md-logo" aria-label="mpp-sdk docs" data-md-component="logo">
+    <a href="../.." title="mpp-sdk docs" class="md-nav__button md-logo" aria-label="mpp-sdk docs" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -262,7 +260,7 @@
   
   
     <li class="md-nav__item">
-      <a href=".." class="md-nav__link">
+      <a href="../.." class="md-nav__link">
         
   
   
@@ -289,7 +287,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../general_information/" class="md-nav__link">
+      <a href="../../general_information/" class="md-nav__link">
         
   
   
@@ -316,7 +314,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../rationale/" class="md-nav__link">
+      <a href="../../rationale/" class="md-nav__link">
         
   
   
@@ -340,37 +338,10 @@
       
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Methodology
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../methodology/" class="md-nav__link">
         
   
   
@@ -386,114 +357,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#one-idea-behind-every-metric" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        One idea behind every metric
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#three-harnesses-three-questions" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Three harnesses, three questions
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#the-metrics" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        The metrics
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#why-global-trackers-need-a-trigger-policy" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Why global trackers need a trigger policy
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#measurement-noise" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Measurement noise
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#sim-to-real-the-three-layer-comparison" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Sim-to-real: the three-layer comparison
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#the-numbers-the-simulation-assumes" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        The numbers the simulation assumes
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#reproducibility" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Reproducibility
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -502,8 +365,10 @@
       
   
   
+    
   
   
+  
     
     
     
@@ -514,11 +379,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
         
           
           <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
@@ -539,7 +404,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_5">
             <span class="md-nav__icon md-icon"></span>
             
@@ -557,7 +422,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../algorithms/perturb_observe/" class="md-nav__link">
+      <a href="../perturb_observe/" class="md-nav__link">
         
   
   
@@ -588,7 +453,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../algorithms/incremental_conductance/" class="md-nav__link">
+      <a href="../incremental_conductance/" class="md-nav__link">
         
   
   
@@ -619,7 +484,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../algorithms/fuzzy_logic/" class="md-nav__link">
+      <a href="../fuzzy_logic/" class="md-nav__link">
         
   
   
@@ -650,7 +515,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../algorithms/scan_and_track/" class="md-nav__link">
+      <a href="../scan_and_track/" class="md-nav__link">
         
   
   
@@ -681,7 +546,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../algorithms/particle_swarm/" class="md-nav__link">
+      <a href="../particle_swarm/" class="md-nav__link">
         
   
   
@@ -709,10 +574,38 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../algorithms/restart_policy/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Restart policy
+  
+
+    
+      <br>
+      <small>MPPT algorithm reference</small>
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -731,6 +624,90 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#why-a-trigger-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why a trigger policy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#step-detector" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step detector
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#periodic-backstop" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Periodic backstop
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#choosing-the-period-expected-loss-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Choosing the period: expected-loss model
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#measured-behavior" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Measured behavior
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#references" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        References
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -760,8 +737,6 @@
   
   
   
-    
-  
   
     <label class="md-nav__title" for="__toc">
       <span class="md-nav__icon md-icon"></span>
@@ -770,10 +745,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#one-idea-behind-every-metric" class="md-nav__link">
+  <a href="#why-a-trigger-policy" class="md-nav__link">
     <span class="md-ellipsis">
       
-        One idea behind every metric
+        Why a trigger policy
       
     </span>
   </a>
@@ -781,10 +756,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#three-harnesses-three-questions" class="md-nav__link">
+  <a href="#step-detector" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Three harnesses, three questions
+        Step detector
       
     </span>
   </a>
@@ -792,10 +767,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#the-metrics" class="md-nav__link">
+  <a href="#periodic-backstop" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The metrics
+        Periodic backstop
       
     </span>
   </a>
@@ -803,10 +778,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#why-global-trackers-need-a-trigger-policy" class="md-nav__link">
+  <a href="#choosing-the-period-expected-loss-model" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Why global trackers need a trigger policy
+        Choosing the period: expected-loss model
       
     </span>
   </a>
@@ -814,10 +789,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#measurement-noise" class="md-nav__link">
+  <a href="#measured-behavior" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Measurement noise
+        Measured behavior
       
     </span>
   </a>
@@ -825,32 +800,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#sim-to-real-the-three-layer-comparison" class="md-nav__link">
+  <a href="#references" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Sim-to-real: the three-layer comparison
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#the-numbers-the-simulation-assumes" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        The numbers the simulation assumes
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#reproducibility" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Reproducibility
+        References
       
     </span>
   </a>
@@ -877,199 +830,107 @@
   
 
 
-<h1 id="comparison-methodology">Comparison methodology<a class="headerlink" href="#comparison-methodology" title="Permanent link">&para;</a></h1>
-<p>How the harness measures MPPT performance, what each number means, and how
-the simulation results will be reproduced on PLECS and on the bench. For
-the system overview see <code>general_information.md</code>; for design decisions,
-<code>rationale.md</code>.</p>
-<h2 id="one-idea-behind-every-metric">One idea behind every metric<a class="headerlink" href="#one-idea-behind-every-metric" title="Permanent link">&para;</a></h2>
-<p>At every instant the panel has a best possible power, <span class="arithmatex">\(P_\text{mpp}\)</span>: the
-global maximum of the P-V curve for the current irradiance and
-temperature. Every metric compares what the controller actually captured
-against that ideal. The reference comes from the same panel model the
-simulation runs on (<code>TabulatedPanel.mpp()</code>), so the simulated world and
-the grading curve are identical by construction.</p>
-<h2 id="three-harnesses-three-questions">Three harnesses, three questions<a class="headerlink" href="#three-harnesses-three-questions" title="Permanent link">&para;</a></h2>
-<table>
-<thead>
-<tr>
-<th>Harness</th>
-<th>Question</th>
-<th>Replicable on hardware?</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>compare_cyclic.py</code></td>
-<td>Which algorithm is better under realistic, changing shading?</td>
-<td>No, and it does not need to be (sim-only ranking)</td>
-</tr>
-<tr>
-<td><code>compare_bank.py</code></td>
-<td>Does the simulation predict reality?</td>
-<td>Yes: five simple scenarios, one shade cloth</td>
-</tr>
-<tr>
-<td><code>compare_noise.py</code></td>
-<td>How fast does each algorithm degrade with measurement noise?</td>
-<td>Indirectly (the bench has a fixed noise floor)</td>
-</tr>
-<tr>
-<td><code>compare_rescan.py</code></td>
-<td>What is the right rescan period?</td>
-<td>No (sim-only, feeds the trigger-policy figure)</td>
-</tr>
-<tr>
-<td><code>compare_seeds.py</code></td>
-<td>How seed-sensitive is the stochastic tracker?</td>
-<td>No (sim-only)</td>
-</tr>
-</tbody>
-</table>
-<p>The split matters: a rich, chaotic, seeded schedule is ideal for <em>ranking</em>
-but impossible to reproduce with a real sun, while bench scenarios must be
-simple. Asking one experiment to do both jobs would do both badly.</p>
-<p><code>compare_static.py</code>, <code>compare_dynamic.py</code> and <code>animate.py</code> predate the
-methodology and remain as smoke tests and demos.</p>
-<h2 id="the-metrics">The metrics<a class="headerlink" href="#the-metrics" title="Permanent link">&para;</a></h2>
+  <h1>Restart policy</h1>
+
+<h2 id="why-a-trigger-policy">Why a trigger policy<a class="headerlink" href="#why-a-trigger-policy" title="Permanent link">&para;</a></h2>
+<p>A global search (<code>ScanAndTrack</code>'s full duty sweep, or a PSO pass) physically
+drives the converter across its range: exploration costs energy, so it cannot
+run continuously. After the search hands off, the controller is a plain local
+tracker (<code>PerturbAndObserve</code>) and cannot escape a local maximum once the
+shading pattern changes again. The open question is <em>when to search again</em> -
+it moves the results more than the choice of search itself. Two mechanisms,
+both on the controller side and both fed only by <span class="arithmatex">\((V, I)\)</span>, answer it: a step
+detector and a periodic backstop.</p>
+<h2 id="step-detector">Step detector<a class="headerlink" href="#step-detector" title="Permanent link">&para;</a></h2>
+<p><code>PowerChangeDetector</code> (<code>mpp_sdk/algorithms/restart.py</code>) watches
+<span class="arithmatex">\(P = V\,I\)</span> during tracking and restarts the global search when the power has
+deviated from its reference by more than <code>threshold</code> (relative, default
+20 %) for <code>samples</code> consecutive steps (default 3) - the classic <span class="arithmatex">\(|\Delta
+P|/P\)</span> restart condition used by PSO-MPPT schemes [Liu et al. 2012].</p>
 <ul>
-<li><strong>eta energy</strong> <span class="arithmatex">\(= \sum_k P_k \,/\, \sum_k P_{\text{mpp},k}\)</span>: captured
-  energy over ideally-available energy across the whole run, with a
-  time-varying reference (<code>metrics.energy_efficiency</code>). The headline
-  energy bill. It is <em>energy-weighted</em>: deep-shade segments offer little
-  energy, so failing them dents this number surprisingly little. Always
-  read it together with the trap columns.</li>
-<li><strong>success / trapped</strong>: how many held conditions (plateaus) ended within
-  5 % of <span class="arithmatex">\(P_\text{mpp}\)</span>, and for the trapped ones, the settled fraction of
-  available power (mean and worst). This is the honest pain number: "when
-  trapped, the controller delivers X % of what the panel could give".</li>
-<li><strong>re-acquisition</strong>: time from a condition change until the power is back
-  inside the 5 % band and stays there. Local trackers re-acquire in
-  ~10 ms or never (trapped); global trackers always re-acquire but pay
-  their search time, bounded by the rescan period.</li>
-<li>Building blocks in <code>mpp_sdk.metrics</code>: <code>tracking_efficiency</code>,
-  <code>final_efficiency</code>, <code>settling_time</code>, <code>steady_state_ripple</code>,
-  <code>overshoot</code>, <code>trap_depth</code>. Each harness prints a plain-language guide
-  before its table.</li>
+<li><strong>Arming after reset</strong>: after a reset (construction, or right after a
+  search hands off) the detector simply follows the raw samples until
+  <code>samples</code> consecutive readings agree within the band before it arms. This
+  makes it immune to the electrical settling transient that follows the jump
+  to a newly-found peak, with no plant-specific hold-off constant needed.</li>
+<li><strong>In-band reference follow</strong>: once armed, the reference follows the power
+  only while it stays inside the band (an EMA; <code>smoothing=1.0</code> by default
+  pins it to the last in-band sample). The converter's own continuous
+  transients and slow irradiance ramps - which the local tracker follows on
+  its own - never trigger a restart.</li>
+<li><strong>Step detector, blind to ramps</strong>: a change that creeps in over many
+  control periods is followed, not flagged. An abrupt shading change is a
+  discontinuity and fires within <code>samples</code> steps.</li>
+<li>State is four scalars (<code>_ref</code>, <code>_count</code>, <code>_armed</code>, plus the fixed
+  <code>threshold</code>/<code>samples</code>/<code>smoothing</code>) and the update is branch-light -
+  MCU-portable by design. See the docstring at
+  <code>mpp_sdk/algorithms/restart.py:7-53</code> for the authoritative behavior; this
+  page is explanatory.</li>
 </ul>
-<h2 id="why-global-trackers-need-a-trigger-policy">Why global trackers need a trigger policy<a class="headerlink" href="#why-global-trackers-need-a-trigger-policy" title="Permanent link">&para;</a></h2>
-<p>A global search (full duty sweep, or a PSO pass) physically drives the
-converter across its range: exploration costs energy, so it cannot run
-continuously. After the search, a local P&amp;O holds the found peak. The open
-question is <em>when to search again</em>, and it moves the results more than the
-choice of search itself. Two mechanisms, both on the controller side and
-both fed only by <span class="arithmatex">\((V, I)\)</span>:</p>
-<ol>
-<li><strong>Step detector</strong> (<code>PowerChangeDetector</code>, on by default): restart when
-   <span class="arithmatex">\(|\Delta P|/P &gt; 20\,\%\)</span> for 3 consecutive control steps, with the
-   reference following the power while it stays in band. It arms only once
-   the power is stable after a search, so the converter's own recovery
-   transient (the input capacitor recharging, panel-current-limited at low
-   irradiance) cannot cause a restart loop. It fires on <em>steps</em> only.</li>
-<li><strong>Periodic backstop</strong> (<code>rescan_period</code>): re-search every <span class="arithmatex">\(N\)</span> tracking
-   steps unconditionally. It exists for the step detector's blind spot:
-   changes that reshape the curve without moving the tracked power, which
-   includes every <em>slow ramp</em> into partial shading. Its cost is one search
-   per period (a few percent of energy at 1 s); its benefit is bounding
-   the worst-case trapped time to the period.</li>
-</ol>
-<p>Measured on the cyclic schedule: local trackers trap in roughly half the
-shaded plateaus at 44-67 % of available power; the configured global
-trackers cut traps to a handful at the price of up to ~1 s re-acquisition
-when only the backstop can free them. The deployed period (1000 steps) is
-not a guess: an expected-loss model derives an optimum <span class="arithmatex">\(P^\star \approx
-1034\)</span> that lands on the empirically measured best (eta peaks at 95.0 % at
-period 1000) - see <code>algorithms/restart_policy.md</code> for the full derivation.</p>
-<h2 id="measurement-noise">Measurement noise<a class="headerlink" href="#measurement-noise" title="Permanent link">&para;</a></h2>
-<p>Real sense chains are noisy, and clean-sim numbers flatter the simple
-methods. <code>NoisySource</code> adds seeded Gaussian noise to the <span class="arithmatex">\((V, I)\)</span> samples
-the controller sees (the plant stays clean; grading uses true power),
-specified as a fraction of the hardware full scale (40 V / 1 A).</p>
-<p>The theory of the observed cliff: fixed-step P&amp;O decides direction from
-the <em>sign</em> of the power change across a duty perturbation. Near the MPP
-that change is tiny, so once per-sample noise exceeds it the decision is a
-coin flip and the tracker random-walks away (this is the classical
-step-size design constraint, Femia et al. 2005). On this rig the cliff
-sits between 0.25 % and 0.5 % of full scale; global searches keep a ~60 %
-floor at levels that reduce P&amp;O to ~19 %, because each sweep yanks the
-operating point back near the peak.</p>
-<h2 id="sim-to-real-the-three-layer-comparison">Sim-to-real: the three-layer comparison<a class="headerlink" href="#sim-to-real-the-three-layer-comparison" title="Permanent link">&para;</a></h2>
-<p>Closed-loop waveforms from different environments are never compared
-directly; the claim is split so a disagreement points at the broken layer:</p>
-<ol>
-<li><strong>Plant vs plant</strong> (validates <code>DynamicSimulatedSource</code> against the
-   PLECS switched model): replay the <em>same recorded duty sequence</em>
-   open-loop into both and compare <span class="arithmatex">\(V(t), I(t)\)</span>. The panel enters PLECS
-   as a lookup table exported by <code>scripts/export_iv_plecs.py</code>, so both
-   simulators share the same curve by construction.</li>
-<li><strong>Controller vs controller</strong> (validates a port, PLECS C-Script or the
-   RP2040 firmware, against the Python reference): replay recorded
-   <span class="arithmatex">\((V, I)\)</span> traces through both and compare the emitted duty sequences
-   step by step. Deterministic algorithms only.</li>
-<li><strong>Closed loop</strong>: run the test-case bank in each environment and compare
-   the metrics tables within documented tolerances.</li>
-</ol>
-<p><code>compare_bank.py</code> dumps a <span class="arithmatex">\((t, V, I, D)\)</span> CSV per run precisely to feed
-layers 1 and 2. On the bench, the scenarios map to one shade cloth of
-~30 % transmission (cover on, cover off, steady shade) plus the
-controller's configured start duty for the Voc-side trap case; the ground
-truth <span class="arithmatex">\(P_\text{mpp}\)</span> comes from a calibration duty sweep with the
-condition held - the rig is its own instrument.</p>
-<h2 id="the-numbers-the-simulation-assumes">The numbers the simulation assumes<a class="headerlink" href="#the-numbers-the-simulation-assumes" title="Permanent link">&para;</a></h2>
-<table>
-<thead>
-<tr>
-<th>Quantity</th>
-<th>Value</th>
-<th>Where</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Control loop</td>
-<td>1 kHz (1 ms per step)</td>
-<td><code>panel_config.CONTROL_PERIOD_MS</code>, RP2040 target</td>
-</tr>
-<tr>
-<td>Input capacitance</td>
-<td>100 uF</td>
-<td><code>DynamicSimulatedSource</code> default</td>
-</tr>
-<tr>
-<td>Load</td>
-<td>10 Ohm resistive</td>
-<td>harness scripts</td>
-</tr>
-<tr>
-<td>Hardware full scale</td>
-<td>40 V / 1 A</td>
-<td><code>panel_config.V_IN_MAX</code>, <code>I_MAX</code> (PCB limits)</td>
-</tr>
-<tr>
-<td>Panel string</td>
-<td>2x Hissuma PSF10MONO in series</td>
-<td><code>panel_config.shaded_string</code></td>
-</tr>
-<tr>
-<td>Shade cloth</td>
-<td>~30 % transmission</td>
-<td><code>compare_bank.CLOTH_TRANSMISSION</code></td>
-</tr>
-</tbody>
-</table>
-<h2 id="reproducibility">Reproducibility<a class="headerlink" href="#reproducibility" title="Permanent link">&para;</a></h2>
-<p>Every stochastic element is seeded: the cyclic schedule, the PSO swarm,
-the noise stream. Re-running any harness reproduces its numbers exactly;
-changing a seed is a deliberate, visible act. This is a PLAN-level rule
-because every figure in the paper must be regenerable from a command.
-Stochastic algorithms are reported as mean +/- std over 30 seeds
-(<code>compare_seeds.py</code>), never a single seed.</p>
+<h2 id="periodic-backstop">Periodic backstop<a class="headerlink" href="#periodic-backstop" title="Permanent link">&para;</a></h2>
+<p>The detector has one blind spot: a new, higher peak appearing elsewhere
+while the tracked power barely moves (e.g. shade swapping from one panel to
+another in a series string). The <code>rescan_period</code> backstop covers it by
+re-running the search every <span class="arithmatex">\(M\)</span> control steps unconditionally:</p>
+<div class="arithmatex">\[\text{if } (\text{steps since last scan}) \ge M \;\Rightarrow\; \text{restart the search.}\]</div>
+<p>It bounds the worst-case trapped time to one period, at the price of one
+search's energy cost per period.</p>
+<h2 id="choosing-the-period-expected-loss-model">Choosing the period: expected-loss model<a class="headerlink" href="#choosing-the-period-expected-loss-model" title="Permanent link">&para;</a></h2>
+<p><code>harness/compare_rescan.py</code> sweeps <code>rescan_period</code> over {250, 500, 1000,
+2000, off} for the global trackers on the cyclic schedule and derives the
+optimum from first principles, then checks it against the measurement. The
+loss, as a fraction of available energy, is modelled as</p>
+<div class="arithmatex">\[L(P) = \frac{A}{P} + B \cdot P,\]</div>
+<p>where the first term is the search tax and the second is trap exposure:</p>
+<ul>
+<li><strong><span class="arithmatex">\(A\)</span> (search tax)</strong>: a periodic re-search costs a fixed energy <span class="arithmatex">\(e_s\)</span>,
+  measured in a steady-full-sun calibration run where re-scanning is the
+  <em>only</em> loss (backstop off vs. backstop on every <code>CAL_PERIOD</code> steps, same
+  unchanging condition - the extra energy lost divided by the re-search
+  count gives <span class="arithmatex">\(e_s\)</span>). Over <span class="arithmatex">\(N\)</span> schedule steps there are about <span class="arithmatex">\(N/P\)</span>
+  periodic re-searches, so <span class="arithmatex">\(A = e_s \cdot N / E_\text{available}\)</span>.</li>
+<li><strong><span class="arithmatex">\(B\)</span> (trap exposure)</strong>: with the backstop off, stealth traps cost a
+  fraction <span class="arithmatex">\(L_\text{off}\)</span> of the available energy (measured on the same
+  backstop-off run used for the calibration above). A trap persists until
+  the next periodic re-search, on average <span class="arithmatex">\(P/2\)</span>; for periods below the mean
+  plateau length <span class="arithmatex">\(D\)</span> the exposure scales with <span class="arithmatex">\(P\)</span>, so <span class="arithmatex">\(B = L_\text{off} /
+  D\)</span>.</li>
+</ul>
+<p>Minimising <span class="arithmatex">\(L(P)\)</span> gives the derived optimum</p>
+<div class="arithmatex">\[P^\star = \sqrt{A / B} \approx 1034 \text{ control steps},\]</div>
+<p>which lands on the empirical best: Scan&amp;Track's eta energy peaks at
+<strong>95.0 %</strong> at period <strong>1000</strong> (the nearest swept value to <span class="arithmatex">\(P^\star\)</span>).
+Over-frequent re-scanning (period 250) actually traps <em>more</em> often, not
+less - each sweep is itself a window during which a mid-scan shading change
+can go undetected, so shortening the period below the plateau timescale adds
+risk instead of removing it. <code>harness/compare_rescan.py</code> regenerates this
+table and the accompanying figure (<code>harness/output/compare_rescan.png</code>).</p>
+<h2 id="measured-behavior">Measured behavior<a class="headerlink" href="#measured-behavior" title="Permanent link">&para;</a></h2>
+<p>Local trackers (no restart policy) trap in roughly half the shaded plateaus
+of the cyclic schedule, settling at 44-67 % of available power on those
+traps (<code>docs/methodology.md</code>). The configured global trackers
+(<code>rescan_period=1000</code>, detector on) cut traps to a handful at the price of
+up to ~1 s re-acquisition when only the backstop can free them.</p>
+<p>Stochastic search is measured the same way, over seeds rather than periods:
+<code>harness/compare_seeds.py</code> runs PSO (8 particles, <code>rescan_period=1000</code>) over
+30 seeds on the cyclic schedule and reports eta <strong>93.9 % +/- 0.7</strong> and
+<strong>7.9 +/- 1.7</strong> trapped plateaus, against the deterministic Scan&amp;Track at
+<strong>95.0 %</strong> eta and <strong>5</strong> traps with zero variance. Scan&amp;Track beats PSO's
+mean on both metrics and removes seed-to-seed variance entirely, which is
+why it is the MCU deployment candidate - see <code>scan_and_track.md</code> and
+<code>particle_swarm.md</code> for the per-algorithm detail.</p>
+<h2 id="references">References<a class="headerlink" href="#references" title="Permanent link">&para;</a></h2>
+<p>Liu et al. (2012), <em>A PSO-based MPPT for PV under partial shading</em>, IEEE
+TEC.</p>
 
 
 
 
 
 
+
+  
+  
 
 
 
@@ -1135,10 +996,10 @@ Stochastic algorithms are reported as mean +/- std over 30 seeds
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.top", "content.code.copy", "search.suggest"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "content.code.copy", "search.suggest"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
       
         <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
       

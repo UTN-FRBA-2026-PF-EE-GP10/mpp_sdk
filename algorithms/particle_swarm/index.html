@@ -16,6 +16,8 @@
         <link rel="prev" href="../scan_and_track/">
       
       
+        <link rel="next" href="../restart_policy/">
+      
       
         
       
@@ -715,6 +717,37 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../restart_policy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Restart policy
+  
+
+    
+      <br>
+      <small>MPPT algorithm reference</small>
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -917,7 +950,8 @@ trigger a restart loop.</p>
 global peak while barely moving the tracked power (e.g. the shade swapping
 from one panel to the other). The optional <code>rescan_period</code> re-runs the
 search every <span class="arithmatex">\(N\)</span> tracking steps as a backstop, at the price of the search's
-energy cost each period — the same knob <code>ScanAndTrack</code> has.</p>
+energy cost each period — the same knob <code>ScanAndTrack</code> has. See
+<code>restart_policy.md</code> for the derivation behind the deployed period.</p>
 <h2 id="trade-offs">Trade-offs<a class="headerlink" href="#trade-offs" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>Swarm size / iterations:</strong> larger ⇒ more reliable global capture but a
@@ -939,6 +973,12 @@ while the input capacitor is still slewing, so the first (coarse-scan)
 iteration sees lag-corrupted powers. On the 2-panel Hissuma rig at a 1 kHz
 loop, 6 particles locate the global basin for only ~60 % of seeds after a
 shading change; 8 particles are reliable.</p>
+<p>Because the swarm's convergence depends on the RNG stream, <code>harness/compare_seeds.py</code>
+runs PSO (8 particles) over 30 seeds on the cyclic schedule: eta energy
+93.9 % +/- 0.7 and 7.9 +/- 1.7 trapped plateaus, against the deterministic
+Scan&amp;Track at 95.0 % eta and 5 traps with zero variance. Scan&amp;Track beats
+PSO's mean on both metrics with no seed dependence, which makes it the
+stronger MCU deployment candidate.</p>
 <h2 id="references">References<a class="headerlink" href="#references" title="Permanent link">&para;</a></h2>
 <p>Kennedy &amp; Eberhart (1995), <em>Particle swarm optimization</em>, ICNN. Miyatake et al.
 (2011), <em>MPPT of multiple PV arrays: a PSO approach</em>, IEEE TAES. Liu et al.

@@ -695,6 +695,37 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../restart_policy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Restart policy
+  
+
+    
+      <br>
+      <small>MPPT algorithm reference</small>
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -876,6 +907,11 @@ are available:</p>
 see: a new, higher peak appearing elsewhere while the tracked power barely
 moves. Frequent re-scans track moving shade better but spend more time
 off-MPP during each sweep.</p>
+<p>A sweep of <code>rescan_period</code> on the cyclic schedule (<code>harness/compare_rescan.py</code>)
+shows eta energy peaking at 95.0 % at period 1000, matching the derived
+optimum <span class="arithmatex">\(P^\star \approx 1034\)</span> from an expected-loss model; period 250
+actually traps <em>more</em> often, not less, since each extra sweep is itself a
+window for a mid-scan change. See <code>restart_policy.md</code> for the full model.</p>
 <h2 id="trade-offs">Trade-offs<a class="headerlink" href="#trade-offs" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong><span class="arithmatex">\(\Delta D_\text{scan}\)</span>:</strong> finer ⇒ won't miss a narrow global peak, but a
