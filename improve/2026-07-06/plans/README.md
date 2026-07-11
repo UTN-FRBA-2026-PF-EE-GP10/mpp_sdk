@@ -15,7 +15,7 @@ checks, `pip-audit` / `cargo audit` runs.
 |------|-------|----------|--------|------------|--------|
 | 001 | Make CI run the pvlib-dependent tests | P1 | S | - | TODO |
 | 002 | Characterization tests for cyclic-harness profile machinery | P1 | S-M | 001 | TODO |
-| 003 | Unit tests for P&O, simulated sources, TabulatedPanel | P2 | S-M | - | TODO |
+| 003 | Unit tests for P&O, simulated sources, TabulatedPanel | P2 | S-M | - | DONE |
 | 004 | Consolidate harness scripts onto harness/common.py | P2 | M | 002, 003 | TODO |
 | 005 | Firmware INA229 driver (real V/I acquisition) | P1 | L | - | TODO |
 | 006 | Fix sensing-chain docs drift (INA226 -> INA229, frame size) | P3 | S | - | TODO |
