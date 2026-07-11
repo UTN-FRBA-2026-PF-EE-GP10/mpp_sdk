@@ -22,10 +22,11 @@ mapping is one shade cloth of ~30 % transmission on one panel:
 
 Each scenario grades its *last* segment against that segment's global MPP
 with the standard metrics (final efficiency, settling / re-acquisition time,
-energy efficiency, ripple). Per the sim-to-real protocol in TODO.md, every
-run also dumps a (t, V, I, D) trace CSV so the same duty sequence can be
-replayed open-loop into PLECS (plant vs plant) and the same (V, I) stream
-can be replayed through another controller implementation (controller vs
+energy efficiency, ripple). Per the sim-to-real protocol in
+docs/methodology.md (sim-to-real comparison protocol), every run also dumps
+a (t, V, I, D) trace CSV so the same duty sequence can be replayed
+open-loop into PLECS (plant vs plant) and the same (V, I) stream can be
+replayed through another controller implementation (controller vs
 controller). PSO is included for completeness but is stochastic: use the
 deterministic algorithms for cross-environment replay.
 
@@ -97,8 +98,8 @@ global MPP (P_mpp):
   ripple       peak-to-peak power oscillation once settled, in W.
 
 Each run also writes harness/output/bank_traces/<scenario>_<algo>.csv
-with columns t_ms, v, i, duty for PLECS / bench replay (see TODO.md,
-sim-to-real comparison protocol).
+with columns t_ms, v, i, duty for PLECS / bench replay (see
+docs/methodology.md, sim-to-real comparison protocol).
 =========================================================================
 """
 

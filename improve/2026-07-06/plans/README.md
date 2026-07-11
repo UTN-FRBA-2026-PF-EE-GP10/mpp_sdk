@@ -20,7 +20,7 @@ checks, `pip-audit` / `cargo audit` runs.
 | 005 | Firmware INA229 driver (real V/I acquisition) | P1 | L | - | TODO |
 | 006 | Fix sensing-chain docs drift (INA226 -> INA229, frame size) | P3 | S | - | DONE |
 | 007 | Document restart policy + rescan/seed findings in docs/ | P2 | M | merge of `e77ca9a` | DONE |
-| 008 | Retire TODO.md into PLAN.md / AGENTS.md / docs | P3 | S-M | 007, merge of `e77ca9a` | TODO |
+| 008 | Retire TODO.md into PLAN.md / AGENTS.md / docs | P3 | S-M | 007, merge of `e77ca9a` | DONE |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) |
 REJECTED (with one-line rationale).

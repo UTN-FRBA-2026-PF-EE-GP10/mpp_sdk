@@ -158,3 +158,9 @@ rotate it, then rewrite history with `git filter-repo` and force-push.
 - **Demos and the harness are living documentation.** When you add an algorithm,
   add it to the comparison harness (`harness/`) and, where useful, a demo under
   `examples/`. The canonical quickstart is `main.py`.
+
+### Definition of done for a new module
+
+1. Unit tests under `tests/` - public API in isolation.
+2. Demo script under `examples/` (or a harness entry) producing one plot.
+3. Integration in the comparison harness.

@@ -15,6 +15,6 @@ table feeding a voltage-controlled current source.
 These are the same curves the Python harness simulates against, so a
 PLECS run and a `harness/compare_bank.py` run share the same panel by
 construction (plant-vs-plant layer of the sim-to-real protocol in
-TODO.md).
+docs/methodology.md).
 
 Last generated: 2026-06-10.

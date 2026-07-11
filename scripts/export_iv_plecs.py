@@ -8,8 +8,8 @@ PLECS models the panel as a voltage-controlled current source driven by a
 1-D lookup table. This script dumps the exact I-V curves the Python
 simulation uses (the pvlib-fitted Hissuma PSF10MONO string behind
 ``TabulatedPanel``) so that the plant-vs-plant comparison of the
-sim-to-real protocol (see TODO.md) runs both simulators on the *same*
-panel curve.
+sim-to-real protocol (see docs/methodology.md) runs both simulators on the
+*same* panel curve.
 
 One CSV per condition of the fixed test-case bank (``harness/compare_bank``):
 full sun and the shade-cloth case. Columns: ``v`` [V], ``i`` [A], with a
@@ -51,7 +51,7 @@ table feeding a voltage-controlled current source.
 These are the same curves the Python harness simulates against, so a
 PLECS run and a `harness/compare_bank.py` run share the same panel by
 construction (plant-vs-plant layer of the sim-to-real protocol in
-TODO.md).
+docs/methodology.md).
 
 Last generated: {today}.
 """

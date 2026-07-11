@@ -226,7 +226,11 @@ composes any module above and the rest of the SDK consumes it identically.
 - [x] **Global MPPT** — `ScanAndTrack` (full-range scan + local refinement) and
       `ParticleSwarm`. Escape the local maxima from bypass diodes under shading.
 - [ ] Adaptive-step P&O / variable-step InCond.
-- [ ] Own model-informed candidate scan (peaks near k·V_mp) for minimal MCU cost.
+- [ ] Own model-informed candidate scan (peaks near k·V_mp) plus a
+      cumulative-drift trigger, for minimal MCU cost. Prototype after noise
+      and the rescan sweep exist so its value is measurable: a 3-point
+      search makes aggressive re-checking affordable where the 23-point
+      scan cannot.
 - [ ] Sliding-mode / model-predictive controllers.
 - [ ] Data-driven baseline (supervised on swept curves and/or RL).
 
@@ -262,11 +266,14 @@ Still to do:
       measurement (`harness/compare_cyclic.py`, `metrics.energy_efficiency`).
 - [ ] Fixed test-case bank — mostly shipped in `harness/compare_bank.py`
       (cold start, cover-on/off steps, steady shade, Voc-side trap, with
-      (t, V, I, D) trace dumps for sim-to-real replay); still missing
-      isolated ramps and measurement noise.
+      (t, V, I, D) trace dumps for sim-to-real replay per the protocol in
+      `docs/methodology.md`); still missing isolated ramps and measurement
+      noise.
 - [ ] **Partial-shading bank metrics**: global-MPP success rate and
       time-to-global ship with the cyclic harness; worst-case trap depth
-      *across patterns* waits on the 2/3/4-peak shading bank.
+      *across patterns* waits on the 2/3/4-peak shading bank -
+      `harness/panel_config.py` only builds a 2-panel string (max 2 peaks)
+      today, so a 3+ panel string config is needed first.
 - [ ] **Robustness**: `η` vs measurement-noise level ✓
       (`harness/compare_noise.py` via `NoisySource`); vs sample rate pending.
 - [ ] **Implementation-cost** (binding for the MCU port): state size in bytes,
@@ -323,6 +330,9 @@ the paper's "MCU-deployable algorithm" claim rests on.
 - [ ] Hardware validation chapter.
 - [ ] Discussion and conclusions.
 - [ ] SDK reference and reproducibility appendix.
+- [ ] Auto-generated paper figures from the harness, built on
+      `harness/common.py` once it exists (see "Consolidate harness scripts"
+      in the improve-plans backlog).
 
 ### Publishing to PyPI
 
