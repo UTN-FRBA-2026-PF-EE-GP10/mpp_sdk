@@ -57,7 +57,7 @@ Evidence to gather:
 
 - `mpp_sdk/io/spi_mcu.py`: a working `SpiMcuSource(SignalSource)`, not a
   skeleton (look for the watchdog, the command set, calibration use).
-- Firmware HIL mode in `firmware/src/`: ADC sense, hardware PWM, SPI
+- Firmware HIL mode in `firmware/pipico_board/src/`: ADC sense, hardware PWM, SPI
   slave command set (set duty, read sample, read calibration, soft-stop
   on watchdog timeout).
 - Recorded (V, I, D) traces from the real rig (under `data/`), or
@@ -119,7 +119,7 @@ Evidence:
 - Implementation-cost metrics in the harness (state size, per-step
   compute) - a TODO item as of June.
 - A documented candidate choice (PLAN, TODO, or `entregables/`).
-- Port code in `firmware/src/` beyond the SPI proxy, and/or
+- Port code in `firmware/pipico_board/src/` beyond the SPI proxy, and/or
   cross-validation against the Python reference on recorded traces.
 - If the own model-informed candidate-scan algorithm shipped, whether it
   is in the comparison.
