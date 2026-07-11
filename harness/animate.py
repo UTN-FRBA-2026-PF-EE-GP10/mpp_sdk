@@ -27,7 +27,7 @@ import numpy as np
 from matplotlib.animation import FuncAnimation
 from matplotlib.widgets import Button, Slider
 
-import mpp_sdk
+from harness import common
 from harness.panel_config import CONTROL_PERIOD_MS
 from mpp_sdk import (
     DynamicSimulatedSource,
@@ -44,13 +44,7 @@ SCAN_SAMPLES = 240  # per-panel I-V samples (lower = snappier sliders)
 # ~no current and its bypass diode drops it out of the string — effectively off.
 G_OFF_FLOOR = 1.0  # W/m²
 
-ALGORITHMS = [
-    ("P&O", mpp_sdk.PerturbAndObserve, "tab:blue"),
-    ("InCond", mpp_sdk.IncrementalConductance, "tab:red"),
-    ("Fuzzy", mpp_sdk.FuzzyLogic, "tab:green"),
-    ("Scan&Track", mpp_sdk.ScanAndTrack, "tab:purple"),
-    ("PSO", mpp_sdk.ParticleSwarm, "tab:orange"),
-]
+ALGORITHMS = [(s.label, s.make, s.color) for s in common.algorithm_specs()]
 
 
 def parse_args():
@@ -82,10 +76,10 @@ def build_panel(g1: float, g2: float) -> TabulatedPanel:
 class Runner:
     """One algorithm + dynamic source, advanced step by step."""
 
-    def __init__(self, ctl_cls, panel, initial_duty):
-        self._ctl_cls = ctl_cls
+    def __init__(self, make_ctl, panel, initial_duty):
+        self._make_ctl = make_ctl
         self._duty0 = initial_duty
-        self.ctl = ctl_cls(initial_duty=initial_duty)
+        self.ctl = make_ctl(initial_duty)
         self.src = DynamicSimulatedSource(
             panel=panel,
             converter=SEPICConverter(),
@@ -99,7 +93,7 @@ class Runner:
         self.src.set_panel(panel)
 
     def reset(self, panel):
-        self.ctl = self._ctl_cls(initial_duty=self._duty0)
+        self.ctl = self._make_ctl(self._duty0)
         self.src = DynamicSimulatedSource(
             panel=panel,
             converter=SEPICConverter(),
@@ -163,8 +157,8 @@ def main():
     p_hist: list[list[float]] = []
     t_hist: list[float] = []
     frame_offset = {"n": 0}  # frame counter base, reset when env changes
-    for _label, cls, color in ALGORITHMS:
-        runners.append(Runner(cls, tab, args.duty))
+    for _label, make_ctl, color in ALGORITHMS:
+        runners.append(Runner(make_ctl, tab, args.duty))
         (trail_line,) = ax.plot([], [], "-", color=color, alpha=0.4, lw=1, zorder=3)
         (dot,) = ax.plot([], [], "o", color=color, ms=12, zorder=4, label=_label)
         (t_line,) = ax_t.plot([], [], "-", color=color, lw=1.4, label=_label)

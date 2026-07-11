@@ -20,18 +20,13 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 import mpp_sdk
+from harness import common
 from harness.panel_config import make_static_source, series_string, shaded_string
 
 N_STEPS = 2000
 INITIAL_DUTY = 0.5
 
-ALGORITHMS = [
-    ("P&O", mpp_sdk.PerturbAndObserve),
-    ("InCond", mpp_sdk.IncrementalConductance),
-    ("Fuzzy", mpp_sdk.FuzzyLogic),
-    ("Scan&Track", mpp_sdk.ScanAndTrack),
-    ("PSO", mpp_sdk.ParticleSwarm),
-]
+ALGORITHMS = [(s.label, s.make) for s in common.algorithm_specs()]
 
 SCENARIOS = [
     ("Full sun (1000, 1000 W/m²)", series_string),
@@ -39,9 +34,9 @@ SCENARIOS = [
 ]
 
 
-def final_point(ctl_cls, panel):
+def final_point(make_ctl, panel):
     src = make_static_source(panel=panel, initial_duty=INITIAL_DUTY)
-    ctl = ctl_cls(initial_duty=INITIAL_DUTY)
+    ctl = make_ctl(INITIAL_DUTY)
     v = i = 0.0
     for _ in range(N_STEPS):
         v, i = src.read()
@@ -67,8 +62,8 @@ def main() -> None:
         ax.plot(v_curve, p_curve, "k-", lw=1.5, label="P-V curve", zorder=1)
         ax.plot(v_mpp, p_mpp, "k*", ms=14, zorder=3, label=f"global MPP ({p_mpp:.2f} W)")
 
-        for (label, cls), color in zip(ALGORITHMS, colors, strict=False):
-            v_f, p_f = final_point(cls, panel_fn())
+        for (label, make_ctl), color in zip(ALGORITHMS, colors, strict=False):
+            v_f, p_f = final_point(make_ctl, panel_fn())
             eta = p_f / p_mpp
             ax.plot(v_f, p_f, "o", color=color, ms=10, zorder=4, label=f"{label}: {p_f:.2f} W")
             print(f"{title:<32}{label:<10}{v_f:<9.2f}{p_f:<9.2f}{eta * 100:5.1f} %")

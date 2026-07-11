@@ -21,6 +21,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 import mpp_sdk
+from harness import common
 from harness.panel_config import (
     CONTROL_PERIOD_MS,
     make_dynamic_source,
@@ -31,13 +32,7 @@ from harness.panel_config import (
 N_STEPS = 1500
 INITIAL_DUTY = 0.5
 
-ALGORITHMS = [
-    ("P&O", mpp_sdk.PerturbAndObserve),
-    ("InCond", mpp_sdk.IncrementalConductance),
-    ("Fuzzy", mpp_sdk.FuzzyLogic),
-    ("Scan&Track", mpp_sdk.ScanAndTrack),
-    ("PSO", mpp_sdk.ParticleSwarm),
-]
+ALGORITHMS = [(s.label, s.make) for s in common.algorithm_specs()]
 
 SCENARIOS = [
     ("Full sun (1000, 1000 W/m²)", series_string),
@@ -45,9 +40,9 @@ SCENARIOS = [
 ]
 
 
-def run(ctl_cls, panel):
+def run(make_ctl, panel):
     src = make_dynamic_source(panel=panel, initial_duty=INITIAL_DUTY)
-    ctl = ctl_cls(initial_duty=INITIAL_DUTY)
+    ctl = make_ctl(INITIAL_DUTY)
     powers = np.empty(N_STEPS)
     for k in range(N_STEPS):
         v, i = src.read()
@@ -74,8 +69,8 @@ def main() -> None:
         panel = panel_fn()
         p_mpp = panel.mpp()[2]
         ax.axhline(p_mpp, color="k", lw=1, ls="--", label=f"global MPP = {p_mpp:.2f} W")
-        for (label, cls), color in zip(ALGORITHMS, colors, strict=False):
-            powers = run(cls, panel_fn())
+        for (label, make_ctl), color in zip(ALGORITHMS, colors, strict=False):
+            powers = run(make_ctl, panel_fn())
             ax.plot(time_ms, powers, label=label, color=color, lw=1.2)
             m = mpp_sdk.metrics.summarize(powers, p_mpp, dt=CONTROL_PERIOD_MS, last_n=100)
             settle = "—" if m["settling_time"] is None else f"{m['settling_time']:.0f}"
