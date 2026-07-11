@@ -148,10 +148,10 @@ over RTT.
 | 19  | GPIO14  | Blinky          | Status / heartbeat LED        |
 | 20  | GPIO15  | PWM_Gate        | PWM output (via 10R + 3.3nF)  |
 | 21  | GPIO16  | SPI0_MISO       | SPI0 MISO                     |
-| 22  | GPIO17  | SPI0_CS1        | SPI0 chip select 1            |
+| 22  | GPIO17  | SPI0_CS1        | SPI0 CS 1 - INA229 (CS_INA)   |
 | 24  | GPIO18  | SPI0_SCK        | SPI0 clock                    |
 | 25  | GPIO19  | SPI0_MOSI       | SPI0 MOSI                     |
-| 26  | GPIO20  | SPI0_CS2        | SPI0 chip select 2            |
+| 26  | GPIO20  | SPI0_CS2        | SPI0 CS 2 - MAX31865 (CS_TP100) |
 | 27  | GPIO21  | INA_OOR_Alert   | INA out-of-range alert input  |
 | 29  | GPIO22  | DRDY_TMP        | Temp sensor data-ready input  |
 | 31  | GPIO26  | ADC_PWR         | ADC0 — power measurement      |
