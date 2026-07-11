@@ -47,7 +47,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 import mpp_sdk
-from harness.panel_config import CONTROL_PERIOD_MS, STC_IRRADIANCE, shaded_string
+from harness import common
+from harness.panel_config import CONTROL_PERIOD_MS, STC_IRRADIANCE
 
 CLOTH_TRANSMISSION = 0.3  # shade-cloth transmission used on the bench
 FULL = (STC_IRRADIANCE, STC_IRRADIANCE)
@@ -71,16 +72,7 @@ LAST_N = 100
 # cyclic *ranking* harness (long chaotic schedules). On the bank's short
 # single-change scenarios it would fire mid-segment and pollute the settle
 # and energy numbers of every environment being compared.
-ALGORITHMS = [
-    ("P&O", lambda d: mpp_sdk.PerturbAndObserve(initial_duty=d)),
-    ("InCond", lambda d: mpp_sdk.IncrementalConductance(initial_duty=d)),
-    ("Fuzzy", lambda d: mpp_sdk.FuzzyLogic(initial_duty=d)),
-    ("Scan&Track", lambda d: mpp_sdk.ScanAndTrack(initial_duty=d)),
-    (
-        "PSO",  # stochastic - excluded from cross-environment replay
-        lambda d: mpp_sdk.ParticleSwarm(initial_duty=d, n_particles=8),
-    ),
-]
+ALGORITHMS = [(s.label, s.make) for s in common.algorithm_specs(pso_particles=8)]
 
 METRICS_GUIDE = """\
 ======================== HOW TO READ THE METRICS ========================
@@ -106,37 +98,13 @@ docs/methodology.md, sim-to-real comparison protocol).
 
 def build_conditions():
     """Tabulate each distinct irradiance pair once: ``{irr: (panel, p_mpp)}``."""
-    conditions = {}
-    for _, _, segments in SCENARIOS:
-        for irr, _ in segments:
-            if irr not in conditions:
-                panel = mpp_sdk.TabulatedPanel(shaded_string(irr))
-                conditions[irr] = (panel, panel.mpp()[2])
-    return conditions
+    return common.build_conditions(irr for _, _, segments in SCENARIOS for irr, _ in segments)
 
 
 def run(make_ctl, initial_duty, segments, conditions):
     """Run one scenario; returns (v, i, duty) arrays over all segments."""
-    src = mpp_sdk.DynamicSimulatedSource(
-        panel=conditions[segments[0][0]][0],
-        converter=mpp_sdk.SEPICConverter(),
-        load_resistance=10.0,
-        initial_duty=initial_duty,
-        dt=CONTROL_PERIOD_MS * 1e-3,
-    )
-    ctl = make_ctl(initial_duty)
-    n_total = sum(n for _, n in segments)
-    vs, is_, ds = np.empty(n_total), np.empty(n_total), np.empty(n_total)
-    k = 0
-    for irr, n_steps in segments:
-        src.set_panel(conditions[irr][0])
-        for _ in range(n_steps):
-            v, i = src.read()
-            d = ctl.step(v, i)
-            src.write(d)
-            vs[k], is_[k], ds[k] = v, i, d
-            k += 1
-    return vs, is_, ds
+    schedule = [(irr, n, None) for irr, n in segments]
+    return common.run_schedule(make_ctl, schedule, conditions, initial_duty=initial_duty)
 
 
 def dump_trace(path, vs, is_, ds):

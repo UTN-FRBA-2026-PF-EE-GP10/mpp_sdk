@@ -70,17 +70,20 @@ def make_dynamic_source(
     panel=None,
     load_resistance: float = 10.0,
     initial_duty: float = 0.5,
+    tabulate: bool = True,
 ) -> DynamicSimulatedSource:
     """Return a ``DynamicSimulatedSource`` for the given panel.
 
     Uses input-capacitor dynamics so the terminal voltage slews toward the
     operating point instead of jumping — exposing settling time / overshoot.
-    The panel is tabulated for speed (the I-V solve runs thousands of times).
+    The panel is tabulated for speed (the I-V solve runs thousands of times)
+    unless ``tabulate=False``, for callers that pass an already-tabulated
+    panel and want to avoid double-wrapping it.
     """
     if panel is None:
         panel = series_string()
     return DynamicSimulatedSource(
-        panel=TabulatedPanel(panel),
+        panel=TabulatedPanel(panel) if tabulate else panel,
         converter=SEPICConverter(),
         load_resistance=load_resistance,
         initial_duty=initial_duty,

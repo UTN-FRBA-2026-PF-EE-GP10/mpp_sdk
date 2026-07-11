@@ -65,7 +65,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 import mpp_sdk
-from harness.panel_config import CONTROL_PERIOD_MS, shaded_string
+from harness import common
+from harness.panel_config import CONTROL_PERIOD_MS
 
 PROFILE_SEED = 1  # fixed for reproducibility — change to stress differently
 N_SEGMENTS = 30
@@ -116,17 +117,7 @@ reacq, paid for by their search transients).
 """
 
 ALGORITHMS = [
-    ("P&O", lambda d: mpp_sdk.PerturbAndObserve(initial_duty=d)),
-    ("InCond", lambda d: mpp_sdk.IncrementalConductance(initial_duty=d)),
-    ("Fuzzy", lambda d: mpp_sdk.FuzzyLogic(initial_duty=d)),
-    (
-        "Scan&Track",
-        lambda d: mpp_sdk.ScanAndTrack(initial_duty=d, rescan_period=RESCAN_PERIOD),
-    ),
-    (
-        "PSO",
-        lambda d: mpp_sdk.ParticleSwarm(initial_duty=d, n_particles=8, rescan_period=RESCAN_PERIOD),
-    ),
+    (s.label, s.make) for s in common.algorithm_specs(rescan_period=RESCAN_PERIOD, pso_particles=8)
 ]
 
 
@@ -207,33 +198,12 @@ def build_conditions(schedule):
     and their own ``mpp()`` is the reference so the simulated world and the
     ideal-energy reference are the same curve.
     """
-    conditions = {}
-    for irr, _, _ in schedule:
-        if irr not in conditions:
-            panel = mpp_sdk.TabulatedPanel(shaded_string(irr))
-            conditions[irr] = (panel, panel.mpp()[2])
-    return conditions
+    return common.build_conditions(irr for irr, _, _ in schedule)
 
 
 def run(make_ctl, schedule, conditions) -> np.ndarray:
-    src = mpp_sdk.DynamicSimulatedSource(
-        panel=conditions[schedule[0][0]][0],
-        converter=mpp_sdk.SEPICConverter(),
-        load_resistance=10.0,
-        initial_duty=INITIAL_DUTY,
-        dt=CONTROL_PERIOD_MS * 1e-3,
-    )
-    ctl = make_ctl(INITIAL_DUTY)
-    powers = np.empty(sum(n for _, n, _ in schedule))
-    k = 0
-    for irr, n_steps, _ in schedule:
-        src.set_panel(conditions[irr][0])
-        for _ in range(n_steps):
-            v, i = src.read()
-            src.write(ctl.step(v, i))
-            powers[k] = v * i
-            k += 1
-    return powers
+    v, i, _d = common.run_schedule(make_ctl, schedule, conditions, initial_duty=INITIAL_DUTY)
+    return v * i
 
 
 def plateau_spans(schedule):

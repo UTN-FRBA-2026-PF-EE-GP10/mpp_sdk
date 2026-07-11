@@ -39,6 +39,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 import mpp_sdk
+from harness import common
 from harness.compare_cyclic import (
     ALGORITHMS,
     BAND,
@@ -92,33 +93,17 @@ What the curves mean:
 
 
 def run(make_ctl, schedule, conditions, noise_fs: float) -> np.ndarray:
-    inner = mpp_sdk.DynamicSimulatedSource(
-        panel=conditions[schedule[0][0]][0],
-        converter=mpp_sdk.SEPICConverter(),
-        load_resistance=10.0,
+    # grade on the *true* delivered power; only the controller sees noise
+    v, i, _d = common.run_schedule(
+        make_ctl,
+        schedule,
+        conditions,
         initial_duty=INITIAL_DUTY,
-        dt=CONTROL_PERIOD_MS * 1e-3,
+        noise_v_std=noise_fs * V_IN_MAX,
+        noise_i_std=noise_fs * I_MAX,
+        noise_seed=NOISE_SEED,
     )
-    src = mpp_sdk.NoisySource(
-        inner,
-        v_std=noise_fs * V_IN_MAX,
-        i_std=noise_fs * I_MAX,
-        seed=NOISE_SEED,
-    )
-    ctl = make_ctl(INITIAL_DUTY)
-    powers = np.empty(sum(n for _, n, _ in schedule))
-    k = 0
-    for irr, n_steps, _ in schedule:
-        inner.set_panel(conditions[irr][0])
-        for _ in range(n_steps):
-            # grade on the *true* delivered power; only the controller
-            # sees the noisy reading
-            v_true, i_true = inner.read()
-            v, i = src.read()
-            src.write(ctl.step(v, i))
-            powers[k] = v_true * i_true
-            k += 1
-    return powers
+    return v * i
 
 
 def main() -> None:
