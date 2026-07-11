@@ -27,7 +27,7 @@ use embassy_rp::pio::{
 use embassy_rp::{Peri, bind_interrupts};
 use portable_atomic::Ordering;
 
-use crate::{DUTY, SIM_I, SIM_V};
+use crate::{DUTY, MEAS_I_MA, MEAS_V_MV};
 
 bind_interrupts!(pub struct PioIrqs {
     PIO0_IRQ_0 => InterruptHandler<PIO0>;
@@ -126,8 +126,8 @@ pub async fn spi_pio_task(
     defmt::info!("spi_pio_task: PIO SPI slave running (DMA TX, {} byte frame)", FRAME_LEN);
 
     let mut tx_buf = build_tx_frame(
-        SIM_V.load(Ordering::Relaxed),
-        SIM_I.load(Ordering::Relaxed),
+        MEAS_V_MV.load(Ordering::Relaxed),
+        MEAS_I_MA.load(Ordering::Relaxed),
     );
 
     loop {
@@ -151,9 +151,14 @@ pub async fn spi_pio_task(
         let duty = ((rx[0] as u8 as u16) << 8) | rx[1] as u8 as u16;
         DUTY.store(duty, Ordering::Relaxed);
 
-        let v = SIM_V.load(Ordering::Relaxed);
-        let i = SIM_I.load(Ordering::Relaxed);
-        defmt::info!("rx: duty={}% | tx: V={} I={}", duty as u32 * 100 / 65535, v, i);
+        let v = MEAS_V_MV.load(Ordering::Relaxed);
+        let i = MEAS_I_MA.load(Ordering::Relaxed);
+        defmt::info!(
+            "rx: duty={}% | tx: V={} mV I={} mA",
+            duty as u32 * 100 / 65535,
+            v,
+            i
+        );
 
         tx_buf = build_tx_frame(v, i);
     }
