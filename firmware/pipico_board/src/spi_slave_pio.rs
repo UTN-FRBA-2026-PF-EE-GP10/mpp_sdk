@@ -21,9 +21,7 @@ use embassy_futures::join::join;
 use embassy_rp::dma;
 use embassy_rp::peripherals::{PIN_10, PIN_11, PIN_12, PIN_13, PIO0};
 use embassy_rp::pio::program::pio_asm;
-use embassy_rp::pio::{
-    Config, Direction, InterruptHandler, Pio, ShiftDirection, StateMachine,
-};
+use embassy_rp::pio::{Config, Direction, InterruptHandler, Pio, ShiftDirection, StateMachine};
 use embassy_rp::{Peri, bind_interrupts};
 use portable_atomic::Ordering;
 
@@ -42,7 +40,11 @@ pub fn init(
     pin_mosi: Peri<'static, PIN_12>,
     pin_cs: Peri<'static, PIN_13>,
 ) -> StateMachine<'static, PIO0, 0> {
-    let Pio { mut common, mut sm0, .. } = Pio::new(pio, PioIrqs);
+    let Pio {
+        mut common,
+        mut sm0,
+        ..
+    } = Pio::new(pio, PioIrqs);
 
     let sck = common.make_pio_pin(pin_sck);
     let miso = common.make_pio_pin(pin_miso);
@@ -55,14 +57,14 @@ pub fn init(
     // - exit bit loop when CS goes high (jmp pin = CS via set_jmp_pin)
     let prg = pio_asm!(
         ".wrap_target",
-        "    wait 1 gpio 13",      // CS idle (deasserted)
-        "    wait 0 gpio 13",      // CS asserted -> start of transaction
+        "    wait 1 gpio 13", // CS idle (deasserted)
+        "    wait 0 gpio 13", // CS asserted -> start of transaction
         "bit_loop:",
-        "    out pins, 1",          // setup MISO bit (autopull from TX FIFO)
-        "    wait 1 gpio 10",       // SCK rising edge
-        "    in pins, 1",           // sample MOSI bit (autopush every 8 bits)
-        "    jmp pin done",         // CS deasserted? exit (resync at top)
-        "    wait 0 gpio 10",       // SCK falling edge — next bit setup
+        "    out pins, 1",    // setup MISO bit (autopull from TX FIFO)
+        "    wait 1 gpio 10", // SCK rising edge
+        "    in pins, 1",     // sample MOSI bit (autopush every 8 bits)
+        "    jmp pin done",   // CS deasserted? exit (resync at top)
+        "    wait 0 gpio 10", // SCK falling edge — next bit setup
         "    jmp bit_loop",
         "done:",
         ".wrap",
@@ -101,10 +103,17 @@ pub fn init(
 fn build_tx_frame(v: u16, i: u16) -> [u32; FRAME_LEN] {
     [
         u32::from_be_bytes([(v >> 8) as u8, 0, 0, 0]),
-        u32::from_be_bytes([v as u8,        0, 0, 0]),
+        u32::from_be_bytes([v as u8, 0, 0, 0]),
         u32::from_be_bytes([(i >> 8) as u8, 0, 0, 0]),
-        u32::from_be_bytes([i as u8,        0, 0, 0]),
-        0, 0, 0, 0, 0, 0, 0, 0,
+        u32::from_be_bytes([i as u8, 0, 0, 0]),
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
     ]
 }
 
@@ -119,11 +128,11 @@ fn build_tx_frame(v: u16, i: u16) -> [u32; FRAME_LEN] {
 /// MOSI (RPi→Pico): [ DUTY_H | DUTY_L | 0 … 0 ]  (12 bytes)
 /// MISO (Pico→RPi): [ V_H   | V_L    | I_H | I_L | 0 … 0 ]
 #[embassy_executor::task]
-pub async fn spi_pio_task(
-    mut sm: StateMachine<'static, PIO0, 0>,
-    mut dma: dma::Channel<'static>,
-) {
-    defmt::info!("spi_pio_task: PIO SPI slave running (DMA TX, {} byte frame)", FRAME_LEN);
+pub async fn spi_pio_task(mut sm: StateMachine<'static, PIO0, 0>, mut dma: dma::Channel<'static>) {
+    defmt::info!(
+        "spi_pio_task: PIO SPI slave running (DMA TX, {} byte frame)",
+        FRAME_LEN
+    );
 
     let mut tx_buf = build_tx_frame(
         MEAS_V_MV.load(Ordering::Relaxed),
@@ -136,14 +145,11 @@ pub async fn spi_pio_task(
         // TX (DMA) and RX (wait_pull) run concurrently via split borrows.
         {
             let (rx_half, tx_half) = sm.rx_tx();
-            join(
-                tx_half.dma_push(&mut dma, &tx_buf, false),
-                async {
-                    for slot in &mut rx {
-                        *slot = rx_half.wait_pull().await;
-                    }
-                },
-            )
+            join(tx_half.dma_push(&mut dma, &tx_buf, false), async {
+                for slot in &mut rx {
+                    *slot = rx_half.wait_pull().await;
+                }
+            })
             .await;
         }
 
