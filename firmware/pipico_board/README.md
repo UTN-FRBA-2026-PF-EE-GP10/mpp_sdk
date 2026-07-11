@@ -81,7 +81,10 @@ Pico pins 14–18 are adjacent on the left side of the board (USB connector faci
 | MOSI (RPi→Pico)| DUTY_H  | DUTY_L  | 0x00   | 0x00   | 0x00 padding  |
 | MISO (Pico→RPi)| V_H     | V_L     | I_H    | I_L    | 0x00 padding  |
 
-DUTY is a u16 (0 = 0 %, 65535 = 100 %). V/I are 12-bit ADC counts.
+DUTY is a u16 (0 = 0 %, 65535 = 100 %). V/I are u16, saturating: V in
+millivolts, I in milliamperes (negative current clamps to 0). See "Sensing"
+below. On the Pi side, construct `SpiMcuSource(v_scale=1e-3, i_scale=1e-3)`
+to convert to volts/amps.
 
 #### 4. Flash and stream logs
 
@@ -124,8 +127,38 @@ cargo build --release
 
 ## What it does
 
-Default `src/main.rs` blinks the on-board LED on `PIN_25` and emits defmt log lines
-over RTT.
+`src/main.rs` drives the SEPIC gate PWM from the `DUTY` value it receives
+over the RPi SPI link, and feeds that link real `(V, I)` measurements read
+from the on-board INA229 power monitor over SPI0 (see "Sensing" below).
+Default `#[embassy_executor::main]` also emits defmt log lines over RTT.
+
+Build without a sensing board wired up with `cargo build --release --features
+sim-adc`: this swaps the INA229 acquisition task for a pseudo-random
+generator so the RPi SPI link still works end to end on the bench.
+
+## Sensing
+
+The board carries a TI INA229 (`firmware/src/ina229.rs`) measuring the
+panel-side bus voltage and shunt current over SPI0 (GPIO16/17/18/19, see the
+GPIO table below; GPIO20 is the MAX31865's chip select, held idle high so it
+never floats onto the shared bus - that sensor is future work).
+
+- **Shunt resistor**: `R_SHUNT = 10 mOhm` (0.010 ohm). Not on the schematic
+  (the `Device:R_US` symbol carries a generic placeholder value) - given
+  directly by the project operator.
+- **Wire units**: the firmware reports V in **millivolts** and I in
+  **milliamperes** as saturating u16 over the existing 12-byte Pi frame
+  (negative current clamps to 0). Calibration (register scaling, SHUNT_CAL)
+  lives entirely in the firmware, next to the sensor; the Pi side just
+  constructs `SpiMcuSource(v_scale=1e-3, i_scale=1e-3)`.
+- **SPI mode**: the INA229 samples MOSI on the SCLK falling edge and shifts
+  MISO out on the rising edge (datasheet Section 7.5.1) - CPOL = 0, CPHA = 1
+  (SPI mode 1), clocked at 1 MHz. This is a different, independent SPI bus
+  from the RPi-facing PIO link described above (which is a fixed-protocol
+  bit-banged mode 0 frame, unrelated to this device's timing).
+- **`sim-adc` feature**: gates the INA229 acquisition task behind real
+  hardware; `cargo build --release --features sim-adc` keeps the old
+  pseudo-random `MEAS_V_MV`/`MEAS_I_MA` generator for bench-less development.
 
 ## GPIO Assignments
 
