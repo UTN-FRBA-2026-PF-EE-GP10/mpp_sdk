@@ -13,8 +13,10 @@ import spidev
 
 BUS, DEVICE = 0, 0
 SPEED_HZ = 8_000_000
-V_SCALE = 3.3 / 4095.0
-I_SCALE = 3.3 / 4095.0
+# Firmware reports V in millivolts and I in milliamperes as raw u16
+# (firmware/pipico_board/README.md "Sensing"), not raw ADC counts.
+V_SCALE = 1e-3
+I_SCALE = 1e-3
 
 
 def make_frame(duty: float) -> list[int]:
@@ -48,7 +50,9 @@ def main() -> None:
         while True:
             rx = spi.xfer2(list(tx))
             v_raw, i_raw = parse_response(rx)
-            ok = "✓" if (1500 < v_raw < 4096 and 300 < i_raw < 1000) else "✗"
+            # Board is designed for <= 40 V / <= 1 A on the panel input
+            # (docs/general_information.md); flag readings outside that.
+            ok = "✓" if (0 <= v_raw <= 40_000 and 0 <= i_raw <= 1_000) else "✗"
             v_str = f"{v_raw * V_SCALE:>7.3f}"
             i_str = f"{i_raw * I_SCALE:>7.3f}"
             print(f"{n:>5}  {v_raw:>6}  {i_raw:>6}  {v_str}  {i_str}  {ok}")
