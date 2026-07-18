@@ -17,11 +17,14 @@
 //!
 //! Mode 0 (CPOL=0, CPHA=0), MSB-first, 8-bit frames.
 //!
-//! Frame resync: the PIO program's own `wait CS` preamble is not reliably
-//! reached at a normal frame boundary (the trailing `jmp pin done` check
-//! races the master's CS deassertion). `spi_pio_task` instead forces a
-//! clean state machine restart from the CPU side after every frame
-//! (success or timeout) - see `resync()`.
+//! Frame recovery: a short/aborted frame (fewer than 96 SCK edges) can
+//! leave the state machine's bit alignment out of sync with no built-in
+//! way back. `spi_pio_task` bounds each frame with a timeout and, only on
+//! that (rare) failure, forces the state machine back to a clean start via
+//! `resync()`. This is deliberately NOT done after every successful frame
+//! - see `spi_pio_task`'s doc comment for why routine CPU-side resyncing
+//! turned out to corrupt the PIO's own IRQ-driven RX wakeup on target
+//! hardware.
 
 use embassy_futures::join::join;
 use embassy_rp::dma;
@@ -40,13 +43,17 @@ bind_interrupts!(pub struct PioIrqs {
 
 pub const FRAME_LEN: usize = 12;
 
+/// Returns the configured state machine plus the PIO instruction-memory
+/// address its program was loaded at (`resync()` needs this to jump back
+/// to the top of the program - see its doc comment for why a hardcoded
+/// address would be fragile).
 pub fn init(
     pio: Peri<'static, PIO0>,
     pin_sck: Peri<'static, PIN_10>,
     pin_miso: Peri<'static, PIN_11>,
     pin_mosi: Peri<'static, PIN_12>,
     pin_cs: Peri<'static, PIN_13>,
-) -> StateMachine<'static, PIO0, 0> {
+) -> (StateMachine<'static, PIO0, 0>, u8) {
     let Pio {
         mut common,
         mut sm0,
@@ -59,14 +66,12 @@ pub fn init(
     let cs = common.make_pio_pin(pin_cs);
 
     // PIO program: SPI slave mode 0, 8-bit MSB-first.
-    // - preamble: wait for CS to deassert then re-assert - the entry point
-    //   the CPU-side resync() (in spi_pio_task) forces execution back to
-    //   after every frame; NOT reliably reached on its own via the
-    //   trailing jmp below (see the module doc comment)
+    // - preamble: wait for CS to deassert then re-assert (resyncs byte
+    //   alignment on a clean frame boundary); the CPU-side resync() is a
+    //   fallback for the rare case a frame is aborted mid-transfer, not
+    //   the primary mechanism (see the module doc comment)
     // - per bit: drive MISO before SCK rising, sample MOSI on SCK rising
-    // - exit bit loop when CS goes high (jmp pin = CS via set_jmp_pin) -
-    //   opportunistic only; the CPU-side resync is what actually guarantees
-    //   alignment every frame
+    // - exit bit loop when CS goes high (jmp pin = CS via set_jmp_pin)
     let prg = pio_asm!(
         ".wrap_target",
         "    wait 1 gpio 13", // CS idle (deasserted)
@@ -82,8 +87,11 @@ pub fn init(
         ".wrap",
     );
 
+    let loaded = common.load_program(&prg.program);
+    let origin = loaded.origin;
+
     let mut cfg = Config::default();
-    cfg.use_program(&common.load_program(&prg.program), &[]);
+    cfg.use_program(&loaded, &[]);
 
     cfg.set_out_pins(&[&miso]);
     cfg.set_in_pins(&[&mosi]);
@@ -106,7 +114,7 @@ pub fn init(
     sm0.set_config(&cfg);
     sm0.set_enable(true);
 
-    sm0
+    (sm0, origin)
 }
 
 /// Build a TX frame (u32 words, byte in top 8 bits for shift_out = Left).
@@ -149,18 +157,18 @@ const FRAME_TIMEOUT: Duration = Duration::from_millis(100);
 /// the resync from the CPU side, once per frame, removes that race
 /// entirely regardless of exact edge timing.
 ///
-/// `exec_instr(0x0000)` encodes `JMP ALWAYS, delay=0, address=0` (opcode
-/// `000`, no side-set configured on this program, condition `000` =
-/// always, address `00000`) - i.e. an unconditional jump to the first
-/// instruction, which is always all-zero bits. `restart()` additionally
-/// clears the ISR/OSR and shift counters (`clear_fifos()` covers the FIFO
-/// contents; `restart()` does not touch the program counter, which is why
-/// the explicit `exec_instr` jump above is still required).
-fn resync(sm: &mut StateMachine<'static, PIO0, 0>) {
+/// Jumps to `origin` (the program's actual load address in the PIO's
+/// shared instruction memory, captured once at `init()` time via
+/// `exec_jmp` - embassy-rp's own helper for this, instead of a hand-rolled
+/// raw instruction word). `restart()` additionally clears the ISR/OSR and
+/// shift counters (`clear_fifos()` covers the FIFO contents; `restart()`
+/// does not touch the program counter, which is why the explicit jump
+/// above is still required).
+fn resync(sm: &mut StateMachine<'static, PIO0, 0>, origin: u8) {
     sm.set_enable(false);
     sm.clear_fifos();
     unsafe {
-        sm.exec_instr(0x0000);
+        sm.exec_jmp(origin);
     }
     sm.restart();
     sm.set_enable(true);
@@ -177,14 +185,28 @@ fn resync(sm: &mut StateMachine<'static, PIO0, 0>) {
 /// SCK edges) cannot leave the DMA transfer and the RX pull stuck forever;
 /// on timeout the frame is dropped (last-good `DUTY` is kept: never freeze
 /// the gate at a stale HIGH duty from a torn read) and the state machine is
-/// forced back to a clean starting point. The same forced resync also runs
-/// after every *successful* frame - see `resync()` for why that is required
-/// even in the happy path.
+/// forced back to a clean starting point via `resync()`.
+///
+/// `resync()` runs ONLY on that (rare, exceptional) timeout path, not after
+/// every successful frame. An earlier version of this fix called it every
+/// frame on the theory that the PIO program's own CS-edge resync is
+/// unreachable in steady state - on-target testing showed that routinely
+/// disabling/flushing/restarting the state machine every frame corrupts
+/// its IRQ-driven RX wakeup (`wait_pull()` never resolves again after a
+/// couple of frames, with no timeout firing either - consistent with the
+/// PIO's interrupt latch ending up in a state embassy's driver never sees
+/// a fresh edge on). Confining `resync()` to genuine failures keeps the
+/// steady-state path untouched and only exercises the recovery code when
+/// there is actually something to recover from.
 ///
 /// MOSI (RPi→Pico): [ DUTY_H | DUTY_L | 0 … 0 ]  (12 bytes)
 /// MISO (Pico→RPi): [ V_H   | V_L    | I_H | I_L | 0 … 0 ]
 #[embassy_executor::task]
-pub async fn spi_pio_task(mut sm: StateMachine<'static, PIO0, 0>, mut dma: dma::Channel<'static>) {
+pub async fn spi_pio_task(
+    mut sm: StateMachine<'static, PIO0, 0>,
+    origin: u8,
+    mut dma: dma::Channel<'static>,
+) {
     defmt::info!(
         "spi_pio_task: PIO SPI slave running (DMA TX, {} byte frame)",
         FRAME_LEN
@@ -212,7 +234,7 @@ pub async fn spi_pio_task(mut sm: StateMachine<'static, PIO0, 0>, mut dma: dma::
             // Dropping `exchange` here cancels the DMA push (its Drop impl
             // aborts the channel) and the pending `wait_pull`s.
             defmt::warn!("spi_pio_task: frame timeout, resyncing (duty unchanged)");
-            resync(&mut sm);
+            resync(&mut sm, origin);
             // Re-arm TX with the last-known-good V/I for the next attempt;
             // DUTY is intentionally left untouched (see doc comment above).
             continue;
@@ -232,6 +254,5 @@ pub async fn spi_pio_task(mut sm: StateMachine<'static, PIO0, 0>, mut dma: dma::
         );
 
         tx_buf = build_tx_frame(v, i);
-        resync(&mut sm);
     }
 }
