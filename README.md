@@ -1,4 +1,10 @@
+<div align="center">
+
 # mpp-sdk
+
+[![Hardware preview](https://img.shields.io/badge/hardware-open%20in%20KiCanvas-2b6cb0?logo=kicad&logoColor=white)](https://kicanvas.org/?github=https://github.com/UTN-FRBA-2026-PF-EE-GP10/mpp_sdk/tree/main/hardware)
+
+</div>
 
 A Python SDK for designing, comparing, and deploying **Maximum Power Point
 Tracking** (MPPT) algorithms for photovoltaic systems. Built around a clean
@@ -6,8 +12,8 @@ hardware-abstraction seam so the same controller code drives a simulation
 today and a real SEPIC converter on a Raspberry Pi 5 tomorrow.
 
 See [`AGENTS.md`](./AGENTS.md) for architectural pillars and contribution
-guidelines, [`PLAN.md`](./PLAN.md) for the full roadmap and viability
-assessment, and [`CHANGELOG.md`](./CHANGELOG.md) for what has shipped.
+guidelines, and [`PLAN.md`](./PLAN.md) for the full roadmap and viability
+assessment.
 
 ## Why
 
@@ -18,7 +24,7 @@ closed-loop algorithms that decide where on the I-V curve to operate.
 Most MPPT comparison work in the literature uses MATLAB / Simulink with
 code that is rarely released and per-paper bespoke metrics, which makes
 cross-paper comparisons and sim-to-real validation hard to reproduce
-[Esram & Chapman 2007; Subudhi & Pradhan 2013].
+[Subudhi & Pradhan 2013].
 
 `mpp-sdk` is built to close that gap with four concrete contributions:
 
@@ -29,15 +35,15 @@ cross-paper comparisons and sim-to-real validation hard to reproduce
    code runs against a `SimulatedSource` *or* a real power-electronics
    board, with no branches in the algorithm.
 3. **A microcontroller-as-deployment-target architecture.** The power
-   stage is driven by a small MCU (Raspberry Pi Pico / RP2040 and ESP32
-   are both under evaluation) connected to the Raspberry Pi 5 over SPI.
+   stage is driven by a small MCU (Raspberry Pi Pico / RP2040) connected
+   to the Raspberry Pi 5 over SPI.
    This isolates the fast-switching / high-current side from the Pi
    *and* gives us the natural deployment target: once an algorithm has
    been validated against the framework, it is ported to the MCU and
    re-run end-to-end against the same physical rig.
-4. **A reproducible comparison harness** — EN 50530 dynamic profiles,
-   shared metrics (tracking efficiency, settling time, steady-state
-   oscillation, step response), and paper figures regenerated from code.
+4. **A reproducible comparison harness** — dynamic irradiance profiles, shared
+   metrics (tracking efficiency, settling time, steady-state oscillation, trap
+   depth), and paper figures regenerated from code.
 
 > **The end deliverable of the thesis is an MCU-deployable algorithm
 > that fits comfortably inside a Pico-class chip yet performs
@@ -102,11 +108,15 @@ operating-point trajectory.
 
 ```text
 mpp_sdk/
-├── models/         # Solar panel I-V models  (PanelModel ABC + IdealSingleDiode)
+├── models/         # Solar panel I-V models  (PanelModel ABC; ideal, pvlib, string, tabulated)
 ├── converters/     # Power-stage models      (SEPICConverter)
-├── algorithms/     # MPPT controllers        (MPPTAlgorithm ABC + PerturbAndObserve)
-├── io/             # Hardware-abstraction    (SignalSource ABC + SimulatedSource)
+├── algorithms/     # MPPT controllers        (MPPTAlgorithm ABC; P&O, InCond, fuzzy, scan, PSO)
+├── io/             # Hardware-abstraction    (SignalSource ABC; simulated, dynamic)
+├── metrics.py      # Comparison metrics
 └── visualization.py
+
+harness/            # Comparison scripts (static, dynamic, live, cyclic ranking, sim-to-real bank)
+docs/               # Algorithm references, rationale, general information
 ```
 
 The control variable is always the SEPIC **duty cycle**; the
@@ -152,77 +162,58 @@ authoritative implementation.
 
 ## Roadmap
 
-Short list of what's next. The full plan — phases, milestones, verification
+What's shipped and what's next. The full plan — phases, milestones, verification
 expectations, contributor liability, and LLM-usage policy — lives in
 [`PLAN.md`](./PLAN.md).
 
-### Models — single module (in-tree, pedagogical)
+### Models
 
-- [ ] `SingleDiodeWithLosses` — single-diode with `R_s` / `R_sh`
-      (implicit I-V, hand-rolled Newton or bisection)
-
-### Models — via `PvlibPanelModel` adapter (optional `mpp-sdk[pvlib]`)
-
-- [ ] `PvlibPanelModel(PanelModel)` skeleton wrapping pvlib's
-      `singlediode` and `bishop88` paths
-- [ ] Temperature- and irradiance-aware single-diode via pvlib's
-      `calcparams_cec` / `calcparams_desoto`
-- [ ] Partial-shading / reverse-bias via pvlib's `bishop88` family
-- [ ] CEC-module-database-backed lookups and / or user-supplied
-      measured I-V tables under `data/`
-
-### Models — arrays and shading
-
-- [ ] Multi-panel `PanelArray(PanelModel)` composing modules in
-      series / parallel topologies (S, P, SP, TCT, BL)
-- [ ] Bypass diodes per panel or per substring
-- [ ] Partial-shading scenarios — non-uniform per-panel irradiance
-      yielding multi-modal P-V curves
+- [x] `IdealSingleDiode` — explicit closed-form I(V) (in-tree, pedagogical)
+- [x] `PvlibPanelModel` — pvlib De Soto adapter, temperature/irradiance aware
+      (optional `mpp-sdk[pvlib]`); `from_datasheet` + `hissuma_psf10mono`
+- [x] `PvString` — series panels with bypass diodes → multi-modal P-V curves
+- [x] `TabulatedPanel` — cached I-V curve for fast repeated lookups
+- [ ] `SingleDiodeWithLosses` — in-tree `R_s` / `R_sh` (implicit I-V)
 
 ### Algorithms
 
-- [ ] Incremental Conductance (fixed and variable step)
-- [ ] Adaptive-step P&O
-- [ ] Fuzzy-logic and sliding-mode controllers
-- [ ] Model-predictive controller
-- [ ] Global MPPT for multi-modal P-V curves under partial shading
-      (particle-swarm, periodic scan + local refinement, hybrid)
+- [x] Perturb & Observe
+- [x] Incremental Conductance
+- [x] Fuzzy-logic (local tracker)
+- [x] Scan-and-track (global MPPT)
+- [x] Particle Swarm Optimization (global MPPT)
+- [ ] Adaptive-step P&O; own model-informed candidate scan
 - [ ] Data-driven / RL baseline
 
 ### Comparison harness
 
-- [ ] Standardized dynamic profiles (e.g. EN 50530)
-- [ ] Tracking-efficiency, settling-time, steady-state-oscillation, and
-      step-response metrics
-- [ ] Auto-generated tables and plots consumed directly by the paper
+- [x] Static, dynamic, and live interactive (`harness/`)
+- [x] Preliminary metrics — tracking efficiency, settling time, ripple, overshoot,
+      trap depth (`mpp_sdk.metrics`)
+- [x] Cyclic irradiance profile for a valid dynamic efficiency measurement
+      (`harness/compare_cyclic.py`, `metrics.energy_efficiency`)
+- [x] Fixed sim-to-real test-case bank (`harness/compare_bank.py`) with
+      (t, V, I, D) trace dumps for PLECS / bench replay
+- [ ] Auto-generated paper figures
 
-### Hardware
+### Hardware (future — see [`PLAN.md`](./PLAN.md))
 
-The power-electronics board is driven by a small **microcontroller**
-(candidates under evaluation: Raspberry Pi Pico / RP2040 and ESP32),
-connected to the Raspberry Pi 5 over SPI. The MCU isolates the
-fast-switching / high-current side from the Pi *and* doubles as the
-deployment target for the final algorithm.
+The power stage is driven by an **RP2040 (Pi Pico, firmware in Rust)** connected
+to the Raspberry Pi 5 over SPI. The MCU isolates the fast-switching side *and* is
+the deployment target for the final algorithm.
 
-- [ ] `SpiMcuSource(SignalSource)` — Pi-side wrapper that sends a duty
-      cycle and reads `(V, I)` from the MCU over SPI
-- [ ] MCU firmware (HIL mode): ADC sense + hardware-PWM drive + SPI
-      slave; in this mode the MCU is an I/O proxy and the algorithm
-      still runs on the Pi in Python
-- [ ] Calibration procedure (ADC scale / offset, sense-resistor value,
-      PWM frequency, soft duty-cycle limits)
-- [ ] Algorithm port from Python to the MCU (deployed mode): C with
-      the Pico SDK or ESP-IDF, MicroPython / CircuitPython for early
-      prototyping
-- [ ] Cross-validation: deployed-MCU vs Pi-driven-Python on the same
-      physical rig, same load profile, same recorded V/I/D traces
+- [x] SPI-slave firmware scaffold (PIO)
+- [ ] `SpiMcuSource(SignalSource)` — Pi-side SPI wrapper (`mpp-sdk[hardware]`)
+- [ ] MCU firmware (HIL mode): ADC + PWM + SPI-slave as an I/O proxy
+- [ ] Calibration (ADC scale/offset, INA229 calibration / INA281 gain, PWM freq, duty limits)
+- [ ] Algorithm port to RP2040 + cross-validation against the Python reference
 - [ ] Bench and outdoor validation against the simulator
 
 ### Infrastructure
 
-- [ ] `tests/` with unit + integration tests for every pillar
+- [x] `tests/` — unit tests per pillar (`pytest`)
 - [ ] CI workflow (`uv sync`, `pytest`, demo smoke run)
-- [ ] `data/` directory with provenanced benchmark profiles and panel curves
+- [ ] `data/` — provenanced benchmark profiles and panel curves
 
 ## Context
 
@@ -232,6 +223,29 @@ the contributor-liability statement, the policy on acknowledging LLM
 usage, the viability / related-work analysis, and the requirement that
 **each part of the SDK must work and be verified in isolation** before it
 is integrated.
+
+## On the use of AI
+
+This project uses large language models (Claude, ChatGPT, Copilot) as
+part of its day-to-day toolchain — and treats that usage as a deliberate
+methodological choice rather than something to apologise for.
+
+The thesis is being developed **without external funding**, by a
+three-person team with limited weekly hours, in a research landscape
+where comparable groups routinely operate with either dedicated funding
+or AI-assisted workflows (or both). Refusing to use AI would not buy us
+purity; it would simply widen the resource gap between this work and
+the well-resourced groups it has to be benchmarked against. We use AI
+for the same reason we use `pvlib` instead of re-implementing
+single-diode physics: because the leverage is real and the alternative
+is to do less science.
+
+That choice comes with explicit guardrails — disclosure, human
+verification of every change, citation of the underlying references,
+and human authorship of all numerical results, experimental claims, and
+conclusions. The full policy lives in [`PLAN.md`](./PLAN.md#use-of-large-language-models),
+together with a per-layer exposure table that makes it easy to audit
+where AI helped and where it didn't.
 
 ## References
 
@@ -251,10 +265,6 @@ as algorithms and models land.
 
 ### Panel modelling
 
-- **[Bishop 1988]** Bishop, J. W. (1988). *Computer simulation of the
-  effects of electrical mismatches in photovoltaic cell interconnection
-  circuits.* Solar Cells, **25**(1), 73–89. (Origin of the reverse-bias
-  / breakdown model that pvlib's `bishop88` is named after.)
 - **[De Soto et al. 2006]** De Soto, W., Klein, S. A., & Beckman, W. A.
   (2006). *Improvement and validation of a model for photovoltaic array
   performance.* Solar Energy, **80**(1), 78–88. (Single-diode model
@@ -262,10 +272,11 @@ as algorithms and models land.
 
 ### MPPT algorithm reviews and canonical methods
 
-- **[Esram & Chapman 2007]** Esram, T., & Chapman, P. L. (2007).
-  *Comparison of photovoltaic array maximum power point tracking
-  techniques.* IEEE Transactions on Energy Conversion, **22**(2),
-  439–449. (Canonical MPPT review.)
+- **[Andriniriniaimalaza et al. 2025]** Andriniriniaimalaza, F. P., Murad,
+  N. M., Balan, G., Bilal, H., Randriatefison, N., Khoodaruth, A.,
+  Andrianirina, C. B., & Ravelo, B. (2025). *Hybrid Fuzzy Logic and
+  Shading-Aware Particle Swarm Optimization for Dynamic Photovoltaic
+  Shading Faults Mitigation.* arXiv. <https://doi.org/10.48550/arXiv.2512.08419>
 - **[Subudhi & Pradhan 2013]** Subudhi, B., & Pradhan, R. (2013). *A
   comparative study on maximum power point tracking techniques for
   photovoltaic power systems.* IEEE Transactions on Sustainable Energy,
@@ -279,6 +290,10 @@ as algorithms and models land.
   Vitelli, M. (2005). *Optimization of perturb and observe maximum
   power point tracking method.* IEEE Transactions on Power Electronics,
   **20**(4), 963–973. (P&O step-size design.)
+- **[Kobayashi et al. 2006]** Kobayashi, K., Takano, I., & Sawada, Y.
+  (2006). *A study of a two stage maximum power point tracking control of
+  a photovoltaic system under partially shaded insolation conditions.*
+  Solar Energy Materials and Solar Cells, **90**(18), 2975–2988.
 
 ### Partial shading and Global MPPT
 

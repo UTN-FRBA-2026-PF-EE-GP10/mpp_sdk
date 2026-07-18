@@ -24,6 +24,11 @@ dev = [
     "ruff>=0.6",
     "pre-commit>=4",
 ]
+# Docs site (MkDocs Material). `uv run --group docs mkdocs serve`.
+docs = [
+    "mkdocs-material>=9.5",
+    "pymdown-extensions>=10",
+]
 
 [tool.ruff]
 line-length = 100
@@ -43,6 +48,7 @@ ignore = []
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["E501"]  # tests can have long descriptive lines
+"entregables/*" = ["E501"]  # slide/paper generators have long prose strings
 
 [tool.ruff.format]
 quote-style = "double"

@@ -7,6 +7,22 @@ reads ADC channels and writes a hardware-PWM duty cycle.
 """
 
 from .base import SignalSource
+from .dynamic import DynamicSimulatedSource
+from .noisy import NoisySource
 from .simulated import SimulatedSource
 
-__all__ = ["SignalSource", "SimulatedSource"]
+__all__ = [
+    "SignalSource",
+    "SimulatedSource",
+    "DynamicSimulatedSource",
+    "NoisySource",
+    "SpiMcuSource",
+]
+
+
+def __getattr__(name: str):
+    if name == "SpiMcuSource":
+        from .spi_mcu import SpiMcuSource  # noqa: PLC0415
+
+        return SpiMcuSource
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

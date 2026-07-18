@@ -16,7 +16,7 @@ liability statement, and the LLM-usage policy.
   2. A written paper / thesis describing methodology, comparisons, and
      conclusions.
   3. A reproducible hardware demonstrator: Raspberry Pi 5 + a small
-     intermediary MCU (Pico / ESP32 under evaluation) over SPI + a
+     intermediary MCU (Raspberry Pi Pico / RP2040) over SPI + a
      **SEPIC** power stage (chosen so panel `V_mpp` may sit on either
      side of the load voltage) + small PV panel.
   4. **An MCU-deployable algorithm**: a controller that has been
@@ -63,13 +63,12 @@ author for each stream; the team meets weekly to cross-pollinate.
   `SpiMcuSource`, paper drafting, CI / reproducibility. Heavy LLM
   assistance expected and welcome here.
 - **Person B — Power-electronics hardware lead.** Schematic and PCB
-  (KiCad), component selection (GaN **or** SiC FET, gate driver, V/I
+  (KiCad), component selection (MOSFET ✓, gate driver ✓, INA229 + INA281 ✓, V/I
   sense), BOM, assembly, bench bringup, calibration, hardware chapter
   of the paper.
-- **Person C — Embedded firmware lead.** MCU bringup (Pi Pico SDK or
-  ESP-IDF), ADC / PWM / SPI-slave firmware, HIL protocol, the
-  algorithm port from Python to MCU, resource-budget reporting,
-  firmware chapter of the paper.
+- **Person C — Embedded firmware lead.** RP2040 bringup (Rust, `rp2040-hal`),
+  ADC / PWM / SPI-slave firmware, HIL protocol, the algorithm port from Python
+  to MCU, resource-budget reporting, firmware chapter of the paper.
 
 The B↔C boundary is permeable; they pair on bringup. A↔C pair on the
 SPI protocol and on the algorithm port.
@@ -82,8 +81,8 @@ has shipped *and* been independently verified per the rules in
 
 | Block             | Weeks | A — SDK & integration                                                    | B — hardware                                              | C — firmware                                                  |
 | ----------------- | ----- | ------------------------------------------------------------------------ | --------------------------------------------------------- | ------------------------------------------------------------- |
-| **Foundation**    | 1–4   | Phase 2 in-tree (`lossy`, `array`); `pvlib_adapter` skeleton             | MCU choice; topology; FET + gate-driver selection; schematic v1 | MCU bringup; ADC / PWM / SPI-slave skeleton                   |
-| **Sim & SPI**     | 5–8   | Phase 3: P&O variants + InCond; harness scaffold; `SpiMcuSource` skeleton | PCB layout v1; **fab order by week 6**; long-lead parts in | SPI protocol locked; loopback HIL working in software         |
+| **Foundation** ✓  | 1–4   | Phase 2 in-tree (`lossy`, `array`); `pvlib_adapter` skeleton             | Topology ✓; MOSFET + gate-driver ✓; INA229 + INA281 ✓; SEPIC in PLECS ✓; PCB design closed ✓ | MCU bringup (RP2040, Rust) ✓; SPI-slave skeleton with PIO ✓ |
+| **Sim & SPI** ✓   | 5–8   | Phase 3: P&O variants + InCond ✓; harness scaffold ✓; `SpiMcuSource` skeleton ✓ | PCB layout v1 ✓; **fab order by week 6** ✓ (at fab 2026-06-10); long-lead parts in ✓ (all components bought) | SPI protocol locked; loopback HIL working in software ✓ (#10) |
 | **Hardware up**   | 9–12  | First sim-only comparison results; pvlib adapter integrated              | PCB assembly; bringup; ADC calibration                    | ADC / PWM jitter measurement; SPI link to Pi alive            |
 | **HIL milestone** | 13–16 | Sim + HIL numbers in the harness                                         | Bench: sense path validated against scope                 | **Phase 5a done** — HIL end-to-end with Python algorithm      |
 | **Algo push**     | 17–20 | Add one Global-MPPT method; first paper figures                          | Hardware-vs-sim cross-check at multiple operating points  | Begin algorithm port to MCU (deployed mode)                   |
@@ -93,25 +92,28 @@ has shipped *and* been independently verified per the rules in
 **Two hard milestones drive everything else:**
 
 1. **PCB to fab by end of week 6.** Hardware slip here cascades.
+   ✓ **Met (2026-06-10):** PCB sent to the manufacturer, all components
+   purchased. Assembly, soldering and bench checks estimated at ~2 weeks
+   after boards arrive, so board-level firmware bringup (Phase 5a) starts
+   late June / mid July — inside the Hardware-up block (weeks 9–12).
 2. **HIL working by end of week 16.** If HIL is not running by then,
    *deployed mode* is at risk and the paper falls back to a
    simulation-only contribution.
 
 ### In scope for v1 (the paper)
 
-- `IdealSingleDiode` (shipped) and `SingleDiodeWithLosses` in-tree.
-- `PvlibPanelModel` adapter for temperature / irradiance and `bishop88`
-  partial shading.
-- `PanelArray` + bypass diodes (one canonical shading pattern in the
-  paper, not a topology survey).
-- `SEPICConverter` model.
-- Algorithms: P&O (shipped), Incremental Conductance, one adaptive-step
-  variant, and **one** Global-MPPT method (scan-and-track or simple
-  PSO — pick the one easier to port).
+- `IdealSingleDiode` (shipped); `SingleDiodeWithLosses` in-tree (pending).
+- `PvlibPanelModel` adapter for temperature / irradiance (shipped).
+- `PvString` + bypass diodes (one canonical shading pattern in the
+  paper, not a topology survey) (shipped).
+- `SEPICConverter` model (shipped).
+- Algorithms (shipped): P&O, Incremental Conductance, Fuzzy, and two
+  Global-MPPT methods (`ScanAndTrack`, `ParticleSwarm`). Pick the one easier to
+  port for the MCU deployment.
 - Algorithm-focused comparison harness with the metrics listed in
   Phase 4 below — no inverter-efficiency / EN-50530 work in v1.
-- Custom board: **SEPIC** stage with GaN **or** SiC (pick one in
-  block 1), gate driver, V/I sense via INA226 or shunt + amp, MCU
+- Custom board: **SEPIC** stage (simulated in PLECS ✓), MOSFET + gate driver ✓,
+  V/I sense via INA229 + INA281 ✓, MCU
   section, SPI to Pi, basic protections.
 - MCU firmware: HIL mode + the chosen algorithm in deployed mode.
 - Hardware-vs-simulation comparison; resource-budget report.
@@ -124,7 +126,8 @@ become "future work" in the paper and re-open after v1 ships.
 
 - **Two-diode model in-tree** — `bishop88` via the pvlib adapter
   covers the use case.
-- **Fuzzy / sliding-mode / model-predictive** controllers.
+- **Sliding-mode / model-predictive** controllers. (Fuzzy was listed here
+  originally but shipped in Phase 3 and is in the v1 scope above.)
 - **Data-driven / RL** baseline.
 - **More than one Global-MPPT variant.**
 - **Empirical-model library from large datasets** — one panel's swept
@@ -170,7 +173,7 @@ has **shipped *and* been independently verified**.
 - `PerturbAndObserve` controller (sign-corrected for SEPIC duty cycle;
   same sign as a boost so boost-based papers port unchanged).
 - Live I-V / P-V view (`LivePanelView`) driven by `FuncAnimation`.
-- `AGENTS.md` (architectural pillars), `CHANGELOG.md`, this `PLAN.md`.
+- `AGENTS.md` (architectural pillars) and this `PLAN.md`.
 
 ### Phase 2 — Realistic models
 
@@ -192,53 +195,43 @@ Higher-fidelity physics is delegated to pvlib through a single
 group (`mpp-sdk[pvlib]`). Because it subclasses `PanelModel`, the rest
 of the SDK consumes it transparently.
 
-- [ ] `PvlibPanelModel(PanelModel)` skeleton wrapping pvlib's
-      `singlediode` and `bishop88` paths.
-- [ ] Temperature- and irradiance-aware operation via pvlib's
-      `calcparams_cec` / `calcparams_desoto`. Validate against
-      datasheet coefficients (αIsc, βVoc, γPmpp) at STC and at one
-      off-STC operating point.
+- [x] `PvlibPanelModel(PanelModel)` wrapping pvlib's De Soto single-diode,
+      temperature- and irradiance-aware via `calcparams_desoto`.
+      `from_datasheet(...)` fits parameters; `hissuma_psf10mono(...)` is the
+      project panel.
 - [ ] Two-diode / reverse-bias regime via pvlib's `bishop88` family
-      (the relevant piece for partial-shading analysis; we do not
-      need a separate "two-diode" in-tree model).
-- [ ] Empirical model: interpolation over swept I-V tables. Backed
-      either by pvlib's CEC module database lookup or by user-supplied
-      curves under `data/`; either way, the entry point stays the
-      adapter.
+      (per-cell partial-shading; current shading is modelled at the module
+      level by `PvString` bypass diodes instead).
+- [ ] Empirical model: interpolation over swept I-V tables (CEC database or
+      user curves under `data/`). `TabulatedPanel` already caches an I-V
+      curve; this would back it from measured data.
 
-#### Composition: arrays, bypass diodes, shading
+#### Composition: strings, bypass diodes, shading
 
-These are orthogonal to single-module fidelity — a `PanelArray` *is* a
-`PanelModel`, so it composes any of the modules above and the rest of
-the SDK consumes it identically.
+Orthogonal to single-module fidelity — a `PvString` *is* a `PanelModel`, so it
+composes any module above and the rest of the SDK consumes it identically.
 
-- [ ] `PanelArray(PanelModel)` — compose modules in series and parallel
-      topologies (S, P, SP, TCT, BL). String I-V is solved for the
-      common string current (series) or common voltage (parallel).
-- [ ] Bypass diodes per panel or per substring. When the string current
-      exceeds a panel's photocurrent the diode conducts and clamps that
-      panel's voltage to ≈ −0.7 V, which is what produces the
-      characteristic multi-step / multi-modal P-V curve.
-- [ ] Partial-shading scenarios — non-uniform per-panel (and ideally
-      per-cell) irradiance. Standard P&O gets stuck on local maxima
-      here; this case is the motivation for the Global-MPPT work in
-      Phase 3.
-- [ ] Smoke tests that pin the number and rough location of local
-      maxima for canonical shading patterns (one panel fully shaded in a
-      string of N, one substring shaded, etc.).
+- [x] `PvString(PanelModel)` — N panels in series with per-panel bypass diodes;
+      solves the common string current. Per-panel irradiance produces the
+      multi-modal P-V curve (motivation for the global MPPT in Phase 3).
+      Parallel / SP / TCT / BL topologies remain future work.
+- [x] Dedicated smoke test pinning the count / location of local maxima for
+      canonical shading patterns (`tests/test_string.py`).
 
 ### Phase 3 — Algorithm zoo
 
-- [ ] Incremental Conductance (InCond), fixed step.
-- [ ] Adaptive-step P&O.
-- [ ] Variable-step InCond.
-- [ ] Fuzzy-logic controller.
-- [ ] Sliding-mode controller.
-- [ ] Model-predictive controller.
-- [ ] **Global MPPT** for multi-modal P-V curves under partial shading —
-      e.g. particle-swarm, periodic full-range scan with local
-      refinement, two-stage scan-and-track. Required to escape the local
-      maxima introduced by bypass diodes (Phase 2 / composition).
+- [x] Perturb & Observe (shipped in Phase 1).
+- [x] Incremental Conductance (InCond), fixed step.
+- [x] Fuzzy-logic controller (local tracker).
+- [x] **Global MPPT** — `ScanAndTrack` (full-range scan + local refinement) and
+      `ParticleSwarm`. Escape the local maxima from bypass diodes under shading.
+- [ ] Adaptive-step P&O / variable-step InCond.
+- [ ] Own model-informed candidate scan (peaks near k·V_mp) plus a
+      cumulative-drift trigger, for minimal MCU cost. Prototype after noise
+      and the rescan sweep exist so its value is measurable: a 3-point
+      search makes aggressive re-checking affordable where the 23-point
+      scan cannot.
+- [ ] Sliding-mode / model-predictive controllers.
 - [ ] Data-driven baseline (supervised on swept curves and/or RL).
 
 ### Phase 4 — Algorithm comparison harness
@@ -258,37 +251,41 @@ where Global-MPPT is the whole point.
   - Partial-shading patterns producing 2 / 3 / 4 local maxima on the
     P-V curve.
   - Noise injected on V and I measurements at several levels.
-- [ ] **Steady-state metrics**:
-  - Tracking efficiency `η = ⟨P⟩ / P_mpp` at convergence.
-  - Steady-state oscillation amplitude (peak-to-peak P at the
-    converged operating point).
-- [ ] **Dynamic metrics**:
-  - Cold-start convergence time (`D_init` → within 5 % of MPP).
-  - Rise time on an irradiance step.
-  - Overshoot and settling time on an irradiance step.
-  - `η` under irradiance ramps (slow / medium / fast).
-- [ ] **Partial-shading metrics** (the centrepiece for Global-MPPT
-  comparison):
-  - Global-MPP success rate across the partial-shading bank.
-  - Time-to-global-MPP for the patterns the algorithm reaches.
-  - Worst-case trap depth `P_local / P_global` when fooled.
-- [ ] **Robustness metrics**:
-  - `η` degradation versus measurement-noise level.
-  - `η` degradation versus sample rate.
-- [ ] **Implementation-cost metrics** (binding for the MCU port):
-  - Algorithm state size, in bytes.
-  - Per-step worst-case compute, in cycles or μs on the chosen MCU.
-  - Code size after the port (flash / RAM).
-- [ ] Auto-generated result tables and figures consumed directly by
-      the paper.
+Shipped so far in `mpp_sdk.metrics` (preliminary — see the methodology warning
+in that module; the current fixed-start comparison is **not yet a valid
+measurement**):
+
+- [x] Tracking efficiency `η = ⟨P⟩ / P_mpp`, final (steady-state) efficiency.
+- [x] Settling time, steady-state ripple, overshoot, trap depth
+      `P_local / P_global`.
+
+Still to do:
+
+- [x] **Cyclic irradiance profile** (full → A shaded → full → B shaded → both →
+      full) and energy-integrated efficiency over it — the valid dynamic
+      measurement (`harness/compare_cyclic.py`, `metrics.energy_efficiency`).
+- [ ] Fixed test-case bank — mostly shipped in `harness/compare_bank.py`
+      (cold start, cover-on/off steps, steady shade, Voc-side trap, with
+      (t, V, I, D) trace dumps for sim-to-real replay per the protocol in
+      `docs/methodology.md`); still missing isolated ramps and measurement
+      noise.
+- [ ] **Partial-shading bank metrics**: global-MPP success rate and
+      time-to-global ship with the cyclic harness; worst-case trap depth
+      *across patterns* waits on the 2/3/4-peak shading bank -
+      `harness/panel_config.py` only builds a 2-panel string (max 2 peaks)
+      today, so a 3+ panel string config is needed first.
+- [ ] **Robustness**: `η` vs measurement-noise level ✓
+      (`harness/compare_noise.py` via `NoisySource`); vs sample rate pending.
+- [ ] **Implementation-cost** (binding for the MCU port): state size in bytes,
+      per-step compute, code size after the port.
+- [ ] Auto-generated result tables and figures consumed directly by the paper.
 
 ### Phase 5 — Hardware demonstrator
 
-The power-electronics board is driven by a small **microcontroller**
-(candidates: Raspberry Pi Pico / RP2040 and ESP32), connected to the
-Raspberry Pi 5 over SPI. The MCU provides isolation from the Pi (the
-expensive, soft-real-time side) *and* the deployment target for the
-final algorithm. The phase is therefore split into two sub-phases:
+The power-electronics board is driven by an **RP2040 (Pi Pico, firmware in
+Rust)**, connected to the Raspberry Pi 5 over SPI. The MCU provides isolation
+from the Pi (the expensive, soft-real-time side) *and* is the deployment target
+for the final algorithm. The phase is split into two sub-phases:
 
 #### Phase 5a — Pi + MCU HIL bringup
 
@@ -315,8 +312,7 @@ The validated algorithm is ported from Python to MCU firmware; the Pi
 is reduced to monitoring and configuration. This is the contribution
 the paper's "MCU-deployable algorithm" claim rests on.
 
-- [ ] Pick firmware language / toolchain per chip (C with Pi Pico SDK
-      or ESP-IDF; MicroPython / CircuitPython for early prototyping).
+- [x] Firmware language / toolchain: Rust with `rp2040-hal` ✓.
 - [ ] Port the chosen algorithm. Cross-validate it against the Python
       reference point-by-point on recorded `(V, I, D)` traces from
       Phase 5a — same inputs, same outputs (within a defined
@@ -334,6 +330,9 @@ the paper's "MCU-deployable algorithm" claim rests on.
 - [ ] Hardware validation chapter.
 - [ ] Discussion and conclusions.
 - [ ] SDK reference and reproducibility appendix.
+- [ ] Auto-generated paper figures from the harness, built on
+      `harness/common.py` once it exists (see "Consolidate harness scripts"
+      in the improve-plans backlog).
 
 ### Publishing to PyPI
 
@@ -606,7 +605,7 @@ layers that pvlib does not address:
 2. **Power-stage abstraction with an MCU-mediated hardware seam**: a
    `SEPICConverter` model plus a `SignalSource` ABC. The hardware
    implementation is intentionally split — the Pi 5 hosts the SDK and
-   the algorithm; a small MCU (Pi Pico / ESP32 under evaluation) drives
+   the algorithm; a small MCU (Raspberry Pi Pico / RP2040) drives
    the power stage and talks to the Pi over SPI. This isolates the
    fast-switching / high-current side from the Pi *and* gives us a
    natural target for deploying the validated algorithm on the MCU
@@ -703,15 +702,11 @@ the framework + the deployment evidence are the artefacts.
   contrived patterns from the literature).
 - Demonstrator topology: synchronous vs asynchronous boost, switching
   frequency, current sensor (shunt + INA226 vs Hall-effect).
-- **MCU choice (Phase 5):** Raspberry Pi Pico (RP2040, deterministic
-  PIO-driven PWM, well-supported C SDK and MicroPython) vs ESP32
-  (more peripherals and RAM, but Wi-Fi background tasks can interfere
-  with hard-real-time loops). Decision needs a small back-to-back
-  bench measurement of PWM jitter and SPI throughput.
-- **Firmware language for the deployed algorithm:** C (Pi Pico SDK or
-  ESP-IDF) is the production answer; MicroPython / CircuitPython is
-  the prototyping shortcut. Pick early so the Phase-5b resource
-  budget is meaningful.
+- **MCU choice (Phase 5):** Resolved — Raspberry Pi Pico (RP2040).
+  Firmware language: Rust (decided during Block 1; SPI-slave PIO
+  scaffolding already in place).
+- **Firmware language for the deployed algorithm:** Resolved — Rust
+  with `rp2040-hal`. MicroPython prototyping path dropped.
 - **SPI protocol design (Phase 5a):** master/slave roles, frame
   format, sample rate, watchdog / soft-stop semantics. Document the
   protocol in `data/hardware/spi_protocol.md` once it stabilises.

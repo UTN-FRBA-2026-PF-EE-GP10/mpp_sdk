@@ -19,9 +19,17 @@ wheels/
 *.kicad_prl
 *.jrl
 *.lck
+.history/
+
 # Test / lint caches
 .pytest_cache/
 .ruff_cache/
 htmlcov/
 .coverage
 .coverage.*
+
+# Generated PDFs under entregables/ (built by gen_pdfs.py from .md and .svg).
+# The .svg sources are committed; PDFs are an artifact.
+entregables/**/*.pdf
+harness/output/
+entregables/**/*.pptx

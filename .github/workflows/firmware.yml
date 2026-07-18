@@ -1,0 +1,44 @@
+name: Firmware
+
+on:
+  push:
+    branches: [main]
+    paths: [firmware/**]
+  pull_request:
+    branches: [main]
+    paths: [firmware/**]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: cargo build --release
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: firmware/pipico_board
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust + thumbv6m target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: thumbv6m-none-eabi
+          components: rustfmt
+
+      - name: Cache cargo registry and build artefacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: firmware/pipico_board
+
+      - name: Format check
+        run: cargo fmt --check
+
+      - name: Build (release)
+        run: cargo build --release
+
+      - name: Build (release, sim-adc)
+        run: cargo build --release --features sim-adc
