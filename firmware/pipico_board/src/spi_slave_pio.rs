@@ -16,6 +16,12 @@
 //!   GPIO13 = CS    (input, active low)
 //!
 //! Mode 0 (CPOL=0, CPHA=0), MSB-first, 8-bit frames.
+//!
+//! Frame resync: the PIO program's own `wait CS` preamble is not reliably
+//! reached at a normal frame boundary (the trailing `jmp pin done` check
+//! races the master's CS deassertion). `spi_pio_task` instead forces a
+//! clean state machine restart from the CPU side after every frame
+//! (success or timeout) - see `resync()`.
 
 use embassy_futures::join::join;
 use embassy_rp::dma;
@@ -23,6 +29,7 @@ use embassy_rp::peripherals::{PIN_10, PIN_11, PIN_12, PIN_13, PIO0};
 use embassy_rp::pio::program::pio_asm;
 use embassy_rp::pio::{Config, Direction, InterruptHandler, Pio, ShiftDirection, StateMachine};
 use embassy_rp::{Peri, bind_interrupts};
+use embassy_time::{Duration, with_timeout};
 use portable_atomic::Ordering;
 
 use crate::{DUTY, MEAS_I_MA, MEAS_V_MV};
@@ -52,9 +59,14 @@ pub fn init(
     let cs = common.make_pio_pin(pin_cs);
 
     // PIO program: SPI slave mode 0, 8-bit MSB-first.
-    // - wait for CS to deassert then re-assert (resyncs byte alignment)
+    // - preamble: wait for CS to deassert then re-assert - the entry point
+    //   the CPU-side resync() (in spi_pio_task) forces execution back to
+    //   after every frame; NOT reliably reached on its own via the
+    //   trailing jmp below (see the module doc comment)
     // - per bit: drive MISO before SCK rising, sample MOSI on SCK rising
-    // - exit bit loop when CS goes high (jmp pin = CS via set_jmp_pin)
+    // - exit bit loop when CS goes high (jmp pin = CS via set_jmp_pin) -
+    //   opportunistic only; the CPU-side resync is what actually guarantees
+    //   alignment every frame
     let prg = pio_asm!(
         ".wrap_target",
         "    wait 1 gpio 13", // CS idle (deasserted)
@@ -63,7 +75,7 @@ pub fn init(
         "    out pins, 1",    // setup MISO bit (autopull from TX FIFO)
         "    wait 1 gpio 10", // SCK rising edge
         "    in pins, 1",     // sample MOSI bit (autopush every 8 bits)
-        "    jmp pin done",   // CS deasserted? exit (resync at top)
+        "    jmp pin done",   // CS deasserted? exit (best-effort only)
         "    wait 0 gpio 10", // SCK falling edge — next bit setup
         "    jmp bit_loop",
         "done:",
@@ -117,13 +129,57 @@ fn build_tx_frame(v: u16, i: u16) -> [u32; FRAME_LEN] {
     ]
 }
 
+/// Time budget for one 12-byte frame's RX side. At the Pi's control period
+/// (1 kHz nominal) a normal frame completes in microseconds even at a
+/// conservative SPI clock; 100 ms is generous headroom that only trips on a
+/// genuinely stalled/aborted transfer, not jitter.
+const FRAME_TIMEOUT: Duration = Duration::from_millis(100);
+
+/// Force the state machine back to a known-clean state: halted, FIFOs
+/// flushed, program counter at instruction 0 (the top of `.wrap_target`,
+/// i.e. the `wait 1 gpio 13` CS-idle check), then resumed.
+///
+/// This is what actually makes the PIO program's documented "resync on CS"
+/// real. Left to itself, the program's own `jmp pin done` only reaches the
+/// preamble if CS is already high by the time the *last* bit's check runs -
+/// on a clean 96-bit frame the master is usually still finishing that last
+/// clock cycle at that instant, so the state machine instead falls through
+/// into a phantom 13th `out`/`wait` pair and stalls on the empty TX FIFO
+/// through the whole inter-frame gap, silently losing alignment. Driving
+/// the resync from the CPU side, once per frame, removes that race
+/// entirely regardless of exact edge timing.
+///
+/// `exec_instr(0x0000)` encodes `JMP ALWAYS, delay=0, address=0` (opcode
+/// `000`, no side-set configured on this program, condition `000` =
+/// always, address `00000`) - i.e. an unconditional jump to the first
+/// instruction, which is always all-zero bits. `restart()` additionally
+/// clears the ISR/OSR and shift counters (`clear_fifos()` covers the FIFO
+/// contents; `restart()` does not touch the program counter, which is why
+/// the explicit `exec_instr` jump above is still required).
+fn resync(sm: &mut StateMachine<'static, PIO0, 0>) {
+    sm.set_enable(false);
+    sm.clear_fifos();
+    unsafe {
+        sm.exec_instr(0x0000);
+    }
+    sm.restart();
+    sm.set_enable(true);
+}
+
 /// SPI exchange task — full-duplex DMA TX + async RX via `join`.
 ///
 /// DMA feeds the PIO TX FIFO in hardware (DREQ-paced, ns latency), so the
 /// 4-deep FIFO never underruns even at 8 MHz with a 12-byte frame.
 ///
 /// `join` runs TX DMA and RX `wait_pull` concurrently using `sm.rx_tx()`
-/// split borrows so both halves can be borrowed simultaneously.
+/// split borrows so both halves can be borrowed simultaneously. The whole
+/// exchange is wrapped in a timeout so a short/aborted frame (fewer than 96
+/// SCK edges) cannot leave the DMA transfer and the RX pull stuck forever;
+/// on timeout the frame is dropped (last-good `DUTY` is kept: never freeze
+/// the gate at a stale HIGH duty from a torn read) and the state machine is
+/// forced back to a clean starting point. The same forced resync also runs
+/// after every *successful* frame - see `resync()` for why that is required
+/// even in the happy path.
 ///
 /// MOSI (RPi→Pico): [ DUTY_H | DUTY_L | 0 … 0 ]  (12 bytes)
 /// MISO (Pico→RPi): [ V_H   | V_L    | I_H | I_L | 0 … 0 ]
@@ -143,14 +199,23 @@ pub async fn spi_pio_task(mut sm: StateMachine<'static, PIO0, 0>, mut dma: dma::
         let mut rx = [0u32; FRAME_LEN];
 
         // TX (DMA) and RX (wait_pull) run concurrently via split borrows.
-        {
+        let exchange = {
             let (rx_half, tx_half) = sm.rx_tx();
             join(tx_half.dma_push(&mut dma, &tx_buf, false), async {
                 for slot in &mut rx {
                     *slot = rx_half.wait_pull().await;
                 }
             })
-            .await;
+        };
+
+        if with_timeout(FRAME_TIMEOUT, exchange).await.is_err() {
+            // Dropping `exchange` here cancels the DMA push (its Drop impl
+            // aborts the channel) and the pending `wait_pull`s.
+            defmt::warn!("spi_pio_task: frame timeout, resyncing (duty unchanged)");
+            resync(&mut sm);
+            // Re-arm TX with the last-known-good V/I for the next attempt;
+            // DUTY is intentionally left untouched (see doc comment above).
+            continue;
         }
 
         // RX autopush puts byte in bits 7-0 (shift_in = Left).
@@ -167,5 +232,6 @@ pub async fn spi_pio_task(mut sm: StateMachine<'static, PIO0, 0>, mut dma: dma::
         );
 
         tx_buf = build_tx_frame(v, i);
+        resync(&mut sm);
     }
 }
