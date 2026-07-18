@@ -3,6 +3,8 @@
 
 #[cfg(not(feature = "sim-adc"))]
 mod ina229;
+#[cfg(not(feature = "sim-adc"))]
+mod max31865;
 mod spi_slave_pio;
 
 use embassy_executor::Spawner;
@@ -17,6 +19,10 @@ use embassy_rp::spi::{Config as SpiConfig, Phase, Polarity, Spi};
 use embassy_time::Timer;
 #[cfg(not(feature = "sim-adc"))]
 use ina229::Ina229;
+#[cfg(not(feature = "sim-adc"))]
+use max31865::Max31865;
+#[cfg(not(feature = "sim-adc"))]
+use portable_atomic::AtomicI16;
 use portable_atomic::{AtomicU16, Ordering};
 use {defmt_rtt as _, panic_probe as _};
 
@@ -28,6 +34,10 @@ bind_interrupts!(struct DmaIrqs {
 pub static DUTY: AtomicU16 = AtomicU16::new(0x8000); // 50 % initial
 pub static MEAS_V_MV: AtomicU16 = AtomicU16::new(0);
 pub static MEAS_I_MA: AtomicU16 = AtomicU16::new(0);
+/// Panel temperature in centi-degC (PT100 via MAX31865). Logged context
+/// data only - NOT part of the 12-byte Pi frame, whose layout is frozen.
+#[cfg(not(feature = "sim-adc"))]
+pub static MEAS_T_CC: AtomicI16 = AtomicI16::new(0);
 
 #[cfg(feature = "sim-adc")]
 fn lcg(s: &mut u32) -> u16 {
@@ -49,12 +59,19 @@ async fn adc_task() {
 }
 
 /// Real sensing path: poll the INA229 over SPI0 at the SDK's control period
-/// (`CONTROL_PERIOD_MS = 1.0`) and publish `(V, I)` for the SPI-slave link.
+/// (`CONTROL_PERIOD_MS = 1.0`) and publish `(V, I)` for the SPI-slave link;
+/// poll the MAX31865 (PT100 panel temperature) on the same bus every 100 ms.
+///
+/// The two sensors fail independently: the INA229 gates the loop start
+/// (without V/I there is nothing to control), while a missing/faulted
+/// MAX31865 only logs and retries - temperature is context data, never a
+/// reason to stall the Pi link.
 #[cfg(not(feature = "sim-adc"))]
 #[embassy_executor::task]
-async fn ina_task(
+async fn sensors_task(
     mut spi: Spi<'static, embassy_rp::peripherals::SPI0, embassy_rp::spi::Blocking>,
     mut cs_ina: Output<'static>,
+    mut cs_tp100: Output<'static>,
 ) {
     let mut ina = Ina229::new();
 
@@ -74,7 +91,19 @@ async fn ina_task(
     }
     defmt::info!("INA229 ready");
 
-    let mut log_tick: u32 = 0;
+    let mut max = Max31865::new();
+    let mut max_ok = match max.init(&mut spi, &mut cs_tp100) {
+        Ok(()) => {
+            defmt::info!("MAX31865 ready");
+            true
+        }
+        Err(e) => {
+            defmt::error!("MAX31865 init failed: {}, will retry in background", e);
+            false
+        }
+    };
+
+    let mut tick: u32 = 0;
     loop {
         match (
             ina.read_vbus_mv(&mut spi, &mut cs_ina),
@@ -83,15 +112,40 @@ async fn ina_task(
             (Ok(v), Ok(i)) => {
                 MEAS_V_MV.store(v, Ordering::Relaxed);
                 MEAS_I_MA.store(i, Ordering::Relaxed);
-                log_tick += 1;
-                if log_tick >= 1000 {
-                    // ~1 Hz at the 1 ms poll period - RTT flooding at 1 kHz
-                    // stalls the target.
-                    log_tick = 0;
-                    defmt::info!("V={} mV I={} mA", v, i);
-                }
             }
             _ => defmt::error!("INA229 read failed"),
+        }
+
+        tick = tick.wrapping_add(1);
+        // Temperature moves on a seconds scale; 100 ms polling is plenty and
+        // keeps the 1 kHz V/I cadence undisturbed.
+        if tick % 100 == 0 {
+            if max_ok {
+                match max.read_temp_centi_c(&mut spi, &mut cs_tp100) {
+                    Ok(t) => MEAS_T_CC.store(t, Ordering::Relaxed),
+                    Err(e) => defmt::error!("MAX31865 read failed: {}", e),
+                }
+            } else if tick % 5000 == 0 {
+                // Probe for the sensor every 5 s so plugging it in later
+                // just works.
+                max_ok = max.init(&mut spi, &mut cs_tp100).is_ok();
+                if max_ok {
+                    defmt::info!("MAX31865 ready");
+                }
+            }
+        }
+
+        if tick % 1000 == 0 {
+            // ~1 Hz at the 1 ms poll period - RTT flooding at 1 kHz stalls
+            // the target.
+            let t = MEAS_T_CC.load(Ordering::Relaxed);
+            defmt::info!(
+                "V={} mV I={} mA T={}.{:02} degC",
+                MEAS_V_MV.load(Ordering::Relaxed),
+                MEAS_I_MA.load(Ordering::Relaxed),
+                t / 100,
+                (t % 100).unsigned_abs()
+            );
         }
         Timer::after_millis(1).await;
     }
@@ -136,13 +190,10 @@ async fn main(spawner: Spawner) {
     let spi = Spi::new_blocking(p.SPI0, p.PIN_18, p.PIN_19, p.PIN_16, spi_cfg);
     #[cfg(not(feature = "sim-adc"))]
     let cs_ina = Output::new(p.PIN_17, Level::High);
-    // MAX31865 chip select: kept idle HIGH so it never floats onto the
-    // shared SPI0 bus. Not driven low anywhere - that sensor is future work
-    // (see firmware/README.md maintenance notes).
     #[cfg(not(feature = "sim-adc"))]
-    let _cs_tp100 = Output::new(p.PIN_20, Level::High);
+    let cs_tp100 = Output::new(p.PIN_20, Level::High);
     #[cfg(not(feature = "sim-adc"))]
-    spawner.spawn(ina_task(spi, cs_ina).unwrap());
+    spawner.spawn(sensors_task(spi, cs_ina, cs_tp100).unwrap());
 
     spawner.spawn(spi_slave_pio::spi_pio_task(sm, sm_origin, dma_ch).unwrap());
 
