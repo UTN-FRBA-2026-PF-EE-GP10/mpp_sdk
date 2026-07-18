@@ -61,15 +61,24 @@ class DynamicSimulatedSource(SignalSource):
         self._i = float(panel.current(self._v))
 
     def _advance(self, duty: float) -> None:
-        """Integrate the capacitor ODE over one control period."""
+        """Integrate the capacitor ODE over one control period.
+
+        The stiff linear term (``-V/R_eff``) is stepped exactly via
+        exponential Euler (treating ``I_panel`` as constant over one
+        substep); explicit Euler on that term is only stable for
+        ``h < 2*R_eff*C``, which the scan's high-duty samples
+        (``R_eff`` shrinks as ``D`` rises) violate at the harness's
+        default ``dt``/``substeps``/``load_resistance``/``capacitance``.
+        """
         r_eff = self._converter.reflected_resistance(duty, self._load)
         h = self._dt / self._substeps
         voc = self._panel.open_circuit_voltage  # constant over the control period
+        decay = math.exp(-h / (r_eff * self._cap))
         v = self._v
         for _ in range(self._substeps):
             i_panel = float(self._panel.current(v))
-            dvdt = (i_panel - v / r_eff) / self._cap
-            v += dvdt * h
+            v_eq = i_panel * r_eff
+            v = v_eq + (v - v_eq) * decay
             v = max(0.0, min(v, voc))
         self._v = v
         self._i = float(self._panel.current(v))

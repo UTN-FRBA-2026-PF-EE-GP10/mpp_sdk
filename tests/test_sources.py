@@ -127,3 +127,48 @@ def test_dynamic_set_panel_clamps_to_new_voc():
     src.set_panel(low_voc_panel)
     v_after, _ = src.read()
     assert v_after <= low_voc_panel.open_circuit_voltage
+
+
+def test_dynamic_source_stable_at_high_duty():
+    """Explicit Euler diverges (0/Voc flip-flop) for D >~ 0.91 at these
+    defaults; the exponential-Euler step must stay bounded and settle."""
+    panel = mpp_sdk.IdealSingleDiode()
+    voc = panel.open_circuit_voltage
+    src = _make_dynamic_source(capacitance=100e-6, dt=1e-3, substeps=50, initial_duty=0.95)
+
+    voltages = []
+    for _ in range(100):
+        src.write(0.95)
+        v, _ = src.read()
+        assert 0.0 < v < voc
+        voltages.append(v)
+
+    # Once settled, consecutive readings should not oscillate by a large
+    # fraction of Voc (that flip-flop is exactly the divergence symptom).
+    tail = voltages[-20:]
+    for a, b in zip(tail, tail[1:], strict=False):
+        assert abs(a - b) < 0.01 * voc
+
+
+def test_dynamic_source_settles_to_load_line():
+    """At steady state, I_panel(V) must equal V/R_eff (load-line intersection)."""
+    panel = mpp_sdk.IdealSingleDiode()
+    converter = mpp_sdk.SEPICConverter()
+    load_resistance = 10.0
+    duty = 0.5
+    src = mpp_sdk.DynamicSimulatedSource(
+        panel,
+        converter,
+        load_resistance=load_resistance,
+        capacitance=100e-6,
+        dt=1e-3,
+        substeps=50,
+        initial_duty=duty,
+    )
+    for _ in range(500):
+        src.write(duty)
+    v, i = src.read()
+
+    r_eff = converter.reflected_resistance(duty, load_resistance)
+    voc = panel.open_circuit_voltage
+    assert abs(i - v / r_eff) * r_eff < 1e-3 * voc
