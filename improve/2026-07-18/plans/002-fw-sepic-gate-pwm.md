@@ -55,11 +55,21 @@ over the SPI frame (u16, 0 = 0 %, 65535 = 100 %).
    A live gate must come up at 0 % and only move when the Pi commands it.
    The `sim-adc` build keeps the same initial value (no reason to
    diverge).
-6. **LED mirror (optional, keep if free)**: keep `PIN_25` PWM as a visual
+6. **Input clamp** (added 2026-07-18 after the firmware audit): the raw
+   SPI `DUTY` word is applied unvalidated today - a desynced or
+   misbehaving master can command 100 % duty, which on a SEPIC means an
+   unbounded inductor current ramp. Clamp at the point of use, where
+   `DUTY` is loaded to compute the compare value:
+   `const DUTY_MAX: u16 = 62258; // 0.95 * 65535, mirrors the SDK's max_duty`
+   then `DUTY.load(...).min(DUTY_MAX)`. Zero stays allowed (it is the
+   safe state). No logging on clamp - it is a steady-state guard, not an
+   event. (Frame-integrity hardening is plan 004's job; this clamp is the
+   defense-in-depth layer behind it.)
+7. **LED mirror (optional, keep if free)**: keep `PIN_25` PWM as a visual
    duty indicator on its old slice. If it costs more than a handful of
    lines, drop it.
-7. **README**: update the "What it does" section (gate PWM on GPIO15 at
-   100 kHz, boots at 0 % duty) and the PWM_Gate row note.
+8. **README**: update the "What it does" section (gate PWM on GPIO15 at
+   100 kHz, boots at 0 % duty, clamped at 95 %) and the PWM_Gate row note.
 
 ## Scope
 
@@ -86,6 +96,8 @@ harsh), INA_OOR fast-shutdown wiring (follow-up).
 
 - [ ] GPIO15 carries 100 kHz PWM, duty tracks the Pi-commanded u16
 - [ ] Boots at 0 % duty in both feature configurations
+- [ ] Commanded 0xFFFF produces the 95 % clamp, not 100 % (scope or
+      defmt-verified)
 - [ ] PIN_25 placeholder loop is gone
 - [ ] README updated
 
