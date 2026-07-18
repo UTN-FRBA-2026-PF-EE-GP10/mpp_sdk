@@ -123,7 +123,14 @@ async fn sensors_task(
             if max_ok {
                 match max.read_temp_centi_c(&mut spi, &mut cs_tp100) {
                     Ok(t) => MEAS_T_CC.store(t, Ordering::Relaxed),
-                    Err(e) => defmt::error!("MAX31865 read failed: {}", e),
+                    // A faulted probe (e.g. unplugged PT100) fails every
+                    // read; throttle to the 1 Hz log discipline instead of
+                    // spamming RTT at 10 Hz.
+                    Err(e) => {
+                        if tick % 1000 == 0 {
+                            defmt::error!("MAX31865 read failed: {}", e);
+                        }
+                    }
                 }
             } else if tick % 5000 == 0 {
                 // Probe for the sensor every 5 s so plugging it in later
@@ -139,11 +146,14 @@ async fn sensors_task(
             // ~1 Hz at the 1 ms poll period - RTT flooding at 1 kHz stalls
             // the target.
             let t = MEAS_T_CC.load(Ordering::Relaxed);
+            // Explicit sign so -0.50 degC does not print as 0.50 (integer
+            // t / 100 drops the sign for -100 < t < 0).
             defmt::info!(
-                "V={} mV I={} mA T={}.{:02} degC",
+                "V={} mV I={} mA T={}{}.{:02} degC",
                 MEAS_V_MV.load(Ordering::Relaxed),
                 MEAS_I_MA.load(Ordering::Relaxed),
-                t / 100,
+                if t < 0 { "-" } else { "" },
+                (t / 100).unsigned_abs(),
                 (t % 100).unsigned_abs()
             );
         }
