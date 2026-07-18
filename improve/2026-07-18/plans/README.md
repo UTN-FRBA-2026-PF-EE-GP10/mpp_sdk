@@ -26,7 +26,7 @@ then on-target bring-up and PR).
 | 001 | Firmware: curve-tracer relay + Tracer_pwm foundation | P2 | S | - | TODO |
 | 002 | Firmware: SEPIC gate PWM on GPIO15 at 100 kHz (+ duty clamp) | P1 | S-M | - | TODO |
 | 003 | Bench: duty sweep into a 10 Ohm load, transfer-ratio check | P1 | M (bench) | 002 flashed | TODO |
-| 004 | Firmware: PIO SPI-slave per-frame resync + short-frame recovery | P1 | M | - | TODO |
+| 004 | Firmware: PIO SPI-slave per-frame resync + short-frame recovery | P1 | M | - | IN PROGRESS (code done, on-target steps 2-3 pending) |
 | 005 | Stable (exponential-Euler) integrator for DynamicSimulatedSource | P1 | S | - | DONE |
 | 006 | Commit firmware Cargo.locks, enforce --locked in CI | P1 | S | - | DONE |
 | 007 | Characterization tests for harness/common.py | P2 | M | - | DONE |
