@@ -28,7 +28,7 @@ then on-target bring-up and PR).
 | 003 | Bench: duty sweep into a 10 Ohm load, transfer-ratio check | P1 | M (bench) | 002 flashed | TODO |
 | 004 | Firmware: PIO SPI-slave per-frame resync + short-frame recovery | P1 | M | - | TODO |
 | 005 | Stable (exponential-Euler) integrator for DynamicSimulatedSource | P1 | S | - | TODO |
-| 006 | Commit firmware Cargo.locks, enforce --locked in CI | P1 | S | - | TODO |
+| 006 | Commit firmware Cargo.locks, enforce --locked in CI | P1 | S | - | DONE |
 | 007 | Characterization tests for harness/common.py | P2 | M | - | TODO |
 | 008 | NoisySource cached read (idempotent read()) | P2 | S | 007 | TODO |
 | 009 | Docs and tooling sweep after the merge wave | P3 | S | - | TODO |
