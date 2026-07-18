@@ -9,7 +9,7 @@ wheels/
 # Virtual environments
 .venv
 
-# tmp/cache from KiCAD
+# Archivos temporales y backups de KiCad
 *-bak
 *.bck
 *.kicad_pcb-bak
