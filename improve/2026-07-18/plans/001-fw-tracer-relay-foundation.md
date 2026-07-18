@@ -24,8 +24,12 @@ before any bench work, and the README GPIO table is stale for these pins.
   **GPIO0 = But1, GPIO1 = But2, GPIO2 = Tracer_En, GPIO3 = Tracer_pwm**.
   (`firmware/pipico_board/README.md` GPIO table still shows the old
   LED1/LED2/general-purpose names for GPIO0-3.)
-- `Tracer_En` drives the K1 coil (via a transistor stage on the
-  SepicConverter sheet - the GPIO never sees coil current).
+- `Tracer_En` drives the K1 coil through an NPN transistor (the GPIO
+  never sees coil current). Polarity confirmed by the operator
+  (2026-07-18): **GPIO2 = 1 energizes the coil and switches the panel
+  input to the curve-tracer circuit; GPIO2 = 0 releases the relay and the
+  SEPIC path is active.** Idle-low is therefore both the safe default and
+  normal MPPT operation.
 - `Tracer_pwm` feeds the bleed/tracer PWM input (`Tracer_Coil`,
   `V_Bleed` labels nearby).
 
@@ -60,6 +64,6 @@ button (But1/But2) handling, the bleed PWM waveform itself.
 
 ## STOP conditions
 
-- The schematic shows the relay transistor is active-LOW (GPIO low would
-  energize the coil): re-check the SepicConverter sheet before choosing
-  idle level, and report instead of guessing.
+- Bench observation contradicts the confirmed polarity above (relay
+  audibly clicks or the tracer path engages while GPIO2 is low): stop and
+  report - do not flip the idle level without re-tracing the schematic.
