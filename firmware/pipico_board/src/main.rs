@@ -31,10 +31,9 @@ pub static MEAS_V_MV: AtomicU16 = AtomicU16::new(0);
 pub static MEAS_I_MA: AtomicU16 = AtomicU16::new(0);
 // MAX31865 disabled - no compatible probe to test with right now (see PR body).
 // pub static MEAS_T_CC: AtomicI16 = AtomicI16::new(0);
-// On-chip ADC readings, raw millivolts at the pin (no calibration applied
-// yet - divider ratios/gains for these three nets are not resolved, see
-// improve/2026-07-18/plans/010-fw-onchip-adc.md). ADC_Input_Curr is the
-// INA281 analog cross-check for MEAS_I_MA.
+// On-chip ADC readings, in millivolts. PWR/VOUT are calibrated (divider
+// scaling applied); Input_Curr (the INA281 cross-check for MEAS_I_MA) is
+// still raw pin mV - its gain/shunt aren't resolved yet.
 pub static MEAS_ADC_PWR_MV: AtomicU16 = AtomicU16::new(0);
 pub static MEAS_ADC_VOUT_MV: AtomicU16 = AtomicU16::new(0);
 pub static MEAS_ADC_IIN_MV: AtomicU16 = AtomicU16::new(0);
@@ -126,9 +125,8 @@ async fn sensors_task(
     }
 }
 
-/// Polls the RP2040's on-chip ADC (raw mV, no calibration yet - see
-/// improve/2026-07-18/plans/010-fw-onchip-adc.md) and logs it next to
-/// MEAS_I_MA so ADC_Input_Curr can be eyeballed against the INA229.
+/// Polls the RP2040's on-chip ADC and logs it next to MEAS_I_MA so
+/// ADC_Input_Curr can be eyeballed against the INA229.
 #[embassy_executor::task]
 async fn onchip_adc_task(
     mut adc: Adc<'static, embassy_rp::adc::Blocking>,
@@ -141,14 +139,22 @@ async fn onchip_adc_task(
         (raw as u32 * 3300 / 4095) as u16
     }
 
+    // ADC_PWR/ADC_VOUT go through a 3x 75k + 10k divider, ADC read across
+    // the 10k: V_actual = V_adc * 235k/10k = V_adc * 23.5.
+    fn divider_to_actual_mv(adc_mv: u16) -> u16 {
+        (adc_mv as u32 * 235 / 10) as u16
+    }
+
     let mut tick: u32 = 0;
     loop {
         if let Ok(raw) = adc.blocking_read(&mut ch_pwr) {
-            MEAS_ADC_PWR_MV.store(raw_to_mv(raw), Ordering::Relaxed);
+            MEAS_ADC_PWR_MV.store(divider_to_actual_mv(raw_to_mv(raw)), Ordering::Relaxed);
         }
         if let Ok(raw) = adc.blocking_read(&mut ch_vout) {
-            MEAS_ADC_VOUT_MV.store(raw_to_mv(raw), Ordering::Relaxed);
+            MEAS_ADC_VOUT_MV.store(divider_to_actual_mv(raw_to_mv(raw)), Ordering::Relaxed);
         }
+        // ADC_Input_Curr (INA281 cross-check) stays raw pin mV - gain and
+        // shunt not resolved yet.
         if let Ok(raw) = adc.blocking_read(&mut ch_iin) {
             MEAS_ADC_IIN_MV.store(raw_to_mv(raw), Ordering::Relaxed);
         }
