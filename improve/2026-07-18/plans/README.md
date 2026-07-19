@@ -24,7 +24,7 @@ re-enabling; no plan file, tracked via the PR that disabled it.
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
-| 001 | Firmware: curve-tracer relay + Tracer_pwm foundation | P2 | S | - | TODO |
+| 001 | Firmware: curve-tracer relay + Tracer_pwm foundation | P2 | S | - | DONE |
 | 002 | Firmware: SEPIC gate PWM on GPIO15 at 100 kHz (+ duty clamp) | P1 | S-M | - | TODO |
 | 003 | Bench: duty sweep into a 10 Ohm load, transfer-ratio check | P1 | M (bench) | 002 flashed | TODO |
 | 004 | Firmware: PIO SPI-slave frame-timeout recovery + 1 MHz speed fix | P1 | M | - | DONE |
