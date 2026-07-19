@@ -72,6 +72,15 @@ divider ratios and the INA281 gain before writing any conversion math.
   larger decision the operator has not made
 - PWM / gate control changes
 
+## Progress note
+
+Executed as two passes per an operator decision: Pass A (raw mV, no
+calibration - validates the read path and gives an eyeball cross-check
+against INA229) landed first, deferring Step 1's scaling work. Done:
+`onchip_adc_task` reads all three channels every 100 ms, logs at ~1 Hz
+alongside `MEAS_I_MA`. Still pending: Step 1 (divider ratios, INA281 A3
+gain/shunt) and the on-target tolerance check in Step 3.
+
 ## Steps
 
 ### Step 1: Determine the analog scaling

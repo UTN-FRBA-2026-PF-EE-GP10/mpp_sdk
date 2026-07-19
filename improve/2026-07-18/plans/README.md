@@ -33,7 +33,7 @@ re-enabling; no plan file, tracked via the PR that disabled it.
 | 007 | Characterization tests for harness/common.py | P2 | M | - | DONE |
 | 008 | NoisySource cached read (idempotent read()) | P2 | S | 007 | TODO |
 | 009 | Docs and tooling sweep after the merge wave | P3 | S | - | TODO |
-| 010 | Firmware: read on-chip ADC (ADC_PWR/ADC_VOUT/ADC_Input_Curr) | P2 | M | - | TODO |
+| 010 | Firmware: read on-chip ADC (ADC_PWR/ADC_VOUT/ADC_Input_Curr) | P2 | M | - | IN PROGRESS (raw mV reads + logging done; calibration and on-target check pending) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) |
 REJECTED (with one-line rationale).
