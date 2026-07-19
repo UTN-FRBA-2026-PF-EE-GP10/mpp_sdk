@@ -138,16 +138,12 @@ over the RPi SPI link, and feeds that link real `(V, I)` measurements read
 from the on-board INA229 power monitor over SPI0 (see "Sensing" below).
 Default `#[embassy_executor::main]` also emits defmt log lines over RTT.
 
-Build without a sensing board wired up with `cargo build --release --features
-sim-adc`: this swaps the INA229 acquisition task for a pseudo-random
-generator so the RPi SPI link still works end to end on the bench.
-
 ## Sensing
 
 The board carries a TI INA229 (`firmware/src/ina229.rs`) measuring the
 panel-side bus voltage and shunt current over SPI0 (GPIO16/17/18/19, see the
 GPIO table below; GPIO20 is the MAX31865's chip select, held idle high so it
-never floats onto the shared bus - that sensor is future work).
+never floats onto the shared bus).
 
 - **Shunt resistor**: `R_SHUNT = 10 mOhm` (0.010 ohm). Not on the schematic
   (the `Device:R_US` symbol carries a generic placeholder value) - given
@@ -162,9 +158,13 @@ never floats onto the shared bus - that sensor is future work).
   (SPI mode 1), clocked at 1 MHz. This is a different, independent SPI bus
   from the RPi-facing PIO link described above (which is a fixed-protocol
   bit-banged mode 0 frame, unrelated to this device's timing).
-- **`sim-adc` feature**: gates the INA229 acquisition task behind real
-  hardware; `cargo build --release --features sim-adc` keeps the old
-  pseudo-random `MEAS_V_MV`/`MEAS_I_MA` generator for bench-less development.
+
+### Panel temperature (MAX31865, disabled)
+
+`firmware/src/max31865.rs` has a working PT100 driver, but it's commented
+out of `main.rs` for now - the bench probe is a PT1000, incompatible with
+the board's fixed reference resistor. See the PR that disabled it for
+details.
 
 ## GPIO Assignments
 
