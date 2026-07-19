@@ -144,18 +144,11 @@ fn build_tx_frame(v: u16, i: u16) -> [u32; FRAME_LEN] {
 const FRAME_TIMEOUT: Duration = Duration::from_millis(100);
 
 /// Force the state machine back to a known-clean state: halted, FIFOs
-/// flushed, program counter at instruction 0 (the top of `.wrap_target`,
-/// i.e. the `wait 1 gpio 13` CS-idle check), then resumed.
+/// flushed, program counter at instruction `origin` (the top of
+/// `.wrap_target`, i.e. the `wait 1 gpio 13` CS-idle check), then resumed.
 ///
-/// This is what actually makes the PIO program's documented "resync on CS"
-/// real. Left to itself, the program's own `jmp pin done` only reaches the
-/// preamble if CS is already high by the time the *last* bit's check runs -
-/// on a clean 96-bit frame the master is usually still finishing that last
-/// clock cycle at that instant, so the state machine instead falls through
-/// into a phantom 13th `out`/`wait` pair and stalls on the empty TX FIFO
-/// through the whole inter-frame gap, silently losing alignment. Driving
-/// the resync from the CPU side, once per frame, removes that race
-/// entirely regardless of exact edge timing.
+/// Called only from the timeout-recovery path in `spi_pio_task` - see its
+/// doc comment for why this must NOT run after every successful frame.
 ///
 /// Jumps to `origin` (the program's actual load address in the PIO's
 /// shared instruction memory, captured once at `init()` time via
