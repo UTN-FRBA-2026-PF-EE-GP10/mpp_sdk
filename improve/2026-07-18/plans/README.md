@@ -14,10 +14,11 @@ Context: the 2026-07-06 audit is fully executed - all 8 plans DONE, its
 folder removed (history: `improve/2026-07-06/` in git; its "findings
 considered and rejected" list lives there).
 
-In flight, no plan file needed: the MAX31865 PT100 driver is implemented
-on local branch `feat/fw-max31865` (pending two small audit fixes - 10 Hz
-error-log flood on probe fault, sign-dropped print for -1 < T < 0 degC -
-then on-target bring-up and PR).
+MAX31865 (PT100 driver, `feat/fw-max31865`): implemented and correct, but
+disabled (commented out of `main.rs`) - on-target bring-up found the bench
+probe is a PT1000, incompatible with the board's fixed 400 Ohm reference
+resistor. Needs a PT100 probe or a reference-resistor swap before
+re-enabling; no plan file, tracked via the PR that disabled it.
 
 ## Execution order & status
 
@@ -32,6 +33,7 @@ then on-target bring-up and PR).
 | 007 | Characterization tests for harness/common.py | P2 | M | - | DONE |
 | 008 | NoisySource cached read (idempotent read()) | P2 | S | 007 | TODO |
 | 009 | Docs and tooling sweep after the merge wave | P3 | S | - | TODO |
+| 010 | Firmware: read on-chip ADC (ADC_PWR/ADC_VOUT/ADC_Input_Curr) | P2 | M | - | TODO |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) |
 REJECTED (with one-line rationale).
