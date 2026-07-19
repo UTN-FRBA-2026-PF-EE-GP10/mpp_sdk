@@ -74,12 +74,13 @@ divider ratios and the INA281 gain before writing any conversion math.
 
 ## Progress note
 
-Executed as two passes per an operator decision: Pass A (raw mV, no
-calibration - validates the read path and gives an eyeball cross-check
-against INA229) landed first, deferring Step 1's scaling work. Done:
+Executed as two passes per an operator decision. Done:
 `onchip_adc_task` reads all three channels every 100 ms, logs at ~1 Hz
-alongside `MEAS_I_MA`. Still pending: Step 1 (divider ratios, INA281 A3
-gain/shunt) and the on-target tolerance check in Step 3.
+alongside `MEAS_I_MA`. `ADC_PWR`/`ADC_VOUT` are calibrated (3x 75k + 10k
+divider, `V_actual = V_adc * 23.5`, confirmed by the operator from the
+board). `ADC_Input_Curr` is still raw pin mV - the INA281 A3's gain and
+shunt aren't resolved yet. Still pending: that gain/shunt lookup and the
+on-target tolerance check in Step 3.
 
 ## Steps
 
