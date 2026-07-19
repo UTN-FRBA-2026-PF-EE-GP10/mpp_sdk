@@ -7,6 +7,7 @@ mod ina229;
 mod spi_slave_pio;
 
 use embassy_executor::Spawner;
+use embassy_rp::adc::{Adc, Channel as AdcChannel, Config as AdcConfig};
 use embassy_rp::bind_interrupts;
 use embassy_rp::dma;
 use embassy_rp::gpio::{Input, Level, Output, Pull};
@@ -30,6 +31,13 @@ pub static MEAS_V_MV: AtomicU16 = AtomicU16::new(0);
 pub static MEAS_I_MA: AtomicU16 = AtomicU16::new(0);
 // MAX31865 disabled - no compatible probe to test with right now (see PR body).
 // pub static MEAS_T_CC: AtomicI16 = AtomicI16::new(0);
+// On-chip ADC readings, raw millivolts at the pin (no calibration applied
+// yet - divider ratios/gains for these three nets are not resolved, see
+// improve/2026-07-18/plans/010-fw-onchip-adc.md). ADC_Input_Curr is the
+// INA281 analog cross-check for MEAS_I_MA.
+pub static MEAS_ADC_PWR_MV: AtomicU16 = AtomicU16::new(0);
+pub static MEAS_ADC_VOUT_MV: AtomicU16 = AtomicU16::new(0);
+pub static MEAS_ADC_IIN_MV: AtomicU16 = AtomicU16::new(0);
 
 /// Polls the INA229 over SPI0 at the SDK's control period
 /// (`CONTROL_PERIOD_MS = 1.0`) and publishes `(V, I)` for the SPI-slave link.
@@ -118,6 +126,48 @@ async fn sensors_task(
     }
 }
 
+/// Polls the RP2040's on-chip ADC (raw mV, no calibration yet - see
+/// improve/2026-07-18/plans/010-fw-onchip-adc.md) and logs it next to
+/// MEAS_I_MA so ADC_Input_Curr can be eyeballed against the INA229.
+#[embassy_executor::task]
+async fn onchip_adc_task(
+    mut adc: Adc<'static, embassy_rp::adc::Blocking>,
+    mut ch_pwr: AdcChannel<'static>,
+    mut ch_vout: AdcChannel<'static>,
+    mut ch_iin: AdcChannel<'static>,
+) {
+    // RP2040 ADC: 12-bit, VREF ~3.3 V (Pico module's internal reference).
+    fn raw_to_mv(raw: u16) -> u16 {
+        (raw as u32 * 3300 / 4095) as u16
+    }
+
+    let mut tick: u32 = 0;
+    loop {
+        if let Ok(raw) = adc.blocking_read(&mut ch_pwr) {
+            MEAS_ADC_PWR_MV.store(raw_to_mv(raw), Ordering::Relaxed);
+        }
+        if let Ok(raw) = adc.blocking_read(&mut ch_vout) {
+            MEAS_ADC_VOUT_MV.store(raw_to_mv(raw), Ordering::Relaxed);
+        }
+        if let Ok(raw) = adc.blocking_read(&mut ch_iin) {
+            MEAS_ADC_IIN_MV.store(raw_to_mv(raw), Ordering::Relaxed);
+        }
+
+        tick = tick.wrapping_add(1);
+        if tick % 10 == 0 {
+            // ~1 Hz at the 100 ms poll period.
+            defmt::info!(
+                "ADC_PWR={} mV ADC_VOUT={} mV ADC_Input_Curr={} mV (INA229 I={} mA)",
+                MEAS_ADC_PWR_MV.load(Ordering::Relaxed),
+                MEAS_ADC_VOUT_MV.load(Ordering::Relaxed),
+                MEAS_ADC_IIN_MV.load(Ordering::Relaxed),
+                MEAS_I_MA.load(Ordering::Relaxed)
+            );
+        }
+        Timer::after_millis(100).await;
+    }
+}
+
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
     let p = embassy_rp::init(Default::default());
@@ -154,6 +204,12 @@ async fn main(spawner: Spawner) {
     let cs_ina = Output::new(p.PIN_17, Level::High);
     let cs_tp100 = Output::new(p.PIN_20, Level::High);
     spawner.spawn(sensors_task(spi, cs_ina, cs_tp100).unwrap());
+
+    let adc = Adc::new_blocking(p.ADC, AdcConfig::default());
+    let ch_pwr = AdcChannel::new_pin(p.PIN_26, Pull::None);
+    let ch_vout = AdcChannel::new_pin(p.PIN_27, Pull::None);
+    let ch_iin = AdcChannel::new_pin(p.PIN_28, Pull::None);
+    spawner.spawn(onchip_adc_task(adc, ch_pwr, ch_vout, ch_iin).unwrap());
 
     spawner.spawn(spi_slave_pio::spi_pio_task(sm, sm_origin, dma_ch).unwrap());
 
