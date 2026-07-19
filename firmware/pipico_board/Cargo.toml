@@ -3,12 +3,6 @@ name = "mpp-firmware"
 version = "0.1.0"
 edition = "2024"
 
-[features]
-# Bench-less development: feed MEAS_V_MV/MEAS_I_MA from a pseudo-random
-# generator instead of the INA229, so the SPI-slave link to the Pi still
-# works without the sensing board wired up.
-sim-adc = []
-
 [dependencies]
 embassy-executor = { git = "https://github.com/embassy-rs/embassy", features = ["platform-cortex-m", "executor-thread", "executor-interrupt", "defmt"] }
 embassy-time = { git = "https://github.com/embassy-rs/embassy", features = ["defmt", "defmt-timestamp-uptime"] }
