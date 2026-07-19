@@ -173,6 +173,10 @@ path for I-V curve sweeps instead of the normal SEPIC path. `Tracer_pwm`
 (GPIO3) drives the bleed PWM. Both idle low at boot, which is also normal
 MPPT operation (SEPIC path active, tracer released).
 
+Bring-up aid: holding **But1** (GPIO0, active-low) energizes the relay
+directly, so you can hear it click without any host tooling. Remove once
+the curve tracer has real control logic.
+
 ## GPIO Assignments
 
 | Pin | GPIO    | Net Name        | Function / Notes              |
