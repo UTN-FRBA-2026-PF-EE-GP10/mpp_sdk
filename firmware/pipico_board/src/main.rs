@@ -9,7 +9,7 @@ mod spi_slave_pio;
 use embassy_executor::Spawner;
 use embassy_rp::bind_interrupts;
 use embassy_rp::dma;
-use embassy_rp::gpio::{Level, Output};
+use embassy_rp::gpio::{Input, Level, Output, Pull};
 use embassy_rp::peripherals::DMA_CH0;
 use embassy_rp::pwm::{Config as PwmConfig, Pwm};
 use embassy_rp::spi::{Config as SpiConfig, Phase, Polarity, Spi};
@@ -129,6 +129,14 @@ async fn main(spawner: Spawner) {
     pwm_cfg.compare_b = 0x8000;
     let mut pwm = Pwm::new_output_b(p.PWM_SLICE4, p.PIN_25, pwm_cfg.clone());
 
+    // Curve-tracer relay + bleed PWM: idle low is both the safe default
+    // and normal MPPT operation (low releases the relay, SEPIC path active).
+    let mut tracer_en = Output::new(p.PIN_2, Level::Low);
+    let _tracer_pwm = Output::new(p.PIN_3, Level::Low);
+    // Bring-up aid: hold But1 (active-low, switch to GND) to energize the
+    // relay and hear it click. Remove once the curve tracer has real logic.
+    let but1 = Input::new(p.PIN_0, Pull::Up);
+
     let (sm, sm_origin) = spi_slave_pio::init(p.PIO0, p.PIN_10, p.PIN_11, p.PIN_12, p.PIN_13);
     let dma_ch = dma::Channel::new(p.DMA_CH0, DmaIrqs);
 
@@ -153,6 +161,13 @@ async fn main(spawner: Spawner) {
         let duty = DUTY.load(Ordering::Relaxed);
         pwm_cfg.compare_b = duty;
         pwm.set_config(&pwm_cfg);
+
+        tracer_en.set_level(if but1.is_low() {
+            Level::High
+        } else {
+            Level::Low
+        });
+
         Timer::after_millis(100).await;
     }
 }

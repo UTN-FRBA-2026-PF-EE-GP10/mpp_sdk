@@ -166,14 +166,25 @@ out of `main.rs` for now - the bench probe is a PT1000, incompatible with
 the board's fixed reference resistor. See the PR that disabled it for
 details.
 
+## Curve tracer
+
+`Tracer_En` (GPIO2) switches relay K1, routing the panel input to a bleed
+path for I-V curve sweeps instead of the normal SEPIC path. `Tracer_pwm`
+(GPIO3) drives the bleed PWM. Both idle low at boot, which is also normal
+MPPT operation (SEPIC path active, tracer released).
+
+Bring-up aid: holding **But1** (GPIO0, active-low) energizes the relay
+directly, so you can hear it click without any host tooling. Remove once
+the curve tracer has real control logic.
+
 ## GPIO Assignments
 
 | Pin | GPIO    | Net Name        | Function / Notes              |
 |-----|---------|-----------------|-------------------------------|
-| 1   | GPIO0   | LED1            | LED 1 control                 |
-| 2   | GPIO1   | LED2            | LED 2 control                 |
-| 4   | GPIO2   | GPIO2           | General purpose               |
-| 5   | GPIO3   | GPIO3           | General purpose               |
+| 1   | GPIO0   | But1            | Button 1 input                |
+| 2   | GPIO1   | But2            | Button 2 input                |
+| 4   | GPIO2   | Tracer_En       | Curve-tracer relay enable (idle low) |
+| 5   | GPIO3   | Tracer_pwm      | Curve-tracer bleed PWM (idle low) |
 | 6   | GPIO4   | GPIO4           | General purpose               |
 | 7   | GPIO5   | I2C_SDA         | I2C data                      |
 | 9   | GPIO6   | I2C_SCL         | I2C clock                     |
