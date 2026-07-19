@@ -44,10 +44,13 @@ mod reg {
 /// Write-address bit (datasheet Table 1: write addresses are 0x80-0x87).
 const WRITE_BIT: u8 = 0x80;
 
-/// Set for a 3-wire PT100 hookup (config bit 4). The board has a 2/3-wire
-/// selector jumper on the sensing sheet; the probe is currently wired
-/// 2-wire, which also covers 4-wire per the datasheet.
-const THREE_WIRE: bool = false;
+/// Set for a 3-wire PT100 hookup (config bit 4): enables the second
+/// current source on the third lead so its resistance cancels out of the
+/// measurement instead of reading as (wrongly) part of the RTD. The board
+/// has a 2/3-wire selector jumper on the sensing sheet - confirmed during
+/// on-target bring-up that the probe in use is 3-wire, so this must be
+/// `true` AND the physical jumper set to the 3-wire position to match.
+const THREE_WIRE: bool = true;
 
 /// `CONFIG` bits (datasheet Table 2).
 mod cfg {
