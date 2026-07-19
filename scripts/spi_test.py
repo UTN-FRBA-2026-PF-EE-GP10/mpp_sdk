@@ -12,7 +12,11 @@ import time
 import spidev
 
 BUS, DEVICE = 0, 0
-SPEED_HZ = 8_000_000
+# 8 MHz is unreliable on the breadboard HIL wiring (GPIO input synchronizer
+# latency eats too much of the 125 ns bit period, on top of jumper-wire
+# signal integrity); 1 MHz is the validated working speed - bench-tested
+# during plan 004 bring-up.
+SPEED_HZ = 1_000_000
 # Firmware reports V in millivolts and I in milliamperes as raw u16
 # (firmware/pipico_board/README.md "Sensing"), not raw ADC counts.
 V_SCALE = 1e-3
