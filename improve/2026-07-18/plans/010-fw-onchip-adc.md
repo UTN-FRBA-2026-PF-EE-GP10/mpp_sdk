@@ -72,6 +72,26 @@ divider ratios and the INA281 gain before writing any conversion math.
   larger decision the operator has not made
 - PWM / gate control changes
 
+## Progress note
+
+Executed as two passes per an operator decision. Done:
+`onchip_adc_task` reads all three channels every 100 ms, logs at ~1 Hz
+alongside `MEAS_I_MA`. `ADC_PWR`/`ADC_VOUT` apply the theoretical divider
+scaling (3x 75k + 10k, `V_actual = V_adc * 23.5`, resistor values
+confirmed by the operator from the board). `ADC_Input_Curr` is raw pin
+mV - the INA281 A3's gain and shunt aren't resolved yet.
+
+On-target check found `ADC_PWR` reading ~9% high versus the INA229's
+calibrated `MEAS_V_MV` on the same node family - larger than resistor
+tolerance alone explains, most likely the RP2040's ADC gain/offset error
+(confirmed: unlike the ESP32, the RP2040 has no factory calibration data
+readable back per chip - checked both `embassy-rp`'s ADC driver and the
+raw `rp-pac` register definitions, no calibration/trim/VREF registers
+exist). **Two-point calibration against a known reference is deliberately
+left pending** - operator decision: current accuracy is good enough for
+this channel's role as a redundant sanity/fault cross-check, not a
+precision measurement. Revisit if tighter agreement is ever needed.
+
 ## Steps
 
 ### Step 1: Determine the analog scaling

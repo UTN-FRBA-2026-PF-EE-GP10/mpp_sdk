@@ -166,6 +166,18 @@ out of `main.rs` for now - the bench probe is a PT1000, incompatible with
 the board's fixed reference resistor. See the PR that disabled it for
 details.
 
+### On-chip ADC
+
+`ADC_PWR`/`ADC_VOUT`/`ADC_Input_Curr` (GPIO26-28) are read every 100 ms and
+logged at ~1 Hz in millivolts.
+
+- **`ADC_PWR`/`ADC_VOUT`**: calibrated. Both go through a 3x 75k + 10k
+  divider, ADC reading across the 10k: `V_actual = V_adc * 235k/10k =
+  V_adc * 23.5`.
+- **`ADC_Input_Curr`**: still raw pin mV. It's the INA281 analog
+  cross-check for the INA229's `MEAS_I_MA` (logged on the same line for
+  comparison), but the INA281's gain/shunt aren't resolved yet.
+
 ## Curve tracer
 
 `Tracer_En` (GPIO2) switches relay K1, routing the panel input to a bleed
