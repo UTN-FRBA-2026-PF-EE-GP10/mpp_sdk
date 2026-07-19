@@ -108,7 +108,7 @@ async fn main(spawner: Spawner) {
     pwm_cfg.compare_b = 0x8000;
     let mut pwm = Pwm::new_output_b(p.PWM_SLICE4, p.PIN_25, pwm_cfg.clone());
 
-    let sm = spi_slave_pio::init(p.PIO0, p.PIN_10, p.PIN_11, p.PIN_12, p.PIN_13);
+    let (sm, sm_origin) = spi_slave_pio::init(p.PIO0, p.PIN_10, p.PIN_11, p.PIN_12, p.PIN_13);
     let dma_ch = dma::Channel::new(p.DMA_CH0, DmaIrqs);
 
     #[cfg(feature = "sim-adc")]
@@ -144,7 +144,7 @@ async fn main(spawner: Spawner) {
     #[cfg(not(feature = "sim-adc"))]
     spawner.spawn(ina_task(spi, cs_ina).unwrap());
 
-    spawner.spawn(spi_slave_pio::spi_pio_task(sm, dma_ch).unwrap());
+    spawner.spawn(spi_slave_pio::spi_pio_task(sm, sm_origin, dma_ch).unwrap());
 
     loop {
         let duty = DUTY.load(Ordering::Relaxed);

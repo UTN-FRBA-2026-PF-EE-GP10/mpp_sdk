@@ -86,6 +86,12 @@ millivolts, I in milliamperes (negative current clamps to 0). See "Sensing"
 below. On the Pi side, construct `SpiMcuSource(v_scale=1e-3, i_scale=1e-3)`
 to convert to volts/amps.
 
+**Master clock speed**: bench-tested at **1 MHz** on the breadboard HIL
+wiring - reliable. 8 MHz was tried and is unreliable (occasional torn/garbled
+frames): the GPIO input synchronizer latency eats too much of the 125 ns bit
+period, worse on jumper-wire signal integrity than a real PCB trace would
+be. `scripts/spi_test.py` defaults to 1 MHz for this reason.
+
 #### 4. Flash and stream logs
 
 The `.cargo/config.toml` runner is already set to `probe-rs run --chip RP2040`:

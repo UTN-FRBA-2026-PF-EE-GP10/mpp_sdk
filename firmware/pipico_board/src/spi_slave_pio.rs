@@ -16,6 +16,15 @@
 //!   GPIO13 = CS    (input, active low)
 //!
 //! Mode 0 (CPOL=0, CPHA=0), MSB-first, 8-bit frames.
+//!
+//! Frame recovery: a short/aborted frame (fewer than 96 SCK edges) can
+//! leave the state machine's bit alignment out of sync with no built-in
+//! way back. `spi_pio_task` bounds each frame with a timeout and, only on
+//! that (rare) failure, forces the state machine back to a clean start via
+//! `resync()`. This is deliberately NOT done after every successful frame
+//! - see `spi_pio_task`'s doc comment for why routine CPU-side resyncing
+//! turned out to corrupt the PIO's own IRQ-driven RX wakeup on target
+//! hardware.
 
 use embassy_futures::join::join;
 use embassy_rp::dma;
@@ -23,6 +32,7 @@ use embassy_rp::peripherals::{PIN_10, PIN_11, PIN_12, PIN_13, PIO0};
 use embassy_rp::pio::program::pio_asm;
 use embassy_rp::pio::{Config, Direction, InterruptHandler, Pio, ShiftDirection, StateMachine};
 use embassy_rp::{Peri, bind_interrupts};
+use embassy_time::{Duration, with_timeout};
 use portable_atomic::Ordering;
 
 use crate::{DUTY, MEAS_I_MA, MEAS_V_MV};
@@ -33,13 +43,17 @@ bind_interrupts!(pub struct PioIrqs {
 
 pub const FRAME_LEN: usize = 12;
 
+/// Returns the configured state machine plus the PIO instruction-memory
+/// address its program was loaded at (`resync()` needs this to jump back
+/// to the top of the program - see its doc comment for why a hardcoded
+/// address would be fragile).
 pub fn init(
     pio: Peri<'static, PIO0>,
     pin_sck: Peri<'static, PIN_10>,
     pin_miso: Peri<'static, PIN_11>,
     pin_mosi: Peri<'static, PIN_12>,
     pin_cs: Peri<'static, PIN_13>,
-) -> StateMachine<'static, PIO0, 0> {
+) -> (StateMachine<'static, PIO0, 0>, u8) {
     let Pio {
         mut common,
         mut sm0,
@@ -52,7 +66,10 @@ pub fn init(
     let cs = common.make_pio_pin(pin_cs);
 
     // PIO program: SPI slave mode 0, 8-bit MSB-first.
-    // - wait for CS to deassert then re-assert (resyncs byte alignment)
+    // - preamble: wait for CS to deassert then re-assert (resyncs byte
+    //   alignment on a clean frame boundary); the CPU-side resync() is a
+    //   fallback for the rare case a frame is aborted mid-transfer, not
+    //   the primary mechanism (see the module doc comment)
     // - per bit: drive MISO before SCK rising, sample MOSI on SCK rising
     // - exit bit loop when CS goes high (jmp pin = CS via set_jmp_pin)
     let prg = pio_asm!(
@@ -63,15 +80,18 @@ pub fn init(
         "    out pins, 1",    // setup MISO bit (autopull from TX FIFO)
         "    wait 1 gpio 10", // SCK rising edge
         "    in pins, 1",     // sample MOSI bit (autopush every 8 bits)
-        "    jmp pin done",   // CS deasserted? exit (resync at top)
+        "    jmp pin done",   // CS deasserted? exit (best-effort only)
         "    wait 0 gpio 10", // SCK falling edge — next bit setup
         "    jmp bit_loop",
         "done:",
         ".wrap",
     );
 
+    let loaded = common.load_program(&prg.program);
+    let origin = loaded.origin;
+
     let mut cfg = Config::default();
-    cfg.use_program(&common.load_program(&prg.program), &[]);
+    cfg.use_program(&loaded, &[]);
 
     cfg.set_out_pins(&[&miso]);
     cfg.set_in_pins(&[&mosi]);
@@ -94,7 +114,7 @@ pub fn init(
     sm0.set_config(&cfg);
     sm0.set_enable(true);
 
-    sm0
+    (sm0, origin)
 }
 
 /// Build a TX frame (u32 words, byte in top 8 bits for shift_out = Left).
@@ -117,18 +137,69 @@ fn build_tx_frame(v: u16, i: u16) -> [u32; FRAME_LEN] {
     ]
 }
 
+/// Time budget for one 12-byte frame's RX side. At the Pi's control period
+/// (1 kHz nominal) a normal frame completes in microseconds even at a
+/// conservative SPI clock; 100 ms is generous headroom that only trips on a
+/// genuinely stalled/aborted transfer, not jitter.
+const FRAME_TIMEOUT: Duration = Duration::from_millis(100);
+
+/// Force the state machine back to a known-clean state: halted, FIFOs
+/// flushed, program counter at instruction `origin` (the top of
+/// `.wrap_target`, i.e. the `wait 1 gpio 13` CS-idle check), then resumed.
+///
+/// Called only from the timeout-recovery path in `spi_pio_task` - see its
+/// doc comment for why this must NOT run after every successful frame.
+///
+/// Jumps to `origin` (the program's actual load address in the PIO's
+/// shared instruction memory, captured once at `init()` time via
+/// `exec_jmp` - embassy-rp's own helper for this, instead of a hand-rolled
+/// raw instruction word). `restart()` additionally clears the ISR/OSR and
+/// shift counters (`clear_fifos()` covers the FIFO contents; `restart()`
+/// does not touch the program counter, which is why the explicit jump
+/// above is still required).
+fn resync(sm: &mut StateMachine<'static, PIO0, 0>, origin: u8) {
+    sm.set_enable(false);
+    sm.clear_fifos();
+    unsafe {
+        sm.exec_jmp(origin);
+    }
+    sm.restart();
+    sm.set_enable(true);
+}
+
 /// SPI exchange task — full-duplex DMA TX + async RX via `join`.
 ///
 /// DMA feeds the PIO TX FIFO in hardware (DREQ-paced, ns latency), so the
 /// 4-deep FIFO never underruns even at 8 MHz with a 12-byte frame.
 ///
 /// `join` runs TX DMA and RX `wait_pull` concurrently using `sm.rx_tx()`
-/// split borrows so both halves can be borrowed simultaneously.
+/// split borrows so both halves can be borrowed simultaneously. The whole
+/// exchange is wrapped in a timeout so a short/aborted frame (fewer than 96
+/// SCK edges) cannot leave the DMA transfer and the RX pull stuck forever;
+/// on timeout the frame is dropped (last-good `DUTY` is kept: never freeze
+/// the gate at a stale HIGH duty from a torn read) and the state machine is
+/// forced back to a clean starting point via `resync()`.
+///
+/// `resync()` runs ONLY on that (rare, exceptional) timeout path, not after
+/// every successful frame. An earlier version of this fix called it every
+/// frame on the theory that the PIO program's own CS-edge resync is
+/// unreachable in steady state - on-target testing showed that routinely
+/// disabling/flushing/restarting the state machine every frame corrupts
+/// its IRQ-driven RX wakeup (`wait_pull()` never resolves again after a
+/// couple of frames, with no timeout firing either - consistent with the
+/// PIO's interrupt latch ending up in a state embassy's driver never sees
+/// a fresh edge on). Confining `resync()` to genuine failures keeps the
+/// steady-state path untouched and only exercises the recovery code when
+/// there is actually something to recover from.
 ///
 /// MOSI (RPi→Pico): [ DUTY_H | DUTY_L | 0 … 0 ]  (12 bytes)
 /// MISO (Pico→RPi): [ V_H   | V_L    | I_H | I_L | 0 … 0 ]
 #[embassy_executor::task]
-pub async fn spi_pio_task(mut sm: StateMachine<'static, PIO0, 0>, mut dma: dma::Channel<'static>) {
+pub async fn spi_pio_task(
+    mut sm: StateMachine<'static, PIO0, 0>,
+    origin: u8,
+    mut dma: dma::Channel<'static>,
+) {
     defmt::info!(
         "spi_pio_task: PIO SPI slave running (DMA TX, {} byte frame)",
         FRAME_LEN
@@ -143,14 +214,23 @@ pub async fn spi_pio_task(mut sm: StateMachine<'static, PIO0, 0>, mut dma: dma::
         let mut rx = [0u32; FRAME_LEN];
 
         // TX (DMA) and RX (wait_pull) run concurrently via split borrows.
-        {
+        let exchange = {
             let (rx_half, tx_half) = sm.rx_tx();
             join(tx_half.dma_push(&mut dma, &tx_buf, false), async {
                 for slot in &mut rx {
                     *slot = rx_half.wait_pull().await;
                 }
             })
-            .await;
+        };
+
+        if with_timeout(FRAME_TIMEOUT, exchange).await.is_err() {
+            // Dropping `exchange` here cancels the DMA push (its Drop impl
+            // aborts the channel) and the pending `wait_pull`s.
+            defmt::warn!("spi_pio_task: frame timeout, resyncing (duty unchanged)");
+            resync(&mut sm, origin);
+            // Re-arm TX with the last-known-good V/I for the next attempt;
+            // DUTY is intentionally left untouched (see doc comment above).
+            continue;
         }
 
         // RX autopush puts byte in bits 7-0 (shift_in = Left).
