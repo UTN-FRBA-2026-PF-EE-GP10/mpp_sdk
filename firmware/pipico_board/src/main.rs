@@ -129,6 +129,11 @@ async fn main(spawner: Spawner) {
     pwm_cfg.compare_b = 0x8000;
     let mut pwm = Pwm::new_output_b(p.PWM_SLICE4, p.PIN_25, pwm_cfg.clone());
 
+    // Curve-tracer relay + bleed PWM: idle low is both the safe default
+    // and normal MPPT operation (low releases the relay, SEPIC path active).
+    let _tracer_en = Output::new(p.PIN_2, Level::Low);
+    let _tracer_pwm = Output::new(p.PIN_3, Level::Low);
+
     let (sm, sm_origin) = spi_slave_pio::init(p.PIO0, p.PIN_10, p.PIN_11, p.PIN_12, p.PIN_13);
     let dma_ch = dma::Channel::new(p.DMA_CH0, DmaIrqs);
 
