@@ -172,11 +172,39 @@ details.
 logged at ~1 Hz in millivolts.
 
 - **`ADC_PWR`/`ADC_VOUT`**: calibrated. Both go through a 3x 75k + 10k
-  divider, ADC reading across the 10k: `V_actual = V_adc * 235k/10k =
-  V_adc * 23.5`.
+  (1% tolerance) divider, ADC reading across the 10k: `V_actual = V_adc *
+  235k/10k = V_adc * 23.5` at the as-built divider (see the range table
+  below for lower-range jumper options).
+- **Divider range jumpers**: 1 or 2 of the three 75k resistors ahead of the
+  10k leg can be bridged out to trade full-scale range for ADC resolution
+  at lower operating voltages (a fixed ADC offset error is a much bigger
+  fraction of the reading when few of the 4095 codes are in use). Ganged
+  across both channels. Set `AdcDividerRange`/`ADC_DIVIDER_RANGE` in
+  `main.rs` to match whichever jumpers are actually shorted - it is not
+  auto-sensed, and the selected range is logged once at boot as a
+  cross-check.
+
+  | `AdcDividerRange` | Jumpers shorted | Divider | Full scale (`VREF=3.218 V`) |
+  |-------------------|------------------|---------|------------------------------|
+  | `Full` (default)  | 0 (all 3x 75k in series) | 235k/10k | ~75.6 V |
+  | `Mid`              | 1 (2x 75k remain)        | 160k/10k | ~51.5 V |
+  | `Low`              | 2 (1x 75k remains)       | 85k/10k  | ~27.3 V |
+
+  Confirmed on-target: at ~4 V bench input, `Full` read `ADC_PWR` ~9% high
+  versus the INA229; `Low` reads ~0.03% off. Use `Low` for bench/low-voltage
+  testing, `Full`/`Mid` nearer the design's ~40 V ceiling where more ADC
+  codes are naturally in use even with the larger divider.
 - **`ADC_Input_Curr`**: still raw pin mV. It's the INA281 analog
   cross-check for the INA229's `MEAS_I_MA` (logged on the same line for
   comparison), but the INA281's gain/shunt aren't resolved yet.
+- **ADC reference voltage**: `ADC_VREF_MV = 3218` in `raw_to_mv()` is a
+  measured constant, not the nominal 3.3 V - multimeter reading at the
+  Pico's `ADC_VREF` pin (physical pin 35). This closed about a quarter of
+  the original ~9% `ADC_PWR` vs INA229 discrepancy; the remaining ~4.5% is
+  within the divider's 1% resistor tolerance plus RP2040 ADC gain error
+  (no factory calibration exists to correct the latter, see plan 010's
+  progress note). Re-measure and update this constant if the divider
+  resistors or reference circuit ever change.
 
 ## Curve tracer
 
