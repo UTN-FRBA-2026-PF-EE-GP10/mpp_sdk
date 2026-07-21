@@ -159,18 +159,14 @@ async fn onchip_adc_task(
         (raw as u32 * ADC_VREF_MV / 4095) as u16
     }
 
-    // Total divider resistance (top + 10k bottom leg) in kOhm, matching
-    // the currently-shorted jumper state.
-    fn divider_total_kohm(range: AdcDividerRange) -> u32 {
-        match range {
-            AdcDividerRange::Full => 235, // 3x 75k + 10k
-            AdcDividerRange::Mid => 160,  // 2x 75k + 10k
-            AdcDividerRange::Low => 85,   // 1x 75k + 10k
-        }
-    }
-
+    // Scales by the divider's total-to-bottom-leg (10k) resistance ratio,
+    // matching the currently-shorted jumper state.
     fn divider_to_actual_mv(adc_mv: u16) -> u16 {
-        (adc_mv as u32 * divider_total_kohm(ADC_DIVIDER_RANGE) / 10) as u16
+        (match ADC_DIVIDER_RANGE {
+            AdcDividerRange::Full => adc_mv as u32 * 235 / 10, // 3x 75k + 10k
+            AdcDividerRange::Mid => adc_mv as u32 * 160 / 10,  // 2x 75k + 10k
+            AdcDividerRange::Low => adc_mv as u32 * 85 / 10,   // 1x 75k + 10k
+        }) as u16
     }
 
     defmt::info!(
