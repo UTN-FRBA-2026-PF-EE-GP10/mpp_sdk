@@ -125,26 +125,17 @@ async fn sensors_task(
     }
 }
 
-/// Physical jumper state of the ADC_PWR/ADC_VOUT divider network: each
-/// channel has 3x 75k in series ahead of the 10k ADC leg, and 1 or 2 of
-/// the 75k resistors can be bridged out to trade full-scale range for ADC
-/// resolution at lower operating voltages (a fixed ADC offset error is a
-/// much bigger fraction of the reading when few codes are in use). Both
-/// channels are jumpered together. Must match the physical board - not
-/// auto-sensed, logged once at boot so a mismatch is at least visible.
-// Mid/Low are selected by editing ADC_DIVIDER_RANGE and recompiling, not
-// constructed elsewhere - dead_code would otherwise flag them.
-#[allow(dead_code)]
+/// Jumper state of the ADC_PWR/ADC_VOUT divider network (see README for
+/// the range table and why it matters). Must match the physical board -
+/// not auto-sensed, logged once at boot.
+#[allow(dead_code)] // Mid/Low selected by editing ADC_DIVIDER_RANGE, not constructed elsewhere.
 #[derive(Clone, Copy, defmt::Format)]
 enum AdcDividerRange {
-    /// All 3x 75k in series (225k, 235k/10k divider) - full scale ~75.6 V
-    /// at the measured VREF. As-built default.
+    /// 3x 75k in series (235k/10k divider). As-built default.
     Full,
-    /// 1 jumper bridges one 75k, leaving 2x 75k (150k, 160k/10k divider) -
-    /// full scale ~51.5 V.
+    /// 2x 75k in series (160k/10k divider).
     Mid,
-    /// 2 jumpers bridge two 75k, leaving 1x 75k (75k, 85k/10k divider) -
-    /// full scale ~27.3 V, most resolution at low bench voltages.
+    /// 1x 75k (85k/10k divider) - most resolution at low bench voltages.
     Low,
 }
 
@@ -160,19 +151,17 @@ async fn onchip_adc_task(
     mut ch_vout: AdcChannel<'static>,
     mut ch_iin: AdcChannel<'static>,
 ) {
-    // RP2040 ADC: 12-bit. VREF (Pico pin 35) measured 3.218 V on this board,
-    // not the nominal 3.3 V - multimeter against the real pin beats assuming
-    // the datasheet figure. Residual error vs the INA229 (~4.5%, down from
-    // ~9%) is within 1%-resistor tolerance + RP2040 ADC gain error (no
-    // factory calibration exists to correct the latter - see README).
+    // Measured at the Pico's ADC_VREF pin (pin 35), not the nominal 3.3 V.
+    // See README for the ADC accuracy notes.
     const ADC_VREF_MV: u32 = 3218;
 
     fn raw_to_mv(raw: u16) -> u16 {
         (raw as u32 * ADC_VREF_MV / 4095) as u16
     }
 
-    // Divider ratio x10, matching the currently-shorted jumper state.
-    fn divider_ratio_x10(range: AdcDividerRange) -> u32 {
+    // Total divider resistance (top + 10k bottom leg) in kOhm, matching
+    // the currently-shorted jumper state.
+    fn divider_total_kohm(range: AdcDividerRange) -> u32 {
         match range {
             AdcDividerRange::Full => 235, // 3x 75k + 10k
             AdcDividerRange::Mid => 160,  // 2x 75k + 10k
@@ -181,7 +170,7 @@ async fn onchip_adc_task(
     }
 
     fn divider_to_actual_mv(adc_mv: u16) -> u16 {
-        (adc_mv as u32 * divider_ratio_x10(ADC_DIVIDER_RANGE) / 10) as u16
+        (adc_mv as u32 * divider_total_kohm(ADC_DIVIDER_RANGE) / 10) as u16
     }
 
     defmt::info!(
