@@ -125,6 +125,23 @@ async fn sensors_task(
     }
 }
 
+/// Jumper state of the ADC_PWR/ADC_VOUT divider network (see README for
+/// the range table and why it matters). Must match the physical board -
+/// not auto-sensed, logged once at boot.
+#[allow(dead_code)] // Mid/Low selected by editing ADC_DIVIDER_RANGE, not constructed elsewhere.
+#[derive(Clone, Copy, defmt::Format)]
+enum AdcDividerRange {
+    /// 3x 75k in series (235k/10k divider). As-built default.
+    Full,
+    /// 2x 75k in series (160k/10k divider).
+    Mid,
+    /// 1x 75k (85k/10k divider) - most resolution at low bench voltages.
+    Low,
+}
+
+/// Set this to match the jumpers actually shorted on the board.
+const ADC_DIVIDER_RANGE: AdcDividerRange = AdcDividerRange::Low;
+
 /// Polls the RP2040's on-chip ADC and logs it next to MEAS_I_MA so
 /// ADC_Input_Curr can be eyeballed against the INA229.
 #[embassy_executor::task]
@@ -134,16 +151,28 @@ async fn onchip_adc_task(
     mut ch_vout: AdcChannel<'static>,
     mut ch_iin: AdcChannel<'static>,
 ) {
-    // RP2040 ADC: 12-bit, VREF ~3.3 V (Pico module's internal reference).
+    // Measured at the Pico's ADC_VREF pin (pin 35), not the nominal 3.3 V.
+    // See README for the ADC accuracy notes.
+    const ADC_VREF_MV: u32 = 3218;
+
     fn raw_to_mv(raw: u16) -> u16 {
-        (raw as u32 * 3300 / 4095) as u16
+        (raw as u32 * ADC_VREF_MV / 4095) as u16
     }
 
-    // ADC_PWR/ADC_VOUT go through a 3x 75k + 10k divider, ADC read across
-    // the 10k: V_actual = V_adc * 235k/10k = V_adc * 23.5.
+    // Scales by the divider's total-to-bottom-leg (10k) resistance ratio,
+    // matching the currently-shorted jumper state.
     fn divider_to_actual_mv(adc_mv: u16) -> u16 {
-        (adc_mv as u32 * 235 / 10) as u16
+        (match ADC_DIVIDER_RANGE {
+            AdcDividerRange::Full => adc_mv as u32 * 235 / 10, // 3x 75k + 10k
+            AdcDividerRange::Mid => adc_mv as u32 * 160 / 10,  // 2x 75k + 10k
+            AdcDividerRange::Low => adc_mv as u32 * 85 / 10,   // 1x 75k + 10k
+        }) as u16
     }
+
+    defmt::info!(
+        "ADC divider range: {} (must match the physical jumpers)",
+        ADC_DIVIDER_RANGE
+    );
 
     let mut tick: u32 = 0;
     loop {

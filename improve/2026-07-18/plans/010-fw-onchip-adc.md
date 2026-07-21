@@ -82,15 +82,43 @@ confirmed by the operator from the board). `ADC_Input_Curr` is raw pin
 mV - the INA281 A3's gain and shunt aren't resolved yet.
 
 On-target check found `ADC_PWR` reading ~9% high versus the INA229's
-calibrated `MEAS_V_MV` on the same node family - larger than resistor
-tolerance alone explains, most likely the RP2040's ADC gain/offset error
-(confirmed: unlike the ESP32, the RP2040 has no factory calibration data
-readable back per chip - checked both `embassy-rp`'s ADC driver and the
-raw `rp-pac` register definitions, no calibration/trim/VREF registers
-exist). **Two-point calibration against a known reference is deliberately
-left pending** - operator decision: current accuracy is good enough for
-this channel's role as a redundant sanity/fault cross-check, not a
-precision measurement. Revisit if tighter agreement is ever needed.
+calibrated `MEAS_V_MV` on the same node family. Root-caused in two steps:
+
+1. Measured the Pico's `ADC_VREF` pin (physical pin 35) directly: 3.218 V,
+   not the nominal 3.3 V `raw_to_mv()` assumed. Fixed by replacing the
+   hardcoded `3300` with a named `ADC_VREF_MV = 3218` constant - closed
+   about a quarter of the 9% gap.
+2. The divider resistors are 1% tolerance, which bounds their worst-case
+   contribution to ~2% - not enough to explain the rest. The remaining
+   ~4.5% is most likely the RP2040's own ADC gain/offset error (confirmed:
+   unlike the ESP32, the RP2040 has no factory calibration data readable
+   back per chip - checked both `embassy-rp`'s ADC driver and the raw
+   `rp-pac` register definitions, no calibration/trim/VREF registers
+   exist).
+
+**Two-point calibration against a known reference is deliberately left
+pending** for that residual ~4.5% - operator decision: current accuracy is
+good enough for this channel's role as a redundant sanity/fault
+cross-check, not a precision measurement. Revisit if tighter agreement is
+ever needed.
+
+Separately: at bench voltages (~4 V), the as-built 235k/10k divider only
+puts ~5.5% of the ADC's 4095 codes to use, which is why a fixed ADC offset
+error shows up as a much larger relative error at low voltages than it
+will at the design's full range. Added `AdcDividerRange` (`Full`/`Mid`/
+`Low`) so the operator can bridge out 1 or 2 of the three series 75k
+resistors (jumpers, both channels ganged) to trade full-scale range for
+resolution when testing at lower voltages - `ADC_DIVIDER_RANGE` in
+`main.rs` must be set to match whichever jumpers are physically shorted;
+logged once at boot as a cross-check. See README for the range table.
+
+**Confirmed on-target**: with 2 jumpers shorted (`Low`, 85k/10k divider,
+~14.6% of ADC codes in use at ~4 V vs ~5.5% at `Full`), `ADC_PWR` reads
+3901 mV against the INA229's 3900 mV - ~0.03% error, down from the
+original ~9%. The offset-error theory is confirmed; `Low` is the range to
+use for bench/low-voltage testing. `Full`/`Mid` remain available for
+higher operating voltages (design ceiling ~40 V) where more codes are
+naturally in play even with the larger divider.
 
 ## Steps
 
