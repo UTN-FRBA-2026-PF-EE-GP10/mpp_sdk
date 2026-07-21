@@ -137,7 +137,10 @@ cargo build --release
 from the `DUTY` value it receives over the RPi SPI link (u16, 0 = 0 %,
 65535 = 100 %, updated every 1 ms). Boots at 0 % duty and clamps commanded
 duty at 95 % (`DUTY_MAX`) as a defense-in-depth guard against a
-desynced/misbehaving master. It also feeds that link real `(V, I)`
+desynced/misbehaving master. If the SPI master goes silent for ~500 ms
+(5 consecutive frame timeouts), the link is considered lost and duty is
+forced to 0 - the gate stops switching rather than free-running the last
+commanded duty unsupervised. It also feeds that link real `(V, I)`
 measurements read from the on-board INA229 power monitor over SPI0 (see
 "Sensing" below). Default `#[embassy_executor::main]` also emits defmt log
 lines over RTT.
