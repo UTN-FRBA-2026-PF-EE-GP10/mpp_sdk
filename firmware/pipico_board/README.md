@@ -133,10 +133,14 @@ cargo build --release
 
 ## What it does
 
-`src/main.rs` drives the SEPIC gate PWM from the `DUTY` value it receives
-over the RPi SPI link, and feeds that link real `(V, I)` measurements read
-from the on-board INA229 power monitor over SPI0 (see "Sensing" below).
-Default `#[embassy_executor::main]` also emits defmt log lines over RTT.
+`src/main.rs` drives the SEPIC gate PWM on GPIO15 (`PWM_Gate`) at 100 kHz
+from the `DUTY` value it receives over the RPi SPI link (u16, 0 = 0 %,
+65535 = 100 %, updated every 1 ms). Boots at 0 % duty and clamps commanded
+duty at 95 % (`DUTY_MAX`) as a defense-in-depth guard against a
+desynced/misbehaving master. It also feeds that link real `(V, I)`
+measurements read from the on-board INA229 power monitor over SPI0 (see
+"Sensing" below). Default `#[embassy_executor::main]` also emits defmt log
+lines over RTT.
 
 ## Sensing
 
@@ -236,7 +240,7 @@ the curve tracer has real control logic.
 | 16  | GPIO12  | SPI1_RX         | SPI1 MISO                     |
 | 17  | GPIO13  | SPI1_CS         | SPI1 chip select              |
 | 19  | GPIO14  | Blinky          | Status / heartbeat LED        |
-| 20  | GPIO15  | PWM_Gate        | PWM output (via 10R + 3.3nF)  |
+| 20  | GPIO15  | PWM_Gate        | SEPIC gate PWM, 100 kHz (via 10R + 3.3nF) |
 | 21  | GPIO16  | SPI0_MISO       | SPI0 MISO                     |
 | 22  | GPIO17  | SPI0_CS1        | SPI0 CS 1 - INA229 (CS_INA)   |
 | 24  | GPIO18  | SPI0_SCK        | SPI0 clock                    |

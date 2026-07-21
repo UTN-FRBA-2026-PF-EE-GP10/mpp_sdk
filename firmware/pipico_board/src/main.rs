@@ -26,7 +26,13 @@ bind_interrupts!(struct DmaIrqs {
 });
 
 // Shared state (written by SPI/ADC tasks, read by main).
-pub static DUTY: AtomicU16 = AtomicU16::new(0x8000); // 50 % initial
+pub static DUTY: AtomicU16 = AtomicU16::new(0); // 0 % initial - safe boot state
+
+// 0.95 * 65535, mirrors the SDK's max_duty. Defense-in-depth: the raw SPI
+// DUTY word is applied unvalidated by the master, and on a SEPIC an
+// unclamped 100 % duty ramps the inductor current unbounded. Frame-integrity
+// hardening is spi_slave_pio.rs's job; this is the guard behind it.
+const DUTY_MAX: u16 = 62258;
 pub static MEAS_V_MV: AtomicU16 = AtomicU16::new(0);
 pub static MEAS_I_MA: AtomicU16 = AtomicU16::new(0);
 // MAX31865 disabled - no compatible probe to test with right now (see PR body).
@@ -209,10 +215,14 @@ async fn main(spawner: Spawner) {
 
     defmt::info!("mpp-firmware booted (PIO SPI slave)");
 
+    // SEPIC gate PWM on GPIO15 (PWM_Gate net, through a 10R + 3.3nF network
+    // into the driver stage): 100 kHz at the default 125 MHz sysclk with
+    // divider 1, top = 1249. Duty is commanded via `DUTY` (u16, 0 = 0 %,
+    // 65535 = 100 %) over the Pi SPI link.
     let mut pwm_cfg = PwmConfig::default();
-    pwm_cfg.top = 0xFFFF;
-    pwm_cfg.compare_b = 0x8000;
-    let mut pwm = Pwm::new_output_b(p.PWM_SLICE4, p.PIN_25, pwm_cfg.clone());
+    pwm_cfg.top = 1249;
+    pwm_cfg.compare_b = 0;
+    let mut pwm = Pwm::new_output_b(p.PWM_SLICE7, p.PIN_15, pwm_cfg.clone());
 
     // Curve-tracer relay + bleed PWM: idle low is both the safe default
     // and normal MPPT operation (low releases the relay, SEPIC path active).
@@ -249,8 +259,8 @@ async fn main(spawner: Spawner) {
     spawner.spawn(spi_slave_pio::spi_pio_task(sm, sm_origin, dma_ch).unwrap());
 
     loop {
-        let duty = DUTY.load(Ordering::Relaxed);
-        pwm_cfg.compare_b = duty;
+        let duty = DUTY.load(Ordering::Relaxed).min(DUTY_MAX);
+        pwm_cfg.compare_b = (duty as u32 * 1250 / 65536) as u16;
         pwm.set_config(&pwm_cfg);
 
         tracer_en.set_level(if but1.is_low() {
@@ -259,6 +269,6 @@ async fn main(spawner: Spawner) {
             Level::Low
         });
 
-        Timer::after_millis(100).await;
+        Timer::after_millis(1).await;
     }
 }

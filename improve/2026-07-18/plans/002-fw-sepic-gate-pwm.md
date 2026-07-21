@@ -37,6 +37,17 @@ loop {
 `DUTY` is a `AtomicU16` initialized to `0x8000` (50 %), written by the Pi
 over the SPI frame (u16, 0 = 0 %, 65535 = 100 %).
 
+## Progress note
+
+Implemented on `feat/fw-sepic-gate-pwm`. `sim-adc` was removed from the
+firmware (a prior, unrelated change) - the plan's dual-build verify step
+no longer applies; only `cargo build --release --locked` is checked.
+Dropped the `PIN_25` LED mirror per the plan's own "if it costs more than
+a handful of lines, drop it" - `PWM_SLICE4`/`PIN_25` are now free. Code and
+`cargo build --release --locked`/`cargo fmt --check` are done; the
+on-target smoke test (step 2, scope/logic-analyzer on GPIO15) is still
+pending operator hardware access.
+
 ## Design (follow it)
 
 1. **Pin/slice**: GPIO15 is PWM slice 7, channel B on the RP2040
