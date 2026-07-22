@@ -35,7 +35,7 @@ use embassy_rp::{Peri, bind_interrupts};
 use embassy_time::{Duration, with_timeout};
 use portable_atomic::Ordering;
 
-use crate::{DUTY, MEAS_I_MA, MEAS_V_MV};
+use crate::{DUTY, MEAS_I_MA, MEAS_V_MV, PACKET_COUNT};
 
 bind_interrupts!(pub struct PioIrqs {
     PIO0_IRQ_0 => InterruptHandler<PIO0>;
@@ -256,6 +256,7 @@ pub async fn spi_pio_task(
         // RX autopush puts byte in bits 7-0 (shift_in = Left).
         let duty = ((rx[0] as u8 as u16) << 8) | rx[1] as u8 as u16;
         DUTY.store(duty, Ordering::Relaxed);
+        PACKET_COUNT.fetch_add(1, Ordering::Relaxed);
 
         // Log only on change - at the Pi's control period this would
         // otherwise flood RTT every frame; V/I are already logged

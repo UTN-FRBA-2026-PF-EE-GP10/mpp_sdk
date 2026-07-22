@@ -20,6 +20,21 @@ sends - gives an at-a-glance "is the link actually talking to me right
 now" signal without needing a debug probe attached, complementary to the
 on-change `rx: duty=...` log line.
 
+## Progress note
+
+Implemented. Resolved the DMA-IRQ open question from the design section:
+embassy-rp binds *every* DMA channel's `InterruptHandler` to the same
+`DMA_IRQ_0` name (there is no `DMA_IRQ_1` in this HAL) - confirmed via a
+real embassy-rp example (`examples/rp/src/bin/uart_r503.rs`) using two
+channels: `DMA_IRQ_0 => InterruptHandler<DMA_CH0>, InterruptHandler<DMA_CH1>;`.
+`PIO1_IRQ_0` does get its own separate `bind_interrupts!` block
+(`Pio1Irqs`), since that's a distinct interrupt from `DMA_IRQ_0`.
+
+`cargo build --release --locked` and `cargo fmt --check` are clean.
+On-target confirmation (pixels flash on each `spi_test.py` frame, dark
+otherwise, and the SPI link's own timing/reliability is unaffected) is
+still pending operator hardware access.
+
 ## Current state
 
 - GPIO4 is unclaimed in `firmware/pipico_board/src/main.rs`.
@@ -108,14 +123,15 @@ solve it).
 
 ## Done criteria
 
-- [ ] `neopixel_task` on PIO1 + a second DMA channel, does not touch PIO0
+- [x] `neopixel_task` on PIO1 + a second DMA channel, does not touch PIO0
       or `DMA_CH0`
 - [ ] Pixels flash on each received SPI frame, idle (off or dim) otherwise
-- [ ] `spi_pio_task` changed by exactly one atomic increment - no other
+      - on-target confirmation pending
+- [x] `spi_pio_task` changed by exactly one atomic increment - no other
       logic moved into it
 - [ ] On-target: SPI link timing/behavior unaffected (no new timeouts
-      introduced versus PR #46's baseline)
-- [ ] README documents GPIO4 and the new statics
+      introduced versus PR #46's baseline) - pending
+- [x] README documents GPIO4 and the new statics
 - [ ] `improve/2026-07-18/plans/README.md` row updated
 
 ## STOP conditions

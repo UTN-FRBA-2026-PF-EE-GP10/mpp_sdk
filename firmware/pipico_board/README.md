@@ -224,6 +224,22 @@ Bring-up aid: holding **But1** (GPIO0, active-low) energizes the relay
 directly, so you can hear it click without any host tooling. Remove once
 the curve tracer has real control logic.
 
+## Status indicators
+
+Two independent LEDs answer two different questions:
+
+- **GPIO14 (`Blinky`)**: is the firmware alive at all? Toggles ~1 Hz in
+  the main loop regardless of SPI activity - a frozen LED means a hung
+  firmware, not just "no traffic right now."
+- **GPIO4 (4x WS2812 NeoPixels, `PIO1` + its own DMA channel, decoupled
+  from the SPI-slave task)**: is the Pi actually talking to me? Flashes
+  dim green briefly on every successfully-received SPI frame, dark
+  otherwise - a frozen or dark strip with the heartbeat LED still
+  blinking means the link has gone quiet (or `spi_pio_task` itself is
+  stuck), not that the whole board is down. Driven by `PACKET_COUNT`, an
+  `AtomicU32` bumped once per received frame in `spi_slave_pio.rs` -
+  nothing SPI-timing-sensitive runs on the NeoPixel's own task.
+
 ## GPIO Assignments
 
 | Pin | GPIO    | Net Name        | Function / Notes              |
@@ -232,7 +248,7 @@ the curve tracer has real control logic.
 | 2   | GPIO1   | But2            | Button 2 input                |
 | 4   | GPIO2   | Tracer_En       | Curve-tracer relay enable (idle low) |
 | 5   | GPIO3   | Tracer_pwm      | Curve-tracer bleed PWM (idle low) |
-| 6   | GPIO4   | GPIO4           | General purpose               |
+| 6   | GPIO4   | NeoPixel_Din    | 4x WS2812 NeoPixels, packet-receive heartbeat |
 | 7   | GPIO5   | I2C_SDA         | I2C data                      |
 | 9   | GPIO6   | I2C_SCL         | I2C clock                     |
 | 10  | GPIO7   | GPIO7           | General purpose               |
