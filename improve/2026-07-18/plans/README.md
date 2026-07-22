@@ -83,15 +83,17 @@ the same week; the clamp is in `main.rs`, so no real overlap).
 - **012's CCM/DCM section is independent** (bench data already exists);
   its `power_supply` mode section needs 011 merged first - mark that part
   BLOCKED rather than guessing if executed before 011 lands.
-- **013 has no hard dependency** but touches `main.rs` (new task/statics)
-  and `spi_slave_pio.rs` (one atomic increment) - the same files 011
-  touches, so serialize the two rather than running them in parallel
-  branches to avoid a rebase.
-- **014 has no hard dependency**, but ranks P1 (not P3 like 011/012/013):
+- **013 is DONE** (merged) - 011 and 014 no longer need to serialize
+  against it, just rebase onto current `main`. It also changed the
+  bench-validated SPI clock speed to **200 kHz** (down from 1 MHz - the
+  actively-switching NeoPixels crosstalk the SPI1 MISO line at 1 MHz, see
+  013's Progress note); any future work touching SPI speed constants
+  should use 200 kHz, not the older 1 MHz figure.
+- **014 has no hard dependency**, but ranks P1 (not P3 like 011/012):
   a corrupted-but-complete SPI frame is applied to the live gate today
   with zero detection - found during on-target testing, not theoretical.
-  Also touches `spi_slave_pio.rs`, so sequence it with 011/013 rather than
-  running all three in parallel.
+  Touches `spi_slave_pio.rs`, so rebase onto current `main` (past 013)
+  before starting.
 - **015 has no hard dependency** and is fully parallel with everything
   else (`mpp_sdk/io/spi_mcu.py` + a new test file only, no firmware
   files touched). Ranks P1 like 014: its headline issue (default V/I
