@@ -232,6 +232,11 @@ async fn main(spawner: Spawner) {
     // relay and hear it click. Remove once the curve tracer has real logic.
     let but1 = Input::new(p.PIN_0, Pull::Up);
 
+    // Heartbeat LED (GPIO14, "Blinky" net) - an external LED, since the
+    // onboard one is fried. Toggles in the main loop so a stuck/hung
+    // firmware shows as a frozen LED, not just an always-on one.
+    let mut heartbeat = Output::new(p.PIN_14, Level::Low);
+
     let (sm, sm_origin) = spi_slave_pio::init(p.PIO0, p.PIN_10, p.PIN_11, p.PIN_12, p.PIN_13);
     let dma_ch = dma::Channel::new(p.DMA_CH0, DmaIrqs);
 
@@ -258,6 +263,7 @@ async fn main(spawner: Spawner) {
 
     spawner.spawn(spi_slave_pio::spi_pio_task(sm, sm_origin, dma_ch).unwrap());
 
+    let mut tick: u32 = 0;
     loop {
         let duty = DUTY.load(Ordering::Relaxed).min(DUTY_MAX);
         pwm_cfg.compare_b = (duty as u32 * 1250 / 65536) as u16;
@@ -268,6 +274,12 @@ async fn main(spawner: Spawner) {
         } else {
             Level::Low
         });
+
+        tick = tick.wrapping_add(1);
+        if tick % 500 == 0 {
+            // 500 ms per half-period at the 1 ms loop cadence -> ~1 Hz blink.
+            heartbeat.toggle();
+        }
 
         Timer::after_millis(1).await;
     }

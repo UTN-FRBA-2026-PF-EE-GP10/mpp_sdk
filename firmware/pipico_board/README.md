@@ -242,7 +242,7 @@ the curve tracer has real control logic.
 | 15  | GPIO11  | SPI1_TX         | SPI1 MOSI                     |
 | 16  | GPIO12  | SPI1_RX         | SPI1 MISO                     |
 | 17  | GPIO13  | SPI1_CS         | SPI1 chip select              |
-| 19  | GPIO14  | Blinky          | Status / heartbeat LED        |
+| 19  | GPIO14  | Blinky          | External heartbeat LED, ~1 Hz (onboard LED is fried) |
 | 20  | GPIO15  | PWM_Gate        | SEPIC gate PWM, 100 kHz (via 10R + 3.3nF) |
 | 21  | GPIO16  | SPI0_MISO       | SPI0 MISO                     |
 | 22  | GPIO17  | SPI0_CS1        | SPI0 CS 1 - INA229 (CS_INA)   |
