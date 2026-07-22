@@ -37,6 +37,7 @@ re-enabling; no plan file, tracked via the PR that disabled it.
 | 011 | Firmware: `power_supply` mode vs `mpp_tracker` mode | P2 | M | 002, 010 | TODO |
 | 012 | Docs: CCM/DCM behavior and `power_supply` mode rationale | P3 | S | 011 (mode note only; CCM/DCM part is independent) | TODO |
 | 013 | Firmware: NeoPixel packet-receive heartbeat (GPIO4) | P3 | S-M | - | TODO |
+| 014 | Firmware: CRC/checksum on the SPI frame | P1 | S-M | - | TODO |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) |
 REJECTED (with one-line rationale).
@@ -85,6 +86,11 @@ the same week; the clamp is in `main.rs`, so no real overlap).
   and `spi_slave_pio.rs` (one atomic increment) - the same files 011
   touches, so serialize the two rather than running them in parallel
   branches to avoid a rebase.
+- **014 has no hard dependency**, but ranks P1 (not P3 like 011/012/013):
+  a corrupted-but-complete SPI frame is applied to the live gate today
+  with zero detection - found during on-target testing, not theoretical.
+  Also touches `spi_slave_pio.rs`, so sequence it with 011/013 rather than
+  running all three in parallel.
 
 Suggested waves:
 

@@ -232,9 +232,8 @@ async fn main(spawner: Spawner) {
     // relay and hear it click. Remove once the curve tracer has real logic.
     let but1 = Input::new(p.PIN_0, Pull::Up);
 
-    // Heartbeat LED (GPIO14, "Blinky" net) - an external LED, since the
-    // onboard one is fried. Toggles in the main loop so a stuck/hung
-    // firmware shows as a frozen LED, not just an always-on one.
+    // Heartbeat LED (GPIO14, "Blinky" net): toggles in the main loop so a
+    // stuck/hung firmware shows as a frozen LED, not just an always-on one.
     let mut heartbeat = Output::new(p.PIN_14, Level::Low);
 
     let (sm, sm_origin) = spi_slave_pio::init(p.PIO0, p.PIN_10, p.PIN_11, p.PIN_12, p.PIN_13);
