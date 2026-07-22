@@ -166,13 +166,16 @@ async fn onchip_adc_task(
     }
 
     // Scales by the divider's total-to-bottom-leg (10k) resistance ratio,
-    // matching the currently-shorted jumper state.
+    // matching the currently-shorted jumper state. Saturates instead of
+    // wrapping: on `Full`, inputs above ~65.5 V (still within that range's
+    // ~75.6 V full scale) would otherwise overflow u16 silently.
     fn divider_to_actual_mv(adc_mv: u16) -> u16 {
-        (match ADC_DIVIDER_RANGE {
+        let mv = match ADC_DIVIDER_RANGE {
             AdcDividerRange::Full => adc_mv as u32 * 235 / 10, // 3x 75k + 10k
             AdcDividerRange::Mid => adc_mv as u32 * 160 / 10,  // 2x 75k + 10k
             AdcDividerRange::Low => adc_mv as u32 * 85 / 10,   // 1x 75k + 10k
-        }) as u16
+        };
+        mv.min(u16::MAX as u32) as u16
     }
 
     defmt::info!(

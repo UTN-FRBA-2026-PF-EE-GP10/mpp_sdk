@@ -6,10 +6,23 @@
 > report - do not improvise. When done, update the status row for this plan
 > in `improve/2026-07-18/plans/README.md`.
 >
-> **Drift check (run first)**:
-> `git diff --stat 6fc47a0..HEAD -- README.md pyproject.toml .github/workflows/ harness/compare_cyclic.py examples/ main.py`
+> **Drift check (run first)**, paths split across lines for readability
+> (pass them all to one `git diff --stat 6fc47a0..HEAD --` invocation):
+>
+> ```text
+> README.md pyproject.toml .github/workflows/
+> harness/compare_cyclic.py examples/ main.py
+> firmware/pipico_board/README.md improve/2026-07-18/plans/README.md
+> ```
+>
 > On any change, re-verify the excerpts below before editing; a direct
 > contradiction = STOP.
+>
+> **Refreshed 2026-07-22 (commit `2aa9d35`)** after a follow-up `/improve`
+> audit: item 1's "PWM is still the placeholder pin" is now stale (plan
+> 002 shipped the real gate PWM) - see the updated item 1 and step 1
+> below. Items 9-12 and their steps/scope are new from that audit; items
+> 1-8 and their steps are unchanged from the original 2026-07-18 write-up.
 
 ## Status
 
@@ -33,12 +46,16 @@ disagrees with itself in three places.
 
 1. `README.md:206` - `- [ ] SpiMcuSource(SignalSource)` unchecked, but
    `mpp_sdk/io/spi_mcu.py` ships it. `README.md:207` - MCU firmware (ADC +
-   PWM + SPI-slave) unchecked, but INA229 acquisition + PIO SPI-slave are
-   merged (`firmware/pipico_board/src/`); PWM is still the placeholder
-   pin, so mark this one partially. `README.md:215` - CI workflow
-   unchecked, but `.github/workflows/ci.yml` does uv sync + ruff + pytest.
-   `README.md:216` - `data/` unchecked, but `data/plecs/` exists with a
-   README.
+   PWM + SPI-slave) unchecked, but ADC, the real 100 kHz gate PWM (plan
+   002), and the PIO SPI-slave are all merged
+   (`firmware/pipico_board/src/`) - check it fully now, PWM is no longer a
+   placeholder. `README.md:208` - Calibration (ADC scale/offset, INA229
+   calibration / INA281 gain, PWM freq, duty limits) unchecked, but ADC
+   scale/offset, `SHUNT_CAL`, PWM frequency and `DUTY_MAX` are all
+   implemented - check it with a trailing note that only INA281
+   gain/shunt remains open. `README.md:215` - CI workflow unchecked, but
+   `.github/workflows/ci.yml` does uv sync + ruff + pytest. `README.md:216`
+   - `data/` unchecked, but `data/plecs/` exists with a README.
 2. No `hardware/README.md`. The folder mixes KiCad SOURCE
    (`*.kicad_sch`, `Proyecto0.1V.kicad_pcb`, `Proyecto0.1V.kicad_pro`,
    `Custom_Library.pretty/`) with GENERATED artifacts (`jlcpcb/gerber/`,
@@ -75,6 +92,26 @@ disagrees with itself in three places.
 8. `.github/workflows/docs.yml:30,48` install docs deps via
    `pip install mkdocs-material pymdown-extensions`, bypassing the
    `docs` dependency group declared in `pyproject.toml`.
+9. `firmware/pipico_board/README.md`'s GPIO table lists GPIO4 as
+   "General purpose", but 4x WS2812 NeoPixels are now physically wired
+   there in series (per plan 013's own "Current state" section) - this is
+   a fact about the board today, independent of whether plan 013's driver
+   code has landed. Anyone wiring/debugging from the README alone could
+   wrongly assume GPIO4 is free.
+10. `.github/workflows/firmware.yml` has no `cargo clippy` step anywhere
+    (only `cargo fmt --check` and `cargo build --release --locked`), and
+    no README mentions it as an expected local practice either - clippy
+    is simply absent end-to-end for code driving a live power stage.
+11. Neither `README.md` nor `AGENTS.md` contains the string
+    `pipico_board` or links to `firmware/pipico_board/README.md`, which is
+    where the actual build/flash/calibration instructions live - a
+    contributor working from the root docs has no discoverable path to
+    them.
+12. `improve/2026-07-18/plans/README.md:3` still opens with "Two batches,
+    one index, written at commit `6fc47a0`" describing only plans 001-009,
+    but the status table and dependency notes now run through plan 014
+    (added across later PRs) with no wave/parallelization guidance for
+    010-014.
 
 ## Commands you will need
 
@@ -98,11 +135,18 @@ disagrees with itself in three places.
 - `pyproject.toml` (ruff target-version only)
 - `.github/workflows/entregables.yml` (setup-uv version only)
 - `.github/workflows/docs.yml` (dependency install lines only)
+- `firmware/pipico_board/README.md` (GPIO4 row only, item 9)
+- `.github/workflows/firmware.yml` (add a clippy step, item 10)
+- `AGENTS.md` (one cross-reference sentence, item 11)
+- `improve/2026-07-18/plans/README.md` (opening framing paragraph only,
+  item 12 - not the status table or dependency notes, those are kept
+  current by whichever plan lands most recently)
 
 **Out of scope** (do NOT touch):
 
-- `firmware/pipico_board/README.md` - the GPIO0-3 rows belong to plan 001
-  and the PWM wording to plan 002; touching them here creates conflicts.
+- `firmware/pipico_board/README.md`'s GPIO0-3 rows or PWM wording - both
+  plans 001 and 002 are DONE and already keep that content current; this
+  plan's item 9 touches only the GPIO4 row, nothing else in that file.
 - `main.py` body (it stays the canonical demo).
 - Any harness logic; any docs/ content pages; entregables content.
 
@@ -110,9 +154,10 @@ disagrees with itself in three places.
 
 ### Step 1: README roadmap checkboxes
 
-Mark `SpiMcuSource`, CI workflow, and `data/` as `[x]`; for the MCU
-firmware line use `[x]` with a trailing note "(gate PWM pin pending - see
-improve/2026-07-18/plans/002)". **Verify**: markdownlint clean.
+Mark `SpiMcuSource`, MCU firmware, CI workflow, and `data/` as `[x]` (MCU
+firmware is now fully shipped, no trailing note needed). Mark Calibration
+as `[x]` with a trailing note "(INA281 gain/shunt still open - see
+improve/2026-07-18/plans/010)". **Verify**: markdownlint clean.
 
 ### Step 2: hardware/README.md
 
@@ -171,6 +216,43 @@ runpy.run_path(str(Path(__file__).resolve().parents[1] / "main.py"), run_name="_
 **Verify**: `uv run ruff check . && uv run ruff format --check .` exit 0;
 `uv run pytest -q` passes.
 
+### Step 7: GPIO4 README row
+
+Change `firmware/pipico_board/README.md`'s GPIO4 row's "Function / Notes"
+column from "General purpose" to something like "4x WS2812 NeoPixels
+wired in series (driver not yet implemented, see plan 013)". Touch only
+that one row. **Verify**: markdownlint clean; `grep -c "General purpose"
+firmware/pipico_board/README.md` drops by exactly 1.
+
+### Step 8: Firmware CI clippy step
+
+Add a `cargo clippy --all-targets -- -D warnings` step to
+`.github/workflows/firmware.yml` alongside the existing `fmt --check` and
+`build` steps. First run `cargo clippy --all-targets` locally in
+`firmware/pipico_board/` (and `firmware/esp32c3-bpw34/` if it builds
+cleanly enough to lint) - if it surfaces more than a handful of
+pre-existing warnings, land the CI step without `-D warnings` first (warn
+only) and note in this plan's status that tightening to deny is a
+follow-up, rather than trying to fix a pile of unrelated lints in a
+docs/DX plan. **Verify**: CI step present and green (or intentionally
+warn-only, documented).
+
+### Step 9: Cross-reference the firmware README
+
+Add one sentence to `README.md`'s Hardware section and one to
+`AGENTS.md`'s Hardware target section pointing at
+`firmware/pipico_board/README.md` for build/flash/calibration
+instructions. **Verify**: markdownlint clean.
+
+### Step 10: Refresh the plans index framing
+
+Update `improve/2026-07-18/plans/README.md`'s opening paragraph (currently
+"Two batches, one index, written at commit `6fc47a0`" describing only
+001-009) to acknowledge the later additions (010-014) without rewriting
+the whole file - a sentence or two is enough. Do not touch the status
+table or dependency notes sections; those are kept current by whichever
+plan lands most recently, not by this one. **Verify**: markdownlint clean.
+
 ## Test plan
 
 No new tests - this is docs/config. The gates are markdownlint, ruff,
@@ -185,6 +267,10 @@ report and rely on the next natural trigger).
 - [ ] `examples/pno_demo.py` is a shim; both quickstart entry points run
 - [ ] Ruff target matches the runtime (or documented as unsupported)
 - [ ] One `setup-uv` version across workflows; docs.yml uses the uv group
+- [ ] GPIO4 README row updated (item 9)
+- [ ] Firmware CI has a clippy step, warn-only or deny documented (item 10)
+- [ ] Root docs cross-reference the firmware README (item 11)
+- [ ] Plans index opening paragraph refreshed, table/notes untouched (item 12)
 - [ ] `uv run pytest -q` exits 0
 - [ ] No out-of-scope files modified
 - [ ] `improve/2026-07-18/plans/README.md` row updated
