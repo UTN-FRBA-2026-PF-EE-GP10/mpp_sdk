@@ -4,11 +4,10 @@
 > condition, stop and report. Update this plan's row in `README.md` when
 > done.
 >
-> Drift check: written after the GPIO14 heartbeat LED / on-change duty log
-> landed (PR #46). `git diff --stat <base>..HEAD -- firmware/pipico_board/`
->
-> - if `main.rs` or `spi_slave_pio.rs` changed since, re-check the excerpts
-> below before editing.
+> Drift check: written alongside PR #46 (merged as commit `2aa9d35`).
+> `git diff --stat 2aa9d35..HEAD -- firmware/pipico_board/` - if `main.rs`
+> or `spi_slave_pio.rs` changed since, re-check the excerpts below before
+> editing.
 
 ## Why
 

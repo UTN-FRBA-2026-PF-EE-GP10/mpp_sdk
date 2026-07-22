@@ -38,6 +38,7 @@ re-enabling; no plan file, tracked via the PR that disabled it.
 | 012 | Docs: CCM/DCM behavior and `power_supply` mode rationale | P3 | S | 011 (mode note only; CCM/DCM part is independent) | TODO |
 | 013 | Firmware: NeoPixel packet-receive heartbeat (GPIO4) | P3 | S-M | - | TODO |
 | 014 | Firmware: CRC/checksum on the SPI frame | P1 | S-M | - | TODO |
+| 015 | SDK: harden `SpiMcuSource` (scale defaults, teardown, read()-before-write(), tests) | P1 | S-M | - | TODO |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) |
 REJECTED (with one-line rationale).
@@ -91,6 +92,11 @@ the same week; the clamp is in `main.rs`, so no real overlap).
   with zero detection - found during on-target testing, not theoretical.
   Also touches `spi_slave_pio.rs`, so sequence it with 011/013 rather than
   running all three in parallel.
+- **015 has no hard dependency** and is fully parallel with everything
+  else (`mpp_sdk/io/spi_mcu.py` + a new test file only, no firmware
+  files touched). Ranks P1 like 014: its headline issue (default V/I
+  scale factors off by ~3300x from what the firmware actually sends) is
+  a confirmed, evidence-backed drift, not theoretical.
 
 Suggested waves:
 
@@ -141,10 +147,39 @@ contract (008), docs/DX drift bundle (009), unclamped duty (amended into
 
 ## Carried context (still-live notes from the closed 2026-07-06 audit)
 
-- `SpiMcuSource.read()` returns (0, 0) before the first `write()` -
-  revisit during HIL bring-up.
-- The PWM placeholder on `PIN_25` updated every 100 ms is exactly what
-  plan 002 replaces.
+- `SpiMcuSource.read()` returns (0, 0) before the first `write()` - now
+  tracked by plan 015 (no longer just a loose note).
+- The PWM placeholder on `PIN_25` note is resolved: plan 002 (DONE)
+  replaced it with the real GPIO15 gate PWM.
 - `INA_OOR_Alert` (GPIO21) is wired but unused; a follow-up can configure
   DIAG_ALRT limits and wire it to a fast PWM shutdown - natural extension
-  of plan 002 once the gate is live.
+  of plan 002 now that the gate is live.
+
+## Audit trail (2026-07-22 follow-up audit)
+
+Post-merge-wave `/improve` re-audit at commit `2aa9d35`, after plans
+001-002/004-007 landed and 010 progressed. Findings that became new plans:
+`SpiMcuSource`'s V/I scale-factor drift + missing tests + two smaller
+correctness gaps (015, bundled - see its own file for why bundled rather
+than split). Findings folded into the existing plan 009 rather than
+duplicated: GPIO4's NeoPixel wiring undocumented, no firmware CI clippy
+step, no root-docs pointer to the firmware README, and this index's own
+stale opening framing (009's new items 9-12). One direct fix applied
+immediately, no plan needed: `divider_to_actual_mv`'s (`main.rs`) u16
+saturation on overflow (was silently wrapping on the `Full` ADC divider
+range above ~65.5 V - currently dormant since `Low` is the active range,
+but cheap enough to just fix). One stale git worktree
+(`plan/009-docs-dx-sweep`, fully merged, zero unique commits) removed
+directly.
+
+### Findings considered and rejected (2026-07-22)
+
+- A suspected torn-read race where `spi_pio_task` could read a mismatched
+  `(V, I)` pair mid-update from `sensors_task` (two separate `Atomic*`
+  statics, two separate stores/loads): not reachable. Both the writer's
+  two stores and the reader's two loads are back-to-back with no
+  `.await` between them, and this firmware runs a single cooperative
+  executor on one core (confirmed: no `InterruptExecutor`, no
+  `spawn_core1` anywhere, despite the `executor-interrupt` Cargo feature
+  being enabled) - embassy's executor only switches tasks at yield
+  points, so this specific interleaving can't happen. Not a finding.
