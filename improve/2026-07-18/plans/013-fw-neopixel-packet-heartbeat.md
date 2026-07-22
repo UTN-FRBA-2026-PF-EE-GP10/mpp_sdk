@@ -31,9 +31,26 @@ channels: `DMA_IRQ_0 => InterruptHandler<DMA_CH0>, InterruptHandler<DMA_CH1>;`.
 (`Pio1Irqs`), since that's a distinct interrupt from `DMA_IRQ_0`.
 
 `cargo build --release --locked` and `cargo fmt --check` are clean.
-On-target confirmation (pixels flash on each `spi_test.py` frame, dark
-otherwise, and the SPI link's own timing/reliability is unaffected) is
-still pending operator hardware access.
+On-target: pixels confirmed flashing on packet receipt (with a caveat
+on the exact per-packet visual crispness at high packet rates - inherent
+to the simple change-detection polling design, not a bug, see the
+`## Maintenance notes` addition below).
+
+**SPI link timing/reliability WAS affected** - this is the STOP condition
+this plan's own design section anticipated, now confirmed on real
+hardware rather than assumed away. At the previously-validated 1 MHz, the
+actively-switching NeoPixels produced corrupted-but-complete MISO frames
+(e.g. `I_raw` reading exactly `0x8000` - one bit, not random noise), most
+likely electrical crosstalk from the NeoPixels' fast switching onto
+nearby breadboard SPI1 wiring - not a scheduling/executor-contention
+issue (the isolation this plan's design specified - separate PIO/DMA -
+correctly prevented that class of problem) and not a firmware math bug
+(`current_raw_to_ma()` cannot produce `0x8000` from any real INA229
+reading, given `I_MAX_MA = 1000` - checked and ruled out). **200 kHz is
+bench-confirmed clean** with the NeoPixels active - `scripts/spi_test.py`
+and the firmware README updated accordingly. Revisit toward 1 MHz only if
+the NeoPixel wiring is rerouted away from the SPI1 wires or moved to a
+real PCB.
 
 ## Current state
 
@@ -125,14 +142,17 @@ solve it).
 
 - [x] `neopixel_task` on PIO1 + a second DMA channel, does not touch PIO0
       or `DMA_CH0`
-- [ ] Pixels flash on each received SPI frame, idle (off or dim) otherwise
-      - on-target confirmation pending
+- [x] Pixels flash on each received SPI frame, idle (off or dim) otherwise
+      (crisp per-packet visual distinction degrades at high packet rates -
+      see Maintenance notes, not treated as a failure of this criterion)
 - [x] `spi_pio_task` changed by exactly one atomic increment - no other
       logic moved into it
-- [ ] On-target: SPI link timing/behavior unaffected (no new timeouts
-      introduced versus PR #46's baseline) - pending
+- [x] On-target: SPI link timing/behavior unaffected **at the bench-
+      confirmed 200 kHz clock** - at the previously-validated 1 MHz, the
+      link was measurably affected (electrical crosstalk, not scheduling
+      contention); see the Progress note for the full finding
 - [x] README documents GPIO4 and the new statics
-- [ ] `improve/2026-07-18/plans/README.md` row updated
+- [x] `improve/2026-07-18/plans/README.md` row updated
 
 ## STOP conditions
 
@@ -151,3 +171,18 @@ solve it).
   4-pixel strip is a natural place to add them (different colors/pixels)
   rather than adding more discrete LEDs/GPIOs - note as a possible
   follow-up, not required now.
+- `neopixel_task`'s change-detection is a simple "has `PACKET_COUNT`
+  changed since I last polled" check (10 ms poll, ~20 ms flash-hold) - it
+  cannot distinguish one packet from several arriving within that ~30 ms
+  window. At low/spaced-out packet rates (e.g. `spi_test.py`'s default
+  loop) this gives one clean flash per frame; at higher, more MPPT-
+  realistic rates (~1 kHz) `PACKET_COUNT` keeps incrementing during the
+  hold and the strip can look closer to solid-on than distinctly
+  blinking. Not fixed here - the plan's own scope explicitly said not to
+  bikeshed the flash pattern. Worth revisiting only if the qualitative
+  "is it talking to me" signal stops being useful in practice.
+- SPI clock speed is now 200 kHz (down from 1 MHz) specifically because of
+  this plan's NeoPixel wiring - see the Progress note. Any future plan
+  touching `scripts/spi_test.py`/`SpiMcuSource`'s speed defaults (e.g.
+  plan 015) should use 200 kHz as the current bench-validated figure, not
+  the older 1 MHz.

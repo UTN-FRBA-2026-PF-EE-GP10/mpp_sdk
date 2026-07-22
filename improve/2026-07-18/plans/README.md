@@ -36,7 +36,7 @@ re-enabling; no plan file, tracked via the PR that disabled it.
 | 010 | Firmware: read on-chip ADC (ADC_PWR/ADC_VOUT/ADC_Input_Curr) | P2 | M | - | IN PROGRESS (PWR/VOUT calibrated + on-target checked, ~9% error accepted; Input_Curr needs INA281 gain/shunt) |
 | 011 | Firmware: `power_supply` mode vs `mpp_tracker` mode | P2 | M | 002, 010 | TODO |
 | 012 | Docs: CCM/DCM behavior and `power_supply` mode rationale | P3 | S | 011 (mode note only; CCM/DCM part is independent) | TODO |
-| 013 | Firmware: NeoPixel packet-receive heartbeat (GPIO4) | P3 | S-M | - | IN PROGRESS (code done, on-target confirmation pending) |
+| 013 | Firmware: NeoPixel packet-receive heartbeat (GPIO4) | P3 | S-M | - | DONE (on-target confirmed at 200 kHz - 1 MHz caused NeoPixel-crosstalk MISO corruption, see plan file) |
 | 014 | Firmware: CRC/checksum on the SPI frame | P1 | S-M | - | TODO |
 | 015 | SDK: harden `SpiMcuSource` (scale defaults, teardown, read()-before-write(), tests) | P1 | S-M | - | TODO |
 

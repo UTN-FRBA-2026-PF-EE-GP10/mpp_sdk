@@ -14,9 +14,13 @@ import spidev
 BUS, DEVICE = 0, 0
 # 8 MHz is unreliable on the breadboard HIL wiring (GPIO input synchronizer
 # latency eats too much of the 125 ns bit period, on top of jumper-wire
-# signal integrity); 1 MHz is the validated working speed - bench-tested
-# during plan 004 bring-up.
-SPEED_HZ = 1_000_000
+# signal integrity) - 1 MHz was the validated speed during plan 004
+# bring-up. After wiring in the GPIO4 NeoPixel strip (plan 013), 1 MHz
+# started producing corrupted-but-complete MISO frames (e.g. I_raw reading
+# exactly 0x8000 - one bit, not random noise), most likely electrical
+# crosstalk from the NeoPixels' fast switching onto nearby breadboard
+# wiring. 200 kHz is bench-confirmed clean with the NeoPixels active.
+SPEED_HZ = 200_000
 # Firmware reports V in millivolts and I in milliamperes as raw u16
 # (firmware/pipico_board/README.md "Sensing"), not raw ADC counts.
 V_SCALE = 1e-3

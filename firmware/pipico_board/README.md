@@ -86,11 +86,23 @@ millivolts, I in milliamperes (negative current clamps to 0). See "Sensing"
 below. On the Pi side, construct `SpiMcuSource(v_scale=1e-3, i_scale=1e-3)`
 to convert to volts/amps.
 
-**Master clock speed**: bench-tested at **1 MHz** on the breadboard HIL
-wiring - reliable. 8 MHz was tried and is unreliable (occasional torn/garbled
-frames): the GPIO input synchronizer latency eats too much of the 125 ns bit
-period, worse on jumper-wire signal integrity than a real PCB trace would
-be. `scripts/spi_test.py` defaults to 1 MHz for this reason.
+**Master clock speed**: 8 MHz is unreliable (occasional torn/garbled
+frames) - the GPIO input synchronizer latency eats too much of the 125 ns
+bit period, worse on jumper-wire signal integrity than a real PCB trace
+would be. 1 MHz was bench-validated as reliable during plan 004's
+bring-up, before the GPIO4 NeoPixel strip (plan 013) was wired in.
+
+With the NeoPixels actively switching, 1 MHz started producing
+corrupted-but-complete MISO frames (e.g. `I_raw` reading exactly `0x8000`,
+a single bit, not random noise) - most likely electrical crosstalk from
+the NeoPixels' fast switching onto nearby breadboard SPI1 wiring, not a
+firmware bug (the firmware's `current_raw_to_ma()` math cannot itself
+produce `0x8000` from any real INA229 reading, given `I_MAX_MA = 1000`).
+**200 kHz is bench-confirmed clean with the NeoPixels active** -
+`scripts/spi_test.py` defaults to 200 kHz for this reason. If the
+NeoPixel wiring is ever rerouted away from the SPI1 wires (or moved onto
+a real PCB), this may be revisitable back toward 1 MHz - not yet
+retested.
 
 #### 4. Flash and stream logs
 
