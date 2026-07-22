@@ -143,6 +143,13 @@ fn build_tx_frame(v: u16, i: u16) -> [u32; FRAME_LEN] {
 /// genuinely stalled/aborted transfer, not jitter.
 const FRAME_TIMEOUT: Duration = Duration::from_millis(100);
 
+/// Consecutive frame timeouts (~100 ms each) after which the SPI master is
+/// considered gone, not just briefly glitching: `spi_pio_task` forces
+/// `DUTY` to 0 so the gate stops switching instead of free-running the
+/// last commanded duty with no host watching. Resets on the next valid
+/// frame.
+const LINK_LOST_TIMEOUTS: u32 = 5; // ~500 ms of total silence
+
 /// Force the state machine back to a known-clean state: halted, FIFOs
 /// flushed, program counter at instruction `origin` (the top of
 /// `.wrap_target`, i.e. the `wait 1 gpio 13` CS-idle check), then resumed.
@@ -176,9 +183,11 @@ fn resync(sm: &mut StateMachine<'static, PIO0, 0>, origin: u8) {
 /// split borrows so both halves can be borrowed simultaneously. The whole
 /// exchange is wrapped in a timeout so a short/aborted frame (fewer than 96
 /// SCK edges) cannot leave the DMA transfer and the RX pull stuck forever;
-/// on timeout the frame is dropped (last-good `DUTY` is kept: never freeze
-/// the gate at a stale HIGH duty from a torn read) and the state machine is
-/// forced back to a clean starting point via `resync()`.
+/// on timeout the frame is dropped (a single torn read must not overwrite
+/// `DUTY` with garbage) and the state machine is forced back to a clean
+/// starting point via `resync()`. After `LINK_LOST_TIMEOUTS` consecutive
+/// timeouts the master is considered gone, not just glitching, and `DUTY`
+/// is forced to 0 - see that const's doc comment.
 ///
 /// `resync()` runs ONLY on that (rare, exceptional) timeout path, not after
 /// every successful frame. An earlier version of this fix called it every
@@ -209,6 +218,7 @@ pub async fn spi_pio_task(
         MEAS_V_MV.load(Ordering::Relaxed),
         MEAS_I_MA.load(Ordering::Relaxed),
     );
+    let mut consecutive_timeouts: u32 = 0;
 
     loop {
         let mut rx = [0u32; FRAME_LEN];
@@ -229,9 +239,18 @@ pub async fn spi_pio_task(
             defmt::warn!("spi_pio_task: frame timeout, resyncing (duty unchanged)");
             resync(&mut sm, origin);
             // Re-arm TX with the last-known-good V/I for the next attempt;
-            // DUTY is intentionally left untouched (see doc comment above).
+            // DUTY is left untouched by a single torn frame (see doc
+            // comment above) but forced to 0 if the master appears gone.
+            consecutive_timeouts += 1;
+            if consecutive_timeouts == LINK_LOST_TIMEOUTS {
+                defmt::warn!("spi_pio_task: link lost, forcing duty to 0");
+            }
+            if consecutive_timeouts >= LINK_LOST_TIMEOUTS {
+                DUTY.store(0, Ordering::Relaxed);
+            }
             continue;
         }
+        consecutive_timeouts = 0;
 
         // RX autopush puts byte in bits 7-0 (shift_in = Left).
         let duty = ((rx[0] as u8 as u16) << 8) | rx[1] as u8 as u16;
