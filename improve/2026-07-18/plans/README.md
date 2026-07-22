@@ -36,6 +36,7 @@ re-enabling; no plan file, tracked via the PR that disabled it.
 | 010 | Firmware: read on-chip ADC (ADC_PWR/ADC_VOUT/ADC_Input_Curr) | P2 | M | - | IN PROGRESS (PWR/VOUT calibrated + on-target checked, ~9% error accepted; Input_Curr needs INA281 gain/shunt) |
 | 011 | Firmware: `power_supply` mode vs `mpp_tracker` mode | P2 | M | 002, 010 | TODO |
 | 012 | Docs: CCM/DCM behavior and `power_supply` mode rationale | P3 | S | 011 (mode note only; CCM/DCM part is independent) | TODO |
+| 013 | Firmware: NeoPixel packet-receive heartbeat (GPIO4) | P3 | S-M | - | TODO |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) |
 REJECTED (with one-line rationale).
@@ -80,6 +81,10 @@ the same week; the clamp is in `main.rs`, so no real overlap).
 - **012's CCM/DCM section is independent** (bench data already exists);
   its `power_supply` mode section needs 011 merged first - mark that part
   BLOCKED rather than guessing if executed before 011 lands.
+- **013 has no hard dependency** but touches `main.rs` (new task/statics)
+  and `spi_slave_pio.rs` (one atomic increment) - the same files 011
+  touches, so serialize the two rather than running them in parallel
+  branches to avoid a rebase.
 
 Suggested waves:
 
