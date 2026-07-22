@@ -86,11 +86,23 @@ millivolts, I in milliamperes (negative current clamps to 0). See "Sensing"
 below. On the Pi side, construct `SpiMcuSource(v_scale=1e-3, i_scale=1e-3)`
 to convert to volts/amps.
 
-**Master clock speed**: bench-tested at **1 MHz** on the breadboard HIL
-wiring - reliable. 8 MHz was tried and is unreliable (occasional torn/garbled
-frames): the GPIO input synchronizer latency eats too much of the 125 ns bit
-period, worse on jumper-wire signal integrity than a real PCB trace would
-be. `scripts/spi_test.py` defaults to 1 MHz for this reason.
+**Master clock speed**: 8 MHz is unreliable (occasional torn/garbled
+frames) - the GPIO input synchronizer latency eats too much of the 125 ns
+bit period, worse on jumper-wire signal integrity than a real PCB trace
+would be. 1 MHz was bench-validated as reliable during plan 004's
+bring-up, before the GPIO4 NeoPixel strip (plan 013) was wired in.
+
+With the NeoPixels actively switching, 1 MHz started producing
+corrupted-but-complete MISO frames (e.g. `I_raw` reading exactly `0x8000`,
+a single bit, not random noise) - most likely electrical crosstalk from
+the NeoPixels' fast switching onto nearby breadboard SPI1 wiring, not a
+firmware bug (the firmware's `current_raw_to_ma()` math cannot itself
+produce `0x8000` from any real INA229 reading, given `I_MAX_MA = 1000`).
+**200 kHz is bench-confirmed clean with the NeoPixels active** -
+`scripts/spi_test.py` defaults to 200 kHz for this reason. If the
+NeoPixel wiring is ever rerouted away from the SPI1 wires (or moved onto
+a real PCB), this may be revisitable back toward 1 MHz - not yet
+retested.
 
 #### 4. Flash and stream logs
 
@@ -224,6 +236,22 @@ Bring-up aid: holding **But1** (GPIO0, active-low) energizes the relay
 directly, so you can hear it click without any host tooling. Remove once
 the curve tracer has real control logic.
 
+## Status indicators
+
+Two independent LEDs answer two different questions:
+
+- **GPIO14 (`Blinky`)**: is the firmware alive at all? Toggles ~1 Hz in
+  the main loop regardless of SPI activity - a frozen LED means a hung
+  firmware, not just "no traffic right now."
+- **GPIO4 (4x WS2812 NeoPixels, `PIO1` + its own DMA channel, decoupled
+  from the SPI-slave task)**: is the Pi actually talking to me? Flashes
+  dim green briefly on every successfully-received SPI frame, dark
+  otherwise - a frozen or dark strip with the heartbeat LED still
+  blinking means the link has gone quiet (or `spi_pio_task` itself is
+  stuck), not that the whole board is down. Driven by `PACKET_COUNT`, an
+  `AtomicU32` bumped once per received frame in `spi_slave_pio.rs` -
+  nothing SPI-timing-sensitive runs on the NeoPixel's own task.
+
 ## GPIO Assignments
 
 | Pin | GPIO    | Net Name        | Function / Notes              |
@@ -232,7 +260,7 @@ the curve tracer has real control logic.
 | 2   | GPIO1   | But2            | Button 2 input                |
 | 4   | GPIO2   | Tracer_En       | Curve-tracer relay enable (idle low) |
 | 5   | GPIO3   | Tracer_pwm      | Curve-tracer bleed PWM (idle low) |
-| 6   | GPIO4   | GPIO4           | General purpose               |
+| 6   | GPIO4   | NeoPixel_Din    | 4x WS2812 NeoPixels, packet-receive heartbeat |
 | 7   | GPIO5   | I2C_SDA         | I2C data                      |
 | 9   | GPIO6   | I2C_SCL         | I2C clock                     |
 | 10  | GPIO7   | GPIO7           | General purpose               |

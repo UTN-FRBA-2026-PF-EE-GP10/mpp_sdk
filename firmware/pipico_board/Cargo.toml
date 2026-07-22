@@ -20,6 +20,10 @@ portable-atomic = { version = "1", features = ["critical-section"] }
 defmt = "1.1.0"
 defmt-rtt = "1.0"
 
+# RGB8 for embassy-rp's vendored PioWs2812 driver (transitive via
+# embassy-rp, needs to be a direct dep to name the type).
+smart-leds = "0.4.0"
+
 [profile.release]
 debug = 2
 lto = "fat"

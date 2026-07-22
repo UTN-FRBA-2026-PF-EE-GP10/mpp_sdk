@@ -93,12 +93,15 @@ change.
 ### Step 1: Fix the default scale factors and docstring
 
 Change `v_scale`/`i_scale` defaults from `3.3 / 4095.0` to `1e-3`, change
-`speed_hz`'s default from `4_000_000` to `1_000_000` (matching
-`scripts/spi_test.py`'s bench-validated speed - 8 MHz is documented as
-unreliable on this hardware, 4 MHz has no supporting bench evidence
-either way). Rewrite the docstring's "V and I are 12-bit ADC counts..."
-sentence to describe the actual wire format: calibrated millivolts/
-milliamperes as saturating u16, matching
+`speed_hz`'s default from `4_000_000` to `200_000` (matching
+`scripts/spi_test.py`'s current bench-validated speed - re-check that
+file before writing the constant, plan 013's bring-up found 1 MHz
+produces electrical crosstalk from the GPIO4 NeoPixel strip, corrupting
+MISO frames; 200 kHz is clean with the NeoPixels active. 4 MHz and 8 MHz
+have no supporting bench evidence either way and are likely worse.)
+Rewrite the docstring's "V and I are 12-bit ADC counts..." sentence to
+describe the actual wire format: calibrated millivolts/milliamperes as
+saturating u16, matching
 `firmware/pipico_board/README.md`'s "Sensing" section wording.
 
 **Verify**: `uv run ruff check mpp_sdk/io/spi_mcu.py && uv run ruff format
@@ -171,8 +174,9 @@ pytest -q` both pass; `uv run ruff check .` clean.
 
 ## Done criteria
 
-- [ ] `v_scale`/`i_scale` default to `1e-3`, `speed_hz` defaults to
-      `1_000_000`, docstring describes mV/mA not raw ADC counts
+- [ ] `v_scale`/`i_scale` default to `1e-3`, `speed_hz` matches
+      `scripts/spi_test.py`'s current value at execution time (`200_000` as
+      of this writing), docstring describes mV/mA not raw ADC counts
 - [ ] `__exit__` uses try/finally, `close()` always runs
 - [ ] `read()` before first `write()` raises instead of returning `(0,0)`
 - [ ] `tests/test_spi_mcu.py` exists and covers the four items in step 4,
@@ -199,7 +203,9 @@ pytest -q` both pass; `uv run ruff check .` clean.
 - If plan 014 (SPI frame CRC) lands after this plan, `_transact()` will
   need a corresponding update to verify/strip the checksum byte - not this
   plan's job, just noting the interaction point for whoever picks up 014.
-- The `speed_hz` default change (4 MHz -> 1 MHz) only affects the
+- The `speed_hz` default change (4 MHz -> 200 kHz as of this writing, but
+  re-check `scripts/spi_test.py` before implementing - it may move again if
+  the NeoPixel wiring is ever rerouted, see plan 013) only affects the
   *default*; nothing currently constructs `SpiMcuSource()` without an
   explicit `speed_hz` in the codebase today (checked during the audit),
   so this is a safety-net fix, not a behavior change for existing code.

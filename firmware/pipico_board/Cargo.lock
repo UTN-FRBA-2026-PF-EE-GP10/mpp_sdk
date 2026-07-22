@@ -812,6 +812,7 @@ dependencies = [
  "embassy-time",
  "panic-probe",
  "portable-atomic",
+ "smart-leds",
  "static_cell",
 ]
 

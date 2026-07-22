@@ -11,18 +11,25 @@ use embassy_rp::adc::{Adc, Channel as AdcChannel, Config as AdcConfig};
 use embassy_rp::bind_interrupts;
 use embassy_rp::dma;
 use embassy_rp::gpio::{Input, Level, Output, Pull};
-use embassy_rp::peripherals::DMA_CH0;
+use embassy_rp::peripherals::{DMA_CH0, DMA_CH1, PIO1};
+use embassy_rp::pio::{InterruptHandler as PioInterruptHandler, Pio};
+use embassy_rp::pio_programs::ws2812::{Grb, PioWs2812, PioWs2812Program};
 use embassy_rp::pwm::{Config as PwmConfig, Pwm};
 use embassy_rp::spi::{Config as SpiConfig, Phase, Polarity, Spi};
 use embassy_time::Timer;
 use ina229::Ina229;
 // use max31865::Max31865;
 // use portable_atomic::AtomicI16;
-use portable_atomic::{AtomicU16, Ordering};
+use portable_atomic::{AtomicU16, AtomicU32, Ordering};
+use smart_leds::RGB8;
 use {defmt_rtt as _, panic_probe as _};
 
 bind_interrupts!(struct DmaIrqs {
-    DMA_IRQ_0 => dma::InterruptHandler<DMA_CH0>;
+    DMA_IRQ_0 => dma::InterruptHandler<DMA_CH0>, dma::InterruptHandler<DMA_CH1>;
+});
+
+bind_interrupts!(struct Pio1Irqs {
+    PIO1_IRQ_0 => PioInterruptHandler<PIO1>;
 });
 
 // Shared state (written by SPI/ADC tasks, read by main).
@@ -43,6 +50,9 @@ pub static MEAS_I_MA: AtomicU16 = AtomicU16::new(0);
 pub static MEAS_ADC_PWR_MV: AtomicU16 = AtomicU16::new(0);
 pub static MEAS_ADC_VOUT_MV: AtomicU16 = AtomicU16::new(0);
 pub static MEAS_ADC_IIN_MV: AtomicU16 = AtomicU16::new(0);
+// Bumped once per successfully-received SPI frame (spi_slave_pio.rs) -
+// read-only elsewhere, drives the NeoPixel packet heartbeat.
+pub static PACKET_COUNT: AtomicU32 = AtomicU32::new(0);
 
 /// Polls the INA229 over SPI0 at the SDK's control period
 /// (`CONTROL_PERIOD_MS = 1.0`) and publishes `(V, I)` for the SPI-slave link.
@@ -212,6 +222,33 @@ async fn onchip_adc_task(
     }
 }
 
+const NEOPIXEL_COUNT: usize = 4;
+
+/// Flashes the GPIO4 NeoPixel strip briefly on every SPI frame the Pi
+/// successfully sends, dark otherwise - a packet-received heartbeat,
+/// separate from GPIO14's firmware-alive one. Runs on PIO1 (PIO0 is
+/// owned by the SPI slave) with its own DMA channel, decoupled from
+/// `spi_pio_task` via `PACKET_COUNT` so it can never affect that task's
+/// timing budget.
+#[embassy_executor::task]
+async fn neopixel_task(mut ws2812: PioWs2812<'static, PIO1, 0, NEOPIXEL_COUNT, Grb>) {
+    const OFF: [RGB8; NEOPIXEL_COUNT] = [RGB8 { r: 0, g: 0, b: 0 }; NEOPIXEL_COUNT];
+    const FLASH: [RGB8; NEOPIXEL_COUNT] = [RGB8 { r: 0, g: 32, b: 0 }; NEOPIXEL_COUNT];
+
+    let mut last_seen: u32 = 0;
+    ws2812.write(&OFF).await;
+    loop {
+        let current = PACKET_COUNT.load(Ordering::Relaxed);
+        if current != last_seen {
+            last_seen = current;
+            ws2812.write(&FLASH).await;
+            Timer::after_millis(20).await;
+            ws2812.write(&OFF).await;
+        }
+        Timer::after_millis(10).await;
+    }
+}
+
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
     let p = embassy_rp::init(Default::default());
@@ -264,6 +301,24 @@ async fn main(spawner: Spawner) {
     spawner.spawn(onchip_adc_task(adc, ch_pwr, ch_vout, ch_iin).unwrap());
 
     spawner.spawn(spi_slave_pio::spi_pio_task(sm, sm_origin, dma_ch).unwrap());
+
+    // GPIO4 NeoPixel packet heartbeat: separate PIO block/DMA channel from
+    // the SPI slave above, see neopixel_task's doc comment for why.
+    let Pio {
+        common: mut pio1_common,
+        sm0: pio1_sm0,
+        ..
+    } = Pio::new(p.PIO1, Pio1Irqs);
+    let ws2812_program = PioWs2812Program::new(&mut pio1_common);
+    let ws2812 = PioWs2812::new(
+        &mut pio1_common,
+        pio1_sm0,
+        p.DMA_CH1,
+        DmaIrqs,
+        p.PIN_4,
+        &ws2812_program,
+    );
+    spawner.spawn(neopixel_task(ws2812).unwrap());
 
     let mut tick: u32 = 0;
     loop {
