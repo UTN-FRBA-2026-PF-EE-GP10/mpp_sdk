@@ -39,14 +39,27 @@ over the SPI frame (u16, 0 = 0 %, 65535 = 100 %).
 
 ## Progress note
 
-Implemented on `feat/fw-sepic-gate-pwm`. `sim-adc` was removed from the
-firmware (a prior, unrelated change) - the plan's dual-build verify step
-no longer applies; only `cargo build --release --locked` is checked.
-Dropped the `PIN_25` LED mirror per the plan's own "if it costs more than
-a handful of lines, drop it" - `PWM_SLICE4`/`PIN_25` are now free. Code and
-`cargo build --release --locked`/`cargo fmt --check` are done; the
-on-target smoke test (step 2, scope/logic-analyzer on GPIO15) is still
-pending operator hardware access.
+Implemented on `feat/fw-sepic-gate-pwm`, merged to `main`. `sim-adc` was
+removed from the firmware (a prior, unrelated change) - the plan's
+dual-build verify step no longer applies; only
+`cargo build --release --locked` is checked. Dropped the `PIN_25` LED
+mirror per the plan's own "if it costs more than a handful of lines, drop
+it" - `PWM_SLICE4`/`PIN_25` are now free. Also added an operator-requested
+safety addition beyond the original design: a link-lost watchdog in
+`spi_slave_pio.rs` that forces `DUTY` to 0 after ~500 ms of SPI silence
+(see that file's doc comments).
+
+On-target validation was functional rather than a literal oscilloscope
+capture: bench-tested on a 3.9 V battery / 10 Ohm load (D=0.20 -> ~1 V,
+D=0.60 -> ~4 V, both in the correct direction, deviation from the ideal
+ratio explained by battery sag/conversion losses) and on a 3.3 V supply
+(D=0.50 -> ideal 3.3 V, confirmed once a proper CCM-weight load was
+connected - an initial no-load test read ~7 V and a 10 kOhm load read ~6 V,
+both explained by discontinuous-conduction-mode behavior at light load,
+not a bug). This confirms GPIO15 carries real, correctly-directioned PWM
+and rules out the gate-driver-inversion STOP condition. The 95 % duty
+clamp boundary specifically was not exercised (bench testing stayed at
+D <= 0.6) - left as a natural pickup for plan 003's bench sweep.
 
 ## Design (follow it)
 
@@ -105,12 +118,13 @@ harsh), INA_OOR fast-shutdown wiring (follow-up).
 
 ## Done criteria
 
-- [ ] GPIO15 carries 100 kHz PWM, duty tracks the Pi-commanded u16
-- [ ] Boots at 0 % duty in both feature configurations
+- [x] GPIO15 carries 100 kHz PWM, duty tracks the Pi-commanded u16
+      (functionally confirmed via Vout across multiple duty points)
+- [x] Boots at 0 % duty (code-guaranteed: `DUTY: AtomicU16::new(0)`)
 - [ ] Commanded 0xFFFF produces the 95 % clamp, not 100 % (scope or
-      defmt-verified)
-- [ ] PIN_25 placeholder loop is gone
-- [ ] README updated
+      defmt-verified) - not yet exercised, pick up in plan 003
+- [x] PIN_25 placeholder loop is gone
+- [x] README updated
 
 ## STOP conditions
 
