@@ -219,6 +219,7 @@ pub async fn spi_pio_task(
         MEAS_I_MA.load(Ordering::Relaxed),
     );
     let mut consecutive_timeouts: u32 = 0;
+    let mut last_logged_duty: Option<u16> = None;
 
     loop {
         let mut rx = [0u32; FRAME_LEN];
@@ -256,15 +257,16 @@ pub async fn spi_pio_task(
         let duty = ((rx[0] as u8 as u16) << 8) | rx[1] as u8 as u16;
         DUTY.store(duty, Ordering::Relaxed);
 
+        // Log only on change - at the Pi's control period this would
+        // otherwise flood RTT every frame; V/I are already logged
+        // periodically by sensors_task.
+        if last_logged_duty != Some(duty) {
+            defmt::info!("rx: duty={}%", duty as u32 * 100 / 65535);
+            last_logged_duty = Some(duty);
+        }
+
         let v = MEAS_V_MV.load(Ordering::Relaxed);
         let i = MEAS_I_MA.load(Ordering::Relaxed);
-        defmt::info!(
-            "rx: duty={}% | tx: V={} mV I={} mA",
-            duty as u32 * 100 / 65535,
-            v,
-            i
-        );
-
         tx_buf = build_tx_frame(v, i);
     }
 }

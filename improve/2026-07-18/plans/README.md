@@ -25,7 +25,7 @@ re-enabling; no plan file, tracked via the PR that disabled it.
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
 | 001 | Firmware: curve-tracer relay + Tracer_pwm foundation | P2 | S | - | DONE |
-| 002 | Firmware: SEPIC gate PWM on GPIO15 at 100 kHz (+ duty clamp) | P1 | S-M | - | IN PROGRESS (code done, needs on-target smoke test) |
+| 002 | Firmware: SEPIC gate PWM on GPIO15 at 100 kHz (+ duty clamp) | P1 | S-M | - | DONE (95% clamp boundary untested, pick up in 003) |
 | 003 | Bench: duty sweep into a 10 Ohm load, transfer-ratio check | P1 | M (bench) | 002 flashed | TODO |
 | 004 | Firmware: PIO SPI-slave frame-timeout recovery + 1 MHz speed fix | P1 | M | - | DONE |
 | 005 | Stable (exponential-Euler) integrator for DynamicSimulatedSource | P1 | S | - | DONE |
@@ -34,6 +34,10 @@ re-enabling; no plan file, tracked via the PR that disabled it.
 | 008 | NoisySource cached read (idempotent read()) | P2 | S | 007 | TODO |
 | 009 | Docs and tooling sweep after the merge wave | P3 | S | - | TODO |
 | 010 | Firmware: read on-chip ADC (ADC_PWR/ADC_VOUT/ADC_Input_Curr) | P2 | M | - | IN PROGRESS (PWR/VOUT calibrated + on-target checked, ~9% error accepted; Input_Curr needs INA281 gain/shunt) |
+| 011 | Firmware: `power_supply` mode vs `mpp_tracker` mode | P2 | M | 002, 010 | TODO |
+| 012 | Docs: CCM/DCM behavior and `power_supply` mode rationale | P3 | S | 011 (mode note only; CCM/DCM part is independent) | TODO |
+| 013 | Firmware: NeoPixel packet-receive heartbeat (GPIO4) | P3 | S-M | - | TODO |
+| 014 | Firmware: CRC/checksum on the SPI frame | P1 | S-M | - | TODO |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) |
 REJECTED (with one-line rationale).
@@ -69,6 +73,24 @@ the same week; the clamp is in `main.rs`, so no real overlap).
 - **003 after 002 is flashed** (bench procedure; 004 strongly recommended
   first too - a desyncing link during a live-power sweep is exactly the
   failure 004 removes).
+- **011 after 002 and 010** (needs the real GPIO15 gate PWM and the
+  calibrated `MEAS_ADC_VOUT_MV` feedback signal). **011 has a STOP
+  condition on an explicit operator decision** (does the link-lost
+  watchdog still force duty to 0 in `power_supply` mode, or should the
+  local regulator run standalone) - do not implement the controller before
+  that is answered.
+- **012's CCM/DCM section is independent** (bench data already exists);
+  its `power_supply` mode section needs 011 merged first - mark that part
+  BLOCKED rather than guessing if executed before 011 lands.
+- **013 has no hard dependency** but touches `main.rs` (new task/statics)
+  and `spi_slave_pio.rs` (one atomic increment) - the same files 011
+  touches, so serialize the two rather than running them in parallel
+  branches to avoid a rebase.
+- **014 has no hard dependency**, but ranks P1 (not P3 like 011/012/013):
+  a corrupted-but-complete SPI frame is applied to the live gate today
+  with zero detection - found during on-target testing, not theoretical.
+  Also touches `spi_slave_pio.rs`, so sequence it with 011/013 rather than
+  running all three in parallel.
 
 Suggested waves:
 
