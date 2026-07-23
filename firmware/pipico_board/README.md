@@ -143,19 +143,20 @@ No log output is available in this mode (RTT requires a probe connection).
 cargo build --release
 ```
 
+## Operating Modes
+
+`src/main.rs` supports two compile-time selectable operating modes via `FIRMWARE_MODE`:
+
+- **`FirmwareMode::MppTracker`** (default):
+  Drives the SEPIC gate PWM on GPIO15 (`PWM_Gate`) at 100 kHz from the `DUTY` value received over the RPi SPI link (u16, 0 = 0 %, 65535 = 100 %, updated every 1 ms). Boots at 0 % duty and clamps commanded duty at 95 % (`DUTY_MAX`) as a defense-in-depth guard against a desynced/misbehaving master. If the SPI master goes silent for ~500 ms (5 consecutive frame timeouts), the link is considered lost and duty is forced to 0 - the gate stops switching rather than free-running the last commanded duty unsupervised.
+
+- **`FirmwareMode::PowerSupply`**:
+  Runs a local closed-loop controller targeting a fixed output voltage defined by `POWER_SUPPLY_VOUT_MV` (default: 12000 mV / 12 V), using `MEAS_ADC_VOUT_MV` (plan 010 on-chip ADC) as feedback. Gate duty is still strictly bounded by `DUTY_MAX` (95 %) to prevent inductor current runaway.
+  **Watchdog Behavior (Decision B)**: In `PowerSupply` mode, SPI link-lost watchdog resets of `DUTY` do not force gate duty to zero, allowing the Pico to operate as a standalone closed-loop bench power supply even without an active SPI host attached.
+
 ## What it does
 
-`src/main.rs` drives the SEPIC gate PWM on GPIO15 (`PWM_Gate`) at 100 kHz
-from the `DUTY` value it receives over the RPi SPI link (u16, 0 = 0 %,
-65535 = 100 %, updated every 1 ms). Boots at 0 % duty and clamps commanded
-duty at 95 % (`DUTY_MAX`) as a defense-in-depth guard against a
-desynced/misbehaving master. If the SPI master goes silent for ~500 ms
-(5 consecutive frame timeouts), the link is considered lost and duty is
-forced to 0 - the gate stops switching rather than free-running the last
-commanded duty unsupervised. It also feeds that link real `(V, I)`
-measurements read from the on-board INA229 power monitor over SPI0 (see
-"Sensing" below). Default `#[embassy_executor::main]` also emits defmt log
-lines over RTT.
+`src/main.rs` drives the SEPIC gate PWM on GPIO15 (`PWM_Gate`) at 100 kHz. Depending on `FIRMWARE_MODE`, it either applies the SPI-commanded `DUTY` (`MppTracker`) or regulates output voltage to `POWER_SUPPLY_VOUT_MV` (`PowerSupply`). It also feeds that link real `(V, I)` measurements read from the on-board INA229 power monitor over SPI0 (see "Sensing" below). Default `#[embassy_executor::main]` also emits defmt log lines over RTT.
 
 ## Sensing
 

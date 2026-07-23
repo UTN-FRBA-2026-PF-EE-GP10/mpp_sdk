@@ -249,11 +249,29 @@ async fn neopixel_task(mut ws2812: PioWs2812<'static, PIO1, 0, NEOPIXEL_COUNT, G
     }
 }
 
+/// Selects between host-driven MPPT control (`MppTracker`) and local autonomous voltage regulation (`PowerSupply`).
+#[allow(dead_code)]
+#[derive(Clone, Copy, PartialEq, Eq, defmt::Format)]
+enum FirmwareMode {
+    /// RPi SPI host drives duty cycle directly (open-loop from Pico's perspective).
+    MppTracker,
+    /// Local closed-loop Vout regulation for standalone bench testing.
+    PowerSupply,
+}
+
+/// Compile-time mode selection. Change to `FirmwareMode::PowerSupply` for bench supply operation.
+const FIRMWARE_MODE: FirmwareMode = FirmwareMode::MppTracker;
+/// Target output voltage in millivolts when operating in `PowerSupply` mode.
+const POWER_SUPPLY_VOUT_MV: u16 = 12000;
+
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
     let p = embassy_rp::init(Default::default());
 
-    defmt::info!("mpp-firmware booted (PIO SPI slave)");
+    defmt::info!(
+        "mpp-firmware booted (PIO SPI slave), mode: {}",
+        FIRMWARE_MODE
+    );
 
     // SEPIC gate PWM on GPIO15 (PWM_Gate net, through a 10R + 3.3nF network
     // into the driver stage): 100 kHz at the default 125 MHz sysclk with
@@ -321,8 +339,33 @@ async fn main(spawner: Spawner) {
     spawner.spawn(neopixel_task(ws2812).unwrap());
 
     let mut tick: u32 = 0;
+    let mut ps_duty: u16 = 0;
+
     loop {
-        let duty = DUTY.load(Ordering::Relaxed).min(DUTY_MAX);
+        let duty = match FIRMWARE_MODE {
+            // MppTracker: Apply Pi's commanded SPI duty directly.
+            // Clamped at DUTY_MAX (95%) as defense-in-depth against SEPIC inductor saturation.
+            FirmwareMode::MppTracker => DUTY.load(Ordering::Relaxed).min(DUTY_MAX),
+            // PowerSupply: Local closed-loop Vout regulation using on-chip ADC feedback.
+            FirmwareMode::PowerSupply => {
+                let vout_mv = MEAS_ADC_VOUT_MV.load(Ordering::Relaxed);
+                if vout_mv < POWER_SUPPLY_VOUT_MV {
+                    // Below target Vout: increase duty to boost voltage.
+                    let err = POWER_SUPPLY_VOUT_MV - vout_mv;
+                    // Step size scales proportionally with error (err/50), bounded to 1..200
+                    // per 1 ms loop iteration to avoid overshoot.
+                    let step = (err / 50).clamp(1, 200);
+                    ps_duty = ps_duty.saturating_add(step).min(DUTY_MAX);
+                } else if vout_mv > POWER_SUPPLY_VOUT_MV {
+                    // Above target Vout: decrease duty to lower voltage.
+                    let err = vout_mv - POWER_SUPPLY_VOUT_MV;
+                    let step = (err / 50).clamp(1, 200);
+                    ps_duty = ps_duty.saturating_sub(step);
+                }
+                ps_duty
+            }
+        };
+
         pwm_cfg.compare_b = (duty as u32 * 1250 / 65536) as u16;
         pwm.set_config(&pwm_cfg);
 
