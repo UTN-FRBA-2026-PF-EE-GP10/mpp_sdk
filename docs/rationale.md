@@ -39,6 +39,31 @@ $R_\text{eff}(D) = R_\text{load}\left(\tfrac{1-D}{D}\right)^2$ is monotonic in
 the duty cycle, giving a clean, single-valued mapping from $D$ to operating
 point.
 
+### Continuous vs discontinuous conduction mode (CCM/DCM)
+
+In ideal Continuous Conduction Mode (CCM), the voltage transfer ratio is strictly
+$V_\text{out} = V_\text{in} \cdot \frac{D}{1-D}$. However, on the physical bench,
+the converter operates in Discontinuous Conduction Mode (DCM) at light loads
+(high load resistance). In DCM, the inductor current falls to zero within each
+switching cycle, breaking the continuous flux-balance assumption and causing the
+output voltage to rise above the ideal CCM ratio.
+
+During bench bring-up (plan 002), at a fixed commanded duty $D = 0.5$ and $V_\text{in} = 3.3\text{ V}$, the measured output voltage varied dramatically with load:
+- **~3.3 V into a 10 $\Omega$ load** (matching the ideal CCM ratio $3.3 \cdot \frac{0.5}{1-0.5} = 3.3\text{ V}$)
+- **~6.0 V into a 10 k$\Omega$ load** (DCM boost behavior under light load)
+- **~7.0 V open-circuit** (unloaded DCM ceiling)
+
+Understanding this operating regime transition is vital for hardware validation and characterization.
+
+### Firmware operating modes
+
+To simplify converter characterization on the bench without needing a host-side control loop, the RP2040 firmware supports two operating modes (`FIRMWARE_MODE`):
+
+- **`FirmwareMode::MppTracker`**: The RP2040 acts as a pure hardware I/O proxy. The algorithm on the Raspberry Pi receives $(V, I)$ measurements and commands duty cycle $D$ over SPI. A link-lost watchdog forces $D = 0$ if SPI communication drops for $> 500\text{ ms}$.
+- **`FirmwareMode::PowerSupply`**: The RP2040 operates as an autonomous closed-loop bench power supply, regulating output voltage $V_\text{out}$ to a fixed setpoint (`POWER_SUPPLY_VOUT_MV`, e.g., 12 V) using on-chip ADC feedback (`MEAS_ADC_VOUT_MV`). In this mode, the local regulator continues operating standalone even if the host SPI connection drops.
+
+For full implementation details, setpoint configuration, and watchdog behavior, see [`firmware/pipico_board/README.md`]
+
 ## Why these algorithms, in this order
 
 1. **P&O** — the baseline every MPPT paper compares against. Fixed-step,

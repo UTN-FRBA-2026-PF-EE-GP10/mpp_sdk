@@ -88,11 +88,11 @@ trivial.
 
 ## Done criteria
 
-- [ ] CCM/DCM subsection added to `docs/rationale.md`, grounded in the
+- [x] CCM/DCM subsection added to `docs/rationale.md`, grounded in the
       real plan 002 bench numbers
-- [ ] "Firmware operating modes" note added (or explicitly marked BLOCKED
+- [x] "Firmware operating modes" note added (or explicitly marked BLOCKED
       on plan 011 if 011 hasn't landed yet)
-- [ ] `improve/2026-07-18/plans/README.md` row updated
+- [x] `improve/2026-07-18/plans/README.md` row updated
 
 ## STOP conditions
 

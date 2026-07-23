@@ -130,16 +130,16 @@ its watchdog behavior).
 
 ## Done criteria
 
-- [ ] Mode enum/const added, defaults to `MppTracker` (step 2 alone is a
+- [x] Mode enum/const added, defaults to `MppTracker` (step 2 alone is a
       behavior no-op)
-- [ ] Link-lost-watchdog interaction decided explicitly by the operator
+- [x] Link-lost-watchdog interaction decided explicitly by the operator
       and documented in the README (not assumed by the executor)
-- [ ] `DUTY_MAX`-equivalent clamp verified to still apply in `PowerSupply`
+- [x] `DUTY_MAX`-equivalent clamp verified to still apply in `PowerSupply`
       mode
-- [ ] `PowerSupply` mode regulates `Vout` to the setpoint within a
+- [x] `PowerSupply` mode regulates `Vout` to the setpoint within a
       documented tolerance, on-target confirmed
-- [ ] `MppTracker` mode regression-checked as unchanged
-- [ ] README documents both modes
+- [x] `MppTracker` mode regression-checked as unchanged
+- [x] README documents both modes
 
 ## STOP conditions
 
