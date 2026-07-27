@@ -37,8 +37,8 @@ re-enabling; no plan file, tracked via the PR that disabled it.
 | 011 | Firmware: `power_supply` mode vs `mpp_tracker` mode | P2 | M | 002, 010 | DONE (feed-forward + proportional-trim ClosedLoop confirmed on-target; MppTracker regression-checked unaffected; plan file removed, see PR history) |
 | 012 | Docs: CCM/DCM behavior and `power_supply` mode rationale | P3 | S | 011 (mode note only; CCM/DCM part is independent) | DONE (plan file removed, see PR history) |
 | 013 | Firmware: NeoPixel packet-receive heartbeat (GPIO4) | P3 | S-M | - | DONE (on-target confirmed at 200 kHz - 1 MHz caused NeoPixel-crosstalk MISO corruption, see plan file) |
-| 014 | Firmware: CRC/checksum + Vout/Temp fields on the SPI frame | P1 | S-M | - | DONE (on-target fault injection confirmed - see plan file) |
-| 015 | SDK: harden `SpiMcuSource` (scale defaults, teardown, read()-before-write(), tests) | P1 | S-M | - | DONE |
+| 014 | Firmware: CRC/checksum + Vout/Temp fields on the SPI frame | P1 | S-M | - | DONE (on-target fault injection confirmed; plan file removed, see PR #51) |
+| 015 | SDK: harden `SpiMcuSource` (scale defaults, teardown, read()-before-write(), tests) | P1 | S-M | - | DONE (plan file removed, see PR #51) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) |
 REJECTED (with one-line rationale).
@@ -156,8 +156,8 @@ contract (008), docs/DX drift bundle (009), unclamped duty (amended into
 Post-merge-wave `/improve` re-audit at commit `2aa9d35`, after plans
 001-002/004-007 landed and 010 progressed. Findings that became new plans:
 `SpiMcuSource`'s V/I scale-factor drift + missing tests + two smaller
-correctness gaps (015, bundled - see its own file for why bundled rather
-than split). Findings folded into the existing plan 009 rather than
+correctness gaps (015, bundled rather than split - now DONE, plan file
+removed, see PR #51). Findings folded into the existing plan 009 rather than
 duplicated: GPIO4's NeoPixel wiring undocumented, no firmware CI clippy
 step, no root-docs pointer to the firmware README, and this index's own
 stale opening framing (009's new items 9-12). One direct fix applied
