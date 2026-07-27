@@ -79,9 +79,10 @@ the same week; the clamp is in `main.rs`, so no real overlap).
   `mode_power_supply.rs`) is confirmed on-target, `MppTracker` mode is
   confirmed unaffected, and the docs cross-reference is in place. Both
   plan files were removed after landing; see this README's status table
-  and PR history for the final design (module split into
-  `mode_mpp_tracker.rs`/`mode_power_supply.rs`, the link-lost watchdog
-  decision, and the SPI-log-suppression decision made along the way).
+  and PR history for the final design (`PowerSupply`'s own module,
+  `mode_power_supply.rs`; `MppTracker` inlined directly in `main.rs`, the
+  link-lost watchdog decision, and the SPI-log-suppression decision made
+  along the way).
 - **013 is DONE** (merged) - 014 no longer needs to serialize against it,
   just rebase onto current `main`. It also changed the
   bench-validated SPI clock speed to **200 kHz** (down from 1 MHz - the

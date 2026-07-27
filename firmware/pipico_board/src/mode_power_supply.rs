@@ -1,7 +1,7 @@
 //! `FirmwareMode::PowerSupply`: local, autonomous Vout regulation for
 //! standalone bench characterization - ignores the Pi's commanded `DUTY`
 //! for gate control (the SPI frame still exchanges normally for
-//! telemetry). Never touches `mode_mpp_tracker.rs`'s path. See plan 011's
+//! telemetry). Never touches `MppTracker`'s duty (`main.rs`). See plan 011's
 //! history for the full design rationale, including why the SPI
 //! link-lost watchdog does NOT apply here.
 

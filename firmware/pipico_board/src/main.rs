@@ -4,7 +4,6 @@
 mod ina229;
 // MAX31865 disabled - no compatible probe to test with right now (see PR body).
 // mod max31865;
-mod mode_mpp_tracker;
 mod mode_power_supply;
 mod spi_slave_pio;
 
@@ -258,9 +257,10 @@ async fn neopixel_task(mut ws2812: PioWs2812<'static, PIO1, 0, NEOPIXEL_COUNT, G
     }
 }
 
-/// Host-driven MPPT (`MppTracker`, `mode_mpp_tracker.rs`) vs local bench
-/// supply (`PowerSupply`, `mode_power_supply.rs`). This const is the only
-/// thing `main()`'s loop switches on.
+/// Host-driven MPPT (`MppTracker`, applies the Pi's `DUTY` directly - see
+/// the match arm below) vs local bench supply (`PowerSupply`,
+/// `mode_power_supply.rs`). This const is the only thing `main()`'s loop
+/// switches on.
 #[allow(dead_code)]
 #[derive(Clone, Copy, PartialEq, Eq, defmt::Format)]
 enum FirmwareMode {
@@ -358,7 +358,9 @@ async fn main(spawner: Spawner) {
 
     loop {
         let duty = match FIRMWARE_MODE {
-            FirmwareMode::MppTracker => mode_mpp_tracker::compute_duty(),
+            // Apply the Pi's commanded SPI duty directly, clamped as
+            // defense-in-depth against SEPIC inductor current runaway.
+            FirmwareMode::MppTracker => DUTY.load(Ordering::Relaxed).min(DUTY_MAX),
             FirmwareMode::PowerSupply => mode_power_supply::compute_duty(&mut psu_closed_loop),
         };
 

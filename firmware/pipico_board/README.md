@@ -145,11 +145,11 @@ cargo build --release
 
 ## Operating Modes
 
-`FIRMWARE_MODE` selects between two compile-time modes. `main.rs` only holds
-that const and the top-level match; each mode's logic lives in its own
-module.
+`FIRMWARE_MODE` selects between two compile-time modes in `main.rs`'s
+top-level match. `MppTracker` is small enough to inline directly;
+`PowerSupply`'s logic lives in its own module (`src/mode_power_supply.rs`).
 
-### MppTracker (`src/mode_mpp_tracker.rs`, default)
+### MppTracker (default)
 
 Drives the SEPIC gate PWM on GPIO15 (`PWM_Gate`) at 100 kHz from the `DUTY`
 value received over the RPi SPI link (u16, 0 = 0 %, 65535 = 100 %, updated
