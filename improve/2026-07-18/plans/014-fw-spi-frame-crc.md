@@ -20,10 +20,30 @@ fixes to the same file landed alongside this. `cargo build --release
 --locked`/`fmt`/`clippy` clean; `uv run pytest -q`/`ruff check .` clean
 (`tests/test_spi_mcu.py` covers the checksum-mismatch/keep-last-good path).
 
-**Not yet done - needs real hardware, cannot be verified in this session**:
-on-target fault injection (Done criteria's 5th item) and the SPI
-clock-speed re-evaluation (6th item). Both require a bench session with
-the actual board.
+**On-target fault injection: confirmed.** Operator wiggled a MOSI/SCK
+jumper while `scripts/spi_test.py` was running; the defmt log showed
+`"spi_pio_task: MOSI checksum mismatch, keeping last duty"` during the
+glitch, and duty did not jump to a garbage value - detection works as
+designed.
+
+**Incidental finding during this test**: at `spi_test.py`'s slower
+`--interval` values (e.g. 0.2-0.5 s), the firmware logs periodic
+`"frame timeout, resyncing"` WARNs even with no wiring glitch at all. This
+is expected, not a regression from this plan: `FRAME_TIMEOUT = 100 ms`
+re-arms every main-loop iteration regardless of whether the Pi is actually
+mid-transaction (see `spi_pio_task`'s doc comment - "at the Pi's control
+period (1 kHz nominal) a normal frame completes in microseconds"), so any
+`--interval` slower than ~100 ms will trip it once per idle gap. A real
+MPPT control loop (`SpiMcuSource.write()` called every ~1 ms) never hits
+this; `spi_test.py`'s bench-testing interval just needs to stay well under
+100 ms (`--interval 0.01` confirmed clean) to avoid the cosmetic WARN spam
+during manual testing. Not a bug worth a plan of its own.
+
+**SPI clock-speed re-evaluation**: not separately re-tested. The checksum
+detection above makes this less urgent than when the plan was written -
+corruption is now caught regardless of clock speed, so lowering further is
+an optional noise-reduction measure, not a safety gap. Left at 200 kHz
+(operator's call - see Done criteria).
 
 ## Why
 
@@ -201,11 +221,12 @@ temperature field here is a placeholder sentinel only).
 - [x] Plan 015's independent fixes (scale defaults, `__exit__`
       try/finally, read-before-write raising, test coverage) landed
       alongside this plan's changes to the same file
-- [ ] On-target fault injection confirms detection (not just code review) -
-      needs a real bench session, not done this session
-- [ ] SPI clock-speed re-evaluation recorded (kept at 200 kHz or lowered,
-      with the on-target observation either way) - needs a real bench
-      session, not done this session
+- [x] On-target fault injection confirms detection (not just code review) -
+      confirmed: wiggled MOSI/SCK jumper, defmt logged the rejection, duty
+      did not glitch
+- [x] SPI clock-speed re-evaluation recorded - kept at 200 kHz; checksum
+      detection now catches corruption regardless of speed, so further
+      lowering is optional noise reduction, not required for safety
 - [x] `improve/2026-07-18/plans/README.md` row updated
 
 ## STOP conditions
