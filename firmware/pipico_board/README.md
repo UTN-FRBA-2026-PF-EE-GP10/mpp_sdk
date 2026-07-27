@@ -145,88 +145,77 @@ cargo build --release
 
 ## Operating Modes
 
-`src/main.rs` supports two compile-time selectable operating modes via
-`FIRMWARE_MODE`. `main.rs` itself only holds that const and the top-level
-match; each mode's own logic lives in its own module.
+`FIRMWARE_MODE` selects between two compile-time modes. `main.rs` only holds
+that const and the top-level match; each mode's logic lives in its own
+module.
 
-### MppTracker (`src/mpp_slave.rs`, default)
+### MppTracker (`src/mode_mpp_tracker.rs`, default)
 
 Drives the SEPIC gate PWM on GPIO15 (`PWM_Gate`) at 100 kHz from the `DUTY`
 value received over the RPi SPI link (u16, 0 = 0 %, 65535 = 100 %, updated
-every 1 ms). Boots at 0 % duty and clamps commanded duty at 95 % (`DUTY_MAX`)
-as a defense-in-depth guard against a desynced/misbehaving master. If the SPI
-master goes silent for ~500 ms (5 consecutive frame timeouts), the link is
-considered lost and duty is forced to 0 - the gate stops switching rather
-than free-running the last commanded duty unsupervised.
+every 1 ms). Boots at 0 % duty, clamps at 95 % (`DUTY_MAX`) as a
+defense-in-depth guard against a desynced master. If the SPI master goes
+silent for ~500 ms (5 consecutive frame timeouts), the link is considered
+lost and duty is forced to 0.
 
-### PowerSupply (`src/psu_mode.rs`)
+### PowerSupply (`src/mode_power_supply.rs`)
 
 Ignores the Pi's commanded `DUTY` for gate control (the SPI frame still
-exchanges normally, so `spi_test.py` keeps working for telemetry/monitoring -
-see "Watchdog behavior" below). A second const, `PowerSupplyLoop`, selects
-between two sub-modes:
+exchanges normally, so `spi_test.py` keeps working for telemetry). A second
+const, `PowerSupplyLoop`, selects:
 
-- **`OpenLoop`**: applies a fixed `POWER_SUPPLY_FIXED_DUTY` unconditionally,
-  no feedback at all. A sanity check for the SEPIC transfer-ratio math and
-  the ADC/PWM wiring against a known duty - run this before trusting
-  `ClosedLoop`.
-- **`ClosedLoop`**: regulates `Vout` to `POWER_SUPPLY_VOUT_MV` automatically.
-  See "How the ClosedLoop controller works" below.
+- **`OpenLoop`**: a fixed `POWER_SUPPLY_FIXED_DUTY`, no feedback - sanity
+  check for the SEPIC transfer-ratio math and ADC/PWM wiring, run before
+  trusting `ClosedLoop`.
+- **`ClosedLoop`**: regulates `Vout` to `POWER_SUPPLY_VOUT_MV` automatically
+  (see "How the ClosedLoop controller works" below).
 
-Gate duty is strictly bounded by `DUTY_MAX` (95 %) in both sub-modes, same as
-`MppTracker`, to prevent inductor current runaway.
+Gate duty is bounded by `DUTY_MAX` (95 %) in both sub-modes, same as
+`MppTracker`.
 
-**Watchdog behavior**: in `PowerSupply` mode, SPI link-lost watchdog resets of
-`DUTY` do **not** force gate duty to zero - the local regulator keeps running
-standalone even with no SPI host attached, since that is the point of a bench
-supply that shouldn't need a host heartbeat (this was an explicit operator
-decision, not an executor assumption - see plan 011). The SPI slave task
-itself (`spi_slave_pio.rs`) keeps running unconditionally in both modes so
-telemetry stays available if a Pi happens to be connected, but its "frame
-timeout"/"link lost" WARN log lines are suppressed while
-`FIRMWARE_MODE == PowerSupply` - no Pi being attached is the expected normal
-case there, not a fault worth logging.
+**Watchdog behavior**: in `PowerSupply` mode, the SPI link-lost watchdog does
+**not** force gate duty to zero - the local regulator keeps running
+standalone with no SPI host attached, since that's the point of a bench
+supply (explicit operator decision, see plan 011's history). The SPI slave
+task itself keeps running unconditionally so telemetry stays available if a
+Pi is connected, but its "frame timeout"/"link lost" WARN logs are
+suppressed in `PowerSupply` mode - no Pi attached is expected there, not a
+fault.
 
 #### How the ClosedLoop controller works
 
-Two stages (`psu_mode.rs`'s `ClosedLoopState`), run at most once per fresh
-on-chip ADC sample (~10 Hz, not every 1 ms main-loop tick):
+Two stages (`ClosedLoopState`), at most once per fresh on-chip ADC sample
+(~10 Hz, not every 1 ms tick):
 
-1. **One-time feed-forward jump.** As soon as a plausible `MEAS_V_MV`
-   (INA229, live `Vin`) reading exists, compute the duty the *ideal,
-   lossless* SEPIC ratio would need and jump straight there, instead of
-   climbing up from `ps_duty = 0` one small step at a time (too slow on real
-   hardware - the first version of this controller did exactly that).
+1. **One-time feed-forward jump.** On the first plausible `MEAS_V_MV`
+   (INA229, live `Vin`) reading, jump duty straight to the ideal SEPIC
+   estimate instead of climbing there step by step (too slow on real
+   hardware):
 
    ```text
    V_out = V_in * D / (1 - D)   =>   D = V_out / (V_in + V_out)
    ```
 
-   Worked example from the bench: 5 V lab PSU input, 5 V target ->
-   `D = 5 / (5 + 5) = 0.5`, so `ps_duty` jumps to 32768 (0.5 * 65535)
-   immediately on the first sample.
+   Example: 5 V input, 5 V target -> `D = 0.5`, `ps_duty` jumps to 32768
+   on the first sample.
 
-2. **Continuous proportional trim**, every fresh sample after that: compare
-   the *measured* `Vout` (`MEAS_ADC_VOUT_MV`) against the target
-   (`POWER_SUPPLY_VOUT_MV`) and nudge duty up or down to close the gap.
+2. **Continuous proportional trim**, every sample after: compare measured
+   `Vout` (`MEAS_ADC_VOUT_MV`) against the target and nudge duty to close
+   the gap.
 
    ```text
    err  = |target_mv - measured_mv|
    step = clamp(err / GAIN_DIVISOR, MIN_STEP, MAX_STEP)
-   duty += step   if measured_mv < target_mv   (boost more)
-   duty -= step   if measured_mv > target_mv   (boost less)
+   duty += step   if measured_mv < target_mv
+   duty -= step   if measured_mv > target_mv
    ```
 
-   This is what makes up the real-world gap the ideal formula in step 1
-   ignores - on the bench, the same 0.5 duty from step 1's example measured
-   4.4 V open-loop, not the ideal 5.0 V, due to real diode/switch/inductor
-   losses (see `docs/rationale.md`'s CCM/DCM section). It's also what keeps
-   `Vout` locked to the setpoint if the load or the input changes afterward
-   (e.g. a motor load kicking in and sagging `Vout` briefly).
+   This makes up the real losses the ideal formula ignores (the bench's
+   0.5 duty measured 4.4 V open-loop, not the ideal 5.0 V - see
+   `docs/rationale.md`'s CCM/DCM section) and keeps `Vout` locked to the
+   setpoint through load/input changes afterward.
 
-   `duty` is clamped to `DUTY_MAX` in both stages, so neither the
-   feed-forward estimate nor a stuck-high error can push the gate past the
-   safety limit.
+   `duty` is clamped to `DUTY_MAX` in both stages.
 
 ## What it does
 

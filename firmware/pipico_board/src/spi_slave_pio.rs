@@ -235,13 +235,8 @@ pub async fn spi_pio_task(
         };
 
         if with_timeout(FRAME_TIMEOUT, exchange).await.is_err() {
-            // In PowerSupply mode, no Pi being attached is the expected
-            // normal case (see psu_mode.rs) - the WARN spam these two log
-            // lines would otherwise produce is misleading noise, not a
-            // real fault, so it's suppressed for that mode only. The
-            // resync/timeout-counting/DUTY-zeroing logic below is
-            // unaffected either way (DUTY isn't read for gate control in
-            // PowerSupply mode, so forcing it to 0 is harmless there).
+            // No Pi attached is expected/normal in PowerSupply mode
+            // (mode_power_supply.rs) - suppress the WARN spam there.
             let log_link_state = FIRMWARE_MODE != FirmwareMode::PowerSupply;
 
             // Dropping `exchange` here cancels the DMA push (its Drop impl
