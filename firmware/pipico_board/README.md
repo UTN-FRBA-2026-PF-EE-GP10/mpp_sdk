@@ -76,15 +76,22 @@ Pico pins 14–18 are adjacent on the left side of the board (USB connector faci
 
 **Frame protocol** (12 bytes, Mode 0, MSB-first, CS held low for entire frame):
 
-| Direction      | Byte 0  | Byte 1  | Byte 2 | Byte 3 | Bytes 4-11    |
-|----------------|---------|---------|--------|--------|---------------|
-| MOSI (RPi→Pico)| DUTY_H  | DUTY_L  | 0x00   | 0x00   | 0x00 padding  |
-| MISO (Pico→RPi)| V_H     | V_L     | I_H    | I_L    | 0x00 padding  |
+MOSI (RPi→Pico): `[ DUTY_H | DUTY_L | CHECKSUM | 0x00 x 9 ]`
 
-DUTY is a u16 (0 = 0 %, 65535 = 100 %). V/I are u16, saturating: V in
-millivolts, I in milliamperes (negative current clamps to 0). See "Sensing"
-below. On the Pi side, construct `SpiMcuSource(v_scale=1e-3, i_scale=1e-3)`
-to convert to volts/amps.
+MISO (Pico→RPi): `[ V_H | V_L | I_H | I_L | VOUT_H | VOUT_L | TEMP_H | TEMP_L | CHECKSUM | 0x00 x 3 ]`
+
+DUTY is a u16 (0 = 0 %, 65535 = 100 %). V/I/VOUT are u16, saturating: V/VOUT
+in millivolts, I in milliamperes (negative current clamps to 0). TEMP is a
+big-endian `i16` in centi-Celsius, or the sentinel `-32768` (`0x8000`) while
+the MAX31865 probe stays disabled (see "Panel temperature" below). See
+"Sensing" below for the sensor details. `CHECKSUM` (plan 014) is an XOR of
+the preceding data bytes in each direction - `DUTY_H^DUTY_L` for MOSI,
+`V_H^V_L^I_H^I_L^VOUT_H^VOUT_L^TEMP_H^TEMP_L` for MISO. A checksum mismatch
+is treated as a corrupted-but-complete frame: the firmware keeps the last
+commanded `DUTY` (does not zero it or count it as a timeout), and
+`SpiMcuSource`/`spi_test.py` keep the last-good telemetry rather than
+propagate garbage. On the Pi side, construct `SpiMcuSource()` (defaults
+already match the firmware's calibrated units and this checksum).
 
 **Master clock speed**: 8 MHz is unreliable (occasional torn/garbled
 frames) - the GPIO input synchronizer latency eats too much of the 125 ns
@@ -240,7 +247,7 @@ never floats onto the shared bus).
   **milliamperes** as saturating u16 over the existing 12-byte Pi frame
   (negative current clamps to 0). Calibration (register scaling, SHUNT_CAL)
   lives entirely in the firmware, next to the sensor; the Pi side just
-  constructs `SpiMcuSource(v_scale=1e-3, i_scale=1e-3)`.
+  constructs `SpiMcuSource()` (its defaults already match).
 - **SPI mode**: the INA229 samples MOSI on the SCLK falling edge and shifts
   MISO out on the rising edge (datasheet Section 7.5.1) - CPOL = 0, CPHA = 1
   (SPI mode 1), clocked at 1 MHz. This is a different, independent SPI bus

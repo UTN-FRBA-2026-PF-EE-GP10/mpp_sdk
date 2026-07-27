@@ -35,7 +35,9 @@ use embassy_rp::{Peri, bind_interrupts};
 use embassy_time::{Duration, with_timeout};
 use portable_atomic::Ordering;
 
-use crate::{DUTY, FIRMWARE_MODE, FirmwareMode, MEAS_I_MA, MEAS_V_MV, PACKET_COUNT};
+use crate::{
+    DUTY, FIRMWARE_MODE, FirmwareMode, MEAS_ADC_VOUT_MV, MEAS_I_MA, MEAS_V_MV, PACKET_COUNT,
+};
 
 bind_interrupts!(pub struct PioIrqs {
     PIO0_IRQ_0 => InterruptHandler<PIO0>;
@@ -117,24 +119,44 @@ pub fn init(
     (sm0, origin)
 }
 
+/// Sentinel for "no valid temperature reading" - the MAX31865 driver is
+/// implemented but disabled (incompatible probe on the bench, see
+/// `main.rs`/README's "Panel temperature" section). An implausible real
+/// centi-Celsius reading, so it's unambiguous on the Python side rather
+/// than a real (if extreme) value. Swap for a live `MEAS_T_CC` read once
+/// the sensor is re-enabled.
+const TEMP_NOT_AVAILABLE_CC: i16 = i16::MIN;
+
+/// XOR checksum over the given data bytes - catches single/few-bit
+/// corruption cheaply on both a `no_std` target and in plain Python (see
+/// plan 014). Shared by both frame directions so the formula only lives
+/// in one place.
+fn xor_checksum(bytes: &[u8]) -> u8 {
+    bytes.iter().fold(0, |acc, b| acc ^ b)
+}
+
 /// Build a TX frame (u32 words, byte in top 8 bits for shift_out = Left).
 ///
-/// MISO layout: [ V_H | V_L | I_H | I_L | 0 … 0 ]  (12 bytes total)
-fn build_tx_frame(v: u16, i: u16) -> [u32; FRAME_LEN] {
-    [
-        u32::from_be_bytes([(v >> 8) as u8, 0, 0, 0]),
-        u32::from_be_bytes([v as u8, 0, 0, 0]),
-        u32::from_be_bytes([(i >> 8) as u8, 0, 0, 0]),
-        u32::from_be_bytes([i as u8, 0, 0, 0]),
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-    ]
+/// MISO layout: [ V_H | V_L | I_H | I_L | VOUT_H | VOUT_L | TEMP_H
+///   | TEMP_L | CHECKSUM | 0 x 3 ]  (12 bytes total). `CHECKSUM` is the
+/// XOR of the 8 preceding data bytes - must match `spi_mcu.py`/
+/// `spi_test.py` exactly.
+fn build_tx_frame(v: u16, i: u16, vout: u16, temp_cc: i16) -> [u32; FRAME_LEN] {
+    let data = [
+        v.to_be_bytes(),
+        i.to_be_bytes(),
+        vout.to_be_bytes(),
+        (temp_cc as u16).to_be_bytes(),
+    ];
+    let bytes: [u8; 8] = core::array::from_fn(|idx| data[idx / 2][idx % 2]);
+    let checksum = xor_checksum(&bytes);
+
+    let mut words = [0u32; FRAME_LEN];
+    let all = bytes.iter().chain(core::iter::once(&checksum));
+    for (word, byte) in words.iter_mut().zip(all) {
+        *word = (*byte as u32) << 24;
+    }
+    words
 }
 
 /// Time budget for one 12-byte frame's RX side. At the Pi's control period
@@ -201,8 +223,17 @@ fn resync(sm: &mut StateMachine<'static, PIO0, 0>, origin: u8) {
 /// steady-state path untouched and only exercises the recovery code when
 /// there is actually something to recover from.
 ///
-/// MOSI (RPi→Pico): [ DUTY_H | DUTY_L | 0 … 0 ]  (12 bytes)
-/// MISO (Pico→RPi): [ V_H   | V_L    | I_H | I_L | 0 … 0 ]
+/// MOSI (RPi→Pico): [ DUTY_H | DUTY_L | CHECKSUM | 0 x 9 ]
+/// MISO (Pico→RPi): [ V_H | V_L | I_H | I_L | VOUT_H | VOUT_L | TEMP_H
+///   | TEMP_L | CHECKSUM | 0 x 3 ]
+///
+/// `CHECKSUM` (plan 014) is an XOR over the preceding data bytes in each
+/// direction (`xor_checksum`) - it does not grow the frame, both
+/// directions still 12 bytes. A MOSI checksum mismatch is treated like a
+/// torn frame: `DUTY` is left at its last-good value (never zeroed by a
+/// single mismatch) and does NOT count toward `consecutive_timeouts` -
+/// the master is clearly still talking, just corrupted, a different
+/// failure mode than sustained silence.
 #[embassy_executor::task]
 pub async fn spi_pio_task(
     mut sm: StateMachine<'static, PIO0, 0>,
@@ -217,9 +248,12 @@ pub async fn spi_pio_task(
     let mut tx_buf = build_tx_frame(
         MEAS_V_MV.load(Ordering::Relaxed),
         MEAS_I_MA.load(Ordering::Relaxed),
+        MEAS_ADC_VOUT_MV.load(Ordering::Relaxed),
+        TEMP_NOT_AVAILABLE_CC,
     );
     let mut consecutive_timeouts: u32 = 0;
     let mut last_logged_duty: Option<u16> = None;
+    let mut checksum_failures: u32 = 0;
 
     loop {
         let mut rx = [0u32; FRAME_LEN];
@@ -260,20 +294,38 @@ pub async fn spi_pio_task(
         consecutive_timeouts = 0;
 
         // RX autopush puts byte in bits 7-0 (shift_in = Left).
-        let duty = ((rx[0] as u8 as u16) << 8) | rx[1] as u8 as u16;
-        DUTY.store(duty, Ordering::Relaxed);
-        PACKET_COUNT.fetch_add(1, Ordering::Relaxed);
+        let duty_h = rx[0] as u8;
+        let duty_l = rx[1] as u8;
+        let received_checksum = rx[2] as u8;
 
-        // Log only on change - at the Pi's control period this would
-        // otherwise flood RTT every frame; V/I are already logged
-        // periodically by sensors_task.
-        if last_logged_duty != Some(duty) {
-            defmt::info!("rx: duty={}%", duty as u32 * 100 / 65535);
-            last_logged_duty = Some(duty);
+        if xor_checksum(&[duty_h, duty_l]) == received_checksum {
+            let duty = ((duty_h as u16) << 8) | duty_l as u16;
+            DUTY.store(duty, Ordering::Relaxed);
+            PACKET_COUNT.fetch_add(1, Ordering::Relaxed);
+
+            // Log only on change - at the Pi's control period this would
+            // otherwise flood RTT every frame; V/I are already logged
+            // periodically by sensors_task.
+            if last_logged_duty != Some(duty) {
+                defmt::info!("rx: duty={}%", duty as u32 * 100 / 65535);
+                last_logged_duty = Some(duty);
+            }
+        } else {
+            // Corrupted-but-complete frame (plan 014): keep the last-good
+            // DUTY rather than apply garbage. Rate-limited - a jammed link
+            // could otherwise flood RTT every frame.
+            checksum_failures += 1;
+            if checksum_failures == 1 || checksum_failures % 100 == 0 {
+                defmt::warn!(
+                    "spi_pio_task: MOSI checksum mismatch, keeping last duty ({} total)",
+                    checksum_failures
+                );
+            }
         }
 
         let v = MEAS_V_MV.load(Ordering::Relaxed);
         let i = MEAS_I_MA.load(Ordering::Relaxed);
-        tx_buf = build_tx_frame(v, i);
+        let vout = MEAS_ADC_VOUT_MV.load(Ordering::Relaxed);
+        tx_buf = build_tx_frame(v, i, vout, TEMP_NOT_AVAILABLE_CC);
     }
 }

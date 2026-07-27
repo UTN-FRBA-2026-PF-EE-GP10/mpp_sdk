@@ -8,6 +8,18 @@
 > 2aa9d35..HEAD -- mpp_sdk/io/spi_mcu.py` - if it changed, re-check the
 > excerpt below before editing.
 
+## Progress note
+
+Implemented alongside plan 014 (same file, same `_transact()` - see that
+plan's Maintenance note anticipating exactly this). All four fixes landed:
+scale/speed_hz defaults, docstring, `__exit__` try/finally, and
+read()-before-write() raising. Checked the STOP condition on
+`improve/2026-07-18/plans/003-bench-duty-sweep.md` - it only ever calls
+`write()` before `read()`, no dependency on the old `(0.0, 0.0)` default.
+`tests/test_spi_mcu.py` added (11 tests, the fake-`spidev`-module
+approach, well under the ~20-line STOP threshold). `uv run pytest -q` and
+`uv run ruff check .` both pass.
+
 ## Why
 
 A follow-up `/improve` audit (2026-07-22) found `mpp_sdk/io/spi_mcu.py`'s
@@ -174,15 +186,15 @@ pytest -q` both pass; `uv run ruff check .` clean.
 
 ## Done criteria
 
-- [ ] `v_scale`/`i_scale` default to `1e-3`, `speed_hz` matches
+- [x] `v_scale`/`i_scale` default to `1e-3`, `speed_hz` matches
       `scripts/spi_test.py`'s current value at execution time (`200_000` as
       of this writing), docstring describes mV/mA not raw ADC counts
-- [ ] `__exit__` uses try/finally, `close()` always runs
-- [ ] `read()` before first `write()` raises instead of returning `(0,0)`
-- [ ] `tests/test_spi_mcu.py` exists and covers the four items in step 4,
+- [x] `__exit__` uses try/finally, `close()` always runs
+- [x] `read()` before first `write()` raises instead of returning `(0,0)`
+- [x] `tests/test_spi_mcu.py` exists and covers the four items in step 4,
       without requiring the real `spidev` package to be installed
-- [ ] `uv run pytest -q` and `uv run ruff check .` both exit 0
-- [ ] `improve/2026-07-18/plans/README.md` row updated
+- [x] `uv run pytest -q` and `uv run ruff check .` both exit 0
+- [x] `improve/2026-07-18/plans/README.md` row updated
 
 ## STOP conditions
 
