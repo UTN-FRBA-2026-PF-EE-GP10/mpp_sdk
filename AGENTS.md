@@ -115,7 +115,8 @@ live on the Pi and are *not* bound by this — only the algorithm leaves.
 the algorithm; it is not responsible for hard-real-time signals. The RP2040
 (firmware in **Rust**, `rp2040-hal`) drives the board: ADC sense for `(V, I)`,
 hardware PWM for the SEPIC switch, SPI-slave to the Pi. It isolates the
-fast-switching side *and* is the deployment target.
+fast-switching side *and* is the deployment target. See
+`firmware/pipico_board/README.md` for build/flash/calibration instructions.
 
 Two phases (see `PLAN.md` Phase 5):
 

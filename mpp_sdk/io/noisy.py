@@ -22,8 +22,11 @@ class NoisySource(SignalSource):
     Readings are *not* clamped: a real ADC reads slightly negative around
     zero, and controllers must cope with that.
 
-    The duty path (``write``) is passed through untouched - PWM generation
-    is digital and effectively exact compared to the sense path.
+    ``read()`` is idempotent between writes, matching the ``SignalSource``
+    contract (``base.py``): the noisy ``(V, I)`` sample is drawn once per
+    ``write()`` call (and once at construction, for the first read before
+    any write) and cached; repeated ``read()`` calls in between return the
+    same cached tuple rather than drawing fresh noise each time.
 
     Parameters
     ----------
@@ -53,13 +56,14 @@ class NoisySource(SignalSource):
         self._v_std = v_std
         self._i_std = i_std
         self._rng = random.Random(seed)
+        self._v, self._i = self._sample()
 
     @property
     def source(self) -> SignalSource:
         """The wrapped source (e.g. to call ``set_panel`` on a simulated one)."""
         return self._source
 
-    def read(self) -> tuple[float, float]:
+    def _sample(self) -> tuple[float, float]:
         v, i = self._source.read()
         if self._v_std > 0.0:
             v += self._rng.gauss(0.0, self._v_std)
@@ -67,8 +71,12 @@ class NoisySource(SignalSource):
             i += self._rng.gauss(0.0, self._i_std)
         return v, i
 
+    def read(self) -> tuple[float, float]:
+        return self._v, self._i
+
     def write(self, duty_cycle: float) -> None:
         self._source.write(duty_cycle)
+        self._v, self._i = self._sample()
 
     @property
     def duty(self) -> float:

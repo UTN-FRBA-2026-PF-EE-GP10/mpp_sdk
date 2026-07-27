@@ -1,6 +1,6 @@
 # Implementation Plans - SEPIC bring-up + audit, 2026-07-18
 
-Two batches, one index, written at commit `6fc47a0`:
+Originally two batches, written at commit `6fc47a0`:
 
 - **001-003**: operator-authored bring-up plans, written right after the
   INA229 driver was validated on the real board (battery on the panel
@@ -9,6 +9,12 @@ Two batches, one index, written at commit `6fc47a0`:
   wave: harness consolidation, INA229 firmware, final PCB, CI hardening).
   Plan 002 was amended by the audit (duty input clamp added) rather than
   duplicated.
+
+Plans 010-015 (through commit `92e437e`) came from later work and a
+follow-up 2026-07-22 audit: on-chip ADC, `power_supply` mode, NeoPixel
+packet heartbeat, and the SPI frame checksum/telemetry expansion. Finished
+plans' files are removed once DONE (see the status table below for what's
+left) - this index and the status table are the durable record.
 
 Context: the 2026-07-06 audit is fully executed - all 8 plans DONE, its
 folder removed (history: `improve/2026-07-06/` in git; its "findings
@@ -31,87 +37,40 @@ re-enabling; no plan file, tracked via the PR that disabled it.
 | 005 | Stable (exponential-Euler) integrator for DynamicSimulatedSource | P1 | S | - | DONE |
 | 006 | Commit firmware Cargo.locks, enforce --locked in CI | P1 | S | - | DONE |
 | 007 | Characterization tests for harness/common.py | P2 | M | - | DONE |
-| 008 | NoisySource cached read (idempotent read()) | P2 | S | 007 | TODO |
-| 009 | Docs and tooling sweep after the merge wave | P3 | S | - | TODO |
+| 008 | NoisySource cached read (idempotent read()) | P2 | S | 007 | DONE (plan file removed, see PR history) |
+| 009 | Docs and tooling sweep after the merge wave | P3 | S | - | DONE (plan file removed, see PR history) |
 | 010 | Firmware: read on-chip ADC (ADC_PWR/ADC_VOUT/ADC_Input_Curr) | P2 | M | - | IN PROGRESS (PWR/VOUT calibrated + on-target checked, ~9% error accepted; Input_Curr needs INA281 gain/shunt) |
 | 011 | Firmware: `power_supply` mode vs `mpp_tracker` mode | P2 | M | 002, 010 | DONE (feed-forward + proportional-trim ClosedLoop confirmed on-target; MppTracker regression-checked unaffected; plan file removed, see PR history) |
 | 012 | Docs: CCM/DCM behavior and `power_supply` mode rationale | P3 | S | 011 (mode note only; CCM/DCM part is independent) | DONE (plan file removed, see PR history) |
 | 013 | Firmware: NeoPixel packet-receive heartbeat (GPIO4) | P3 | S-M | - | DONE (on-target confirmed at 200 kHz - 1 MHz caused NeoPixel-crosstalk MISO corruption, see plan file) |
 | 014 | Firmware: CRC/checksum + Vout/Temp fields on the SPI frame | P1 | S-M | - | DONE (on-target fault injection confirmed; plan file removed, see PR #51) |
 | 015 | SDK: harden `SpiMcuSource` (scale defaults, teardown, read()-before-write(), tests) | P1 | S-M | - | DONE (plan file removed, see PR #51) |
+| 016 | Firmware: curve-tracer sweep engine (RP2040 port, bench-only, no Pi transport yet) | P2 | L | - | TODO |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) |
 REJECTED (with one-line rationale).
 
-## Parallelization map
+## Remaining backlog
 
-Which plans can run at the same time (separate worktrees/branches, one PR
-each) without stepping on each other:
+Everything above is DONE except:
 
-**Fully parallel with everything** (disjoint files):
+- **003** (bench duty sweep, P1): needs 002 flashed on the target plus a
+  lab PSU (or battery) + 10 Ohm load. Bench procedure, not a code change.
+- **010** (INA281 gain/shunt, P2): IN PROGRESS, `ADC_Input_Curr` still
+  uncalibrated.
+- **016** (curve-tracer sweep engine, P2): no dependency; the SPI-frame
+  byte-budget numbers in its "Current state" reflect 014's final,
+  merged design (3 spare MISO bytes, 9 spare MOSI).
 
-- **005** (`mpp_sdk/io/dynamic.py` + `tests/test_sources.py`)
-- **006** (firmware `.gitignore`s + lockfiles + `firmware.yml`)
-- **007** (new `tests/test_harness_common.py` only)
-- **009** (root README, new hardware/data READMEs, `compare_cyclic`
-  docstring, `examples/pno_demo.py`, `pyproject.toml`, two workflows)
+**011 is DONE** (not an open item, and not a teammate hand-off - it landed
+in this session, merged as PR #50: feed-forward + proportional-trim
+`ClosedLoop`, `MppTracker` regression-checked unaffected). Any further
+`power_supply`-mode work beyond what plan 011 scoped would be a new plan,
+not a reopening of 011.
 
-**Firmware `main.rs` chain - serialize these** (all touch
-`firmware/pipico_board/src/main.rs`; run one at a time or rebase each on
-the last):
-
-1. `feat/fw-max31865` branch (already written, lands first)
-2. **001** (relay/tracer pin init)
-3. **002** (gate PWM + clamp)
-
-**004** touches only `spi_slave_pio.rs` - parallel with the `main.rs`
-chain and everything else (tiny rebase risk only if 002's clamp lands in
-the same week; the clamp is in `main.rs`, so no real overlap).
-
-**Strictly ordered**:
-
-- **007 before 008** (008's safety net is 007's tests).
-- **003 after 002 is flashed** (bench procedure; 004 strongly recommended
-  first too - a desyncing link during a live-power sweep is exactly the
-  failure 004 removes).
-- **011 and 012 are DONE** (merged) - `power_supply` mode's `ClosedLoop`
-  controller (feed-forward jump + proportional trim, see
-  `mode_power_supply.rs`) is confirmed on-target, `MppTracker` mode is
-  confirmed unaffected, and the docs cross-reference is in place. Both
-  plan files were removed after landing; see this README's status table
-  and PR history for the final design (`PowerSupply`'s own module,
-  `mode_power_supply.rs`; `MppTracker` inlined directly in `main.rs`, the
-  link-lost watchdog decision, and the SPI-log-suppression decision made
-  along the way).
-- **013 is DONE** (merged) - 014 no longer needs to serialize against it,
-  just rebase onto current `main`. It also changed the
-  bench-validated SPI clock speed to **200 kHz** (down from 1 MHz - the
-  actively-switching NeoPixels crosstalk the SPI1 MISO line at 1 MHz, see
-  013's Progress note); any future work touching SPI speed constants
-  should use 200 kHz, not the older 1 MHz figure.
-- **014 and 015 landed together** (same session, same file family -
-  `_transact()` needed both). Both fully DONE, including 014's on-target
-  fault injection (wiggled MOSI/SCK jumper, confirmed rejection in the
-  defmt log, no duty glitch).
-
-Suggested waves:
-
-- Wave 1 (parallel): 004, 005, 006, 007, 009 + the max31865 branch PR
-- Wave 2 (parallel): 001+002 (one firmware branch is fine), 008
-- Wave 3 (bench): 003
-
-## Dependency notes
-
-- 001 and 002 are independent changes but share `main.rs`; one branch/PR
-  for both is acceptable.
-- 003 is a bench procedure, not a code change: it needs 002 flashed on the
-  target and a lab PSU (or battery) + 10 Ohm load. 001 is NOT required for
-  003 (the relay stays off; its curve-tracer function comes later).
-- 008 must not land before 007: it changes the noise-draw timing, and
-  007's `test_run_schedule_noise_isolation` is the tripwire proving the
-  change is behavior-preserving for the plant.
-- 004's fault-injection step needs the Pi + probe; its code step is
-  hardware-free.
+Execution-order/parallelization detail for the now-DONE plans (001-009,
+011-015) is historical - see git history on this file rather than
+maintaining it here.
 
 ## Audit trail (2026-07-18 audit)
 

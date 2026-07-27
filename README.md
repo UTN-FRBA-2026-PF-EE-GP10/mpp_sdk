@@ -200,20 +200,23 @@ expectations, contributor liability, and LLM-usage policy — lives in
 
 The power stage is driven by an **RP2040 (Pi Pico, firmware in Rust)** connected
 to the Raspberry Pi 5 over SPI. The MCU isolates the fast-switching side *and* is
-the deployment target for the final algorithm.
+the deployment target for the final algorithm. See
+[`firmware/pipico_board/README.md`](firmware/pipico_board/README.md) for
+build/flash/calibration instructions.
 
 - [x] SPI-slave firmware scaffold (PIO)
-- [ ] `SpiMcuSource(SignalSource)` — Pi-side SPI wrapper (`mpp-sdk[hardware]`)
-- [ ] MCU firmware (HIL mode): ADC + PWM + SPI-slave as an I/O proxy
-- [ ] Calibration (ADC scale/offset, INA229 calibration / INA281 gain, PWM freq, duty limits)
+- [x] `SpiMcuSource(SignalSource)` — Pi-side SPI wrapper (`mpp-sdk[hardware]`)
+- [x] MCU firmware (HIL mode): ADC + PWM + SPI-slave as an I/O proxy
+- [x] Calibration (ADC scale/offset, INA229 calibration / INA281 gain, PWM freq,
+      duty limits) — INA281 gain/shunt still open, see plan 010
 - [ ] Algorithm port to RP2040 + cross-validation against the Python reference
 - [ ] Bench and outdoor validation against the simulator
 
 ### Infrastructure
 
 - [x] `tests/` — unit tests per pillar (`pytest`)
-- [ ] CI workflow (`uv sync`, `pytest`, demo smoke run)
-- [ ] `data/` — provenanced benchmark profiles and panel curves
+- [x] CI workflow (`uv sync`, `pytest`, demo smoke run)
+- [x] `data/` — provenanced benchmark profiles and panel curves
 
 ## Context
 

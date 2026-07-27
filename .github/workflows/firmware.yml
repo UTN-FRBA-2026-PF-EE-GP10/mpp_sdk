@@ -27,7 +27,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: thumbv6m-none-eabi
-          components: rustfmt
+          components: rustfmt, clippy
 
       - name: Cache cargo registry and build artefacts
         uses: Swatinem/rust-cache@v2
@@ -39,3 +39,6 @@ jobs:
 
       - name: Build (release)
         run: cargo build --release --locked
+
+      - name: Clippy
+        run: cargo clippy --release --locked -- -D warnings

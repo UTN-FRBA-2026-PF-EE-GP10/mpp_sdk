@@ -53,6 +53,11 @@ Saves a PNG to ``harness/output/`` (does not block on a window).
 Run with::
 
     uv run harness/compare_cyclic.py
+
+Also consumed as a library by ``compare_noise.py``, ``compare_rescan.py``
+and ``compare_seeds.py`` (the profile-generation machinery and the
+``ALGORITHMS``/``BAND``/``RESCAN_PERIOD`` constants) — renaming or
+re-signaturing its public symbols breaks them.
 """
 
 import random

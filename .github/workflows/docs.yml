@@ -24,11 +24,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: astral-sh/setup-uv@v6
         with:
-          python-version: "3.x"
-      - run: pip install mkdocs-material pymdown-extensions
-      - run: mkdocs build --strict --site-dir site
+          enable-cache: true
+      - run: uv sync --group docs
+      - run: uv run mkdocs build --strict --site-dir site
       - uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -41,13 +41,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: astral-sh/setup-uv@v6
         if: github.event.action != 'closed'
         with:
-          python-version: "3.x"
-      - run: pip install mkdocs-material pymdown-extensions
+          enable-cache: true
+      - run: uv sync --group docs
         if: github.event.action != 'closed'
-      - run: mkdocs build --strict --site-dir site
+      - run: uv run mkdocs build --strict --site-dir site
         if: github.event.action != 'closed'
       - uses: rossjrw/pr-preview-action@v1
         with:
