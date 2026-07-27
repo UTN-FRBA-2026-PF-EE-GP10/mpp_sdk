@@ -34,8 +34,8 @@ re-enabling; no plan file, tracked via the PR that disabled it.
 | 008 | NoisySource cached read (idempotent read()) | P2 | S | 007 | TODO |
 | 009 | Docs and tooling sweep after the merge wave | P3 | S | - | TODO |
 | 010 | Firmware: read on-chip ADC (ADC_PWR/ADC_VOUT/ADC_Input_Curr) | P2 | M | - | IN PROGRESS (PWR/VOUT calibrated + on-target checked, ~9% error accepted; Input_Curr needs INA281 gain/shunt) |
-| 011 | Firmware: `power_supply` mode vs `mpp_tracker` mode | P2 | M | 002, 010 | DONE |
-| 012 | Docs: CCM/DCM behavior and `power_supply` mode rationale | P3 | S | 011 (mode note only; CCM/DCM part is independent) | DONE |
+| 011 | Firmware: `power_supply` mode vs `mpp_tracker` mode | P2 | M | 002, 010 | DONE (feed-forward + proportional-trim ClosedLoop confirmed on-target; MppTracker regression-checked unaffected; plan file removed, see PR history) |
+| 012 | Docs: CCM/DCM behavior and `power_supply` mode rationale | P3 | S | 011 (mode note only; CCM/DCM part is independent) | DONE (plan file removed, see PR history) |
 | 013 | Firmware: NeoPixel packet-receive heartbeat (GPIO4) | P3 | S-M | - | DONE (on-target confirmed at 200 kHz - 1 MHz caused NeoPixel-crosstalk MISO corruption, see plan file) |
 | 014 | Firmware: CRC/checksum on the SPI frame | P1 | S-M | - | TODO |
 | 015 | SDK: harden `SpiMcuSource` (scale defaults, teardown, read()-before-write(), tests) | P1 | S-M | - | TODO |
@@ -74,17 +74,16 @@ the same week; the clamp is in `main.rs`, so no real overlap).
 - **003 after 002 is flashed** (bench procedure; 004 strongly recommended
   first too - a desyncing link during a live-power sweep is exactly the
   failure 004 removes).
-- **011 after 002 and 010** (needs the real GPIO15 gate PWM and the
-  calibrated `MEAS_ADC_VOUT_MV` feedback signal). **011 has a STOP
-  condition on an explicit operator decision** (does the link-lost
-  watchdog still force duty to 0 in `power_supply` mode, or should the
-  local regulator run standalone) - do not implement the controller before
-  that is answered.
-- **012's CCM/DCM section is independent** (bench data already exists);
-  its `power_supply` mode section needs 011 merged first - mark that part
-  BLOCKED rather than guessing if executed before 011 lands.
-- **013 is DONE** (merged) - 011 and 014 no longer need to serialize
-  against it, just rebase onto current `main`. It also changed the
+- **011 and 012 are DONE** (merged) - `power_supply` mode's `ClosedLoop`
+  controller (feed-forward jump + proportional trim, see `psu_mode.rs`)
+  is confirmed on-target, `MppTracker` mode is confirmed unaffected, and
+  the docs cross-reference is in place. Both plan files were removed after
+  landing; see this README's status table and PR history for the final
+  design (module split into `mpp_slave.rs`/`psu_mode.rs`, the link-lost
+  watchdog decision, and the SPI-log-suppression decision made along the
+  way).
+- **013 is DONE** (merged) - 014 no longer needs to serialize against it,
+  just rebase onto current `main`. It also changed the
   bench-validated SPI clock speed to **200 kHz** (down from 1 MHz - the
   actively-switching NeoPixels crosstalk the SPI1 MISO line at 1 MHz, see
   013's Progress note); any future work touching SPI speed constants

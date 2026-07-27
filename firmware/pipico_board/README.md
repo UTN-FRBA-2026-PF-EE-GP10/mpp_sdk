@@ -145,18 +145,97 @@ cargo build --release
 
 ## Operating Modes
 
-`src/main.rs` supports two compile-time selectable operating modes via `FIRMWARE_MODE`:
+`src/main.rs` supports two compile-time selectable operating modes via
+`FIRMWARE_MODE`. `main.rs` itself only holds that const and the top-level
+match; each mode's own logic lives in its own module.
 
-- **`FirmwareMode::MppTracker`** (default):
-  Drives the SEPIC gate PWM on GPIO15 (`PWM_Gate`) at 100 kHz from the `DUTY` value received over the RPi SPI link (u16, 0 = 0 %, 65535 = 100 %, updated every 1 ms). Boots at 0 % duty and clamps commanded duty at 95 % (`DUTY_MAX`) as a defense-in-depth guard against a desynced/misbehaving master. If the SPI master goes silent for ~500 ms (5 consecutive frame timeouts), the link is considered lost and duty is forced to 0 - the gate stops switching rather than free-running the last commanded duty unsupervised.
+### MppTracker (`src/mpp_slave.rs`, default)
 
-- **`FirmwareMode::PowerSupply`**:
-  Runs a local closed-loop controller targeting a fixed output voltage defined by `POWER_SUPPLY_VOUT_MV` (default: 12000 mV / 12 V), using `MEAS_ADC_VOUT_MV` (plan 010 on-chip ADC) as feedback. Gate duty is still strictly bounded by `DUTY_MAX` (95 %) to prevent inductor current runaway.
-  **Watchdog Behavior (Decision B)**: In `PowerSupply` mode, SPI link-lost watchdog resets of `DUTY` do not force gate duty to zero, allowing the Pico to operate as a standalone closed-loop bench power supply even without an active SPI host attached.
+Drives the SEPIC gate PWM on GPIO15 (`PWM_Gate`) at 100 kHz from the `DUTY`
+value received over the RPi SPI link (u16, 0 = 0 %, 65535 = 100 %, updated
+every 1 ms). Boots at 0 % duty and clamps commanded duty at 95 % (`DUTY_MAX`)
+as a defense-in-depth guard against a desynced/misbehaving master. If the SPI
+master goes silent for ~500 ms (5 consecutive frame timeouts), the link is
+considered lost and duty is forced to 0 - the gate stops switching rather
+than free-running the last commanded duty unsupervised.
+
+### PowerSupply (`src/psu_mode.rs`)
+
+Ignores the Pi's commanded `DUTY` for gate control (the SPI frame still
+exchanges normally, so `spi_test.py` keeps working for telemetry/monitoring -
+see "Watchdog behavior" below). A second const, `PowerSupplyLoop`, selects
+between two sub-modes:
+
+- **`OpenLoop`**: applies a fixed `POWER_SUPPLY_FIXED_DUTY` unconditionally,
+  no feedback at all. A sanity check for the SEPIC transfer-ratio math and
+  the ADC/PWM wiring against a known duty - run this before trusting
+  `ClosedLoop`.
+- **`ClosedLoop`**: regulates `Vout` to `POWER_SUPPLY_VOUT_MV` automatically.
+  See "How the ClosedLoop controller works" below.
+
+Gate duty is strictly bounded by `DUTY_MAX` (95 %) in both sub-modes, same as
+`MppTracker`, to prevent inductor current runaway.
+
+**Watchdog behavior**: in `PowerSupply` mode, SPI link-lost watchdog resets of
+`DUTY` do **not** force gate duty to zero - the local regulator keeps running
+standalone even with no SPI host attached, since that is the point of a bench
+supply that shouldn't need a host heartbeat (this was an explicit operator
+decision, not an executor assumption - see plan 011). The SPI slave task
+itself (`spi_slave_pio.rs`) keeps running unconditionally in both modes so
+telemetry stays available if a Pi happens to be connected, but its "frame
+timeout"/"link lost" WARN log lines are suppressed while
+`FIRMWARE_MODE == PowerSupply` - no Pi being attached is the expected normal
+case there, not a fault worth logging.
+
+#### How the ClosedLoop controller works
+
+Two stages (`psu_mode.rs`'s `ClosedLoopState`), run at most once per fresh
+on-chip ADC sample (~10 Hz, not every 1 ms main-loop tick):
+
+1. **One-time feed-forward jump.** As soon as a plausible `MEAS_V_MV`
+   (INA229, live `Vin`) reading exists, compute the duty the *ideal,
+   lossless* SEPIC ratio would need and jump straight there, instead of
+   climbing up from `ps_duty = 0` one small step at a time (too slow on real
+   hardware - the first version of this controller did exactly that).
+
+   ```text
+   V_out = V_in * D / (1 - D)   =>   D = V_out / (V_in + V_out)
+   ```
+
+   Worked example from the bench: 5 V lab PSU input, 5 V target ->
+   `D = 5 / (5 + 5) = 0.5`, so `ps_duty` jumps to 32768 (0.5 * 65535)
+   immediately on the first sample.
+
+2. **Continuous proportional trim**, every fresh sample after that: compare
+   the *measured* `Vout` (`MEAS_ADC_VOUT_MV`) against the target
+   (`POWER_SUPPLY_VOUT_MV`) and nudge duty up or down to close the gap.
+
+   ```text
+   err  = |target_mv - measured_mv|
+   step = clamp(err / GAIN_DIVISOR, MIN_STEP, MAX_STEP)
+   duty += step   if measured_mv < target_mv   (boost more)
+   duty -= step   if measured_mv > target_mv   (boost less)
+   ```
+
+   This is what makes up the real-world gap the ideal formula in step 1
+   ignores - on the bench, the same 0.5 duty from step 1's example measured
+   4.4 V open-loop, not the ideal 5.0 V, due to real diode/switch/inductor
+   losses (see `docs/rationale.md`'s CCM/DCM section). It's also what keeps
+   `Vout` locked to the setpoint if the load or the input changes afterward
+   (e.g. a motor load kicking in and sagging `Vout` briefly).
+
+   `duty` is clamped to `DUTY_MAX` in both stages, so neither the
+   feed-forward estimate nor a stuck-high error can push the gate past the
+   safety limit.
 
 ## What it does
 
-`src/main.rs` drives the SEPIC gate PWM on GPIO15 (`PWM_Gate`) at 100 kHz. Depending on `FIRMWARE_MODE`, it either applies the SPI-commanded `DUTY` (`MppTracker`) or regulates output voltage to `POWER_SUPPLY_VOUT_MV` (`PowerSupply`). It also feeds that link real `(V, I)` measurements read from the on-board INA229 power monitor over SPI0 (see "Sensing" below). Default `#[embassy_executor::main]` also emits defmt log lines over RTT.
+`src/main.rs` drives the SEPIC gate PWM on GPIO15 (`PWM_Gate`) at 100 kHz.
+Depending on `FIRMWARE_MODE`, it either applies the SPI-commanded `DUTY`
+(`MppTracker`) or regulates output voltage to `POWER_SUPPLY_VOUT_MV`
+(`PowerSupply`). It also feeds that link real `(V, I)` measurements read from
+the on-board INA229 power monitor over SPI0 (see "Sensing" below). Default
+`#[embassy_executor::main]` also emits defmt log lines over RTT.
 
 ## Sensing
 
