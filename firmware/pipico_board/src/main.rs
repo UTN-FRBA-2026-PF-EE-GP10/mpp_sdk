@@ -4,6 +4,7 @@
 mod ina229;
 // MAX31865 disabled - no compatible probe to test with right now (see PR body).
 // mod max31865;
+mod mode_power_supply;
 mod spi_slave_pio;
 
 use embassy_executor::Spawner;
@@ -51,8 +52,14 @@ pub static MEAS_ADC_PWR_MV: AtomicU16 = AtomicU16::new(0);
 pub static MEAS_ADC_VOUT_MV: AtomicU16 = AtomicU16::new(0);
 pub static MEAS_ADC_IIN_MV: AtomicU16 = AtomicU16::new(0);
 // Bumped once per successfully-received SPI frame (spi_slave_pio.rs) -
-// read-only elsewhere, drives the NeoPixel packet heartbeat.
+// drives the NeoPixel packet heartbeat.
 pub static PACKET_COUNT: AtomicU32 = AtomicU32::new(0);
+// Bumped once per onchip_adc_task poll (~100 ms). mode_power_supply's
+// ClosedLoop gates its control step on this, not on MEAS_ADC_VOUT_MV's
+// value - the reading can repeat across samples (e.g. Vout not moving yet
+// at boot), and gating on value-equality instead of sample-freshness
+// stalls the controller the first time that happens.
+pub static ADC_SAMPLE_COUNT: AtomicU32 = AtomicU32::new(0);
 
 /// Polls the INA229 over SPI0 at the SDK's control period
 /// (`CONTROL_PERIOD_MS = 1.0`) and publishes `(V, I)` for the SPI-slave link.
@@ -206,6 +213,7 @@ async fn onchip_adc_task(
         if let Ok(raw) = adc.blocking_read(&mut ch_iin) {
             MEAS_ADC_IIN_MV.store(raw_to_mv(raw), Ordering::Relaxed);
         }
+        ADC_SAMPLE_COUNT.fetch_add(1, Ordering::Relaxed);
 
         tick = tick.wrapping_add(1);
         if tick % 10 == 0 {
@@ -249,11 +257,36 @@ async fn neopixel_task(mut ws2812: PioWs2812<'static, PIO1, 0, NEOPIXEL_COUNT, G
     }
 }
 
+/// Host-driven MPPT (`MppTracker`, applies the Pi's `DUTY` directly - see
+/// the match arm below) vs local bench supply (`PowerSupply`,
+/// `mode_power_supply.rs`). This const is the only thing `main()`'s loop
+/// switches on.
+#[allow(dead_code)]
+#[derive(Clone, Copy, PartialEq, Eq, defmt::Format)]
+enum FirmwareMode {
+    MppTracker,
+    PowerSupply,
+}
+
+/// Change to `FirmwareMode::PowerSupply` for bench supply operation.
+const FIRMWARE_MODE: FirmwareMode = FirmwareMode::MppTracker;
+
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
     let p = embassy_rp::init(Default::default());
 
-    defmt::info!("mpp-firmware booted (PIO SPI slave)");
+    if FIRMWARE_MODE == FirmwareMode::PowerSupply {
+        defmt::info!(
+            "mpp-firmware booted (PIO SPI slave), mode: {} ({})",
+            FIRMWARE_MODE,
+            mode_power_supply::POWER_SUPPLY_LOOP
+        );
+    } else {
+        defmt::info!(
+            "mpp-firmware booted (PIO SPI slave), mode: {}",
+            FIRMWARE_MODE
+        );
+    }
 
     // SEPIC gate PWM on GPIO15 (PWM_Gate net, through a 10R + 3.3nF network
     // into the driver stage): 100 kHz at the default 125 MHz sysclk with
@@ -321,8 +354,16 @@ async fn main(spawner: Spawner) {
     spawner.spawn(neopixel_task(ws2812).unwrap());
 
     let mut tick: u32 = 0;
+    let mut psu_closed_loop = mode_power_supply::ClosedLoopState::new();
+
     loop {
-        let duty = DUTY.load(Ordering::Relaxed).min(DUTY_MAX);
+        let duty = match FIRMWARE_MODE {
+            // Apply the Pi's commanded SPI duty directly, clamped as
+            // defense-in-depth against SEPIC inductor current runaway.
+            FirmwareMode::MppTracker => DUTY.load(Ordering::Relaxed).min(DUTY_MAX),
+            FirmwareMode::PowerSupply => mode_power_supply::compute_duty(&mut psu_closed_loop),
+        };
+
         pwm_cfg.compare_b = (duty as u32 * 1250 / 65536) as u16;
         pwm.set_config(&pwm_cfg);
 

@@ -35,7 +35,7 @@ use embassy_rp::{Peri, bind_interrupts};
 use embassy_time::{Duration, with_timeout};
 use portable_atomic::Ordering;
 
-use crate::{DUTY, MEAS_I_MA, MEAS_V_MV, PACKET_COUNT};
+use crate::{DUTY, FIRMWARE_MODE, FirmwareMode, MEAS_I_MA, MEAS_V_MV, PACKET_COUNT};
 
 bind_interrupts!(pub struct PioIrqs {
     PIO0_IRQ_0 => InterruptHandler<PIO0>;
@@ -235,15 +235,21 @@ pub async fn spi_pio_task(
         };
 
         if with_timeout(FRAME_TIMEOUT, exchange).await.is_err() {
+            // No Pi attached is expected/normal in PowerSupply mode
+            // (mode_power_supply.rs) - suppress the WARN spam there.
+            let log_link_state = FIRMWARE_MODE != FirmwareMode::PowerSupply;
+
             // Dropping `exchange` here cancels the DMA push (its Drop impl
             // aborts the channel) and the pending `wait_pull`s.
-            defmt::warn!("spi_pio_task: frame timeout, resyncing (duty unchanged)");
+            if log_link_state {
+                defmt::warn!("spi_pio_task: frame timeout, resyncing (duty unchanged)");
+            }
             resync(&mut sm, origin);
             // Re-arm TX with the last-known-good V/I for the next attempt;
             // DUTY is left untouched by a single torn frame (see doc
             // comment above) but forced to 0 if the master appears gone.
             consecutive_timeouts += 1;
-            if consecutive_timeouts == LINK_LOST_TIMEOUTS {
+            if consecutive_timeouts == LINK_LOST_TIMEOUTS && log_link_state {
                 defmt::warn!("spi_pio_task: link lost, forcing duty to 0");
             }
             if consecutive_timeouts >= LINK_LOST_TIMEOUTS {
