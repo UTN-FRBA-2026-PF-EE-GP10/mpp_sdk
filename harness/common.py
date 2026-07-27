@@ -93,10 +93,11 @@ def run_schedule(
 
     When ``noise_v_std`` / ``noise_i_std`` are nonzero, the controller sees a
     ``NoisySource``-wrapped reading while the returned arrays record the true
-    (noise-free) plant values - exactly as ``compare_noise.py`` did. The true
-    reading is always taken first (``inner.read()``) and the noisy one second
-    (``noisy.read()``), matching the original read order so the noise RNG
-    stream stays identical run to run.
+    (noise-free) plant values - exactly as ``compare_noise.py`` did.
+    ``NoisySource.read()`` is idempotent between writes (it caches its noisy
+    sample, drawn once per ``write()``), so duty is written through the
+    wrapper (``(noisy or inner).write(d)``) rather than through ``inner``
+    directly - that's what advances the noise stream for the next step.
     """
     inner = make_dynamic_source(
         panel=conditions[schedule[0][0]][0],
@@ -118,7 +119,7 @@ def run_schedule(
             v_true, i_true = inner.read()
             v_ctl, i_ctl = noisy.read() if noisy is not None else (v_true, i_true)
             d = ctl.step(v_ctl, i_ctl)
-            inner.write(d)
+            (noisy or inner).write(d)
             vs[k], is_[k], ds[k] = v_true, i_true, d
             k += 1
     return vs, is_, ds

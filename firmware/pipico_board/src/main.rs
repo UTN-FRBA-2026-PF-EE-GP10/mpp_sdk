@@ -135,7 +135,7 @@ async fn sensors_task(
         //     }
         // }
 
-        if tick % 1000 == 0 {
+        if tick.is_multiple_of(1000) {
             // ~1 Hz at the 1 ms poll period - RTT flooding at 1 kHz stalls
             // the target.
             defmt::info!(
@@ -216,7 +216,7 @@ async fn onchip_adc_task(
         ADC_SAMPLE_COUNT.fetch_add(1, Ordering::Relaxed);
 
         tick = tick.wrapping_add(1);
-        if tick % 10 == 0 {
+        if tick.is_multiple_of(10) {
             // ~1 Hz at the 100 ms poll period.
             defmt::info!(
                 "ADC_PWR={} mV ADC_VOUT={} mV ADC_Input_Curr={} mV (INA229 I={} mA)",
@@ -374,7 +374,7 @@ async fn main(spawner: Spawner) {
         });
 
         tick = tick.wrapping_add(1);
-        if tick % 500 == 0 {
+        if tick.is_multiple_of(500) {
             // 500 ms per half-period at the 1 ms loop cadence -> ~1 Hz blink.
             heartbeat.toggle();
         }

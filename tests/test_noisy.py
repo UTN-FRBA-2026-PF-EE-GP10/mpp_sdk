@@ -45,9 +45,16 @@ def test_zero_noise_is_transparent():
 
 
 def test_noise_mean_and_std_match_configuration():
+    # read() is now idempotent - draw fresh samples via write(), same duty
+    # each time, so the plant's true (v, i) stays fixed and only the noise
+    # varies.
     src = NoisySource(_clean_source(), v_std=0.4, i_std=0.01, seed=7)
     v_true, i_true = src.source.read()
-    samples = np.array([src.read() for _ in range(20000)])
+    samples = []
+    for _ in range(20000):
+        src.write(0.5)
+        samples.append(src.read())
+    samples = np.array(samples)
     assert samples[:, 0].mean() == pytest.approx(v_true, abs=0.02)
     assert samples[:, 0].std() == pytest.approx(0.4, rel=0.05)
     assert samples[:, 1].mean() == pytest.approx(i_true, abs=5e-4)
@@ -57,7 +64,25 @@ def test_noise_mean_and_std_match_configuration():
 def test_reproducible_with_seed():
     a = NoisySource(_clean_source(), v_std=0.4, i_std=0.01, seed=42)
     b = NoisySource(_clean_source(), v_std=0.4, i_std=0.01, seed=42)
-    assert [a.read() for _ in range(20)] == [b.read() for _ in range(20)]
+    a_samples, b_samples = [], []
+    for _ in range(20):
+        a.write(0.5)
+        b.write(0.5)
+        a_samples.append(a.read())
+        b_samples.append(b.read())
+    assert a_samples == b_samples
+
+
+def test_read_idempotent_between_writes():
+    src = NoisySource(_clean_source(), v_std=0.4, i_std=0.01, seed=3)
+    first = src.read()
+    for _ in range(10):
+        assert src.read() == first
+    src.write(0.4)
+    second = src.read()
+    assert second != first
+    for _ in range(10):
+        assert src.read() == second
 
 
 def test_different_seeds_differ():

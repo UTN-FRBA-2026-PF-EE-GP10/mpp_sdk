@@ -32,7 +32,7 @@ docs = [
 
 [tool.ruff]
 line-length = 100
-target-version = "py313"  # Bump when ruff supports py314 as a target.
+target-version = "py314"
 extend-exclude = [".venv", "build", "dist"]
 
 [tool.ruff.lint]

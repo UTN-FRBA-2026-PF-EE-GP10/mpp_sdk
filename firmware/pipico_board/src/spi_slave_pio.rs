@@ -21,8 +21,8 @@
 //! leave the state machine's bit alignment out of sync with no built-in
 //! way back. `spi_pio_task` bounds each frame with a timeout and, only on
 //! that (rare) failure, forces the state machine back to a clean start via
-//! `resync()`. This is deliberately NOT done after every successful frame
-//! - see `spi_pio_task`'s doc comment for why routine CPU-side resyncing
+//! `resync()`. This is deliberately NOT done after every successful frame;
+//! see `spi_pio_task`'s doc comment for why routine CPU-side resyncing
 //! turned out to corrupt the PIO's own IRQ-driven RX wakeup on target
 //! hardware.
 
@@ -315,7 +315,7 @@ pub async fn spi_pio_task(
             // DUTY rather than apply garbage. Rate-limited - a jammed link
             // could otherwise flood RTT every frame.
             checksum_failures += 1;
-            if checksum_failures == 1 || checksum_failures % 100 == 0 {
+            if checksum_failures == 1 || checksum_failures.is_multiple_of(100) {
                 defmt::warn!(
                     "spi_pio_task: MOSI checksum mismatch, keeping last duty ({} total)",
                     checksum_failures
