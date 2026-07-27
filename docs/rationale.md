@@ -80,7 +80,9 @@ For full implementation details, setpoint configuration, and watchdog
 behavior - including a step-by-step walkthrough of the `ClosedLoop`
 feed-forward-plus-trim algorithm - see
 [`firmware/pipico_board/README.md`'s "Operating Modes"
-section](../firmware/pipico_board/README.md#operating-modes).
+section](https://github.com/UTN-FRBA-2026-PF-EE-GP10/mpp_sdk/blob/main/firmware/pipico_board/README.md#operating-modes)
+(outside `docs/`, so linked directly on GitHub rather than as a relative
+mkdocs path).
 
 ## Why these algorithms, in this order
 
