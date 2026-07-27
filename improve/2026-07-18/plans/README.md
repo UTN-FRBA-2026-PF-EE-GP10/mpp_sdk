@@ -62,8 +62,11 @@ Everything above is DONE except:
   byte-budget numbers in its "Current state" reflect 014's final,
   merged design (3 spare MISO bytes, 9 spare MOSI).
 
-011 (`power_supply` mode follow-ups) is being worked by a teammate, not
-tracked here as an open item for this session.
+**011 is DONE** (not an open item, and not a teammate hand-off - it landed
+in this session, merged as PR #50: feed-forward + proportional-trim
+`ClosedLoop`, `MppTracker` regression-checked unaffected). Any further
+`power_supply`-mode work beyond what plan 011 scoped would be a new plan,
+not a reopening of 011.
 
 Execution-order/parallelization detail for the now-DONE plans (001-009,
 011-015) is historical - see git history on this file rather than
