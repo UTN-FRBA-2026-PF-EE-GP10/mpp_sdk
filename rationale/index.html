@@ -406,6 +406,34 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Why SEPIC">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#continuous-vs-discontinuous-conduction-mode-ccmdcm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Continuous vs discontinuous conduction mode (CCM/DCM)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#firmware-operating-modes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Firmware operating modes
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -811,6 +839,34 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Why SEPIC">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#continuous-vs-discontinuous-conduction-mode-ccmdcm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Continuous vs discontinuous conduction mode (CCM/DCM)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#firmware-operating-modes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Firmware operating modes
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -933,6 +989,46 @@ operating condition. The reflected input resistance
 <span class="arithmatex">\(R_\text{eff}(D) = R_\text{load}\left(\tfrac{1-D}{D}\right)^2\)</span> is monotonic in
 the duty cycle, giving a clean, single-valued mapping from <span class="arithmatex">\(D\)</span> to operating
 point.</p>
+<h3 id="continuous-vs-discontinuous-conduction-mode-ccmdcm">Continuous vs discontinuous conduction mode (CCM/DCM)<a class="headerlink" href="#continuous-vs-discontinuous-conduction-mode-ccmdcm" title="Permanent link">&para;</a></h3>
+<p>In ideal Continuous Conduction Mode (CCM), the voltage transfer ratio is strictly
+<span class="arithmatex">\(V_\text{out} = V_\text{in} \cdot \frac{D}{1-D}\)</span>. However, on the physical bench,
+the converter operates in Discontinuous Conduction Mode (DCM) at light loads
+(high load resistance). In DCM, the inductor current falls to zero within each
+switching cycle, breaking the continuous flux-balance assumption and causing the
+output voltage to rise above the ideal CCM ratio.</p>
+<p>During bench bring-up (plan 002), at a fixed commanded duty <span class="arithmatex">\(D = 0.5\)</span> and
+<span class="arithmatex">\(V_\text{in} = 3.3\text{ V}\)</span>, the measured output voltage varied dramatically
+with load:</p>
+<ul>
+<li><strong>~3.3 V into a 10 <span class="arithmatex">\(\Omega\)</span> load</strong> (matching the ideal CCM ratio
+  <span class="arithmatex">\(3.3 \cdot \frac{0.5}{1-0.5} = 3.3\text{ V}\)</span>)</li>
+<li><strong>~6.0 V into a 10 k<span class="arithmatex">\(\Omega\)</span> load</strong> (DCM boost behavior under light load)</li>
+<li><strong>~7.0 V open-circuit</strong> (unloaded DCM ceiling)</li>
+</ul>
+<p>Understanding this operating regime transition is vital for hardware
+validation and characterization.</p>
+<h3 id="firmware-operating-modes">Firmware operating modes<a class="headerlink" href="#firmware-operating-modes" title="Permanent link">&para;</a></h3>
+<p>To simplify converter characterization on the bench without needing a
+host-side control loop, the RP2040 firmware supports two operating modes
+(<code>FIRMWARE_MODE</code>):</p>
+<ul>
+<li><strong><code>FirmwareMode::MppTracker</code></strong>: The RP2040 acts as a pure hardware I/O
+  proxy. The algorithm on the Raspberry Pi receives <span class="arithmatex">\((V, I)\)</span> measurements and
+  commands duty cycle <span class="arithmatex">\(D\)</span> over SPI. A link-lost watchdog forces <span class="arithmatex">\(D = 0\)</span> if
+  SPI communication drops for <span class="arithmatex">\(&gt; 500\text{ ms}\)</span>.</li>
+<li><strong><code>FirmwareMode::PowerSupply</code></strong>: The RP2040 operates as an autonomous
+  closed-loop bench power supply, regulating output voltage <span class="arithmatex">\(V_\text{out}\)</span> to
+  a fixed setpoint (<code>POWER_SUPPLY_VOUT_MV</code>, e.g., 12 V) using on-chip ADC
+  feedback (<code>MEAS_ADC_VOUT_MV</code>). In this mode, the local regulator continues
+  operating standalone even if the host SPI connection drops.</li>
+</ul>
+<p>For full implementation details, setpoint configuration, and watchdog
+behavior - including a step-by-step walkthrough of the <code>ClosedLoop</code>
+feed-forward-plus-trim algorithm - see
+<a href="https://github.com/UTN-FRBA-2026-PF-EE-GP10/mpp_sdk/blob/main/firmware/pipico_board/README.md#operating-modes"><code>firmware/pipico_board/README.md</code>'s "Operating Modes"
+section</a>
+(outside <code>docs/</code>, so linked directly on GitHub rather than as a relative
+mkdocs path).</p>
 <h2 id="why-these-algorithms-in-this-order">Why these algorithms, in this order<a class="headerlink" href="#why-these-algorithms-in-this-order" title="Permanent link">&para;</a></h2>
 <ol>
 <li><strong>P&amp;O</strong> — the baseline every MPPT paper compares against. Fixed-step,
