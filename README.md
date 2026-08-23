@@ -104,6 +104,19 @@ This runs Perturb & Observe MPPT against the ideal single-diode panel model
 and plots the I-V / P-V curves with the calculated MPP and the algorithm's
 operating-point trajectory.
 
+Every other script under `harness/`, `examples/`, and `scripts/` is also
+reachable through one dispatcher, `mpp-sdk`:
+
+```bash
+uv run mpp-sdk --help              # list every runnable script
+uv run mpp-sdk compare-dynamic     # run harness/compare_dynamic.py
+uv run mpp-sdk animate --shade     # forwards extra flags to the target script
+```
+
+Each script also stays directly runnable on its own (e.g.
+`uv run harness/compare_dynamic.py`) — `mpp-sdk` is just a single place to
+discover them all.
+
 ## Layout
 
 ```text

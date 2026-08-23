@@ -46,6 +46,7 @@ re-enabling; no plan file, tracked via the PR that disabled it.
 | 014 | Firmware: CRC/checksum + Vout/Temp fields on the SPI frame | P1 | S-M | - | DONE (on-target fault injection confirmed; plan file removed, see PR #51) |
 | 015 | SDK: harden `SpiMcuSource` (scale defaults, teardown, read()-before-write(), tests) | P1 | S-M | - | DONE (plan file removed, see PR #51) |
 | 016 | Firmware: curve-tracer sweep engine (RP2040 port, bench-only, no Pi transport yet) | P2 | L | - | TODO |
+| 017 | SDK: `mpp-sdk` CLI dispatcher for harness/examples/scripts | P3 | S-M | - | DONE |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) |
 REJECTED (with one-line rationale).
@@ -60,7 +61,9 @@ Everything above is DONE except:
   uncalibrated.
 - **016** (curve-tracer sweep engine, P2): no dependency; the SPI-frame
   byte-budget numbers in its "Current state" reflect 014's final,
-  merged design (3 spare MISO bytes, 9 spare MOSI).
+  merged design (3 spare MISO bytes, 9 spare MOSI). In progress this
+  session - see the plan file for what its own STOP conditions still need
+  operator sign-off on (Pi transport, sweep trigger, sweep direction).
 
 **011 is DONE** (not an open item, and not a teammate hand-off - it landed
 in this session, merged as PR #50: feed-forward + proportional-trim
