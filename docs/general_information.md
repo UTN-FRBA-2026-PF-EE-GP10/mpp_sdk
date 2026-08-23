@@ -122,6 +122,11 @@ uv run harness/compare_noise.py  # robustness vs measurement noise
 uv run pytest -q                 # run the test suite
 ```
 
+Every script above is also reachable through one dispatcher —
+`uv run mpp-sdk --help` lists all of them (`uv run mpp-sdk compare-static`,
+`uv run mpp-sdk animate --shade`, ...); each stays directly runnable on
+its own too, as shown here.
+
 Every `compare_*` script prints a "how to read the metrics" guide before
 its table. See `docs/methodology.md` for the full measurement methodology,
 `docs/algorithms/` for one-page references on each MPPT method, and

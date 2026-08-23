@@ -104,6 +104,21 @@ This runs Perturb & Observe MPPT against the ideal single-diode panel model
 and plots the I-V / P-V curves with the calculated MPP and the algorithm's
 operating-point trajectory.
 
+Every other runnable script under `harness/`, `examples/`, and `scripts/`
+(13 in total; `examples/pno_demo.py` is a thin shim to this same
+`main.py` quickstart, so it isn't a separate entry) is also reachable
+through one dispatcher, `mpp-sdk`:
+
+```bash
+uv run mpp-sdk --help              # list every runnable script
+uv run mpp-sdk compare-dynamic     # run harness/compare_dynamic.py
+uv run mpp-sdk animate --shade     # forwards extra flags to the target script
+```
+
+Each script also stays directly runnable on its own (e.g.
+`uv run harness/compare_dynamic.py`) — `mpp-sdk` is just a single place to
+discover them all.
+
 ## Layout
 
 ```text
@@ -217,6 +232,7 @@ build/flash/calibration instructions.
 - [x] `tests/` — unit tests per pillar (`pytest`)
 - [x] CI workflow (`uv sync`, `pytest`, demo smoke run)
 - [x] `data/` — provenanced benchmark profiles and panel curves
+- [x] `mpp-sdk` CLI — single dispatcher over every harness/example/script
 
 ## Context
 
