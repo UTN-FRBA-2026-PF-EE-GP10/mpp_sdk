@@ -145,7 +145,7 @@ def main() -> None:
 
     for ax, (name, d0, segments) in zip(axes, SCENARIOS, strict=True):
         last_start = sum(n for _, n in segments[:-1])
-        last_irr, last_n_steps = segments[-1]
+        last_irr, _ = segments[-1]
         p_mpp = conditions[last_irr][1]
         p_mpp_t = np.concatenate([np.full(n, conditions[irr][1]) for irr, n in segments])
         time_ms = np.arange(p_mpp_t.size) * CONTROL_PERIOD_MS
