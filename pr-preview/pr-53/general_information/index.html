@@ -979,6 +979,10 @@ uv<span class="w"> </span>run<span class="w"> </span>harness/compare_bank.py<spa
 uv<span class="w"> </span>run<span class="w"> </span>harness/compare_noise.py<span class="w">  </span><span class="c1"># robustness vs measurement noise</span>
 uv<span class="w"> </span>run<span class="w"> </span>pytest<span class="w"> </span>-q<span class="w">                 </span><span class="c1"># run the test suite</span>
 </code></pre></div>
+<p>Every script above is also reachable through one dispatcher —
+<code>uv run mpp-sdk --help</code> lists all of them (<code>uv run mpp-sdk compare-static</code>,
+<code>uv run mpp-sdk animate --shade</code>, ...); each stays directly runnable on
+its own too, as shown here.</p>
 <p>Every <code>compare_*</code> script prints a "how to read the metrics" guide before
 its table. See <code>docs/methodology.md</code> for the full measurement methodology,
 <code>docs/algorithms/</code> for one-page references on each MPPT method, and
