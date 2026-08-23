@@ -66,4 +66,10 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["mpp_sdk"]
+# harness/examples/scripts are included alongside mpp_sdk so the mpp-sdk
+# console script (harness.cli:main) is actually importable from an
+# installed (non-editable) wheel, not just from an in-repo `uv run`.
+packages = ["mpp_sdk", "harness", "examples", "scripts"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"main.py" = "main.py"

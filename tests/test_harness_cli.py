@@ -58,13 +58,34 @@ def test_dispatches_to_target_main(monkeypatch, slug):
 
 
 @pytest.mark.parametrize("slug", ["animate", "spi-test"])
-def test_forwarding_subcommand_dispatches_and_sets_argv(monkeypatch, slug):
+def test_forwarding_subcommand_sets_argv_and_restores_it(monkeypatch, slug):
     module_path, _ = cli._COMMANDS[slug]
     module = importlib.import_module(module_path)
-    calls = []
-    monkeypatch.setattr(module, "main", lambda: calls.append(True))
+    seen_argv = []
+    monkeypatch.setattr(module, "main", lambda: seen_argv.append(list(sys.argv)))
+    original_argv = list(sys.argv)
+
     cli.main([slug, "--duty", "0.3"])
-    assert calls == [True]
+
+    assert seen_argv == [[module_path, "--duty", "0.3"]]
+    assert sys.argv == original_argv
+
+
+@pytest.mark.parametrize("slug", ["animate", "spi-test"])
+def test_forwarding_subcommand_restores_argv_even_on_error(monkeypatch, slug):
+    module_path, _ = cli._COMMANDS[slug]
+    module = importlib.import_module(module_path)
+
+    def _boom():
+        raise RuntimeError("target script failed")
+
+    monkeypatch.setattr(module, "main", _boom)
+    original_argv = list(sys.argv)
+
+    with pytest.raises(RuntimeError):
+        cli.main([slug, "--duty", "0.3"])
+
+    assert sys.argv == original_argv
 
 
 def test_all_registered_modules_importable():

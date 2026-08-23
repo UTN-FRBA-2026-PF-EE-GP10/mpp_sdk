@@ -58,9 +58,21 @@ def main(argv: Sequence[str] | None = None) -> None:
 
     module_path, forwards_argv = _COMMANDS[command]
     module = importlib.import_module(module_path)
-    if forwards_argv:
-        sys.argv = [module_path, *rest]
-    module.main()
+    if not forwards_argv:
+        module.main()
+        return
+
+    # The target script reads sys.argv itself (argparse with no explicit
+    # `args=`), so it must be swapped in for the call - restored afterward
+    # since main() is a plain importable function, not just a __main__
+    # entry point (the test suite calls it directly), and must not leave a
+    # stale sys.argv behind for whatever runs next in the same process.
+    saved_argv = sys.argv
+    sys.argv = [module_path, *rest]
+    try:
+        module.main()
+    finally:
+        sys.argv = saved_argv
 
 
 if __name__ == "__main__":
