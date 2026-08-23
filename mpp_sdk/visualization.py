@@ -185,12 +185,6 @@ class LivePanelView:
 
         self._refresh_curves()
 
-    def _set_static_limits(self) -> None:
-        """Set axis limits from current panel state; call whenever the model may have changed."""
-        v, i = self.panel.iv_curve(self._n)
-        p = v * i
-        self._apply_limits(v, i, p)
-
     def _apply_limits(self, v, i, p) -> None:
         """Update axis limits from an already-sampled (v, i, p) triple."""
         v_max = float(v[-1])
