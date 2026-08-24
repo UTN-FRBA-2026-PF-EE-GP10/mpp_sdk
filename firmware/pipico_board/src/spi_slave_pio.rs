@@ -35,6 +35,7 @@ use embassy_rp::{Peri, bind_interrupts};
 use embassy_time::{Duration, with_timeout};
 use portable_atomic::Ordering;
 
+use crate::mode_curve_tracer::{self, SweepResult, TRACER_SWEEP_POINTS};
 use crate::{
     DUTY, FIRMWARE_MODE, FirmwareMode, MEAS_ADC_VOUT_MV, MEAS_I_MA, MEAS_V_MV, PACKET_COUNT,
 };
@@ -44,6 +45,28 @@ bind_interrupts!(pub struct PioIrqs {
 });
 
 pub const FRAME_LEN: usize = 12;
+
+// Curve-tracer bulk-read protocol (plan 018): a distinct, larger SPI
+// transaction for fetching sweep results (mode_curve_tracer.rs), kept
+// separate from the steady FRAME_LEN telemetry frame it rides alongside.
+// See spi_pio_task's doc comment for the full three-step protocol.
+
+/// MOSI command value (one of the 9 spare bytes, index 3) requesting a
+/// bulk-dump; unlikely to appear from a zeroed/uninitialized buffer.
+const CMD_REQUEST_BULK_DUMP: u8 = 0xB1;
+/// First byte of a bulk-read response - lets the Pi tell a genuine
+/// bulk-dump frame apart from a torn/mis-synced read before trusting
+/// anything else in it.
+const BULK_MAGIC: u8 = 0xC5;
+/// `[ MAGIC | N_POINTS | (V,I) x TRACER_SWEEP_POINTS | CHECKSUM ]`.
+const BULK_FRAME_LEN: usize = 2 + TRACER_SWEEP_POINTS * 4 + 1;
+/// Larger of the two frame shapes - `rx`/`tx_buf` are sized to this so
+/// `spi_pio_task` can switch between them without a second buffer.
+const MAX_FRAME_LEN: usize = if BULK_FRAME_LEN > FRAME_LEN {
+    BULK_FRAME_LEN
+} else {
+    FRAME_LEN
+};
 
 /// Returns the configured state machine plus the PIO instruction-memory
 /// address its program was loaded at (`resync()` needs this to jump back
@@ -138,10 +161,14 @@ fn xor_checksum(bytes: &[u8]) -> u8 {
 /// Build a TX frame (u32 words, byte in top 8 bits for shift_out = Left).
 ///
 /// MISO layout: [ V_H | V_L | I_H | I_L | VOUT_H | VOUT_L | TEMP_H
-///   | TEMP_L | CHECKSUM | 0 x 3 ]  (12 bytes total). `CHECKSUM` is the
-/// XOR of the 8 preceding data bytes - must match `spi_mcu.py`/
-/// `spi_test.py` exactly.
-fn build_tx_frame(v: u16, i: u16, vout: u16, temp_cc: i16) -> [u32; FRAME_LEN] {
+///   | TEMP_L | CHECKSUM | ACK | 0 x 2 ]  (12 bytes total). `CHECKSUM` is
+/// the XOR of the 8 preceding data bytes only - must match `spi_mcu.py`/
+/// `spi_test.py` exactly, and plan 018's `ack` byte does NOT participate
+/// in it (the steady frame's checksum contract is unchanged from plan
+/// 014/015). `ack` is the curve-tracer bulk-read handshake byte (plan
+/// 018): `0x00` in normal operation, `0x80 | point_count` on the one
+/// frame that acks a bulk-dump request - see `spi_pio_task`'s doc comment.
+fn build_tx_frame(v: u16, i: u16, vout: u16, temp_cc: i16, ack: u8) -> [u32; FRAME_LEN] {
     let data = [
         v.to_be_bytes(),
         i.to_be_bytes(),
@@ -152,6 +179,35 @@ fn build_tx_frame(v: u16, i: u16, vout: u16, temp_cc: i16) -> [u32; FRAME_LEN] {
     let checksum = xor_checksum(&bytes);
 
     let mut words = [0u32; FRAME_LEN];
+    let all = bytes
+        .iter()
+        .chain(core::iter::once(&checksum))
+        .chain(core::iter::once(&ack));
+    for (word, byte) in words.iter_mut().zip(all) {
+        *word = (*byte as u32) << 24;
+    }
+    words
+}
+
+/// Build a bulk-read TX frame: `[ MAGIC | N_POINTS | (V_H|V_L|I_H|I_L) x
+/// TRACER_SWEEP_POINTS | CHECKSUM ]`. `CHECKSUM` is the XOR of every
+/// preceding byte (magic, count, and all point bytes) - reuses
+/// `xor_checksum` like the steady frame, just over a different byte range.
+/// `sweep.points` beyond `sweep.count` are the zeroed unfilled tail from an
+/// aborted sweep (`mode_curve_tracer::SweepResult`) - sent as-is; the Pi
+/// only trusts the first `sweep.count` points, per plan 018.
+fn build_bulk_tx_frame(sweep: &SweepResult) -> [u32; BULK_FRAME_LEN] {
+    let mut bytes = [0u8; BULK_FRAME_LEN - 1];
+    bytes[0] = BULK_MAGIC;
+    bytes[1] = sweep.count as u8;
+    for (idx, (v, i)) in sweep.points.iter().enumerate() {
+        let base = 2 + idx * 4;
+        bytes[base..base + 2].copy_from_slice(&v.to_be_bytes());
+        bytes[base + 2..base + 4].copy_from_slice(&i.to_be_bytes());
+    }
+    let checksum = xor_checksum(&bytes);
+
+    let mut words = [0u32; BULK_FRAME_LEN];
     let all = bytes.iter().chain(core::iter::once(&checksum));
     for (word, byte) in words.iter_mut().zip(all) {
         *word = (*byte as u32) << 24;
@@ -196,6 +252,103 @@ fn resync(sm: &mut StateMachine<'static, PIO0, 0>, origin: u8) {
     sm.set_enable(true);
 }
 
+/// Curve-tracer bulk-read handshake (plan 018) - drives which frame shape
+/// `spi_pio_task`'s next exchange uses. All three states use `FRAME_LEN`
+/// except `DoBulk`, the one exchange that uses `BULK_FRAME_LEN`:
+///
+/// 1. `Idle`: steady `FRAME_LEN` telemetry frames. If the Pi's MOSI spare
+///    byte carries `CMD_REQUEST_BULK_DUMP` and a sweep result is available
+///    (`mode_curve_tracer::take_last_sweep()`), advance to `SendAck`.
+/// 2. `SendAck(sweep)`: still a `FRAME_LEN` exchange - its TX carries the
+///    ack (`0x80 | point_count`) in the frame's first spare MISO byte.
+///    Once the Pi reads that ack (from this exchange's RX, on its side),
+///    it issues the bulk-sized transaction next - so regardless of this
+///    exchange's own RX content, always advance to `DoBulk`.
+/// 3. `DoBulk(sweep)`: this exchange itself is the `BULK_FRAME_LEN`
+///    transaction (`build_bulk_tx_frame`); its RX is dummy bytes, not
+///    parsed. Always returns to `Idle` afterward - a sweep result is
+///    fetched at most once.
+///
+/// A frame timeout at any point (Pi didn't follow through, or a torn
+/// frame) resets straight to `Idle` rather than trying to resume mid
+/// handshake - see the timeout branch in `spi_pio_task`.
+enum BulkState {
+    Idle,
+    SendAck(SweepResult),
+    DoBulk(SweepResult),
+}
+
+/// Applies one `FRAME_LEN` exchange's RX as a normal duty-update frame -
+/// shared by the `Idle` and `SendAck` cases (both are steady-shaped
+/// frames from the Pi's own duty-control perspective; only `DoBulk`'s RX
+/// is dummy/unparsed). See `spi_pio_task`'s doc comment for the checksum
+/// contract.
+fn apply_duty_frame(rx: &[u32], last_logged_duty: &mut Option<u16>, checksum_failures: &mut u32) {
+    // RX autopush puts byte in bits 7-0 (shift_in = Left).
+    let duty_h = rx[0] as u8;
+    let duty_l = rx[1] as u8;
+    let received_checksum = rx[2] as u8;
+
+    if xor_checksum(&[duty_h, duty_l]) == received_checksum {
+        let duty = ((duty_h as u16) << 8) | duty_l as u16;
+        DUTY.store(duty, Ordering::Relaxed);
+        PACKET_COUNT.fetch_add(1, Ordering::Relaxed);
+
+        // Log only on change - at the Pi's control period this would
+        // otherwise flood RTT every frame; V/I are already logged
+        // periodically by sensors_task.
+        if *last_logged_duty != Some(duty) {
+            defmt::info!("rx: duty={}%", duty as u32 * 100 / 65535);
+            *last_logged_duty = Some(duty);
+        }
+    } else {
+        // Corrupted-but-complete frame (plan 014): keep the last-good
+        // DUTY rather than apply garbage. Rate-limited - a jammed link
+        // could otherwise flood RTT every frame.
+        *checksum_failures += 1;
+        if *checksum_failures == 1 || checksum_failures.is_multiple_of(100) {
+            defmt::warn!(
+                "spi_pio_task: MOSI checksum mismatch, keeping last duty ({} total)",
+                checksum_failures
+            );
+        }
+    }
+}
+
+/// Builds the TX buffer for `state`'s exchange - always reads live
+/// `MEAS_*` atomics (matches the pre-plan-018 behavior of building the
+/// next telemetry frame fresh each time), padded to `MAX_FRAME_LEN`; only
+/// the first `FRAME_LEN`/`BULK_FRAME_LEN` words are ever pushed to DMA
+/// (the caller slices by the same `state` match).
+fn build_tx_buf_for_state(state: &BulkState) -> [u32; MAX_FRAME_LEN] {
+    let mut buf = [0u32; MAX_FRAME_LEN];
+    match state {
+        BulkState::DoBulk(sweep) => {
+            buf[..BULK_FRAME_LEN].copy_from_slice(&build_bulk_tx_frame(sweep));
+        }
+        BulkState::SendAck(sweep) => {
+            let v = MEAS_V_MV.load(Ordering::Relaxed);
+            let i = MEAS_I_MA.load(Ordering::Relaxed);
+            let vout = MEAS_ADC_VOUT_MV.load(Ordering::Relaxed);
+            let ack = 0x80 | (sweep.count as u8);
+            buf[..FRAME_LEN].copy_from_slice(&build_tx_frame(
+                v,
+                i,
+                vout,
+                TEMP_NOT_AVAILABLE_CC,
+                ack,
+            ));
+        }
+        BulkState::Idle => {
+            let v = MEAS_V_MV.load(Ordering::Relaxed);
+            let i = MEAS_I_MA.load(Ordering::Relaxed);
+            let vout = MEAS_ADC_VOUT_MV.load(Ordering::Relaxed);
+            buf[..FRAME_LEN].copy_from_slice(&build_tx_frame(v, i, vout, TEMP_NOT_AVAILABLE_CC, 0));
+        }
+    }
+    buf
+}
+
 /// SPI exchange task — full-duplex DMA TX + async RX via `join`.
 ///
 /// DMA feeds the PIO TX FIFO in hardware (DREQ-paced, ns latency), so the
@@ -223,9 +376,9 @@ fn resync(sm: &mut StateMachine<'static, PIO0, 0>, origin: u8) {
 /// steady-state path untouched and only exercises the recovery code when
 /// there is actually something to recover from.
 ///
-/// MOSI (RPi→Pico): [ DUTY_H | DUTY_L | CHECKSUM | 0 x 9 ]
+/// MOSI (RPi→Pico): [ DUTY_H | DUTY_L | CHECKSUM | CMD | 0 x 8 ]
 /// MISO (Pico→RPi): [ V_H | V_L | I_H | I_L | VOUT_H | VOUT_L | TEMP_H
-///   | TEMP_L | CHECKSUM | 0 x 3 ]
+///   | TEMP_L | CHECKSUM | ACK | 0 x 2 ]
 ///
 /// `CHECKSUM` (plan 014) is an XOR over the preceding data bytes in each
 /// direction (`xor_checksum`) - it does not grow the frame, both
@@ -234,6 +387,13 @@ fn resync(sm: &mut StateMachine<'static, PIO0, 0>, origin: u8) {
 /// single mismatch) and does NOT count toward `consecutive_timeouts` -
 /// the master is clearly still talking, just corrupted, a different
 /// failure mode than sustained silence.
+///
+/// `CMD`/`ACK` (plan 018) are the curve-tracer bulk-read handshake bytes -
+/// see `BulkState`'s doc comment for the full three-step protocol. They
+/// ride in the steady frame's spare bytes and do not affect `CHECKSUM`'s
+/// formula. The handshake's own third step is a **separate**, larger
+/// (`BULK_FRAME_LEN`-byte) transaction, not part of this steady frame at
+/// all - `this_frame_len` below switches to it only for that one exchange.
 #[embassy_executor::task]
 pub async fn spi_pio_task(
     mut sm: StateMachine<'static, PIO0, 0>,
@@ -241,31 +401,36 @@ pub async fn spi_pio_task(
     mut dma: dma::Channel<'static>,
 ) {
     defmt::info!(
-        "spi_pio_task: PIO SPI slave running (DMA TX, {} byte frame)",
-        FRAME_LEN
+        "spi_pio_task: PIO SPI slave running (DMA TX, {} byte frame, {} byte bulk-read frame)",
+        FRAME_LEN,
+        BULK_FRAME_LEN
     );
 
-    let mut tx_buf = build_tx_frame(
-        MEAS_V_MV.load(Ordering::Relaxed),
-        MEAS_I_MA.load(Ordering::Relaxed),
-        MEAS_ADC_VOUT_MV.load(Ordering::Relaxed),
-        TEMP_NOT_AVAILABLE_CC,
-    );
+    let mut bulk_state = BulkState::Idle;
+    let mut tx_buf = build_tx_buf_for_state(&bulk_state);
     let mut consecutive_timeouts: u32 = 0;
     let mut last_logged_duty: Option<u16> = None;
     let mut checksum_failures: u32 = 0;
 
     loop {
-        let mut rx = [0u32; FRAME_LEN];
+        let this_frame_len = match &bulk_state {
+            BulkState::DoBulk(_) => BULK_FRAME_LEN,
+            BulkState::Idle | BulkState::SendAck(_) => FRAME_LEN,
+        };
+
+        let mut rx = [0u32; MAX_FRAME_LEN];
 
         // TX (DMA) and RX (wait_pull) run concurrently via split borrows.
         let exchange = {
             let (rx_half, tx_half) = sm.rx_tx();
-            join(tx_half.dma_push(&mut dma, &tx_buf, false), async {
-                for slot in &mut rx {
-                    *slot = rx_half.wait_pull().await;
-                }
-            })
+            join(
+                tx_half.dma_push(&mut dma, &tx_buf[..this_frame_len], false),
+                async {
+                    for slot in &mut rx[..this_frame_len] {
+                        *slot = rx_half.wait_pull().await;
+                    }
+                },
+            )
         };
 
         if with_timeout(FRAME_TIMEOUT, exchange).await.is_err() {
@@ -289,43 +454,46 @@ pub async fn spi_pio_task(
             if consecutive_timeouts >= LINK_LOST_TIMEOUTS {
                 DUTY.store(0, Ordering::Relaxed);
             }
+            // A torn/aborted frame mid bulk-read handshake must not leave
+            // this task expecting a frame shape the Pi has moved on from -
+            // always fall back to Idle, same reasoning as DUTY being safe
+            // to leave unresolved on a single miss (see BulkState's doc
+            // comment).
+            bulk_state = BulkState::Idle;
+            tx_buf = build_tx_buf_for_state(&bulk_state);
             continue;
         }
         consecutive_timeouts = 0;
 
-        // RX autopush puts byte in bits 7-0 (shift_in = Left).
-        let duty_h = rx[0] as u8;
-        let duty_l = rx[1] as u8;
-        let received_checksum = rx[2] as u8;
-
-        if xor_checksum(&[duty_h, duty_l]) == received_checksum {
-            let duty = ((duty_h as u16) << 8) | duty_l as u16;
-            DUTY.store(duty, Ordering::Relaxed);
-            PACKET_COUNT.fetch_add(1, Ordering::Relaxed);
-
-            // Log only on change - at the Pi's control period this would
-            // otherwise flood RTT every frame; V/I are already logged
-            // periodically by sensors_task.
-            if last_logged_duty != Some(duty) {
-                defmt::info!("rx: duty={}%", duty as u32 * 100 / 65535);
-                last_logged_duty = Some(duty);
+        bulk_state = match bulk_state {
+            BulkState::DoBulk(_) => {
+                defmt::info!("spi_pio_task: bulk-dump transaction complete");
+                BulkState::Idle
             }
-        } else {
-            // Corrupted-but-complete frame (plan 014): keep the last-good
-            // DUTY rather than apply garbage. Rate-limited - a jammed link
-            // could otherwise flood RTT every frame.
-            checksum_failures += 1;
-            if checksum_failures == 1 || checksum_failures.is_multiple_of(100) {
-                defmt::warn!(
-                    "spi_pio_task: MOSI checksum mismatch, keeping last duty ({} total)",
-                    checksum_failures
-                );
+            BulkState::SendAck(sweep) => {
+                apply_duty_frame(&rx, &mut last_logged_duty, &mut checksum_failures);
+                BulkState::DoBulk(sweep)
             }
-        }
+            BulkState::Idle => {
+                apply_duty_frame(&rx, &mut last_logged_duty, &mut checksum_failures);
+                let cmd = rx[3] as u8;
+                if cmd == CMD_REQUEST_BULK_DUMP {
+                    match mode_curve_tracer::take_last_sweep() {
+                        Some(sweep) => {
+                            defmt::info!(
+                                "spi_pio_task: bulk-dump request acked, {} points",
+                                sweep.count
+                            );
+                            BulkState::SendAck(sweep)
+                        }
+                        None => BulkState::Idle,
+                    }
+                } else {
+                    BulkState::Idle
+                }
+            }
+        };
 
-        let v = MEAS_V_MV.load(Ordering::Relaxed);
-        let i = MEAS_I_MA.load(Ordering::Relaxed);
-        let vout = MEAS_ADC_VOUT_MV.load(Ordering::Relaxed);
-        tx_buf = build_tx_frame(v, i, vout, TEMP_NOT_AVAILABLE_CC);
+        tx_buf = build_tx_buf_for_state(&bulk_state);
     }
 }

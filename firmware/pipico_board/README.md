@@ -76,9 +76,9 @@ Pico pins 14–18 are adjacent on the left side of the board (USB connector faci
 
 **Frame protocol** (12 bytes, Mode 0, MSB-first, CS held low for entire frame):
 
-MOSI (RPi→Pico): `[ DUTY_H | DUTY_L | CHECKSUM | 0x00 x 9 ]`
+MOSI (RPi→Pico): `[ DUTY_H | DUTY_L | CHECKSUM | CMD | 0x00 x 8 ]`
 
-MISO (Pico→RPi): `[ V_H | V_L | I_H | I_L | VOUT_H | VOUT_L | TEMP_H | TEMP_L | CHECKSUM | 0x00 x 3 ]`
+MISO (Pico→RPi): `[ V_H | V_L | I_H | I_L | VOUT_H | VOUT_L | TEMP_H | TEMP_L | CHECKSUM | ACK | 0x00 x 2 ]`
 
 DUTY is a u16 (0 = 0 %, 65535 = 100 %). V/I/VOUT are u16, saturating: V/VOUT
 in millivolts, I in milliamperes (negative current clamps to 0). TEMP is a
@@ -86,12 +86,17 @@ big-endian `i16` in centi-Celsius, or the sentinel `-32768` (`0x8000`) while
 the MAX31865 probe stays disabled (see "Panel temperature" below). See
 "Sensing" below for the sensor details. `CHECKSUM` (plan 014) is an XOR of
 the preceding data bytes in each direction - `DUTY_H^DUTY_L` for MOSI,
-`V_H^V_L^I_H^I_L^VOUT_H^VOUT_L^TEMP_H^TEMP_L` for MISO. A checksum mismatch
-is treated as a corrupted-but-complete frame: the firmware keeps the last
-commanded `DUTY` (does not zero it or count it as a timeout), and
-`SpiMcuSource`/`spi_test.py` keep the last-good telemetry rather than
-propagate garbage. On the Pi side, construct `SpiMcuSource()` (defaults
-already match the firmware's calibrated units and this checksum).
+`V_H^V_L^I_H^I_L^VOUT_H^VOUT_L^TEMP_H^TEMP_L` for MISO; `CMD`/`ACK` do NOT
+participate in it. A checksum mismatch is treated as a corrupted-but-complete
+frame: the firmware keeps the last commanded `DUTY` (does not zero it or
+count it as a timeout), and `SpiMcuSource`/`spi_test.py` keep the last-good
+telemetry rather than propagate garbage. On the Pi side, construct
+`SpiMcuSource()` (defaults already match the firmware's calibrated units and
+this checksum).
+
+`CMD`/`ACK` (plan 018) are both `0x00` in normal operation - the
+curve-tracer bulk-read handshake (see "Curve tracer" below) is the only
+thing that sets them, and only around fetching a sweep result.
 
 **Master clock speed**: 8 MHz is unreliable (occasional torn/garbled
 frames) - the GPIO input synchronizer latency eats too much of the 125 ns
@@ -334,9 +339,25 @@ schematic-derived time constant for the bleed path to derive them from
 analytically.
 
 **Results**: dumped via `defmt`/RTT as `(V_mV, I_mA)` lines when the sweep
-completes or aborts. No Pi transport yet - see plan 018
-(`improve/2026-07-18/plans/`) for the bulk-read SPI transaction that adds
-one.
+completes or aborts, and separately fetchable from the Pi (plan 018) via
+`SpiMcuSource.request_sweep()` (`mpp_sdk/io/spi_mcu.py`). The most recent
+sweep's result is held in `mode_curve_tracer.rs` until fetched once
+(`take_last_sweep()`); a three-step handshake rides on top of the steady
+telemetry frame without changing its shape:
+
+1. Pi requests a dump via a spare MOSI byte (`CMD`, `0xB1`) on an ordinary
+   frame - duty control is unaffected.
+2. Pico acks on the *next* ordinary frame via a spare MISO byte (`ACK`):
+   `0x80 | point_count` if a result is ready, `0x00` otherwise.
+3. Once armed, the Pi issues one distinct, larger SPI transaction (83
+   bytes for the default 20-point sweep: `MAGIC | N_POINTS | (V,I) x N |
+   CHECKSUM`) to fetch it - separate from, not a growth of, the 12-byte
+   telemetry frame.
+
+A frame timeout at any point in the handshake (Pi didn't follow through,
+or a torn frame) resets straight back to normal telemetry rather than
+leaving `spi_pio_task` expecting a frame shape that never arrives - see
+`BulkState`'s doc comment in `spi_slave_pio.rs`.
 
 ## Status indicators
 

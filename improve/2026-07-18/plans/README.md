@@ -47,7 +47,7 @@ re-enabling; no plan file, tracked via the PR that disabled it.
 | 015 | SDK: harden `SpiMcuSource` (scale defaults, teardown, read()-before-write(), tests) | P1 | S-M | - | DONE (plan file removed, see PR #51) |
 | 016 | Firmware: curve-tracer sweep engine (RP2040 port, bench-only, no Pi transport yet) | P2 | L | - | IN PROGRESS (code complete: Steps 1-3, 5 done, build/clippy/fmt clean; Step 4 on-target verification pending - board being set up) |
 | 017 | SDK: `mpp-sdk` CLI dispatcher for harness/examples/scripts | P3 | S-M | - | DONE |
-| 018 | Firmware+SDK: bulk-read SPI transaction for curve-tracer sweep results | P2 | L | 016 (hard) | TODO |
+| 018 | Firmware+SDK: bulk-read SPI transaction for curve-tracer sweep results | P2 | L | 016 (hard) | IN PROGRESS (code complete: BulkState machine, request_sweep(), adversarially reviewed, build/clippy/fmt/pytest clean; on-target verification pending alongside 016 - board being set up) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) |
 REJECTED (with one-line rationale).
@@ -65,15 +65,17 @@ Everything above is DONE except:
   `TRACER_ACTIVE` gate-duty override, README updated, build/clippy/fmt
   clean. Step 4 (on-target verification: relay/PWM sequence, safety
   cutoff actually aborting) needs the board on the bench - not yet done.
-- **018** (bulk-read SPI transaction for sweep results, P2): hard-depends
-  on 016 landing first (nothing to transport otherwise). Design is fully
-  specified (two-phase request/ack/bulk-read over a distinct, larger SPI
-  transaction, chosen over reusing the steady frame's spare bytes or a
-  bench-only defmt dump - see the plan for the tradeoffs). Flagged HIGH
-  risk: it restructures `spi_pio_task`'s exchange loop, the one piece of
-  this firmware with the most documented on-target fragility (see the
-  plan's "Why this is risky"). Not started - needs 016 done first, and
-  should get extra on-target scrutiny given that risk rating.
+- **018** (bulk-read SPI transaction for sweep results, P2): code complete
+  - `spi_slave_pio.rs`'s `BulkState` machine (`Idle`/`SendAck`/`DoBulk`),
+  `mode_curve_tracer.rs`'s `LAST_SWEEP` storage, `SpiMcuSource.
+  request_sweep()`, all adversarially reviewed, build/clippy/fmt/pytest
+  clean. Implemented ahead of 016's own on-target confirmation at the
+  operator's explicit direction, since `request_sweep()`'s visual I-V
+  curve is itself part of validating 016 works. Flagged HIGH risk since it
+  restructures `spi_pio_task`'s exchange loop, the one piece of this
+  firmware with the most documented on-target fragility (see the plan's
+  "Why this is risky") - not yet on-target confirmed, needs the board on
+  the bench alongside 016.
 
 **011 is DONE** (not an open item, and not a teammate hand-off - it landed
 in this session, merged as PR #50: feed-forward + proportional-trim

@@ -8,6 +8,9 @@
 //! via `defmt` on completion or abort - no Pi transport yet, see plan 016's
 //! history and plan 018 (the follow-up that adds one).
 
+use core::cell::RefCell;
+
+use critical_section::Mutex;
 use embassy_rp::gpio::{Input, Output};
 use embassy_rp::pwm::{Config as PwmConfig, Pwm};
 use embassy_time::{Duration, Timer, with_timeout};
@@ -84,6 +87,33 @@ const TRACER_P_MAX_MW: u32 = 5000;
 /// Debounce window for `But1`'s falling edge - rejects contact-bounce
 /// glitches shorter than this before committing to a sweep.
 const BUTTON_DEBOUNCE_MS: u64 = 30;
+
+/// One completed (or aborted) sweep's results - `points[..count]` are
+/// valid, `points[count..]` are the zeroed unfilled tail on an abort.
+/// `Copy` (fixed-size array of `Copy` tuples) so `spi_slave_pio.rs`'s
+/// bulk-read state machine (plan 018) can hold a snapshot by value without
+/// borrowing this module's storage across an `.await`.
+#[derive(Clone, Copy)]
+pub struct SweepResult {
+    pub points: [(u16, u16); TRACER_SWEEP_POINTS],
+    pub count: usize,
+}
+
+/// Most recent sweep's result, if any and not yet fetched. Written once by
+/// `run_sweep` on completion/abort; read (and cleared) exactly once by
+/// `spi_slave_pio.rs`'s bulk-read request handling (`take_last_sweep`) -
+/// see plan 018. `critical_section::Mutex` rather than an atomic because
+/// `SweepResult` isn't a single machine word; this firmware runs a single
+/// cooperative executor on one core (see `spi_slave_pio.rs`'s module doc
+/// comment), so a critical section here is only ever contending with
+/// itself, never truly concurrent hardware access.
+static LAST_SWEEP: Mutex<RefCell<Option<SweepResult>>> = Mutex::new(RefCell::new(None));
+
+/// Takes (removes) the most recent sweep result, if any - `None` if no
+/// sweep has completed yet, or the last one was already fetched.
+pub fn take_last_sweep() -> Option<SweepResult> {
+    critical_section::with(|cs| LAST_SWEEP.borrow(cs).borrow_mut().take())
+}
 
 /// Owned by the curve-tracer task - exactly one instance ever runs.
 pub struct CurveTracer {
@@ -255,6 +285,16 @@ impl CurveTracer {
         for (idx, (v_mv, i_ma)) in points[..points_captured].iter().enumerate() {
             defmt::info!("curve_tracer: point {}: V={} mV I={} mA", idx, v_mv, i_ma);
         }
+
+        // Publish for the SPI bulk-read path (plan 018) - overwrites
+        // whatever the previous sweep left, fetched or not; only the most
+        // recent sweep's result is ever available to fetch.
+        critical_section::with(|cs| {
+            *LAST_SWEEP.borrow(cs).borrow_mut() = Some(SweepResult {
+                points,
+                count: points_captured,
+            });
+        });
     }
 }
 

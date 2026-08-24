@@ -14,8 +14,9 @@ import pytest
 
 class _FakeSpiDev:
     """Stands in for `spidev.SpiDev`. `next_rx`, if set, is returned by the
-    next `xfer2()` call (and cleared); otherwise an all-zero 12-byte MISO
-    frame is returned (its XOR checksum is trivially 0, so it validates)."""
+    next `xfer2()` call (and cleared); otherwise `responses` (if non-empty)
+    is popped from the front; otherwise an all-zero 12-byte MISO frame is
+    returned (its XOR checksum is trivially 0, so it validates)."""
 
     def __init__(self) -> None:
         self.max_speed_hz: int | None = None
@@ -23,6 +24,7 @@ class _FakeSpiDev:
         self.closed = False
         self.sent: list[list[int]] = []
         self.next_rx: list[int] | None = None
+        self.responses: list[list[int]] = []
         self.raise_on_xfer: Exception | None = None
 
     def open(self, bus: int, device: int) -> None:
@@ -35,6 +37,8 @@ class _FakeSpiDev:
         if self.next_rx is not None:
             rx, self.next_rx = self.next_rx, None
             return rx
+        if self.responses:
+            return self.responses.pop(0)
         return [0] * 12
 
     def close(self) -> None:
@@ -56,7 +60,7 @@ def spi_mcu_source(monkeypatch):
 
 
 def _miso_frame(
-    v_raw: int, i_raw: int, vout_raw: int, temp_raw: int, *, corrupt: bool = False
+    v_raw: int, i_raw: int, vout_raw: int, temp_raw: int, *, ack: int = 0, corrupt: bool = False
 ) -> list[int]:
     data = [
         (v_raw >> 8) & 0xFF,
@@ -73,7 +77,35 @@ def _miso_frame(
         checksum ^= byte
     if corrupt:
         checksum ^= 0x01
-    return [*data, checksum, 0, 0, 0]
+    return [*data, checksum, ack, 0, 0]
+
+
+# Mirrors spi_mcu.py's private _TRACER_SWEEP_POINTS/_BULK_MAGIC/
+# _BULK_FRAME_LEN constants - must match firmware/pipico_board/src/
+# spi_slave_pio.rs's bulk-read frame shape (plan 018) exactly.
+_TEST_TRACER_SWEEP_POINTS = 20
+_TEST_BULK_MAGIC = 0xC5
+_TEST_BULK_FRAME_LEN = 2 + _TEST_TRACER_SWEEP_POINTS * 4 + 1
+
+
+def _bulk_frame(
+    points: list[tuple[int, int]],
+    *,
+    magic: int = _TEST_BULK_MAGIC,
+    count_override: int | None = None,
+    corrupt: bool = False,
+) -> list[int]:
+    count = len(points) if count_override is None else count_override
+    data = [magic, count]
+    for v_raw, i_raw in points:
+        data += [(v_raw >> 8) & 0xFF, v_raw & 0xFF, (i_raw >> 8) & 0xFF, i_raw & 0xFF]
+    data += [0] * (2 + _TEST_TRACER_SWEEP_POINTS * 4 - len(data))
+    checksum = 0
+    for byte in data:
+        checksum ^= byte
+    if corrupt:
+        checksum ^= 0x01
+    return [*data, checksum]
 
 
 # ------------------------------------------------------------------
@@ -173,3 +205,85 @@ def test_exit_closes_even_if_soft_stop_raises(spi_mcu_source, monkeypatch):
     with pytest.raises(RuntimeError):
         src.__exit__(None, None, None)
     assert src._spi.closed
+
+
+# ------------------------------------------------------------------
+# request_sweep() - curve-tracer bulk-read protocol (plan 018)
+# ------------------------------------------------------------------
+
+
+def test_request_sweep_sends_cmd_byte(spi_mcu_source):
+    src = spi_mcu_source()
+    src.request_sweep(poll_attempts=0)
+    # duty defaults to 0.0 -> duty_h=duty_l=0, checksum=0; cmd is byte index 3.
+    assert src._spi.sent[0][:4] == [0x00, 0x00, 0x00, 0xB1]
+
+
+def test_request_sweep_returns_none_when_never_armed(spi_mcu_source):
+    src = spi_mcu_source()
+    # Every response is a plain (ack=0) telemetry frame - never armed.
+    result = src.request_sweep(poll_attempts=3, poll_interval_s=0)
+    assert result is None
+
+
+def test_request_sweep_still_updates_telemetry_while_polling(spi_mcu_source):
+    src = spi_mcu_source()
+    src._spi.responses = [_miso_frame(v_raw=5000, i_raw=250, vout_raw=3300, temp_raw=0)]
+    src.request_sweep(poll_attempts=0)
+    v, i = src.read()
+    assert v == pytest.approx(5.0)
+    assert i == pytest.approx(0.25)
+
+
+def test_request_sweep_fetches_points_when_armed(spi_mcu_source):
+    src = spi_mcu_source()
+    points = [(1000 * n, 100 * n) for n in range(5)]
+    # 1) response to the request-carrying frame itself: never armed yet
+    #    (the firmware only acks on the *next* frame - see spi_slave_pio.rs's
+    #    BulkState doc comment).
+    # 2) the following normal poll: now armed, ack = 0x80 | count.
+    # 3) the bulk-read transaction's response.
+    src._spi.responses = [
+        _miso_frame(v_raw=0, i_raw=0, vout_raw=0, temp_raw=0, ack=0),
+        _miso_frame(v_raw=0, i_raw=0, vout_raw=0, temp_raw=0, ack=0x80 | len(points)),
+        _bulk_frame(points),
+    ]
+    result = src.request_sweep(poll_attempts=5, poll_interval_s=0)
+    assert result == [pytest.approx((v / 1000, i / 1000)) for v, i in points]
+    # The bulk-read transaction is a distinct, larger transfer.
+    assert len(src._spi.sent[-1]) == _TEST_BULK_FRAME_LEN
+
+
+def test_request_sweep_raises_on_bad_magic(spi_mcu_source):
+    src = spi_mcu_source()
+    src._spi.responses = [
+        _miso_frame(v_raw=0, i_raw=0, vout_raw=0, temp_raw=0, ack=0),
+        _miso_frame(v_raw=0, i_raw=0, vout_raw=0, temp_raw=0, ack=0x81),
+        _bulk_frame([(1, 1)], magic=0x00),
+    ]
+    with pytest.raises(RuntimeError, match="magic"):
+        src.request_sweep(poll_attempts=5, poll_interval_s=0)
+
+
+def test_request_sweep_raises_on_bulk_checksum_mismatch(spi_mcu_source):
+    src = spi_mcu_source()
+    src._spi.responses = [
+        _miso_frame(v_raw=0, i_raw=0, vout_raw=0, temp_raw=0, ack=0),
+        _miso_frame(v_raw=0, i_raw=0, vout_raw=0, temp_raw=0, ack=0x81),
+        _bulk_frame([(1, 1)], corrupt=True),
+    ]
+    with pytest.raises(RuntimeError, match="checksum"):
+        src.request_sweep(poll_attempts=5, poll_interval_s=0)
+
+
+def test_request_sweep_raises_on_point_count_mismatch(spi_mcu_source):
+    src = spi_mcu_source()
+    src._spi.responses = [
+        _miso_frame(v_raw=0, i_raw=0, vout_raw=0, temp_raw=0, ack=0),
+        # Ack says 3 points ready...
+        _miso_frame(v_raw=0, i_raw=0, vout_raw=0, temp_raw=0, ack=0x83),
+        # ...but the bulk frame itself says 2 - a corruption signal.
+        _bulk_frame([(1, 1), (2, 2)], count_override=2),
+    ]
+    with pytest.raises(RuntimeError, match="point-count mismatch"):
+        src.request_sweep(poll_attempts=5, poll_interval_s=0)
