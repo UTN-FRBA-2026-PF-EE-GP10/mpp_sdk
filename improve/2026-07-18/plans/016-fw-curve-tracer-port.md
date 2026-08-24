@@ -18,6 +18,14 @@
 > If either changed, re-check the excerpts below before editing - in
 > particular re-verify the MISO/MOSI spare-byte counts, since a future
 > change could have consumed more of that padding.
+>
+> **Update (2026-08-24)**: Steps 1-3 and 5 done - `mode_curve_tracer.rs`
+> added, real PWM on GPIO3, edge-triggered `But1`, `TRACER_ACTIVE`
+> gate-duty override, README updated. `cargo build --release --locked` /
+> `cargo clippy --release --locked -- -D warnings` / `cargo fmt --check`
+> all clean. **Step 4 (on-target verification) not yet done** - board is
+> being set up on the bench; none of the Done criteria that require
+> on-target confirmation are checked off below until that happens.
 
 ## Status
 

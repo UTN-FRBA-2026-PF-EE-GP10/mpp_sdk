@@ -4,6 +4,7 @@
 mod ina229;
 // MAX31865 disabled - no compatible probe to test with right now (see PR body).
 // mod max31865;
+mod mode_curve_tracer;
 mod mode_power_supply;
 mod spi_slave_pio;
 
@@ -21,7 +22,7 @@ use embassy_time::Timer;
 use ina229::Ina229;
 // use max31865::Max31865;
 // use portable_atomic::AtomicI16;
-use portable_atomic::{AtomicU16, AtomicU32, Ordering};
+use portable_atomic::{AtomicBool, AtomicU16, AtomicU32, Ordering};
 use smart_leds::RGB8;
 use {defmt_rtt as _, panic_probe as _};
 
@@ -60,6 +61,11 @@ pub static PACKET_COUNT: AtomicU32 = AtomicU32::new(0);
 // at boot), and gating on value-equality instead of sample-freshness
 // stalls the controller the first time that happens.
 pub static ADC_SAMPLE_COUNT: AtomicU32 = AtomicU32::new(0);
+// True for the duration of a curve-tracer sweep (mode_curve_tracer.rs) -
+// the panel is physically rerouted off the SEPIC path by the relay for
+// that whole time, so the gate must not be driven by either FirmwareMode
+// while this is set. See the one-line override in main()'s loop below.
+pub static TRACER_ACTIVE: AtomicBool = AtomicBool::new(false);
 
 /// Polls the INA229 over SPI0 at the SDK's control period
 /// (`CONTROL_PERIOD_MS = 1.0`) and publishes `(V, I)` for the SPI-slave link.
@@ -110,6 +116,7 @@ async fn sensors_task(
             (Ok(v), Ok(i)) => {
                 MEAS_V_MV.store(v, Ordering::Relaxed);
                 MEAS_I_MA.store(i, Ordering::Relaxed);
+                mode_curve_tracer::INA_SAMPLE_COUNT.fetch_add(1, Ordering::Relaxed);
             }
             _ => defmt::error!("INA229 read failed"),
         }
@@ -297,13 +304,22 @@ async fn main(spawner: Spawner) {
     pwm_cfg.compare_b = 0;
     let mut pwm = Pwm::new_output_b(p.PWM_SLICE7, p.PIN_15, pwm_cfg.clone());
 
-    // Curve-tracer relay + bleed PWM: idle low is both the safe default
-    // and normal MPPT operation (low releases the relay, SEPIC path active).
-    let mut tracer_en = Output::new(p.PIN_2, Level::Low);
-    let _tracer_pwm = Output::new(p.PIN_3, Level::Low);
-    // Bring-up aid: hold But1 (active-low, switch to GND) to energize the
-    // relay and hear it click. Remove once the curve tracer has real logic.
+    // Curve-tracer relay + bleed PWM (mode_curve_tracer.rs owns both from
+    // here on): idle low/0 is both the safe default and normal MPPT
+    // operation (relay released, SEPIC path active, bleed PWM off).
+    // Tracer_pwm on GPIO3 -> PWM_SLICE1 channel B (floor(3/2) = 1, odd ->
+    // B - same RP2040 fixed GPIO-to-PWM-slice mapping as the SEPIC gate's
+    // GPIO15 -> PWM_SLICE7 channel B, datasheet section 4.5.2).
+    let mut tracer_pwm_cfg = PwmConfig::default();
+    tracer_pwm_cfg.top = mode_curve_tracer::TRACER_PWM_MAX;
+    tracer_pwm_cfg.compare_b = 0;
+    let tracer_pwm = Pwm::new_output_b(p.PWM_SLICE1, p.PIN_3, tracer_pwm_cfg.clone());
+    let tracer_en = Output::new(p.PIN_2, Level::Low);
+    // But1 (active-low, switch to GND): edge-triggered sweep start, see
+    // mode_curve_tracer::curve_tracer_task.
     let but1 = Input::new(p.PIN_0, Pull::Up);
+    let curve_tracer =
+        mode_curve_tracer::CurveTracer::new(tracer_en, tracer_pwm, tracer_pwm_cfg, but1);
 
     // Heartbeat LED (GPIO14, "Blinky" net): toggles in the main loop so a
     // stuck/hung firmware shows as a frozen LED, not just an always-on one.
@@ -352,26 +368,28 @@ async fn main(spawner: Spawner) {
         &ws2812_program,
     );
     spawner.spawn(neopixel_task(ws2812).unwrap());
+    spawner.spawn(mode_curve_tracer::curve_tracer_task(curve_tracer).unwrap());
 
     let mut tick: u32 = 0;
     let mut psu_closed_loop = mode_power_supply::ClosedLoopState::new();
 
     loop {
-        let duty = match FIRMWARE_MODE {
-            // Apply the Pi's commanded SPI duty directly, clamped as
-            // defense-in-depth against SEPIC inductor current runaway.
-            FirmwareMode::MppTracker => DUTY.load(Ordering::Relaxed).min(DUTY_MAX),
-            FirmwareMode::PowerSupply => mode_power_supply::compute_duty(&mut psu_closed_loop),
+        let duty = if TRACER_ACTIVE.load(Ordering::Relaxed) {
+            // A sweep is rerouting the panel off the SEPIC path via the
+            // relay (mode_curve_tracer.rs) - the gate must not be driven
+            // by either FirmwareMode for the whole time that's true.
+            0
+        } else {
+            match FIRMWARE_MODE {
+                // Apply the Pi's commanded SPI duty directly, clamped as
+                // defense-in-depth against SEPIC inductor current runaway.
+                FirmwareMode::MppTracker => DUTY.load(Ordering::Relaxed).min(DUTY_MAX),
+                FirmwareMode::PowerSupply => mode_power_supply::compute_duty(&mut psu_closed_loop),
+            }
         };
 
         pwm_cfg.compare_b = (duty as u32 * 1250 / 65536) as u16;
         pwm.set_config(&pwm_cfg);
-
-        tracer_en.set_level(if but1.is_low() {
-            Level::High
-        } else {
-            Level::Low
-        });
 
         tick = tick.wrapping_add(1);
         if tick.is_multiple_of(500) {
