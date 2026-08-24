@@ -287,3 +287,17 @@ def test_request_sweep_raises_on_point_count_mismatch(spi_mcu_source):
     ]
     with pytest.raises(RuntimeError, match="point-count mismatch"):
         src.request_sweep(poll_attempts=5, poll_interval_s=0)
+
+
+def test_request_sweep_raises_on_implausible_point_count(spi_mcu_source):
+    src = spi_mcu_source()
+    # ack and bulk-frame counts agree (so the mismatch check above doesn't
+    # catch it) but both say 30 - more than _TEST_TRACER_SWEEP_POINTS (20),
+    # which would index past the frame if not checked explicitly.
+    src._spi.responses = [
+        _miso_frame(v_raw=0, i_raw=0, vout_raw=0, temp_raw=0, ack=0),
+        _miso_frame(v_raw=0, i_raw=0, vout_raw=0, temp_raw=0, ack=0x80 | 30),
+        _bulk_frame([(1, 1), (2, 2)], count_override=30),
+    ]
+    with pytest.raises(RuntimeError, match="implausible point count"):
+        src.request_sweep(poll_attempts=5, poll_interval_s=0)

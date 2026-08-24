@@ -246,6 +246,16 @@ class SpiMcuSource(SignalSource):
                 f"SpiMcuSource.request_sweep(): point-count mismatch "
                 f"(ack said {ack_count}, bulk frame said {count})"
             )
+        if count > _TRACER_SWEEP_POINTS:
+            # A weak XOR checksum can pass even with multi-bit corruption -
+            # a count this large would index past the frame's point data
+            # (rx is only _BULK_FRAME_LEN bytes) rather than just being
+            # wrong, so this is checked explicitly instead of trusting the
+            # count/checksum checks above to always catch it.
+            raise RuntimeError(
+                f"SpiMcuSource.request_sweep(): implausible point count {count} "
+                f"(max {_TRACER_SWEEP_POINTS})"
+            )
 
         points = []
         for idx in range(count):
