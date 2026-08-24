@@ -10,7 +10,7 @@
 
 use embassy_rp::gpio::{Input, Output};
 use embassy_rp::pwm::{Config as PwmConfig, Pwm};
-use embassy_time::Timer;
+use embassy_time::{Duration, Timer, with_timeout};
 use portable_atomic::{AtomicU32, Ordering};
 
 use crate::{MEAS_I_MA, MEAS_V_MV, TRACER_ACTIVE};
@@ -45,6 +45,29 @@ const TRACER_SETTLE_MS: u64 = 250;
 /// reasonable starting point versus the reference's ~1 s/point - needs
 /// on-target confirmation, not just porting the assumption.
 const TRACER_AVG_SAMPLES: u32 = 5;
+
+/// Bounds `wait_fresh_ina_sample` - `sensors_task` normally publishes at
+/// ~1 kHz, so this is generous headroom, not a tight budget. Without this,
+/// a stalled/glitched INA229 link (SPI0 fault, sensor unplugged - exactly
+/// the kind of bench fault this sweep should be robust to) leaves
+/// `wait_fresh_ina_sample` spinning forever: `INA_SAMPLE_COUNT` only
+/// advances on a *successful* read (`sensors_task`'s `Ok(v), Ok(i)` arm),
+/// so a stuck sensor means `run_sweep` never reaches its own cleanup
+/// (de-energize, clear `TRACER_ACTIVE`) - the SEPIC gate would stay
+/// force-zeroed indefinitely. Timing out and aborting the sweep here is
+/// the fix.
+const TRACER_SAMPLE_TIMEOUT_MS: u64 = 500;
+
+/// How often to poll `MEAS_V_MV`/`MEAS_I_MA` for a safety-cutoff breach
+/// during the settle window after each duty step - not gated on sample
+/// freshness like `wait_fresh_ina_sample` (a slightly-stale reading is
+/// fine for "is this dangerously high right now", unlike the point
+/// average, which wants genuinely fresh data). Without this, a spike
+/// immediately after stepping duty goes unmonitored for the whole
+/// `TRACER_SETTLE_MS` window - unlike the ESP32 reference (which never
+/// monitors during its own settle wait either, a gap worth *not*
+/// carrying over here).
+const TRACER_SETTLE_POLL_MS: u64 = 10;
 
 /// Safety cutoff: current, referencing the INA229's own calibrated
 /// full-scale rather than inventing a separate limit disconnected from
@@ -95,35 +118,67 @@ impl CurveTracer {
         self.tracer_pwm.set_config(&self.tracer_pwm_cfg);
     }
 
-    /// Blocks until a fresh `sensors_task` INA229 sample is published,
-    /// returning it - see `TRACER_AVG_SAMPLES`'s doc comment for why this
-    /// is freshness-gated rather than polled on a fixed timer.
-    async fn wait_fresh_ina_sample(&mut self) -> (u16, u16) {
-        loop {
-            let sample = INA_SAMPLE_COUNT.load(Ordering::Relaxed);
-            if self.last_ina_sample_seen != Some(sample) {
-                self.last_ina_sample_seen = Some(sample);
-                return (
-                    MEAS_V_MV.load(Ordering::Relaxed),
-                    MEAS_I_MA.load(Ordering::Relaxed),
-                );
+    /// Waits for a fresh `sensors_task` INA229 sample, returning it - see
+    /// `TRACER_AVG_SAMPLES`'s doc comment for why this is freshness-gated
+    /// rather than polled on a fixed timer. Returns `None` on
+    /// `TRACER_SAMPLE_TIMEOUT_MS` timeout (see its doc comment) instead of
+    /// blocking forever.
+    async fn wait_fresh_ina_sample(&mut self) -> Option<(u16, u16)> {
+        let last_seen = &mut self.last_ina_sample_seen;
+        with_timeout(Duration::from_millis(TRACER_SAMPLE_TIMEOUT_MS), async {
+            loop {
+                let sample = INA_SAMPLE_COUNT.load(Ordering::Relaxed);
+                if *last_seen != Some(sample) {
+                    *last_seen = Some(sample);
+                    return (
+                        MEAS_V_MV.load(Ordering::Relaxed),
+                        MEAS_I_MA.load(Ordering::Relaxed),
+                    );
+                }
+                Timer::after_millis(1).await;
             }
-            Timer::after_millis(1).await;
-        }
+        })
+        .await
+        .ok()
     }
 
-    async fn average_point(&mut self) -> (u16, u16) {
+    /// `None` on a `wait_fresh_ina_sample` timeout - caller must abort the
+    /// sweep, not treat it as a valid (0, 0) point.
+    async fn average_point(&mut self) -> Option<(u16, u16)> {
         let mut v_sum: u32 = 0;
         let mut i_sum: u32 = 0;
         for _ in 0..TRACER_AVG_SAMPLES {
-            let (v, i) = self.wait_fresh_ina_sample().await;
+            let (v, i) = self.wait_fresh_ina_sample().await?;
             v_sum += v as u32;
             i_sum += i as u32;
         }
-        (
+        Some((
             (v_sum / TRACER_AVG_SAMPLES) as u16,
             (i_sum / TRACER_AVG_SAMPLES) as u16,
-        )
+        ))
+    }
+
+    /// Polls `MEAS_V_MV`/`MEAS_I_MA` every `TRACER_SETTLE_POLL_MS` for
+    /// `TRACER_SETTLE_MS`, returning `true` the instant the safety cutoff
+    /// is breached instead of only checking after the fact - see
+    /// `TRACER_SETTLE_POLL_MS`'s doc comment for why.
+    fn breach(v_mv: u16, i_ma: u16) -> bool {
+        let p_mw = v_mv as u32 * i_ma as u32 / 1000;
+        i_ma > TRACER_I_MAX_MA || p_mw > TRACER_P_MAX_MW
+    }
+
+    async fn settle_and_monitor(&self) -> bool {
+        let mut waited_ms = 0u64;
+        while waited_ms < TRACER_SETTLE_MS {
+            let v_mv = MEAS_V_MV.load(Ordering::Relaxed);
+            let i_ma = MEAS_I_MA.load(Ordering::Relaxed);
+            if Self::breach(v_mv, i_ma) {
+                return true;
+            }
+            Timer::after_millis(TRACER_SETTLE_POLL_MS).await;
+            waited_ms += TRACER_SETTLE_POLL_MS;
+        }
+        false
     }
 
     /// Runs one full sweep: energizes the relay, steps `Tracer_pwm` from 0
@@ -144,19 +199,36 @@ impl CurveTracer {
             let duty =
                 (step as u32 * TRACER_PWM_MAX as u32 / (TRACER_SWEEP_POINTS - 1) as u32) as u16;
             self.set_pwm(duty);
-            Timer::after_millis(TRACER_SETTLE_MS).await;
 
-            let (v_mv, i_ma) = self.average_point().await;
-            let p_mw = v_mv as u32 * i_ma as u32 / 1000;
-
-            if i_ma > TRACER_I_MAX_MA || p_mw > TRACER_P_MAX_MW {
+            if self.settle_and_monitor().await {
+                let v_mv = MEAS_V_MV.load(Ordering::Relaxed);
+                let i_ma = MEAS_I_MA.load(Ordering::Relaxed);
                 defmt::warn!(
-                    "curve_tracer: safety cutoff at step {} (V={} mV I={} mA P={} mW), \
-                     aborting sweep",
+                    "curve_tracer: safety cutoff during settle at step {} \
+                     (V={} mV I={} mA), aborting sweep",
                     step,
                     v_mv,
-                    i_ma,
-                    p_mw
+                    i_ma
+                );
+                aborted = true;
+                break;
+            }
+
+            let Some((v_mv, i_ma)) = self.average_point().await else {
+                defmt::warn!(
+                    "curve_tracer: INA229 sample timeout at step {}, aborting sweep",
+                    step
+                );
+                aborted = true;
+                break;
+            };
+
+            if Self::breach(v_mv, i_ma) {
+                defmt::warn!(
+                    "curve_tracer: safety cutoff at step {} (V={} mV I={} mA), aborting sweep",
+                    step,
+                    v_mv,
+                    i_ma
                 );
                 aborted = true;
                 break;

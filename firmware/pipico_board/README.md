@@ -324,9 +324,14 @@ delay, same pattern as `power_supply` mode's `ClosedLoopState`). A safety
 cutoff (`TRACER_I_MAX_MA`, referencing the INA229's own calibrated
 full-scale; `TRACER_P_MAX_MW`) aborts the sweep - de-energizes the relay,
 zeroes the PWM, returns to idle - if breached, rather than only logging.
-All constants live in `mode_curve_tracer.rs` and are starting points that
-need on-target re-tuning; there is no schematic-derived time constant for
-the bleed path to derive them from analytically.
+The cutoff is checked continuously during the settle window
+(`TRACER_SETTLE_POLL_MS`), not only after it, so a spike right after a
+duty step is caught quickly; a stalled INA229 read also aborts the sweep
+(`TRACER_SAMPLE_TIMEOUT_MS`) rather than hanging it and the SEPIC gate
+force-zeroed forever. All constants live in `mode_curve_tracer.rs` and are
+starting points that need on-target re-tuning; there is no
+schematic-derived time constant for the bleed path to derive them from
+analytically.
 
 **Results**: dumped via `defmt`/RTT as `(V_mV, I_mA)` lines when the sweep
 completes or aborts. No Pi transport yet - see plan 018
