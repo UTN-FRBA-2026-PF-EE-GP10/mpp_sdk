@@ -256,7 +256,19 @@ through `main.rs` turned out to be needed):
   plan only reads its finished result buffer.
 - A `harness/`/`examples/` demo consuming a real sweep - explicitly the
   next follow-up after this plan (plan 016's maintenance notes already flag
-  it), not part of this plan's Done criteria.
+  it), not part of this plan's Done criteria. **Update (2026-08-26):** done
+  ahead of schedule at the operator's request, as a small standalone web UI
+  rather than a `harness/`/`examples/` script - `scripts/curve_tracer_web/`
+  (adapted from the `spiffs/` UI in
+  <https://github.com/fborello-lambda/solar_panel_curve_tracer>, MIT
+  licensed - dark-theme Chart.js I(V)/P(V) chart, trimmed to drop that
+  reference's set-current/start-measurement controls since this board has
+  neither) plus `scripts/curve_tracer_server.py` (stdlib
+  `http.server`, background thread polling `request_sweep()`, `/data` JSON
+  endpoint). Wired into the CLI as `mpp-sdk curve-tracer-web`. This is the
+  visual on-target check plan 016/018's "Done criteria" on-target rows are
+  waiting on - it doesn't change either plan's on-target-unconfirmed status
+  by itself.
 - Triggering a sweep *from* the Pi (vs. the physical `But1` press) - plan
   016 explicitly left this as a separate open question; this plan's
   `request_sweep()` only fetches results of a sweep however it started.
