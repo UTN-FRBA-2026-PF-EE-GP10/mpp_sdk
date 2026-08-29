@@ -48,6 +48,7 @@ re-enabling; no plan file, tracked via the PR that disabled it.
 | 016 | Firmware: curve-tracer sweep engine (RP2040 port, bench-only, no Pi transport yet) | P2 | L | - | IN PROGRESS (code complete: Steps 1-3, 5 done, build/clippy/fmt clean; Step 4 on-target verification pending - board being set up) |
 | 017 | SDK: `mpp-sdk` CLI dispatcher for harness/examples/scripts | P3 | S-M | - | DONE |
 | 018 | Firmware+SDK: bulk-read SPI transaction for curve-tracer sweep results | P2 | L | 016 (hard) | IN PROGRESS (code complete: BulkState machine, request_sweep(), adversarially reviewed, build/clippy/fmt/pytest clean; on-target verification pending alongside 016 - board being set up) |
+| 019 | Firmware+SDK: SPI-triggered curve-tracer sweeps + explicit relay release | P2 | L | 018 (hard), 016 (hard) | TODO |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) |
 REJECTED (with one-line rationale).
@@ -76,6 +77,17 @@ Everything above is DONE except:
   firmware with the most documented on-target fragility (see the plan's
   "Why this is risky") - not yet on-target confirmed, needs the board on
   the bench alongside 016.
+- **019** (SPI-triggered sweeps + explicit relay release, P2): TODO, not
+  started. Extends 018: lets the Pi start a sweep and release the
+  curve-tracer relay over SPI (new `CMD_START_SWEEP`/`CMD_RELEASE_RELAY`
+  bytes) instead of only `But1`, and changes the relay to stay engaged
+  across multiple sweeps until explicitly released, instead of
+  auto-releasing at the end of every sweep - needed for the new
+  `scripts/curve_tracer_web/` GUI to drive sweeps directly. Flagged HIGH
+  risk for the same reason as 018 (touches `spi_pio_task`'s exchange loop)
+  plus a live safety-behavior change (a safety-cutoff abort now leaves the
+  relay engaged instead of releasing it) that needs an on-target check, not
+  just a code review.
 
 **011 is DONE** (not an open item, and not a teammate hand-off - it landed
 in this session, merged as PR #50: feed-forward + proportional-trim
