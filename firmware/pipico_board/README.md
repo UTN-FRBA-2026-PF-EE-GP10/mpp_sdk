@@ -85,14 +85,20 @@ in millivolts, I in milliamperes (negative current clamps to 0). TEMP is a
 big-endian `i16` in centi-Celsius, or the sentinel `-32768` (`0x8000`) while
 the MAX31865 probe stays disabled (see "Panel temperature" below). See
 "Sensing" below for the sensor details. `CHECKSUM` (plan 014) is an XOR of
-the preceding data bytes in each direction - `DUTY_H^DUTY_L` for MOSI,
-`V_H^V_L^I_H^I_L^VOUT_H^VOUT_L^TEMP_H^TEMP_L` for MISO; `CMD`/`ACK` do NOT
-participate in it. A checksum mismatch is treated as a corrupted-but-complete
-frame: the firmware keeps the last commanded `DUTY` (does not zero it or
-count it as a timeout), and `SpiMcuSource`/`spi_test.py` keep the last-good
-telemetry rather than propagate garbage. On the Pi side, construct
-`SpiMcuSource()` (defaults already match the firmware's calibrated units and
-this checksum).
+the preceding data bytes in each direction - `DUTY_H^DUTY_L^CMD` for MOSI,
+`V_H^V_L^I_H^I_L^VOUT_H^VOUT_L^TEMP_H^TEMP_L` for MISO; `ACK` does NOT
+participate in MISO's (it's an edge-triggered handshake signal, not a
+telemetry reading - see below). `CMD` participates in MOSI's precisely so
+a corrupted frame can't spoof a bulk-dump request by chance (plan 018); it
+is `0x00` on every normal frame, and XOR with `0x00` is a no-op, so this
+didn't change the checksum's value for plain `write()`/`read()` traffic.
+A checksum mismatch is treated as a corrupted-but-complete frame: the
+firmware keeps the last commanded `DUTY` (does not zero it or count it as
+a timeout) and ignores `CMD` for that frame; `SpiMcuSource`/`spi_test.py`
+keep the last-good telemetry rather than propagate garbage, and report
+`ack=0` rather than replay a possibly-stale cached value. On the Pi side,
+construct `SpiMcuSource()` (defaults already match the firmware's
+calibrated units and this checksum).
 
 `CMD`/`ACK` (plan 018) are both `0x00` in normal operation - the
 curve-tracer bulk-read handshake (see "Curve tracer" below) is the only

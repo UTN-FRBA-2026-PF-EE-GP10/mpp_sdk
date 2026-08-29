@@ -73,6 +73,19 @@ impl ClosedLoopState {
         }
     }
 
+    /// Re-seeds as if from a cold start. Called by `main()` when the
+    /// curve-tracer relay hands the panel back to the SEPIC path after a
+    /// sweep: `compute_duty()` is never called while the sweep is running
+    /// (the gate is force-held at 0 instead), so `ps_duty` would otherwise
+    /// still hold its stale pre-sweep value and jump straight back to it -
+    /// bypassing `MIN_STEP`/`MAX_STEP` - the instant the sweep ends. The
+    /// actual duty applied throughout the sweep was 0, not `ps_duty`, so
+    /// resuming as a fresh cold start (one `feedforward_duty` jump, then
+    /// proportional trim) matches reality instead of replaying stale state.
+    pub fn reset(&mut self) {
+        *self = Self::new();
+    }
+
     /// Steps at most once per fresh ADC sample (~10 Hz), gated on
     /// `ADC_SAMPLE_COUNT` rather than on `MEAS_ADC_VOUT_MV`'s value - see
     /// that static's doc comment in `main.rs` for why. Called every 1 ms

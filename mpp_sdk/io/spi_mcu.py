@@ -50,12 +50,15 @@ class SpiMcuSource(SignalSource):
     counts - the firmware does the calibration). Temp is a big-endian
     ``i16`` in centi-Celsius, or the sentinel -32768 if no probe is
     connected (see ``temperature_c``). ``CHECKSUM`` is an XOR over the
-    preceding data bytes in each direction; a mismatched frame is
-    corrupted-but-complete (passed the firmware's own frame-timeout check)
-    and is rejected - the last-good values are kept instead. ``CMD``/
-    ``ACK`` are the curve-tracer bulk-read handshake bytes (plan 018,
-    see ``request_sweep()``) - both 0 in normal operation, so plain
-    ``read()``/``write()`` usage is unaffected.
+    preceding data bytes in each direction - ``DUTY_H^DUTY_L^CMD`` for
+    MOSI (``CMD`` included, ``ACK`` excluded from MISO's); a mismatched
+    frame is corrupted-but-complete (passed the firmware's own
+    frame-timeout check) and is rejected - the last-good V/I/Vout/temp are
+    kept instead (``ack`` is not, since it's a handshake edge, not a
+    reading - see ``_transact()``). ``CMD``/``ACK`` are the curve-tracer
+    bulk-read handshake bytes (plan 018, see ``request_sweep()``) - both 0
+    in normal operation, so plain ``read()``/``write()`` usage is
+    unaffected.
 
     Usage::
 
@@ -129,13 +132,23 @@ class SpiMcuSource(SignalSource):
         Returns ``(v_raw, i_raw, vout_raw, temp_raw, ack)`` - ``ack`` is the
         curve-tracer bulk-read handshake byte (plan 018): 0 in normal
         operation, ``0x80 | point_count`` on the frame acking a
-        ``_CMD_REQUEST_BULK_DUMP``. Returns the last-good values instead if
-        the MISO checksum doesn't match - a corrupted-but-complete frame
-        must not be applied as if it were real telemetry (plan 014).
+        ``_CMD_REQUEST_BULK_DUMP``. Returns the last-good V/I/Vout/temp
+        instead if the MISO checksum doesn't match - a corrupted-but-complete
+        frame must not be applied as if it were real telemetry (plan 014).
+        ``ack`` is different: it's an edge-triggered handshake signal, not a
+        physical reading, so replaying a stale cached value (possibly from
+        an already-consumed sweep, or from before any sweep existed) risks
+        spuriously re-triggering ``_bulk_read()`` - a checksum failure
+        always reports ``ack=0`` ("nothing new this frame") instead.
         """
         duty_u16 = max(0, min(65535, round(duty * 65535)))
         duty_h, duty_l = duty_u16 >> 8, duty_u16 & 0xFF
-        tx = [duty_h, duty_l, duty_h ^ duty_l, cmd] + [0] * 8
+        # `cmd` participates in the checksum (matches
+        # spi_slave_pio.rs's apply_duty_frame) so a corrupted frame can't
+        # spoof a bulk-dump request by chance; `cmd` is 0 on every call
+        # except request_sweep()'s first, so XOR with 0 leaves the normal
+        # write()/read() checksum unchanged.
+        tx = [duty_h, duty_l, duty_h ^ duty_l ^ cmd, cmd] + [0] * 8
         rx = self._spi.xfer2(list(tx))
 
         data = rx[0:8]
@@ -143,7 +156,8 @@ class SpiMcuSource(SignalSource):
         for byte in data:
             expected_checksum ^= byte
         if rx[8] != expected_checksum:
-            return self._last_good_raw
+            v_raw, i_raw, vout_raw, temp_raw, _stale_ack = self._last_good_raw
+            return v_raw, i_raw, vout_raw, temp_raw, 0
 
         v_raw = (rx[0] << 8) | rx[1]
         i_raw = (rx[2] << 8) | rx[3]

@@ -282,14 +282,27 @@ enum BulkState {
 /// shared by the `Idle` and `SendAck` cases (both are steady-shaped
 /// frames from the Pi's own duty-control perspective; only `DoBulk`'s RX
 /// is dummy/unparsed). See `spi_pio_task`'s doc comment for the checksum
-/// contract.
-fn apply_duty_frame(rx: &[u32], last_logged_duty: &mut Option<u16>, checksum_failures: &mut u32) {
+/// contract. Returns the validated `cmd` byte (`rx[3]`) if the checksum
+/// passed, `None` otherwise - `cmd` participates in `CHECKSUM`
+/// (`duty_h ^ duty_l ^ cmd`) precisely so a corrupted frame can't spoof
+/// `CMD_REQUEST_BULK_DUMP` by chance: a bit flip landing on `cmd` alone
+/// now also mismatches the checksum, same as a flip on `duty_h`/`duty_l`
+/// already did. `cmd` is `0` on every normal poll frame, and XOR with `0`
+/// is a no-op, so this doesn't change the checksum's value for the
+/// steady-state case - only `spi_mcu.py`'s `request_sweep()`, which sends
+/// a nonzero `cmd` deliberately, needed a matching update.
+fn apply_duty_frame(
+    rx: &[u32],
+    last_logged_duty: &mut Option<u16>,
+    checksum_failures: &mut u32,
+) -> Option<u8> {
     // RX autopush puts byte in bits 7-0 (shift_in = Left).
     let duty_h = rx[0] as u8;
     let duty_l = rx[1] as u8;
     let received_checksum = rx[2] as u8;
+    let cmd = rx[3] as u8;
 
-    if xor_checksum(&[duty_h, duty_l]) == received_checksum {
+    if xor_checksum(&[duty_h, duty_l, cmd]) == received_checksum {
         let duty = ((duty_h as u16) << 8) | duty_l as u16;
         DUTY.store(duty, Ordering::Relaxed);
         PACKET_COUNT.fetch_add(1, Ordering::Relaxed);
@@ -301,10 +314,12 @@ fn apply_duty_frame(rx: &[u32], last_logged_duty: &mut Option<u16>, checksum_fai
             defmt::info!("rx: duty={}%", duty as u32 * 100 / 65535);
             *last_logged_duty = Some(duty);
         }
+        Some(cmd)
     } else {
         // Corrupted-but-complete frame (plan 014): keep the last-good
-        // DUTY rather than apply garbage. Rate-limited - a jammed link
-        // could otherwise flood RTT every frame.
+        // DUTY rather than apply garbage, and don't act on `cmd` either -
+        // a corrupted frame's command byte is not trustworthy. Rate
+        // limited - a jammed link could otherwise flood RTT every frame.
         *checksum_failures += 1;
         if *checksum_failures == 1 || checksum_failures.is_multiple_of(100) {
             defmt::warn!(
@@ -312,6 +327,7 @@ fn apply_duty_frame(rx: &[u32], last_logged_duty: &mut Option<u16>, checksum_fai
                 checksum_failures
             );
         }
+        None
     }
 }
 
@@ -390,8 +406,10 @@ fn build_tx_buf_for_state(state: &BulkState) -> [u32; MAX_FRAME_LEN] {
 ///
 /// `CMD`/`ACK` (plan 018) are the curve-tracer bulk-read handshake bytes -
 /// see `BulkState`'s doc comment for the full three-step protocol. They
-/// ride in the steady frame's spare bytes and do not affect `CHECKSUM`'s
-/// formula. The handshake's own third step is a **separate**, larger
+/// ride in the steady frame's spare bytes. `CMD` (MOSI) participates in
+/// `CHECKSUM` (`duty_h ^ duty_l ^ cmd` - see `apply_duty_frame`'s doc
+/// comment for why); `ACK` (MISO) does not (see `build_tx_frame`'s doc
+/// comment). The handshake's own third step is a **separate**, larger
 /// (`BULK_FRAME_LEN`-byte) transaction, not part of this steady frame at
 /// all - `this_frame_len` below switches to it only for that one exchange.
 #[embassy_executor::task]
@@ -475,9 +493,8 @@ pub async fn spi_pio_task(
                 BulkState::DoBulk(sweep)
             }
             BulkState::Idle => {
-                apply_duty_frame(&rx, &mut last_logged_duty, &mut checksum_failures);
-                let cmd = rx[3] as u8;
-                if cmd == CMD_REQUEST_BULK_DUMP {
+                let cmd = apply_duty_frame(&rx, &mut last_logged_duty, &mut checksum_failures);
+                if cmd == Some(CMD_REQUEST_BULK_DUMP) {
                     match mode_curve_tracer::take_last_sweep() {
                         Some(sweep) => {
                             defmt::info!(

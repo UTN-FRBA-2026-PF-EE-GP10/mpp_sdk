@@ -157,6 +157,25 @@ def test_corrupted_miso_frame_keeps_last_good_values(spi_mcu_source):
     assert src.vout == pytest.approx(3.3)
 
 
+def test_transact_reports_ack_zero_on_checksum_failure_not_stale_cache(spi_mcu_source):
+    """A corrupted frame must not replay a stale *armed* ack - unlike
+    V/I/Vout/temp (legitimately held over from the last good frame), ack
+    is an edge-triggered handshake signal: replaying a stale value could
+    spuriously re-trigger `_bulk_read()` against an already-consumed (or
+    never-existent) sweep."""
+    src = spi_mcu_source()
+    src._spi.next_rx = _miso_frame(v_raw=1000, i_raw=100, vout_raw=0, temp_raw=0, ack=0x85)
+    _, _, _, _, ack = src._transact(0.0)
+    assert ack == 0x85
+
+    src._spi.next_rx = _miso_frame(
+        v_raw=2000, i_raw=200, vout_raw=0, temp_raw=0, ack=0x85, corrupt=True
+    )
+    v_raw, _, _, _, ack = src._transact(0.0)
+    assert ack == 0
+    assert v_raw == 1000  # telemetry still replays the last-good frame
+
+
 # ------------------------------------------------------------------
 # Duty clamping
 # ------------------------------------------------------------------
@@ -215,8 +234,9 @@ def test_exit_closes_even_if_soft_stop_raises(spi_mcu_source, monkeypatch):
 def test_request_sweep_sends_cmd_byte(spi_mcu_source):
     src = spi_mcu_source()
     src.request_sweep(poll_attempts=0)
-    # duty defaults to 0.0 -> duty_h=duty_l=0, checksum=0; cmd is byte index 3.
-    assert src._spi.sent[0][:4] == [0x00, 0x00, 0x00, 0xB1]
+    # duty defaults to 0.0 -> duty_h=duty_l=0; cmd is byte index 3 and
+    # participates in the checksum (index 2), so checksum = 0 ^ 0 ^ 0xB1.
+    assert src._spi.sent[0][:4] == [0x00, 0x00, 0xB1, 0xB1]
 
 
 def test_request_sweep_returns_none_when_never_armed(spi_mcu_source):
