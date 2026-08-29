@@ -1,5 +1,5 @@
 """Minimal HTTP server: serves the curve-tracer web UI and a `/data` JSON
-endpoint backed by `SpiMcuSource.request_sweep()` (plan 018).
+endpoint backed by `SpiMcuSource.request_sweep()`.
 
 Standard-library only (`http.server`) - this is meant to run on the same
 Raspberry Pi that already talks to the RP2040 over SPI, so no extra
@@ -7,12 +7,15 @@ dependency is worth adding just to view an I-V curve in a browser. The
 static page under `curve_tracer_web/` is adapted from
 https://github.com/fborello-lambda/solar_panel_curve_tracer's `spiffs/`
 (MIT licensed) - same dark-theme Chart.js UI, trimmed to what this board
-supports (sweep only starts via the physical But1 press).
+supports (no settable current dial).
 
 A background thread calls `request_sweep()` in a loop (it already polls
 the firmware's ack internally) and caches the latest result; HTTP
 handlers just read the cache, so a slow SPI round-trip never blocks a
-page load.
+page load. `spidev` isn't documented thread-safe, so that same thread is
+the only thing that ever touches `SpiMcuSource` - the Start Sweep/Release
+Relay POST endpoints hand their request off through a queue instead of
+calling into it directly from a handler thread.
 
 Usage::
 
@@ -25,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import queue
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -62,21 +66,34 @@ class _SweepCache:
             return list(self._points), self._link
 
 
-def _poll_loop(cache: _SweepCache, bus: int, device: int, speed_hz: int, period_s: float) -> None:
+def _poll_loop(
+    cache: _SweepCache,
+    commands: queue.Queue[str],
+    bus: int,
+    device: int,
+    speed_hz: int,
+    period_s: float,
+) -> None:
     from mpp_sdk.io.spi_mcu import SpiMcuSource
 
     with SpiMcuSource(bus=bus, device=device, speed_hz=speed_hz) as src:
         while True:
+            while not commands.empty():
+                cmd = commands.get_nowait()
+                if cmd == "start_sweep":
+                    src.start_sweep()
+                elif cmd == "release_relay":
+                    src.release_relay()
             try:
                 result = src.request_sweep()
             except RuntimeError as exc:
                 cache.set(None, f"error: {exc}")
             else:
-                cache.set(result, "ok" if result is not None else "waiting for But1")
+                cache.set(result, "ok" if result is not None else "waiting for sweep")
             time.sleep(period_s)
 
 
-def _make_handler(cache: _SweepCache) -> type[BaseHTTPRequestHandler]:
+def _make_handler(cache: _SweepCache, commands: queue.Queue[str]) -> type[BaseHTTPRequestHandler]:
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, fmt: str, *args: object) -> None:  # noqa: A002
             pass  # keep stdout to the poll loop's own status, not per-request access logs
@@ -90,6 +107,17 @@ def _make_handler(cache: _SweepCache) -> type[BaseHTTPRequestHandler]:
                 self.send_error(404)
                 return
             self._serve_static(filename)
+
+        def do_POST(self) -> None:  # noqa: N802
+            if self.path == "/start-sweep":
+                commands.put_nowait("start_sweep")
+            elif self.path == "/release-relay":
+                commands.put_nowait("release_relay")
+            else:
+                self.send_error(404)
+                return
+            self.send_response(204)
+            self.end_headers()
 
         def _serve_data(self) -> None:
             points, link = cache.snapshot()
@@ -133,14 +161,22 @@ def main() -> None:
     args = parser.parse_args()
 
     cache = _SweepCache()
+    commands: queue.Queue[str] = queue.Queue()
     poll_thread = threading.Thread(
         target=_poll_loop,
-        args=(cache, args.spi_bus, args.spi_device, args.spi_speed_hz, args.poll_period_s),
+        args=(
+            cache,
+            commands,
+            args.spi_bus,
+            args.spi_device,
+            args.spi_speed_hz,
+            args.poll_period_s,
+        ),
         daemon=True,
     )
     poll_thread.start()
 
-    server = ThreadingHTTPServer((args.host, args.port), _make_handler(cache))
+    server = ThreadingHTTPServer((args.host, args.port), _make_handler(cache, commands))
     print(f"Serving curve-tracer UI on http://{args.host}:{args.port}/ (Ctrl+C to stop)")
     try:
         server.serve_forever()

@@ -82,7 +82,7 @@ def _miso_frame(
 
 # Mirrors spi_mcu.py's private _TRACER_SWEEP_POINTS/_BULK_MAGIC/
 # _BULK_FRAME_LEN constants - must match firmware/pipico_board/src/
-# spi_slave_pio.rs's bulk-read frame shape (plan 018) exactly.
+# spi_slave_pio.rs's bulk-read frame shape exactly.
 _TEST_TRACER_SWEEP_POINTS = 20
 _TEST_BULK_MAGIC = 0xC5
 _TEST_BULK_FRAME_LEN = 2 + _TEST_TRACER_SWEEP_POINTS * 4 + 1
@@ -227,7 +227,7 @@ def test_exit_closes_even_if_soft_stop_raises(spi_mcu_source, monkeypatch):
 
 
 # ------------------------------------------------------------------
-# request_sweep() - curve-tracer bulk-read protocol (plan 018)
+# request_sweep() - curve-tracer bulk-read protocol
 # ------------------------------------------------------------------
 
 
@@ -321,3 +321,31 @@ def test_request_sweep_raises_on_implausible_point_count(spi_mcu_source):
     ]
     with pytest.raises(RuntimeError, match="implausible point count"):
         src.request_sweep(poll_attempts=5, poll_interval_s=0)
+
+
+# ------------------------------------------------------------------
+# start_sweep()/release_relay() - SPI-triggered sweeps
+# ------------------------------------------------------------------
+
+
+def test_start_sweep_sends_cmd_byte(spi_mcu_source):
+    src = spi_mcu_source()
+    src.start_sweep()
+    # duty defaults to 0.0 -> duty_h=duty_l=0; checksum = 0 ^ 0 ^ 0xB2.
+    assert src._spi.sent[-1][:4] == [0x00, 0x00, 0xB2, 0xB2]
+
+
+def test_release_relay_sends_cmd_byte(spi_mcu_source):
+    src = spi_mcu_source()
+    src.release_relay()
+    # duty defaults to 0.0 -> duty_h=duty_l=0; checksum = 0 ^ 0 ^ 0xB3.
+    assert src._spi.sent[-1][:4] == [0x00, 0x00, 0xB3, 0xB3]
+
+
+def test_start_sweep_still_updates_telemetry(spi_mcu_source):
+    src = spi_mcu_source()
+    src._spi.next_rx = _miso_frame(v_raw=5000, i_raw=250, vout_raw=3300, temp_raw=0)
+    src.start_sweep()
+    v, i = src.read()
+    assert v == pytest.approx(5.0)
+    assert i == pytest.approx(0.25)

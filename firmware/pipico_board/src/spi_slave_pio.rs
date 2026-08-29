@@ -35,7 +35,7 @@ use embassy_rp::{Peri, bind_interrupts};
 use embassy_time::{Duration, with_timeout};
 use portable_atomic::Ordering;
 
-use crate::mode_curve_tracer::{self, SweepResult, TRACER_SWEEP_POINTS};
+use crate::mode_curve_tracer::{self, SweepResult, TRACER_SWEEP_POINTS, TracerCommand};
 use crate::{
     DUTY, FIRMWARE_MODE, FirmwareMode, MEAS_ADC_VOUT_MV, MEAS_I_MA, MEAS_V_MV, PACKET_COUNT,
 };
@@ -46,14 +46,22 @@ bind_interrupts!(pub struct PioIrqs {
 
 pub const FRAME_LEN: usize = 12;
 
-// Curve-tracer bulk-read protocol (plan 018): a distinct, larger SPI
-// transaction for fetching sweep results (mode_curve_tracer.rs), kept
-// separate from the steady FRAME_LEN telemetry frame it rides alongside.
-// See spi_pio_task's doc comment for the full three-step protocol.
+// Curve-tracer bulk-read protocol: a distinct, larger SPI transaction
+// for fetching sweep results (mode_curve_tracer.rs), kept separate from
+// the steady FRAME_LEN telemetry frame it rides alongside. See
+// spi_pio_task's doc comment for the full three-step protocol.
 
 /// MOSI command value (one of the 9 spare bytes, index 3) requesting a
 /// bulk-dump; unlikely to appear from a zeroed/uninitialized buffer.
 const CMD_REQUEST_BULK_DUMP: u8 = 0xB1;
+/// Starts a curve-tracer sweep - forwarded to
+/// `mode_curve_tracer::curve_tracer_task` via `TRACER_COMMAND`, same
+/// checksum protection as `CMD_REQUEST_BULK_DUMP`.
+const CMD_START_SWEEP: u8 = 0xB2;
+/// Explicitly releases the curve-tracer relay - the relay no longer
+/// auto-releases at the end of a sweep, see
+/// `mode_curve_tracer::CurveTracer::release_relay`.
+const CMD_RELEASE_RELAY: u8 = 0xB3;
 /// First byte of a bulk-read response - lets the Pi tell a genuine
 /// bulk-dump frame apart from a torn/mis-synced read before trusting
 /// anything else in it.
@@ -163,11 +171,11 @@ fn xor_checksum(bytes: &[u8]) -> u8 {
 /// MISO layout: [ V_H | V_L | I_H | I_L | VOUT_H | VOUT_L | TEMP_H
 ///   | TEMP_L | CHECKSUM | ACK | 0 x 2 ]  (12 bytes total). `CHECKSUM` is
 /// the XOR of the 8 preceding data bytes only - must match `spi_mcu.py`/
-/// `spi_test.py` exactly, and plan 018's `ack` byte does NOT participate
-/// in it (the steady frame's checksum contract is unchanged from plan
-/// 014/015). `ack` is the curve-tracer bulk-read handshake byte (plan
-/// 018): `0x00` in normal operation, `0x80 | point_count` on the one
-/// frame that acks a bulk-dump request - see `spi_pio_task`'s doc comment.
+/// `spi_test.py` exactly, and the `ack` byte does NOT participate in it
+/// (the steady frame's checksum contract is unchanged). `ack` is the
+/// curve-tracer bulk-read handshake byte: `0x00` in normal operation,
+/// `0x80 | point_count` on the one frame that acks a bulk-dump request -
+/// see `spi_pio_task`'s doc comment.
 fn build_tx_frame(v: u16, i: u16, vout: u16, temp_cc: i16, ack: u8) -> [u32; FRAME_LEN] {
     let data = [
         v.to_be_bytes(),
@@ -195,7 +203,7 @@ fn build_tx_frame(v: u16, i: u16, vout: u16, temp_cc: i16, ack: u8) -> [u32; FRA
 /// `xor_checksum` like the steady frame, just over a different byte range.
 /// `sweep.points` beyond `sweep.count` are the zeroed unfilled tail from an
 /// aborted sweep (`mode_curve_tracer::SweepResult`) - sent as-is; the Pi
-/// only trusts the first `sweep.count` points, per plan 018.
+/// only trusts the first `sweep.count` points.
 fn build_bulk_tx_frame(sweep: &SweepResult) -> [u32; BULK_FRAME_LEN] {
     let mut bytes = [0u8; BULK_FRAME_LEN - 1];
     bytes[0] = BULK_MAGIC;
@@ -252,7 +260,7 @@ fn resync(sm: &mut StateMachine<'static, PIO0, 0>, origin: u8) {
     sm.set_enable(true);
 }
 
-/// Curve-tracer bulk-read handshake (plan 018) - drives which frame shape
+/// Curve-tracer bulk-read handshake - drives which frame shape
 /// `spi_pio_task`'s next exchange uses. All three states use `FRAME_LEN`
 /// except `DoBulk`, the one exchange that uses `BULK_FRAME_LEN`:
 ///
@@ -332,10 +340,10 @@ fn apply_duty_frame(
 }
 
 /// Builds the TX buffer for `state`'s exchange - always reads live
-/// `MEAS_*` atomics (matches the pre-plan-018 behavior of building the
-/// next telemetry frame fresh each time), padded to `MAX_FRAME_LEN`; only
-/// the first `FRAME_LEN`/`BULK_FRAME_LEN` words are ever pushed to DMA
-/// (the caller slices by the same `state` match).
+/// `MEAS_*` atomics (builds the next telemetry frame fresh each time,
+/// same as before the bulk-read handshake existed), padded to
+/// `MAX_FRAME_LEN`; only the first `FRAME_LEN`/`BULK_FRAME_LEN` words are
+/// ever pushed to DMA (the caller slices by the same `state` match).
 fn build_tx_buf_for_state(state: &BulkState) -> [u32; MAX_FRAME_LEN] {
     let mut buf = [0u32; MAX_FRAME_LEN];
     match state {
@@ -404,8 +412,8 @@ fn build_tx_buf_for_state(state: &BulkState) -> [u32; MAX_FRAME_LEN] {
 /// the master is clearly still talking, just corrupted, a different
 /// failure mode than sustained silence.
 ///
-/// `CMD`/`ACK` (plan 018) are the curve-tracer bulk-read handshake bytes -
-/// see `BulkState`'s doc comment for the full three-step protocol. They
+/// `CMD`/`ACK` are the curve-tracer bulk-read handshake bytes - see
+/// `BulkState`'s doc comment for the full three-step protocol. They
 /// ride in the steady frame's spare bytes. `CMD` (MOSI) participates in
 /// `CHECKSUM` (`duty_h ^ duty_l ^ cmd` - see `apply_duty_frame`'s doc
 /// comment for why); `ACK` (MISO) does not (see `build_tx_frame`'s doc
@@ -494,8 +502,8 @@ pub async fn spi_pio_task(
             }
             BulkState::Idle => {
                 let cmd = apply_duty_frame(&rx, &mut last_logged_duty, &mut checksum_failures);
-                if cmd == Some(CMD_REQUEST_BULK_DUMP) {
-                    match mode_curve_tracer::take_last_sweep() {
+                match cmd {
+                    Some(CMD_REQUEST_BULK_DUMP) => match mode_curve_tracer::take_last_sweep() {
                         Some(sweep) => {
                             defmt::info!(
                                 "spi_pio_task: bulk-dump request acked, {} points",
@@ -504,9 +512,16 @@ pub async fn spi_pio_task(
                             BulkState::SendAck(sweep)
                         }
                         None => BulkState::Idle,
+                    },
+                    Some(CMD_START_SWEEP) => {
+                        mode_curve_tracer::TRACER_COMMAND.signal(TracerCommand::StartSweep);
+                        BulkState::Idle
                     }
-                } else {
-                    BulkState::Idle
+                    Some(CMD_RELEASE_RELAY) => {
+                        mode_curve_tracer::TRACER_COMMAND.signal(TracerCommand::ReleaseRelay);
+                        BulkState::Idle
+                    }
+                    _ => BulkState::Idle,
                 }
             }
         };

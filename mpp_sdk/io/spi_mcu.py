@@ -20,13 +20,18 @@ except ModuleNotFoundError as exc:  # pragma: no cover
 _TEMP_NOT_AVAILABLE_RAW = 0x8000
 _TEMP_NOT_AVAILABLE_CC = -32768
 
-# Curve-tracer bulk-read protocol (plan 018) - must match
+# Curve-tracer bulk-read protocol - must match
 # firmware/pipico_board/src/spi_slave_pio.rs's constants of the same name
 # and mode_curve_tracer::TRACER_SWEEP_POINTS exactly.
 _CMD_REQUEST_BULK_DUMP = 0xB1
 _BULK_MAGIC = 0xC5
 _TRACER_SWEEP_POINTS = 20
 _BULK_FRAME_LEN = 2 + _TRACER_SWEEP_POINTS * 4 + 1
+
+# Curve-tracer sweep-trigger/relay-release commands - must match
+# spi_slave_pio.rs's constants of the same name exactly.
+_CMD_START_SWEEP = 0xB2
+_CMD_RELEASE_RELAY = 0xB3
 
 
 def _to_signed_i16(raw: int) -> int:
@@ -56,9 +61,8 @@ class SpiMcuSource(SignalSource):
     frame-timeout check) and is rejected - the last-good V/I/Vout/temp are
     kept instead (``ack`` is not, since it's a handshake edge, not a
     reading - see ``_transact()``). ``CMD``/``ACK`` are the curve-tracer
-    bulk-read handshake bytes (plan 018, see ``request_sweep()``) - both 0
-    in normal operation, so plain ``read()``/``write()`` usage is
-    unaffected.
+    bulk-read handshake bytes (see ``request_sweep()``) - both 0 in normal
+    operation, so plain ``read()``/``write()`` usage is unaffected.
 
     Usage::
 
@@ -130,8 +134,8 @@ class SpiMcuSource(SignalSource):
         """Send *duty* (and, if given, a curve-tracer bulk-read *cmd* byte).
 
         Returns ``(v_raw, i_raw, vout_raw, temp_raw, ack)`` - ``ack`` is the
-        curve-tracer bulk-read handshake byte (plan 018): 0 in normal
-        operation, ``0x80 | point_count`` on the frame acking a
+        curve-tracer bulk-read handshake byte: 0 in normal operation,
+        ``0x80 | point_count`` on the frame acking a
         ``_CMD_REQUEST_BULK_DUMP``. Returns the last-good V/I/Vout/temp
         instead if the MISO checksum doesn't match - a corrupted-but-complete
         frame must not be applied as if it were real telemetry (plan 014).
@@ -194,7 +198,7 @@ class SpiMcuSource(SignalSource):
     def request_sweep(
         self, poll_attempts: int = 20, poll_interval_s: float = 0.05
     ) -> list[tuple[float, float]] | None:
-        """Fetch the firmware's curve-tracer sweep result, if any (plan 018).
+        """Fetch the firmware's curve-tracer sweep result, if any.
 
         Three-step protocol: sends a bulk-dump request riding on a normal
         12-byte frame (current ``duty`` unchanged - a sweep already reroutes
@@ -224,6 +228,29 @@ class SpiMcuSource(SignalSource):
             self._apply_telemetry(v_raw, i_raw, vout_raw, temp_raw)
         return None
 
+    def start_sweep(self) -> None:
+        """Ask the firmware to start a curve-tracer sweep.
+
+        Fire-and-forget - no ack, unlike ``request_sweep()``'s bulk-dump
+        handshake. The relay may already be engaged from a previous sweep
+        (multiple sweeps can run without releasing between them, see
+        ``release_relay()``). Poll ``request_sweep()`` afterward to fetch
+        the result once the sweep completes.
+        """
+        v_raw, i_raw, vout_raw, temp_raw, _ack = self._transact(self._duty, cmd=_CMD_START_SWEEP)
+        self._apply_telemetry(v_raw, i_raw, vout_raw, temp_raw)
+
+    def release_relay(self) -> None:
+        """Ask the firmware to disconnect the panel from the tracer's
+        bleed path and hand it back to the SEPIC.
+
+        The relay otherwise stays engaged across any number of sweeps
+        started via ``start_sweep()`` or the physical ``But1`` press - it
+        is no longer released automatically when a sweep ends.
+        """
+        v_raw, i_raw, vout_raw, temp_raw, _ack = self._transact(self._duty, cmd=_CMD_RELEASE_RELAY)
+        self._apply_telemetry(v_raw, i_raw, vout_raw, temp_raw)
+
     def _apply_telemetry(self, v_raw: int, i_raw: int, vout_raw: int, temp_raw: int) -> None:
         """Update ``read()``/``vout``/``temperature_c`` state from one frame."""
         self._v = v_raw * self._v_scale + self._v_offset
@@ -237,7 +264,7 @@ class SpiMcuSource(SignalSource):
 
         Called only once ``request_sweep()`` has seen an armed ack -
         *ack_count* is that ack's point count, cross-checked against the
-        bulk frame's own count field (plan 018's "cheap corruption signal").
+        bulk frame's own count field (a cheap corruption signal).
         """
         rx = self._spi.xfer2([0] * _BULK_FRAME_LEN)
 

@@ -89,7 +89,7 @@ the preceding data bytes in each direction - `DUTY_H^DUTY_L^CMD` for MOSI,
 `V_H^V_L^I_H^I_L^VOUT_H^VOUT_L^TEMP_H^TEMP_L` for MISO; `ACK` does NOT
 participate in MISO's (it's an edge-triggered handshake signal, not a
 telemetry reading - see below). `CMD` participates in MOSI's precisely so
-a corrupted frame can't spoof a bulk-dump request by chance (plan 018); it
+a corrupted frame can't spoof a bulk-dump request by chance; it
 is `0x00` on every normal frame, and XOR with `0x00` is a no-op, so this
 didn't change the checksum's value for plain `write()`/`read()` traffic.
 A checksum mismatch is treated as a corrupted-but-complete frame: the
@@ -100,9 +100,10 @@ keep the last-good telemetry rather than propagate garbage, and report
 construct `SpiMcuSource()` (defaults already match the firmware's
 calibrated units and this checksum).
 
-`CMD`/`ACK` (plan 018) are both `0x00` in normal operation - the
-curve-tracer bulk-read handshake (see "Curve tracer" below) is the only
-thing that sets them, and only around fetching a sweep result.
+`CMD`/`ACK` are both `0x00` in normal operation - the curve-tracer
+control/bulk-read commands (see "Curve tracer" below) are the only thing
+that sets them: `0xB1` requests a bulk sweep-result dump, `0xB2` starts a
+sweep, `0xB3` releases the tracer relay.
 
 **Master clock speed**: 8 MHz is unreliable (occasional torn/garbled
 frames) - the GPIO input synchronizer latency eats too much of the 125 ns
@@ -320,10 +321,12 @@ path for I-V curve sweeps instead of the normal SEPIC path. `Tracer_pwm`
 bleed PWM. Both idle low/0 at boot, which is also normal MPPT operation
 (SEPIC path active, tracer released).
 
-**Trigger**: a single debounced press of **But1** (GPIO0, active-low)
-starts exactly one sweep; a sweep already running ignores further presses,
-and the next press only re-arms once the button is released. Runs as its
-own task (`mode_curve_tracer.rs`), independent of `FirmwareMode` - a
+**Trigger**: either a single debounced press of **But1** (GPIO0,
+active-low), or the Pi sending `CMD = 0xB2` on a normal SPI frame
+(`SpiMcuSource.start_sweep()`) - both start exactly one sweep. A sweep
+already running ignores further triggers from either source, and a
+still-held button only re-arms once released. Runs as its own task
+(`mode_curve_tracer.rs`), independent of `FirmwareMode` - a
 `TRACER_ACTIVE` flag forces the SEPIC gate duty to 0 for the sweep's whole
 duration, regardless of whether `MppTracker` or `PowerSupply` is active.
 
@@ -333,8 +336,9 @@ averaging 5 consecutive fresh INA229 readings per point
 (`TRACER_AVG_SAMPLES`, gated on a sample-freshness counter - not a fixed
 delay, same pattern as `power_supply` mode's `ClosedLoopState`). A safety
 cutoff (`TRACER_I_MAX_MA`, referencing the INA229's own calibrated
-full-scale; `TRACER_P_MAX_MW`) aborts the sweep - de-energizes the relay,
-zeroes the PWM, returns to idle - if breached, rather than only logging.
+full-scale; `TRACER_P_MAX_MW`) aborts the sweep - zeroes the PWM and
+returns to idle, but leaves the relay engaged (see "Relay lifetime"
+below) - if breached, rather than only logging.
 The cutoff is checked continuously during the settle window
 (`TRACER_SETTLE_POLL_MS`), not only after it, so a spike right after a
 duty step is caught quickly; a stalled INA229 read also aborts the sweep
@@ -344,8 +348,15 @@ starting points that need on-target re-tuning; there is no
 schematic-derived time constant for the bleed path to derive them from
 analytically.
 
+**Relay lifetime**: `Tracer_En` stays engaged across any number of
+sweeps, no longer released automatically when a sweep ends, breach or
+not. **But1** only starts a sweep; releasing the relay is a separate,
+explicit action - send `CMD = 0xB3` (`SpiMcuSource.release_relay()`) from
+the Pi. This lets several sweeps run back-to-back without the relay
+re-clicking between them.
+
 **Results**: dumped via `defmt`/RTT as `(V_mV, I_mA)` lines when the sweep
-completes or aborts, and separately fetchable from the Pi (plan 018) via
+completes or aborts, and separately fetchable from the Pi via
 `SpiMcuSource.request_sweep()` (`mpp_sdk/io/spi_mcu.py`). The most recent
 sweep's result is held in `mode_curve_tracer.rs` until fetched once
 (`take_last_sweep()`); a three-step handshake rides on top of the steady

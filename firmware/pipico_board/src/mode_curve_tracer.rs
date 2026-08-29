@@ -1,39 +1,45 @@
-//! Curve tracer: a runtime, one-shot sweep triggered by `But1`, not a
-//! `FirmwareMode` (see `main.rs`'s `TRACER_ACTIVE` static and its doc
-//! comment for why). While a sweep runs, the panel is rerouted from the
-//! SEPIC path onto the bleed path by the relay (`Tracer_En`, GPIO2), and
-//! `Tracer_pwm` (GPIO3) is stepped linearly across its full range while
-//! `MEAS_V_MV`/`MEAS_I_MA` (published by `sensors_task`, `main.rs`) are
-//! sampled at each step to trace the panel's I-V curve. Results are dumped
-//! via `defmt` on completion or abort - no Pi transport yet, see plan 016's
-//! history and plan 018 (the follow-up that adds one).
+//! Curve tracer: a runtime sweep, not a `FirmwareMode` (see `main.rs`'s
+//! `TRACER_ACTIVE` static and its doc comment for why). A sweep is
+//! triggered either by `But1` or by the Pi over SPI (`TRACER_COMMAND`).
+//! While a sweep runs, the panel is rerouted from the SEPIC path onto the
+//! bleed path by the relay (`Tracer_En`, GPIO2), and `Tracer_pwm` (GPIO3)
+//! is stepped linearly across its full range while `MEAS_V_MV`/
+//! `MEAS_I_MA` (published by `sensors_task`, `main.rs`) are sampled at
+//! each step to trace the panel's I-V curve. Results are published to
+//! `LAST_SWEEP` for the Pi to fetch over SPI. The relay stays engaged
+//! across any number of sweeps - it is released only by an explicit
+//! `TracerCommand::ReleaseRelay` (`But1` never releases it either; only
+//! `release_relay()` does), not automatically at the end of each sweep.
 
 use core::cell::RefCell;
 
 use critical_section::Mutex;
+use embassy_futures::select::{Either, select};
 use embassy_rp::gpio::{Input, Output};
 use embassy_rp::pwm::{Config as PwmConfig, Pwm};
+use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
+use embassy_sync::signal::Signal;
 use embassy_time::{Duration, Timer, with_timeout};
 use portable_atomic::{AtomicU32, Ordering};
 
 use crate::{MEAS_I_MA, MEAS_V_MV, TRACER_ACTIVE};
 
 /// Number of points spanned linearly across the full PWM range - matches
-/// the ESP32-C3 reference device's default sample count (see plan 016).
-/// This board sweeps the *full* range (no user dial to pick a target
-/// current subset, unlike the reference).
+/// the ESP32-C3 reference device's default sample count. This board
+/// sweeps the *full* range (no user dial to pick a target current subset,
+/// unlike the reference).
 pub const TRACER_SWEEP_POINTS: usize = 20;
 
 /// Top of `Tracer_pwm`'s PWM range: `top = 12499`, divider 1, at the
-/// default 125 MHz sysclk -> 10 kHz. Conservative starting point (plan 016
-/// deliberately does not match the SEPIC gate's 100 kHz - the bleed path
-/// switches a slower thermal/electrical process, not a converter
-/// inductor); confirm on-target it doesn't audibly/electrically misbehave
+/// default 125 MHz sysclk -> 10 kHz. Conservative starting point -
+/// deliberately does not match the SEPIC gate's 100 kHz, since the bleed
+/// path switches a slower thermal/electrical process, not a converter
+/// inductor; confirm on-target it doesn't audibly/electrically misbehave
 /// before trusting this value.
 pub const TRACER_PWM_MAX: u16 = 12499;
 
-/// Settle time after each duty step before sampling. Starting point per
-/// plan 016 (matches the ESP32 reference's 250 ms); this project has no
+/// Settle time after each duty step before sampling. Starting point
+/// matches the ESP32 reference's 250 ms; this project has no
 /// schematic-derived time constant for the bleed path, so this needs
 /// on-target re-tuning.
 const TRACER_SETTLE_MS: u64 = 250;
@@ -80,8 +86,8 @@ const TRACER_I_MAX_MA: u16 = crate::ina229::I_MAX_MA as u16;
 /// Safety cutoff: power, in milliwatts. Conservative starting point (well
 /// under the board's `<= 40 V, <= 1 A` design limits, see
 /// `docs/general_information.md`) - the bleed element's actual rating
-/// hasn't been reviewed against this (no schematic read, see plan 016's
-/// Scope); re-tune on-target once that's known.
+/// hasn't been reviewed against this (no schematic read yet); re-tune
+/// on-target once that's known.
 const TRACER_P_MAX_MW: u32 = 5000;
 
 /// Debounce window for `But1`'s falling edge - rejects contact-bounce
@@ -91,7 +97,7 @@ const BUTTON_DEBOUNCE_MS: u64 = 30;
 /// One completed (or aborted) sweep's results - `points[..count]` are
 /// valid, `points[count..]` are the zeroed unfilled tail on an abort.
 /// `Copy` (fixed-size array of `Copy` tuples) so `spi_slave_pio.rs`'s
-/// bulk-read state machine (plan 018) can hold a snapshot by value without
+/// bulk-read state machine can hold a snapshot by value without
 /// borrowing this module's storage across an `.await`.
 #[derive(Clone, Copy)]
 pub struct SweepResult {
@@ -101,12 +107,12 @@ pub struct SweepResult {
 
 /// Most recent sweep's result, if any and not yet fetched. Written once by
 /// `run_sweep` on completion/abort; read (and cleared) exactly once by
-/// `spi_slave_pio.rs`'s bulk-read request handling (`take_last_sweep`) -
-/// see plan 018. `critical_section::Mutex` rather than an atomic because
-/// `SweepResult` isn't a single machine word; this firmware runs a single
-/// cooperative executor on one core (see `spi_slave_pio.rs`'s module doc
-/// comment), so a critical section here is only ever contending with
-/// itself, never truly concurrent hardware access.
+/// `spi_slave_pio.rs`'s bulk-read request handling (`take_last_sweep`).
+/// `critical_section::Mutex` rather than an atomic because `SweepResult`
+/// isn't a single machine word; this firmware runs a single cooperative
+/// executor on one core (see `spi_slave_pio.rs`'s module doc comment), so
+/// a critical section here is only ever contending with itself, never
+/// truly concurrent hardware access.
 static LAST_SWEEP: Mutex<RefCell<Option<SweepResult>>> = Mutex::new(RefCell::new(None));
 
 /// Takes (removes) the most recent sweep result, if any - `None` if no
@@ -114,6 +120,23 @@ static LAST_SWEEP: Mutex<RefCell<Option<SweepResult>>> = Mutex::new(RefCell::new
 pub fn take_last_sweep() -> Option<SweepResult> {
     critical_section::with(|cs| LAST_SWEEP.borrow(cs).borrow_mut().take())
 }
+
+/// A curve-tracer action the Pi can request over SPI - mirrors `But1`'s
+/// two effects (start a sweep; the relay's release, previously implicit
+/// at the end of every sweep, is now explicit-only).
+#[derive(Clone, Copy)]
+pub enum TracerCommand {
+    StartSweep,
+    ReleaseRelay,
+}
+
+/// Cross-task command channel from `spi_pio_task` (`spi_slave_pio.rs`,
+/// on seeing `CMD_START_SWEEP`/`CMD_RELEASE_RELAY`) into
+/// `curve_tracer_task`. `Signal` is single-slot and "latest value wins":
+/// if the Pi sends a second command before the task consumes the first,
+/// the first is silently dropped - acceptable since sweeps are Pi-paced
+/// and one at a time.
+pub static TRACER_COMMAND: Signal<CriticalSectionRawMutex, TracerCommand> = Signal::new();
 
 /// Owned by the curve-tracer task - exactly one instance ever runs.
 pub struct CurveTracer {
@@ -211,11 +234,14 @@ impl CurveTracer {
         false
     }
 
-    /// Runs one full sweep: energizes the relay, steps `Tracer_pwm` from 0
-    /// to `TRACER_PWM_MAX` in `TRACER_SWEEP_POINTS` equal steps, aborts
-    /// early on a safety-cutoff breach, then always de-energizes and
-    /// clears `TRACER_ACTIVE` - the SEPIC gate must never stay forced to 0
-    /// past the sweep's own lifetime, breach or not.
+    /// Runs one full sweep: energizes the relay (harmless no-op if already
+    /// engaged from a previous sweep - see the module doc comment), steps
+    /// `Tracer_pwm` from 0 to `TRACER_PWM_MAX` in `TRACER_SWEEP_POINTS`
+    /// equal steps, aborts early on a safety-cutoff breach, then always
+    /// stops driving the bleed load and clears `TRACER_ACTIVE` - the SEPIC
+    /// gate must never stay forced to 0 past the sweep's own lifetime,
+    /// breach or not. Does **not** release the relay, breach or not (plan
+    /// 019) - only `release_relay()` does that now.
     async fn run_sweep(&mut self) {
         defmt::info!("curve_tracer: sweep starting");
         TRACER_ACTIVE.store(true, Ordering::Relaxed);
@@ -268,10 +294,11 @@ impl CurveTracer {
             points_captured = step + 1;
         }
 
-        // Always de-energize and hand the gate back, breach or not - this
-        // must not depend on how the loop above exited.
+        // Always stop driving the bleed load and hand the gate back,
+        // breach or not - this must not depend on how the loop above
+        // exited. The relay is left as-is: it no longer auto-releases
+        // here, only `release_relay()` does.
         self.set_pwm(0);
-        self.tracer_en.set_low();
         TRACER_ACTIVE.store(false, Ordering::Relaxed);
 
         if aborted {
@@ -286,15 +313,25 @@ impl CurveTracer {
             defmt::info!("curve_tracer: point {}: V={} mV I={} mA", idx, v_mv, i_ma);
         }
 
-        // Publish for the SPI bulk-read path (plan 018) - overwrites
-        // whatever the previous sweep left, fetched or not; only the most
-        // recent sweep's result is ever available to fetch.
+        // Publish for the SPI bulk-read path - overwrites whatever the
+        // previous sweep left, fetched or not; only the most recent
+        // sweep's result is ever available to fetch.
         critical_section::with(|cs| {
             *LAST_SWEEP.borrow(cs).borrow_mut() = Some(SweepResult {
                 points,
                 count: points_captured,
             });
         });
+    }
+
+    /// Explicitly disconnects the panel from the tracer path and hands it
+    /// back to the SEPIC. The relay otherwise stays engaged across any
+    /// number of sweeps - it is no longer released automatically when a
+    /// sweep ends. Safe to call whether or not a sweep is in progress or
+    /// the relay is already released.
+    fn release_relay(&mut self) {
+        self.set_pwm(0);
+        self.tracer_en.set_low();
     }
 }
 
@@ -305,24 +342,34 @@ impl CurveTracer {
 /// publish rate, not a different task's.
 pub static INA_SAMPLE_COUNT: AtomicU32 = AtomicU32::new(0);
 
-/// Waits for a debounced `But1` press, runs one sweep, waits for release,
-/// repeats. A press while a sweep is already running is impossible by
-/// construction - the task is single-threaded and spends the whole sweep
-/// inside `run_sweep()`, not polling `But1`.
+/// Waits for either a debounced `But1` press or a Pi-issued
+/// `TracerCommand`, acts on it, repeats. A trigger while a sweep is
+/// already running is impossible by construction - the task is
+/// single-threaded and spends the whole sweep inside `run_sweep()`, not
+/// polling either trigger source.
 #[embassy_executor::task]
 pub async fn curve_tracer_task(mut tracer: CurveTracer) {
     loop {
-        tracer.but1.wait_for_falling_edge().await;
-        Timer::after_millis(BUTTON_DEBOUNCE_MS).await;
-        if tracer.but1.is_high() {
-            // Debounce rejected a glitch, not a real press.
-            continue;
+        match select(tracer.but1.wait_for_falling_edge(), TRACER_COMMAND.wait()).await {
+            Either::First(()) => {
+                Timer::after_millis(BUTTON_DEBOUNCE_MS).await;
+                if tracer.but1.is_high() {
+                    // Debounce rejected a glitch, not a real press.
+                    continue;
+                }
+
+                tracer.run_sweep().await;
+
+                // Wait for release before re-arming, so a still-held
+                // button can't immediately retrigger the next sweep.
+                tracer.but1.wait_for_high().await;
+            }
+            Either::Second(TracerCommand::StartSweep) => {
+                tracer.run_sweep().await;
+            }
+            Either::Second(TracerCommand::ReleaseRelay) => {
+                tracer.release_relay();
+            }
         }
-
-        tracer.run_sweep().await;
-
-        // Wait for release before re-arming, so a still-held button can't
-        // immediately retrigger the next sweep.
-        tracer.but1.wait_for_high().await;
     }
 }
