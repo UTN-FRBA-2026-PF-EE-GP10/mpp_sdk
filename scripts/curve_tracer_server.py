@@ -41,6 +41,10 @@ _STATIC_FILES = {
     "/script.js": "script.js",
     "/chart.umd.min.js": "chart.umd.min.js",
 }
+_POST_COMMANDS = {
+    "/start-sweep": "start_sweep",
+    "/release-relay": "release_relay",
+}
 _CONTENT_TYPES = {
     ".html": "text/html; charset=utf-8",
     ".js": "text/javascript; charset=utf-8",
@@ -78,12 +82,27 @@ def _poll_loop(
 
     with SpiMcuSource(bus=bus, device=device, speed_hz=speed_hz) as src:
         while True:
-            while not commands.empty():
+            # At most one queued command per iteration, not a drain loop -
+            # the firmware's TRACER_COMMAND signal is single-slot
+            # ("latest wins"), so sending two commands back-to-back with
+            # no SPI round trip in between risks the second silently
+            # overwriting the first before it's consumed. This bounds
+            # each command to about one `request_sweep()` cycle apart.
+            if not commands.empty():
                 cmd = commands.get_nowait()
-                if cmd == "start_sweep":
-                    src.start_sweep()
-                elif cmd == "release_relay":
-                    src.release_relay()
+                try:
+                    if cmd == "start_sweep":
+                        src.start_sweep()
+                    elif cmd == "release_relay":
+                        src.release_relay()
+                except RuntimeError as exc:
+                    # Same failure mode as request_sweep() below - a
+                    # transient SPI fault must not kill this thread, or
+                    # every future command and sweep result silently stops
+                    # working with no visible error. Still falls through
+                    # to the request_sweep() poll and the sleep below,
+                    # rather than looping tightly on a persistent fault.
+                    cache.set(None, f"error: {exc}")
             try:
                 result = src.request_sweep()
             except RuntimeError as exc:
@@ -109,13 +128,11 @@ def _make_handler(cache: _SweepCache, commands: queue.Queue[str]) -> type[BaseHT
             self._serve_static(filename)
 
         def do_POST(self) -> None:  # noqa: N802
-            if self.path == "/start-sweep":
-                commands.put_nowait("start_sweep")
-            elif self.path == "/release-relay":
-                commands.put_nowait("release_relay")
-            else:
+            cmd = _POST_COMMANDS.get(self.path)
+            if cmd is None:
                 self.send_error(404)
                 return
+            commands.put_nowait(cmd)
             self.send_response(204)
             self.end_headers()
 
@@ -155,8 +172,9 @@ def main() -> None:
     parser.add_argument(
         "--poll-period-s",
         type=float,
-        default=1.0,
-        help="delay between request_sweep() calls (each already polls internally)",
+        default=0.3,
+        help="delay between request_sweep() calls (each already polls internally) - "
+        "also bounds how long a queued Start Sweep/Release Relay command waits",
     )
     args = parser.parse_args()
 

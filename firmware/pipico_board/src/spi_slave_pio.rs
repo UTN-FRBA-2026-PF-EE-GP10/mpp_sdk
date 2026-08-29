@@ -62,6 +62,18 @@ const CMD_START_SWEEP: u8 = 0xB2;
 /// auto-releases at the end of a sweep, see
 /// `mode_curve_tracer::CurveTracer::release_relay`.
 const CMD_RELEASE_RELAY: u8 = 0xB3;
+
+/// Maps a MOSI command byte to the `TracerCommand` it should signal into
+/// `curve_tracer_task`, if any - the one place that grows when a new
+/// Pi-issued tracer command is added, instead of a new copy-pasted match
+/// arm in `spi_pio_task`'s `Idle` handling each time.
+fn tracer_command_for(cmd: u8) -> Option<TracerCommand> {
+    match cmd {
+        CMD_START_SWEEP => Some(TracerCommand::StartSweep),
+        CMD_RELEASE_RELAY => Some(TracerCommand::ReleaseRelay),
+        _ => None,
+    }
+}
 /// First byte of a bulk-read response - lets the Pi tell a genuine
 /// bulk-dump frame apart from a torn/mis-synced read before trusting
 /// anything else in it.
@@ -513,15 +525,13 @@ pub async fn spi_pio_task(
                         }
                         None => BulkState::Idle,
                     },
-                    Some(CMD_START_SWEEP) => {
-                        mode_curve_tracer::TRACER_COMMAND.signal(TracerCommand::StartSweep);
+                    Some(cmd) => {
+                        if let Some(tracer_cmd) = tracer_command_for(cmd) {
+                            mode_curve_tracer::TRACER_COMMAND.signal(tracer_cmd);
+                        }
                         BulkState::Idle
                     }
-                    Some(CMD_RELEASE_RELAY) => {
-                        mode_curve_tracer::TRACER_COMMAND.signal(TracerCommand::ReleaseRelay);
-                        BulkState::Idle
-                    }
-                    _ => BulkState::Idle,
+                    None => BulkState::Idle,
                 }
             }
         };

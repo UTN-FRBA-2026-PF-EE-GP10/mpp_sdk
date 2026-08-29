@@ -54,6 +54,15 @@ def spi_mcu_source(monkeypatch):
     fake_module.SpiDev = _FakeSpiDev
     monkeypatch.setitem(sys.modules, "spidev", fake_module)
 
+    # `mpp_sdk.io.spi_mcu` may already be cached in sys.modules - e.g. from
+    # another test file's own (differently-faked, or real) `spidev` import
+    # earlier in the same pytest session. `import ... as _spidev` binds a
+    # name once at that first import and a cached module isn't re-executed,
+    # so without evicting it here, this fixture's fake would silently not
+    # take effect and every test would fail against whichever `spidev` got
+    # bound first. Force a fresh import so it binds to *this* fixture's fake.
+    monkeypatch.delitem(sys.modules, "mpp_sdk.io.spi_mcu", raising=False)
+
     from mpp_sdk.io.spi_mcu import SpiMcuSource
 
     return SpiMcuSource
@@ -216,7 +225,7 @@ def test_read_after_write_succeeds(spi_mcu_source):
 def test_exit_closes_even_if_soft_stop_raises(spi_mcu_source, monkeypatch):
     src = spi_mcu_source()
 
-    def _raise(_duty):
+    def _raise(_duty, cmd=0):
         raise RuntimeError("simulated SPI fault")
 
     monkeypatch.setattr(src, "_transact", _raise)

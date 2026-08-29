@@ -22,7 +22,7 @@ use embassy_sync::signal::Signal;
 use embassy_time::{Duration, Timer, with_timeout};
 use portable_atomic::{AtomicU32, Ordering};
 
-use crate::{MEAS_I_MA, MEAS_V_MV, TRACER_ACTIVE};
+use crate::{MEAS_I_MA, MEAS_V_MV, RELAY_ENGAGED, TRACER_ACTIVE};
 
 /// Number of points spanned linearly across the full PWM range - matches
 /// the ESP32-C3 reference device's default sample count. This board
@@ -62,9 +62,9 @@ const TRACER_AVG_SAMPLES: u32 = 5;
 /// `wait_fresh_ina_sample` spinning forever: `INA_SAMPLE_COUNT` only
 /// advances on a *successful* read (`sensors_task`'s `Ok(v), Ok(i)` arm),
 /// so a stuck sensor means `run_sweep` never reaches its own cleanup
-/// (de-energize, clear `TRACER_ACTIVE`) - the SEPIC gate would stay
-/// force-zeroed indefinitely. Timing out and aborting the sweep here is
-/// the fix.
+/// (stop driving the bleed load, clear `TRACER_ACTIVE`) - the SEPIC gate
+/// would stay force-zeroed indefinitely. Timing out and aborting the
+/// sweep here is the fix.
 const TRACER_SAMPLE_TIMEOUT_MS: u64 = 500;
 
 /// How often to poll `MEAS_V_MV`/`MEAS_I_MA` for a safety-cutoff breach
@@ -240,11 +240,12 @@ impl CurveTracer {
     /// equal steps, aborts early on a safety-cutoff breach, then always
     /// stops driving the bleed load and clears `TRACER_ACTIVE` - the SEPIC
     /// gate must never stay forced to 0 past the sweep's own lifetime,
-    /// breach or not. Does **not** release the relay, breach or not (plan
-    /// 019) - only `release_relay()` does that now.
+    /// breach or not. Does **not** release the relay, breach or not - only
+    /// `release_relay()` does that now.
     async fn run_sweep(&mut self) {
         defmt::info!("curve_tracer: sweep starting");
         TRACER_ACTIVE.store(true, Ordering::Relaxed);
+        RELAY_ENGAGED.store(true, Ordering::Relaxed);
         self.tracer_en.set_high();
 
         let mut points = [(0u16, 0u16); TRACER_SWEEP_POINTS];
@@ -332,6 +333,11 @@ impl CurveTracer {
     fn release_relay(&mut self) {
         self.set_pwm(0);
         self.tracer_en.set_low();
+        // Cleared only after the relay has actually opened, so main.rs's
+        // loop (which gates the SEPIC gate duty on this) never sees "safe
+        // to resume driving" a tick before the panel is really back on
+        // the SEPIC path.
+        RELAY_ENGAGED.store(false, Ordering::Relaxed);
     }
 }
 

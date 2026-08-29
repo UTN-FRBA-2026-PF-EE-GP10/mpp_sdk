@@ -62,10 +62,19 @@ pub static PACKET_COUNT: AtomicU32 = AtomicU32::new(0);
 // stalls the controller the first time that happens.
 pub static ADC_SAMPLE_COUNT: AtomicU32 = AtomicU32::new(0);
 // True for the duration of a curve-tracer sweep (mode_curve_tracer.rs) -
-// the panel is physically rerouted off the SEPIC path by the relay for
-// that whole time, so the gate must not be driven by either FirmwareMode
-// while this is set. See the one-line override in main()'s loop below.
+// the gate must not be driven by either FirmwareMode while a sweep is
+// actively stepping the bleed PWM. See the one-line override in main()'s
+// loop below. Does NOT by itself mean the panel is back on the SEPIC path
+// once it clears - see RELAY_ENGAGED for that.
 pub static TRACER_ACTIVE: AtomicBool = AtomicBool::new(false);
+// True whenever the curve-tracer relay has the panel routed off the SEPIC
+// path onto the bleed path (mode_curve_tracer.rs) - covers the whole
+// window from "relay energized" to "relay explicitly released", which can
+// now span multiple sweeps, not just TRACER_ACTIVE's narrower "a sweep is
+// actively running" window. The gate must not be driven while this is
+// true either, or the SEPIC would be switching with the panel
+// disconnected from its input.
+pub static RELAY_ENGAGED: AtomicBool = AtomicBool::new(false);
 
 /// Polls the INA229 over SPI0 at the SDK's control period
 /// (`CONTROL_PERIOD_MS = 1.0`) and publishes `(V, I)` for the SPI-slave link.
@@ -372,22 +381,26 @@ async fn main(spawner: Spawner) {
 
     let mut tick: u32 = 0;
     let mut psu_closed_loop = mode_power_supply::ClosedLoopState::new();
-    let mut tracer_was_active = false;
+    let mut tracer_holding_panel = false;
 
     loop {
-        let tracer_active = TRACER_ACTIVE.load(Ordering::Relaxed);
-        let duty = if tracer_active {
-            // A sweep is rerouting the panel off the SEPIC path via the
-            // relay (mode_curve_tracer.rs) - the gate must not be driven
-            // by either FirmwareMode for the whole time that's true.
+        // The gate must stay off both while a sweep is actively running
+        // (TRACER_ACTIVE) AND for as long as the relay stays engaged
+        // afterward (RELAY_ENGAGED, which can now outlive TRACER_ACTIVE -
+        // see its doc comment) - driving the SEPIC while the panel is
+        // routed off to the bleed path switches into a disconnected
+        // input.
+        let tracer_holds_panel =
+            TRACER_ACTIVE.load(Ordering::Relaxed) || RELAY_ENGAGED.load(Ordering::Relaxed);
+        let duty = if tracer_holds_panel {
             0
         } else {
-            if tracer_was_active {
+            if tracer_holding_panel {
                 // Falling edge: the relay just handed the panel back to
-                // the SEPIC path. compute_duty() was skipped for the
-                // sweep's whole duration (see above), so PowerSupply
+                // the SEPIC path. compute_duty() was skipped the whole
+                // time the panel was held (see above), so PowerSupply
                 // mode's closed loop must not resume from its stale
-                // pre-sweep ps_duty - see ClosedLoopState::reset()'s doc
+                // pre-hold ps_duty - see ClosedLoopState::reset()'s doc
                 // comment. A no-op in MppTracker mode (no closed-loop
                 // state to go stale there).
                 psu_closed_loop.reset();
@@ -399,7 +412,7 @@ async fn main(spawner: Spawner) {
                 FirmwareMode::PowerSupply => mode_power_supply::compute_duty(&mut psu_closed_loop),
             }
         };
-        tracer_was_active = tracer_active;
+        tracer_holding_panel = tracer_holds_panel;
 
         pwm_cfg.compare_b = (duty as u32 * 1250 / 65536) as u16;
         pwm.set_config(&pwm_cfg);

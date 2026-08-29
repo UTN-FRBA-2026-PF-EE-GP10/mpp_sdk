@@ -186,8 +186,7 @@ class SpiMcuSource(SignalSource):
         available via ``read()``/``vout``/``temperature_c`` afterward.
         """
         self._duty = max(0.0, min(1.0, duty_cycle))
-        v_raw, i_raw, vout_raw, temp_raw, _ack = self._transact(self._duty)
-        self._apply_telemetry(v_raw, i_raw, vout_raw, temp_raw)
+        self._send_cmd()
 
     # ── extras ───────────────────────────────────────────────────────────────
 
@@ -215,17 +214,13 @@ class SpiMcuSource(SignalSource):
         checksum doesn't match, or its point count disagrees with the ack's
         - a real link fault, not a "nothing ready yet" case.
         """
-        v_raw, i_raw, vout_raw, temp_raw, ack = self._transact(
-            self._duty, cmd=_CMD_REQUEST_BULK_DUMP
-        )
-        self._apply_telemetry(v_raw, i_raw, vout_raw, temp_raw)
+        ack = self._send_cmd(cmd=_CMD_REQUEST_BULK_DUMP)
 
         for _ in range(poll_attempts):
             if ack & 0x80:
                 return self._bulk_read(ack & 0x7F)
             time.sleep(poll_interval_s)
-            v_raw, i_raw, vout_raw, temp_raw, ack = self._transact(self._duty)
-            self._apply_telemetry(v_raw, i_raw, vout_raw, temp_raw)
+            ack = self._send_cmd()
         return None
 
     def start_sweep(self) -> None:
@@ -237,8 +232,7 @@ class SpiMcuSource(SignalSource):
         ``release_relay()``). Poll ``request_sweep()`` afterward to fetch
         the result once the sweep completes.
         """
-        v_raw, i_raw, vout_raw, temp_raw, _ack = self._transact(self._duty, cmd=_CMD_START_SWEEP)
-        self._apply_telemetry(v_raw, i_raw, vout_raw, temp_raw)
+        self._send_cmd(cmd=_CMD_START_SWEEP)
 
     def release_relay(self) -> None:
         """Ask the firmware to disconnect the panel from the tracer's
@@ -248,8 +242,16 @@ class SpiMcuSource(SignalSource):
         started via ``start_sweep()`` or the physical ``But1`` press - it
         is no longer released automatically when a sweep ends.
         """
-        v_raw, i_raw, vout_raw, temp_raw, _ack = self._transact(self._duty, cmd=_CMD_RELEASE_RELAY)
+        self._send_cmd(cmd=_CMD_RELEASE_RELAY)
+
+    def _send_cmd(self, cmd: int = 0) -> int:
+        """Transact once at the current duty with *cmd*, apply the
+        returned telemetry, and return the ack byte - the shared shape
+        behind ``write()``/``start_sweep()``/``release_relay()``/
+        ``request_sweep()``'s polling."""
+        v_raw, i_raw, vout_raw, temp_raw, ack = self._transact(self._duty, cmd=cmd)
         self._apply_telemetry(v_raw, i_raw, vout_raw, temp_raw)
+        return ack
 
     def _apply_telemetry(self, v_raw: int, i_raw: int, vout_raw: int, temp_raw: int) -> None:
         """Update ``read()``/``vout``/``temperature_c`` state from one frame."""
