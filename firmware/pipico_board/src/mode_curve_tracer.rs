@@ -244,6 +244,13 @@ impl CurveTracer {
     /// `release_relay()` does that now.
     async fn run_sweep(&mut self) {
         defmt::info!("curve_tracer: sweep starting");
+        // Drop any earlier sweep's result that was never fetched - without
+        // this, a request_sweep() issued right after this sweep starts can
+        // return stale data left over from before, instead of either
+        // "nothing ready yet" or this sweep's own fresh result. Found
+        // on-target: a bulk-dump ack fired 1.5 ms after "sweep starting",
+        // far too fast to be this sweep's real (multi-second) result.
+        let _ = take_last_sweep();
         TRACER_ACTIVE.store(true, Ordering::Relaxed);
         RELAY_ENGAGED.store(true, Ordering::Relaxed);
         self.tracer_en.set_high();

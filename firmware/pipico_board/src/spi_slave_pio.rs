@@ -478,14 +478,21 @@ pub async fn spi_pio_task(
 
             // Dropping `exchange` here cancels the DMA push (its Drop impl
             // aborts the channel) and the pending `wait_pull`s.
-            if log_link_state {
-                defmt::warn!("spi_pio_task: frame timeout, resyncing (duty unchanged)");
-            }
-            resync(&mut sm, origin);
             // Re-arm TX with the last-known-good V/I for the next attempt;
             // DUTY is left untouched by a single torn frame (see doc
             // comment above) but forced to 0 if the master appears gone.
             consecutive_timeouts += 1;
+            // Rate-limited like checksum_failures below - a sustained
+            // outage would otherwise flood RTT every 100 ms.
+            if log_link_state
+                && (consecutive_timeouts == 1 || consecutive_timeouts.is_multiple_of(100))
+            {
+                defmt::warn!(
+                    "spi_pio_task: frame timeout, resyncing (duty unchanged) ({} consecutive)",
+                    consecutive_timeouts
+                );
+            }
+            resync(&mut sm, origin);
             if consecutive_timeouts == LINK_LOST_TIMEOUTS && log_link_state {
                 defmt::warn!("spi_pio_task: link lost, forcing duty to 0");
             }
