@@ -241,11 +241,25 @@ fn build_bulk_tx_frame(sweep: &SweepResult) -> [u32; BULK_FRAME_LEN] {
 /// genuinely stalled/aborted transfer, not jitter.
 const FRAME_TIMEOUT: Duration = Duration::from_millis(100);
 
-/// Consecutive frame timeouts (~100 ms each) after which the SPI master is
-/// considered gone, not just briefly glitching: `spi_pio_task` forces
-/// `DUTY` to 0 so the gate stops switching instead of free-running the
-/// last commanded duty with no host watching. Resets on the next valid
-/// frame.
+/// Time budget for the one 83-byte bulk-read exchange specifically -
+/// `FRAME_TIMEOUT` alone was calibrated for `FRAME_LEN` (12) and reused
+/// unchanged here on the assumption raw SPI clock time is what matters
+/// (only ~3.3 ms more at 200 kHz), but the RX side isn't DMA-driven - it's
+/// `BULK_FRAME_LEN` (83) individual IRQ-driven `wait_pull()` word-waits
+/// instead of `FRAME_LEN`'s 12, and each one carries real executor
+/// wake/reschedule overhead on top of the raw clock time. Found on-target:
+/// the bulk-read consistently timed out under `FRAME_TIMEOUT` while every
+/// other (steady-frame) exchange, including other curve-tracer commands,
+/// worked reliably - a size-proportional overhead, not a general link
+/// problem, matches that symptom.
+const BULK_FRAME_TIMEOUT: Duration = Duration::from_millis(500);
+
+/// Consecutive frame timeouts (~100 ms each for a steady frame,
+/// `BULK_FRAME_TIMEOUT` if one happens to be the rare bulk-read exchange)
+/// after which the SPI master is considered gone, not just briefly
+/// glitching: `spi_pio_task` forces `DUTY` to 0 so the gate stops
+/// switching instead of free-running the last commanded duty with no
+/// host watching. Resets on the next valid frame.
 const LINK_LOST_TIMEOUTS: u32 = 5; // ~500 ms of total silence
 
 /// Force the state machine back to a known-clean state: halted, FIFOs
@@ -451,9 +465,9 @@ pub async fn spi_pio_task(
     let mut checksum_failures: u32 = 0;
 
     loop {
-        let this_frame_len = match &bulk_state {
-            BulkState::DoBulk(_) => BULK_FRAME_LEN,
-            BulkState::Idle | BulkState::SendAck(_) => FRAME_LEN,
+        let (this_frame_len, frame_timeout) = match &bulk_state {
+            BulkState::DoBulk(_) => (BULK_FRAME_LEN, BULK_FRAME_TIMEOUT),
+            BulkState::Idle | BulkState::SendAck(_) => (FRAME_LEN, FRAME_TIMEOUT),
         };
 
         let mut rx = [0u32; MAX_FRAME_LEN];
@@ -471,7 +485,7 @@ pub async fn spi_pio_task(
             )
         };
 
-        if with_timeout(FRAME_TIMEOUT, exchange).await.is_err() {
+        if with_timeout(frame_timeout, exchange).await.is_err() {
             // No Pi attached is expected/normal in PowerSupply mode
             // (mode_power_supply.rs) - suppress the WARN spam there.
             let log_link_state = FIRMWARE_MODE != FirmwareMode::PowerSupply;
