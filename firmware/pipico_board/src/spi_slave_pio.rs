@@ -182,12 +182,20 @@ fn xor_checksum(bytes: &[u8]) -> u8 {
 ///
 /// MISO layout: [ V_H | V_L | I_H | I_L | VOUT_H | VOUT_L | TEMP_H
 ///   | TEMP_L | CHECKSUM | ACK | 0 x 2 ]  (12 bytes total). `CHECKSUM` is
-/// the XOR of the 8 preceding data bytes only - must match `spi_mcu.py`/
-/// `spi_test.py` exactly, and the `ack` byte does NOT participate in it
-/// (the steady frame's checksum contract is unchanged). `ack` is the
-/// curve-tracer bulk-read handshake byte: `0x00` in normal operation,
-/// `0x80 | point_count` on the one frame that acks a bulk-dump request -
-/// see `spi_pio_task`'s doc comment.
+/// the XOR of the 8 telemetry bytes **and** `ack` - must match
+/// `spi_mcu.py`/`spi_test.py` exactly. `ack` is the curve-tracer bulk-read
+/// handshake byte: `0x00` in normal operation, `0x80 | point_count` on the
+/// one frame that acks a bulk-dump request - see `spi_pio_task`'s doc
+/// comment.
+///
+/// `ack` is covered by the checksum because it is a *command* to the Pi,
+/// not a reading: a bit flip setting its top bit makes the Pi issue an
+/// 83-byte bulk-read transaction against firmware that is still sending
+/// 12-byte telemetry, desyncing the wire. Found on-target - spurious
+/// bulk reads with garbage magic bytes, concentrated at sweep start when
+/// the linear current sink switches on and the link is noisiest. It sits
+/// after `CHECKSUM` in the frame but that is only byte order; both sides
+/// XOR it in the same way.
 fn build_tx_frame(v: u16, i: u16, vout: u16, temp_cc: i16, ack: u8) -> [u32; FRAME_LEN] {
     let data = [
         v.to_be_bytes(),
@@ -196,7 +204,7 @@ fn build_tx_frame(v: u16, i: u16, vout: u16, temp_cc: i16, ack: u8) -> [u32; FRA
         (temp_cc as u16).to_be_bytes(),
     ];
     let bytes: [u8; 8] = core::array::from_fn(|idx| data[idx / 2][idx % 2]);
-    let checksum = xor_checksum(&bytes);
+    let checksum = xor_checksum(&bytes) ^ ack;
 
     let mut words = [0u32; FRAME_LEN];
     let all = bytes
@@ -440,10 +448,11 @@ fn build_tx_buf_for_state(state: &BulkState) -> [u32; MAX_FRAME_LEN] {
 ///
 /// `CMD`/`ACK` are the curve-tracer bulk-read handshake bytes - see
 /// `BulkState`'s doc comment for the full three-step protocol. They
-/// ride in the steady frame's spare bytes. `CMD` (MOSI) participates in
-/// `CHECKSUM` (`duty_h ^ duty_l ^ cmd` - see `apply_duty_frame`'s doc
-/// comment for why); `ACK` (MISO) does not (see `build_tx_frame`'s doc
-/// comment). The handshake's own third step is a **separate**, larger
+/// ride in the steady frame's spare bytes. Both participate in their
+/// direction's `CHECKSUM` - `duty_h ^ duty_l ^ cmd` for MOSI (see
+/// `apply_duty_frame`), the telemetry bytes ^ `ack` for MISO (see
+/// `build_tx_frame`) - since each is a command to the other side rather
+/// than a reading. The handshake's own third step is a **separate**, larger
 /// (`BULK_FRAME_LEN`-byte) transaction, not part of this steady frame at
 /// all - `this_frame_len` below switches to it only for that one exchange.
 #[embassy_executor::task]

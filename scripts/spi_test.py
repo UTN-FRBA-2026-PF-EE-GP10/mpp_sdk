@@ -38,9 +38,10 @@ def make_frame(duty: float) -> list[int]:
 
 def parse_response(rx: list[int]) -> tuple[int, int, int, int, bool]:
     """Return (v_raw, i_raw, vout_raw, temp_raw_signed, checksum_ok)."""
-    data = rx[0:8]
-    expected_checksum = 0
-    for byte in data:
+    # Covers the 8 telemetry bytes plus the curve-tracer ack byte (rx[9]),
+    # matching firmware's build_tx_frame and SpiMcuSource._transact.
+    expected_checksum = rx[9]
+    for byte in rx[0:8]:
         expected_checksum ^= byte
     checksum_ok = rx[8] == expected_checksum
 

@@ -85,13 +85,19 @@ in millivolts, I in milliamperes (negative current clamps to 0). TEMP is a
 big-endian `i16` in centi-Celsius, or the sentinel `-32768` (`0x8000`) while
 the MAX31865 probe stays disabled (see "Panel temperature" below). See
 "Sensing" below for the sensor details. `CHECKSUM` (plan 014) is an XOR of
-the preceding data bytes in each direction - `DUTY_H^DUTY_L^CMD` for MOSI,
-`V_H^V_L^I_H^I_L^VOUT_H^VOUT_L^TEMP_H^TEMP_L` for MISO; `ACK` does NOT
-participate in MISO's (it's an edge-triggered handshake signal, not a
-telemetry reading - see below). `CMD` participates in MOSI's precisely so
-a corrupted frame can't spoof a bulk-dump request by chance; it
-is `0x00` on every normal frame, and XOR with `0x00` is a no-op, so this
-didn't change the checksum's value for plain `write()`/`read()` traffic.
+the frame's data bytes in each direction - `DUTY_H^DUTY_L^CMD` for MOSI,
+`V_H^V_L^I_H^I_L^VOUT_H^VOUT_L^TEMP_H^TEMP_L^ACK` for MISO. `CMD` and
+`ACK` are both covered because each is a *command to the other side*
+rather than a reading: a bit flip on `CMD` would spoof a bulk-dump
+request, and one setting `ACK`'s top bit would send the Pi off to clock
+an 83-byte bulk-read transaction against firmware that is still sending
+12-byte telemetry, desyncing the wire (observed on-target, concentrated
+at sweep start when the tracer's linear current sink switches on and the
+link is at its noisiest). Both are `0x00` on every normal frame and XOR
+with `0x00` is a no-op, so this leaves the checksum value unchanged for
+plain `write()`/`read()` traffic. `ACK` sits *after* the `CHECKSUM` byte
+in the frame, which is only byte order - both sides XOR it in the same
+way.
 A checksum mismatch is treated as a corrupted-but-complete frame: the
 firmware keeps the last commanded `DUTY` (does not zero it or count it as
 a timeout) and ignores `CMD` for that frame; `SpiMcuSource`/`spi_test.py`

@@ -33,6 +33,12 @@ _BULK_FRAME_LEN = 2 + _TRACER_SWEEP_POINTS * 4 + 1
 _CMD_START_SWEEP = 0xB2
 _CMD_RELEASE_RELAY = 0xB3
 
+# Pause between reading an armed ack and clocking the bulk transaction,
+# giving the firmware time to re-arm its DMA for the larger frame - see
+# _bulk_read(). Microseconds would do; this is generous and costs nothing
+# on a once-per-sweep transfer.
+_BULK_READ_ARM_DELAY_S = 0.002
+
 # Upper bound on request_sweep()'s poll interval: the firmware drops a
 # frame it has waited on for longer than its own FRAME_TIMEOUT (100 ms,
 # spi_slave_pio.rs) and resyncs, so polling slower than that leaves it
@@ -62,14 +68,16 @@ class SpiMcuSource(SignalSource):
     counts - the firmware does the calibration). Temp is a big-endian
     ``i16`` in centi-Celsius, or the sentinel -32768 if no probe is
     connected (see ``temperature_c``). ``CHECKSUM`` is an XOR over the
-    preceding data bytes in each direction - ``DUTY_H^DUTY_L^CMD`` for
-    MOSI (``CMD`` included, ``ACK`` excluded from MISO's); a mismatched
-    frame is corrupted-but-complete (passed the firmware's own
-    frame-timeout check) and is rejected - the last-good V/I/Vout/temp are
-    kept instead (``ack`` is not, since it's a handshake edge, not a
-    reading - see ``_transact()``). ``CMD``/``ACK`` are the curve-tracer
-    bulk-read handshake bytes (see ``request_sweep()``) - both 0 in normal
-    operation, so plain ``read()``/``write()`` usage is unaffected.
+    frame's data bytes in each direction - ``DUTY_H^DUTY_L^CMD`` for MOSI,
+    the eight telemetry bytes ``^ACK`` for MISO. Both handshake bytes are
+    covered because each is a command to the other side rather than a
+    reading. A mismatched frame is corrupted-but-complete (passed the
+    firmware's own frame-timeout check) and is rejected - the last-good
+    V/I/Vout/temp are kept instead, while ``ack`` reports 0 rather than
+    replaying a stale value (see ``_transact()``). ``CMD``/``ACK`` are the
+    curve-tracer bulk-read handshake bytes (see ``request_sweep()``) -
+    both 0 in normal operation, so plain ``read()``/``write()`` usage is
+    unaffected.
 
     Usage::
 
@@ -162,9 +170,14 @@ class SpiMcuSource(SignalSource):
         tx = [duty_h, duty_l, duty_h ^ duty_l ^ cmd, cmd] + [0] * 8
         rx = self._spi.xfer2(list(tx))
 
-        data = rx[0:8]
-        expected_checksum = 0
-        for byte in data:
+        # The MISO checksum covers the 8 telemetry bytes and the ack byte
+        # (rx[9]) - the latter is a command to us, not a reading, so a bit
+        # flip setting its top bit would otherwise send us off to clock an
+        # 83-byte bulk read against firmware still sending telemetry. It
+        # sits after the checksum byte in the frame; that is only byte
+        # order, both sides XOR it in the same way.
+        expected_checksum = rx[9]
+        for byte in rx[0:8]:
             expected_checksum ^= byte
         if rx[8] != expected_checksum:
             v_raw, i_raw, vout_raw, temp_raw, _stale_ack = self._last_good_raw
@@ -295,6 +308,15 @@ class SpiMcuSource(SignalSource):
         *ack_count* is that ack's point count, cross-checked against the
         bulk frame's own count field (a cheap corruption signal).
         """
+        # The firmware only re-arms its DMA for the larger bulk frame
+        # *after* the ack exchange completes, but its PIO shifts as soon
+        # as we assert CS - it does not wait for the CPU. Firing the bulk
+        # transaction back-to-back with the ack read (the one exchange
+        # with no natural gap in front of it) can therefore start
+        # clocking a transmitter that has not been armed yet, which reads
+        # back as a corrupted leading byte. Found on-target: bad magic
+        # bytes with the low bits shifted out.
+        time.sleep(_BULK_READ_ARM_DELAY_S)
         rx = self._spi.xfer2([0] * _BULK_FRAME_LEN)
 
         if rx[0] != _BULK_MAGIC:

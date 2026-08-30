@@ -81,7 +81,9 @@ def _miso_frame(
         (temp_raw >> 8) & 0xFF,
         temp_raw & 0xFF,
     ]
-    checksum = 0
+    # ack participates in the checksum (see firmware's build_tx_frame) so
+    # a flipped ack bit can't spoof "sweep ready" at the Pi.
+    checksum = ack
     for byte in data:
         checksum ^= byte
     if corrupt:
@@ -265,6 +267,20 @@ def test_request_sweep_resends_cmd_on_every_poll(spi_mcu_source):
     assert len(src._spi.sent) == 4
     for frame in src._spi.sent:
         assert frame[3] == 0xB1
+
+
+def test_flipped_ack_bit_does_not_trigger_a_bulk_read(spi_mcu_source):
+    """A corrupted ack byte must fail the frame checksum rather than send
+    us clocking an 83-byte bulk read at firmware that is still sending
+    12-byte telemetry - the ack is a command to us, not a reading."""
+    src = spi_mcu_source()
+    frame = _miso_frame(v_raw=1000, i_raw=100, vout_raw=0, temp_raw=0, ack=0x00)
+    frame[9] = 0x80  # bit flip on the wire, checksum left as-built
+    src._spi.responses = [frame]
+    result = src.request_sweep(poll_attempts=0)
+    assert result is None
+    # Only the request frame went out - no oversized bulk transaction.
+    assert all(len(sent) == 12 for sent in src._spi.sent)
 
 
 def test_request_sweep_rejects_poll_interval_past_firmware_timeout(spi_mcu_source):
