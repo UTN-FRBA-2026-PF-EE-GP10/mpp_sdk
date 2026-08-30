@@ -518,8 +518,12 @@ impl CurveTracer {
 
         // Always stop driving the bleed load and hand the gate back,
         // breach or not - this must not depend on how the loop above
-        // exited. The relay is left as-is: it no longer auto-releases
-        // here, only `release_relay()` does.
+        // exited. Duty 0 commands 0 A, so Q3 turns fully off and the
+        // panel is left at open circuit rather than loaded: nothing
+        // should be drawing from it between sweeps. The relay is left as
+        // is - it no longer auto-releases here, only `release_relay()`
+        // does - so the panel stays on the tracer path, open circuit,
+        // ready for the next sweep.
         self.set_pwm(0);
         TRACER_ACTIVE.store(false, Ordering::Relaxed);
 
