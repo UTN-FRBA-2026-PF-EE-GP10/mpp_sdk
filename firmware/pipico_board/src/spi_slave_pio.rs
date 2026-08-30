@@ -494,7 +494,7 @@ pub async fn spi_pio_task(
             }
             resync(&mut sm, origin);
             if consecutive_timeouts == LINK_LOST_TIMEOUTS && log_link_state {
-                defmt::warn!("spi_pio_task: link lost, forcing duty to 0");
+                defmt::error!("spi_pio_task: link lost, forcing duty to 0");
             }
             if consecutive_timeouts >= LINK_LOST_TIMEOUTS {
                 DUTY.store(0, Ordering::Relaxed);
