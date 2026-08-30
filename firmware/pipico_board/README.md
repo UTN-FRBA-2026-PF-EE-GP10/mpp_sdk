@@ -316,10 +316,31 @@ logged at ~1 Hz in millivolts.
 ## Curve tracer
 
 `Tracer_En` (GPIO2) switches relay K1, routing the panel input to a bleed
-path for I-V curve sweeps instead of the normal SEPIC path. `Tracer_pwm`
-(GPIO3, real hardware PWM at 10 kHz - `PWM_SLICE1` channel B) drives the
-bleed PWM. Both idle low/0 at boot, which is also normal MPPT operation
+path for I-V curve sweeps instead of the normal SEPIC path. Both it and
+`Tracer_pwm` idle low/0 at boot, which is also normal MPPT operation
 (SEPIC path active, tracer released).
+
+**The bleed path is a linear current sink, not a switched load.**
+`Tracer_pwm` (GPIO3, hardware PWM at 10 kHz - `PWM_SLICE1` channel B) is
+low-pass filtered by two RC stages (R1/C29, R3/C30 - 10K + 100nF each) into
+an analog setpoint; op-amp U5 (OPA171) then servos Q3's gate until the
+voltage across the 100 mOhm sense resistor R29 matches it. Q3 runs in its
+linear region as a voltage-controlled current source, so **`Tracer_pwm`'s
+duty commands a load current**, not a switching ratio. The 10 kHz is just
+the DAC carrier - the RC stages (tau = 1 ms each) filter its ripple, and a
+setpoint step settles in ~10 ms.
+
+Two consequences worth knowing before touching the sweep:
+
+- Full scale is amps (the ESP32-C3 reference device's equivalent load is
+  ~3.9 A) while a small lit panel sources a couple hundred mA, so almost
+  the entire duty range commands more current than the panel can deliver
+  and simply pins it at short-circuit. This is what auto-ranging exists to
+  solve (see "Sweep" below).
+- Q3 dissipates that current linearly at the panel's full voltage, so the
+  sweep is hard-capped at `TRACER_SWEEP_DUTY_MAX_PERCENT` (10 %) of full
+  scale on top of the `TRACER_P_MAX_MW` cutoff - the reference device caps
+  its own load identically.
 
 **Trigger**: either a single debounced press of **But1** (GPIO0,
 active-low), or the Pi sending `CMD = 0xB2` on a normal SPI frame
@@ -330,8 +351,24 @@ still-held button only re-arms once released. Runs as its own task
 `TRACER_ACTIVE` flag forces the SEPIC gate duty to 0 for the sweep's whole
 duration, regardless of whether `MppTracker` or `PowerSupply` is active.
 
-**Sweep**: `Tracer_pwm` steps linearly across its full range in 20 points
-(`TRACER_SWEEP_POINTS`), 250 ms settle per step (`TRACER_SETTLE_MS`),
+**Auto-range**: each sweep first finds its own top, so the 20 recorded
+points span the real curve rather than piling up past the knee. It reads
+Voc at zero load, then doubles the commanded current until the panel
+voltage collapses below `TRACER_COLLAPSE_PERCENT_OF_VOC` (15 %) of Voc -
+bracketing Isc from below - then bisects `TRACER_SCAN_BISECT_STEPS` (4)
+times to tighten it, and sweeps up to that knee plus
+`TRACER_SWEEP_HEADROOM_PERCENT` (115 %). Probes use a shorter settle
+(`TRACER_SCAN_SETTLE_MS`, 60 ms) since they only decide "collapsed yet?".
+Doubling rather than a linear scan because Isc can land anywhere from a
+fraction of a percent to most of full scale depending on panel and light.
+If Voc is under `TRACER_MIN_VOC_MV` (500 mV) there is no panel worth
+sweeping (dark, disconnected, or the relay didn't transfer) and the sweep
+aborts; if the panel never collapses even at the duty cap, the sweep runs
+to the cap and the curve stops short of Isc. This replaces the reference
+device's manual "set current range" dial.
+
+**Sweep**: `Tracer_pwm` steps linearly from 0 to that auto-ranged top in 20
+points (`TRACER_SWEEP_POINTS`), 250 ms settle per step (`TRACER_SETTLE_MS`),
 averaging 5 consecutive fresh INA229 readings per point
 (`TRACER_AVG_SAMPLES`, gated on a sample-freshness counter - not a fixed
 delay, same pattern as `power_supply` mode's `ClosedLoopState`). A safety
