@@ -372,14 +372,26 @@ async fn main(spawner: Spawner) {
 
     let mut tick: u32 = 0;
     let mut psu_closed_loop = mode_power_supply::ClosedLoopState::new();
+    let mut tracer_was_active = false;
 
     loop {
-        let duty = if TRACER_ACTIVE.load(Ordering::Relaxed) {
+        let tracer_active = TRACER_ACTIVE.load(Ordering::Relaxed);
+        let duty = if tracer_active {
             // A sweep is rerouting the panel off the SEPIC path via the
             // relay (mode_curve_tracer.rs) - the gate must not be driven
             // by either FirmwareMode for the whole time that's true.
             0
         } else {
+            if tracer_was_active {
+                // Falling edge: the relay just handed the panel back to
+                // the SEPIC path. compute_duty() was skipped for the
+                // sweep's whole duration (see above), so PowerSupply
+                // mode's closed loop must not resume from its stale
+                // pre-sweep ps_duty - see ClosedLoopState::reset()'s doc
+                // comment. A no-op in MppTracker mode (no closed-loop
+                // state to go stale there).
+                psu_closed_loop.reset();
+            }
             match FIRMWARE_MODE {
                 // Apply the Pi's commanded SPI duty directly, clamped as
                 // defense-in-depth against SEPIC inductor current runaway.
@@ -387,6 +399,7 @@ async fn main(spawner: Spawner) {
                 FirmwareMode::PowerSupply => mode_power_supply::compute_duty(&mut psu_closed_loop),
             }
         };
+        tracer_was_active = tracer_active;
 
         pwm_cfg.compare_b = (duty as u32 * 1250 / 65536) as u16;
         pwm.set_config(&pwm_cfg);

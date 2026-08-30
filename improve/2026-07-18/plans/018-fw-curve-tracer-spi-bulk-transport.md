@@ -14,6 +14,16 @@
 > firmware/pipico_board/src/main.rs` returning a match is the quick check;
 > if it doesn't exist yet, stop and do plan 016 first.
 >
+> **Update (2026-08-24)**: implemented ahead of plan 016's own on-target
+> confirmation, at the operator's explicit direction (016's sweep engine
+> and 018's transport are being validated together on the bench - the
+> visual I-V curve from `request_sweep()` is itself part of confirming 016
+> works). Code complete on both sides (`spi_slave_pio.rs`'s `BulkState`
+> machine, `SpiMcuSource.request_sweep()`), build/clippy/fmt/pytest all
+> clean, adversarially reviewed. **Not yet on-target confirmed** - neither
+> this plan's own Done criteria nor plan 016's are checked off until the
+> board is on the bench.
+>
 > **Drift check (run first)**: `git diff --stat 64502d7..HEAD --
 > firmware/pipico_board/src/spi_slave_pio.rs firmware/pipico_board/src/main.rs
 > mpp_sdk/io/spi_mcu.py`. If any changed, re-read those files in full before
@@ -221,16 +231,20 @@ error-handling convention.
 
 ## Scope
 
-**In scope**:
+**In scope, as implemented** (`main.rs` ended up untouched - the
+sweep-result storage lives in `mode_curve_tracer.rs` itself, which
+`spi_slave_pio.rs` reads directly via `take_last_sweep()`; no wiring
+through `main.rs` turned out to be needed):
 
-- `firmware/pipico_board/src/spi_slave_pio.rs` (frame-length branching,
-  `build_bulk_tx_frame()`, the request/ack/bulk-read state)
-- `firmware/pipico_board/src/main.rs` (wiring the bulk-dump state to
-  `mode_curve_tracer.rs`'s sweep-result buffer - read-only access, this
-  plan does not change how a sweep runs)
-- `mpp_sdk/io/spi_mcu.py` (`request_sweep()` or equivalent)
-- `firmware/pipico_board/README.md` (document the bulk-read transaction
-  alongside the existing "Frame protocol" section)
+- `firmware/pipico_board/src/mode_curve_tracer.rs` (`SweepResult`,
+  `LAST_SWEEP` storage, `take_last_sweep()`; `run_sweep()` publishes to it)
+- `firmware/pipico_board/src/spi_slave_pio.rs` (`BulkState` machine,
+  frame-length branching, `build_bulk_tx_frame()`, `CMD`/`ACK` bytes added
+  to `build_tx_frame()`)
+- `mpp_sdk/io/spi_mcu.py` (`request_sweep()`, `_apply_telemetry()` helper,
+  `_transact()` extended with a `cmd` parameter and `ack` in its return)
+- `firmware/pipico_board/README.md` (documents the bulk-read transaction
+  alongside the existing "Frame protocol" and "Curve tracer" sections)
 - `tests/test_spi_mcu.py` (new tests for the bulk-read path, faked `spidev`
   as the existing tests already do)
 
@@ -242,33 +256,71 @@ error-handling convention.
   plan only reads its finished result buffer.
 - A `harness/`/`examples/` demo consuming a real sweep - explicitly the
   next follow-up after this plan (plan 016's maintenance notes already flag
-  it), not part of this plan's Done criteria.
+  it), not part of this plan's Done criteria. **Update (2026-08-26):** done
+  ahead of schedule at the operator's request, as a small standalone web UI
+  rather than a `harness/`/`examples/` script - `scripts/curve_tracer_web/`
+  (adapted from the `spiffs/` UI in
+  <https://github.com/fborello-lambda/solar_panel_curve_tracer>, MIT
+  licensed - dark-theme Chart.js I(V)/P(V) chart, trimmed to drop that
+  reference's set-current/start-measurement controls since this board has
+  neither) plus `scripts/curve_tracer_server.py` (stdlib
+  `http.server`, background thread polling `request_sweep()`, `/data` JSON
+  endpoint). Wired into the CLI as `mpp-sdk curve-tracer-web`. This is the
+  visual on-target check plan 016/018's "Done criteria" on-target rows are
+  waiting on - it doesn't change either plan's on-target-unconfirmed status
+  by itself.
 - Triggering a sweep *from* the Pi (vs. the physical `But1` press) - plan
   016 explicitly left this as a separate open question; this plan's
   `request_sweep()` only fetches results of a sweep however it started.
 
-## Steps
+## Implementation notes (as built, 2026-08-24)
 
-(Elaborate per-step verification commands, matching this repo's
-`cargo build --release --locked` / `cargo fmt --check` / on-target defmt
-log conventions, same shape as plan 016's Steps section - write these out
-in full before an executor starts, using plan 016's finished code as the
-concrete reference for `TRACER_SWEEP_POINTS`'s real value and
-`mode_curve_tracer.rs`'s actual result-buffer type/name.)
+- `mode_curve_tracer.rs`: `SweepResult { points, count }` (`Copy`, no
+  `aborted` flag - an aborted sweep is already distinguishable by `count <
+  TRACER_SWEEP_POINTS`, so a dedicated flag was unnecessary). Stored in a
+  `critical_section::Mutex<RefCell<Option<SweepResult>>>` (`LAST_SWEEP`) -
+  a plain atomic doesn't fit an 80-byte struct, and this firmware's single
+  cooperative executor (see `spi_slave_pio.rs`'s module doc comment) means
+  the critical section only ever contends with itself. `run_sweep()`
+  publishes to it right after the existing defmt dump; `take_last_sweep()`
+  removes (not peeks) the value - consumed exactly once, per the plan.
+- `spi_slave_pio.rs`: `BulkState { Idle, SendAck(SweepResult),
+  DoBulk(SweepResult) }` drives both `this_frame_len` (`FRAME_LEN` for
+  `Idle`/`SendAck`, `BULK_FRAME_LEN` only for `DoBulk`) and `tx_buf`
+  (`build_tx_buf_for_state`) together, always read from the *same* state
+  value at the top of the next loop iteration - this is what keeps the
+  frame-shape decision and the data actually sent in sync (see that
+  struct's doc comment for the full per-state reasoning). A frame timeout
+  at any point unconditionally resets to `Idle`, reusing the existing
+  `resync()` recovery path - a mismatched bulk-read length (Pi and
+  firmware disagreeing) manifests as an ordinary short/torn frame to that
+  same recovery code, no new failure mode to handle.
+- `mpp_sdk/io/spi_mcu.py`: `_transact()` grew a `cmd` parameter and now
+  returns a 5-tuple (adds `ack`); `write()`/`request_sweep()` share a new
+  `_apply_telemetry()` helper so both update `read()`/`vout`/
+  `temperature_c` identically. `request_sweep()` polls up to
+  `poll_attempts` times (default 20, `poll_interval_s=0.05`) - each poll
+  is still a real telemetry frame at the currently-commanded duty, so
+  polling doesn't disturb `MppTracker`/`PowerSupply` control.
 
 ## Done criteria
 
-- [ ] Normal 12-byte telemetry frame provably unchanged (existing
+- [x] Normal 12-byte telemetry frame provably unchanged (existing
       `tests/test_spi_mcu.py` telemetry tests still pass unmodified)
-- [ ] `request_sweep()` (or equivalent) returns the correct `(V, I)` list
-      for a real on-target sweep, including a sweep that aborted early on
-      the safety cutoff (fewer than `TRACER_SWEEP_POINTS` points)
-- [ ] A corrupted bulk-read frame (wrong `MAGIC`, checksum mismatch) is
-      detected and reported, not silently accepted as valid data
-- [ ] `cargo build --release --locked` / `cargo fmt --check` clean
-- [ ] `uv run pytest tests/ -q` all pass, including new bulk-read tests
-- [ ] Firmware README documents the new transaction
-- [ ] `improve/2026-07-18/plans/README.md` row for 018 updated
+- [ ] `request_sweep()` returns the correct `(V, I)` list for a real
+      on-target sweep, including a sweep that aborted early on the safety
+      cutoff (fewer than `TRACER_SWEEP_POINTS` points) - **needs the board
+      on the bench, not yet confirmed**
+- [x] A corrupted bulk-read frame (wrong `MAGIC`, checksum mismatch, or a
+      point-count mismatch between the ack and the bulk frame) is detected
+      and reported (`RuntimeError`), not silently accepted as valid data -
+      unit-tested (`tests/test_spi_mcu.py`)
+- [x] `cargo build --release --locked` / `cargo clippy --release --locked
+      -- -D warnings` / `cargo fmt --check` clean
+- [x] `uv run pytest tests/ -q` all pass (18 tests in `test_spi_mcu.py`,
+      7 new for the bulk-read path), `uv run ruff check .` clean
+- [x] Firmware README documents the new transaction
+- [x] `improve/2026-07-18/plans/README.md` row for 018 updated
 
 ## STOP conditions
 
@@ -288,11 +340,13 @@ concrete reference for `TRACER_SWEEP_POINTS`'s real value and
 
 ## Maintenance notes
 
-- If `TRACER_SWEEP_POINTS` changes after this plan lands, `BULK_FRAME_LEN`
-  and `build_bulk_tx_frame()` must be updated together - they are derived
-  from it, not independent constants. Consider computing `BULK_FRAME_LEN`
-  from `TRACER_SWEEP_POINTS` at compile time (`const` expression) instead
-  of hand-copying the arithmetic, to make this impossible to forget.
+- `BULK_FRAME_LEN` is already computed from `TRACER_SWEEP_POINTS` at
+  compile time on the Rust side (`const` expression in `spi_slave_pio.rs`)
+  and from the mirrored `_TRACER_SWEEP_POINTS` on the Python side
+  (`spi_mcu.py`) - if `TRACER_SWEEP_POINTS` ever changes, update
+  `spi_mcu.py`'s `_TRACER_SWEEP_POINTS` to match by hand (the two aren't
+  otherwise linked - Python can't import a Rust `const`) and both frame
+  lengths follow automatically.
 - Triggering a sweep from the Pi (rather than only the physical button) is
   a natural next step once this transport exists, but was explicitly left
   open by plan 016 - a future plan, not implied by this one.
