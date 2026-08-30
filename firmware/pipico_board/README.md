@@ -344,9 +344,16 @@ Two consequences worth knowing before touching the sweep:
   and simply pins it at short-circuit. This is what auto-ranging exists to
   solve (see "Sweep" below).
 - Q3 dissipates that current linearly at the panel's full voltage, so the
-  sweep is hard-capped at `TRACER_SWEEP_DUTY_MAX_PERCENT` (10 %) of full
-  scale on top of the `TRACER_P_MAX_MW` cutoff - the reference device caps
-  its own load identically.
+  sweep is bounded by the `TRACER_I_MAX_MA` / `TRACER_P_MAX_MW` cutoffs
+  (a ~23 V x 0.7 A envelope) plus a hard
+  `TRACER_SWEEP_DUTY_MAX_PERCENT` (20 %) duty ceiling as a backstop if
+  those readings are ever wrong. A sweep's worst-case dissipation is the
+  panel's own MPP, since that is where V*I peaks; two panels in series at
+  full sun is ~20 W, so the cutoffs bound the sweep below what the array
+  can deliver. Sweeps are seconds rather than continuous, but the
+  reference device's `LESSONS.md` flags MOSFET heating over repeated
+  sweeps on its unheatsinked build - worth a heatsink on Q3 and an eye on
+  its temperature if you sweep back-to-back near these limits.
 
 **Trigger**: either a single debounced press of **But1** (GPIO0,
 active-low), or the Pi sending `CMD = 0xB2` on a normal SPI frame
@@ -378,10 +385,10 @@ points (`TRACER_SWEEP_POINTS`), 250 ms settle per step (`TRACER_SETTLE_MS`),
 averaging 5 consecutive fresh INA229 readings per point
 (`TRACER_AVG_SAMPLES`, gated on a sample-freshness counter - not a fixed
 delay, same pattern as `power_supply` mode's `ClosedLoopState`). A safety
-cutoff (`TRACER_I_MAX_MA`, referencing the INA229's own calibrated
-full-scale; `TRACER_P_MAX_MW`) aborts the sweep - zeroes the PWM and
-returns to idle, but leaves the relay engaged (see "Relay lifetime"
-below) - if breached, rather than only logging.
+cutoff (`TRACER_I_MAX_MA` 700 mA, below the INA229's 1 A full scale so a
+breach still reads accurately; `TRACER_P_MAX_MW` 16.1 W) aborts the sweep
+when breached rather than only logging: it zeroes the PWM and returns to
+idle, but leaves the relay engaged (see "Relay lifetime" below).
 The cutoff is checked continuously during the settle window
 (`TRACER_SETTLE_POLL_MS`), not only after it, so a spike right after a
 duty step is caught quickly; a stalled INA229 read also aborts the sweep

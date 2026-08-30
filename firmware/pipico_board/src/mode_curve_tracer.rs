@@ -51,8 +51,14 @@ pub const TRACER_PWM_MAX: u16 = 12499;
 /// at a panel's tens of volts that is tens of watts in Q3, far past what
 /// it can dissipate. The ESP32-C3 reference device caps its own load the
 /// same way (`DYNAMIC_LOAD_DUTY_MAX_PERCENT 10`), and this is a hard
-/// bound on top of the `TRACER_P_MAX_MW` cutoff, not a replacement.
-const TRACER_SWEEP_DUTY_MAX_PERCENT: u32 = 10;
+/// bound on top of the `TRACER_I_MAX_MA`/`TRACER_P_MAX_MW` cutoffs, not a
+/// replacement.
+///
+/// Bench measurement: duty 640 commanded ~215 mA, so full scale is
+/// ~4.2 A and 20 % is ~840 mA. Kept just above `TRACER_I_MAX_MA` (700 mA)
+/// so the current and power cutoffs are what actually bound a sweep -
+/// this only stops a runaway if those readings are wrong.
+const TRACER_SWEEP_DUTY_MAX_PERCENT: u32 = 20;
 
 /// Settle time after each duty step before sampling. Starting point
 /// matches the ESP32 reference's 250 ms; this project has no
@@ -94,16 +100,24 @@ const TRACER_SAMPLE_TIMEOUT_MS: u64 = 500;
 /// carrying over here).
 const TRACER_SETTLE_POLL_MS: u64 = 10;
 
-/// Safety cutoff: current, referencing the INA229's own calibrated
-/// full-scale rather than inventing a separate limit disconnected from
-/// what the sensor can even measure.
-const TRACER_I_MAX_MA: u16 = crate::ina229::I_MAX_MA as u16;
+/// Safety cutoff: current. Bench-chosen envelope for the tracer load
+/// (~23 V x 0.7 A), below the INA229's own 1 A full scale
+/// (`ina229::I_MAX_MA`) so the sensor can still resolve a breach rather
+/// than saturating at it.
+const TRACER_I_MAX_MA: u16 = 700;
 
-/// Safety cutoff: power, in milliwatts. Conservative starting point (well
-/// under the board's `<= 40 V, <= 1 A` design limits, see
-/// `docs/general_information.md`) - Q3 dissipates this linearly, so it is
-/// also the practical bound on how hard the sweep may load the panel.
-const TRACER_P_MAX_MW: u32 = 5000;
+/// Safety cutoff: power, in milliwatts - the 23 V x 0.7 A envelope above.
+///
+/// This is dissipated **linearly in Q3** (TO-220, see `TRACER_PWM_MAX`),
+/// not in a resistor, and a sweep's worst case is the panel's own MPP
+/// since that is where V*I peaks. Two panels in series at full sun is
+/// ~20 W (`docs/general_information.md`), so this bounds the sweep below
+/// what the array can deliver. Tolerable because a sweep is seconds, not
+/// continuous - the ESP32-C3 reference device's `LESSONS.md` flags
+/// MOSFET heating during repeated sweeps as a real effect on its own
+/// (unheatsinked) build, so back-to-back sweeps at this limit want a
+/// heatsink on Q3 and an eye on how hot it gets.
+const TRACER_P_MAX_MW: u32 = 16_100;
 
 /// Debounce window for `But1`'s falling edge - rejects contact-bounce
 /// glitches shorter than this before committing to a sweep.
