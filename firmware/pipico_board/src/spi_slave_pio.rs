@@ -502,7 +502,9 @@ pub async fn spi_pio_task(
                 && (consecutive_timeouts == 1 || consecutive_timeouts.is_multiple_of(100))
             {
                 defmt::warn!(
-                    "spi_pio_task: frame timeout, resyncing (duty unchanged) ({} consecutive)",
+                    "spi_pio_task: frame timeout waiting for a {}-byte exchange, resyncing \
+                     (duty unchanged) ({} consecutive)",
+                    this_frame_len,
                     consecutive_timeouts
                 );
             }
