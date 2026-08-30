@@ -45,7 +45,7 @@ re-enabling; no plan file, tracked via the PR that disabled it.
 | 013 | Firmware: NeoPixel packet-receive heartbeat (GPIO4) | P3 | S-M | - | DONE (on-target confirmed at 200 kHz - 1 MHz caused NeoPixel-crosstalk MISO corruption, see plan file) |
 | 014 | Firmware: CRC/checksum + Vout/Temp fields on the SPI frame | P1 | S-M | - | DONE (on-target fault injection confirmed; plan file removed, see PR #51) |
 | 015 | SDK: harden `SpiMcuSource` (scale defaults, teardown, read()-before-write(), tests) | P1 | S-M | - | DONE (plan file removed, see PR #51) |
-| 016 | Firmware: curve-tracer sweep engine (RP2040 port, bench-only, no Pi transport yet) | P2 | L | - | TODO |
+| 016 | Firmware: curve-tracer sweep engine (RP2040 port, bench-only, no Pi transport yet) | P2 | L | - | IN PROGRESS (code complete: Steps 1-3, 5 done, build/clippy/fmt clean; Step 4 on-target verification pending - board being set up) |
 | 017 | SDK: `mpp-sdk` CLI dispatcher for harness/examples/scripts | P3 | S-M | - | DONE |
 | 018 | Firmware+SDK: bulk-read SPI transaction for curve-tracer sweep results | P2 | L | 016 (hard) | TODO |
 
@@ -60,11 +60,11 @@ Everything above is DONE except:
   lab PSU (or battery) + 10 Ohm load. Bench procedure, not a code change.
 - **010** (INA281 gain/shunt, P2): IN PROGRESS, `ADC_Input_Curr` still
   uncalibrated.
-- **016** (curve-tracer sweep engine, P2): no dependency; the SPI-frame
-  byte-budget numbers in its "Current state" reflect 014's final,
-  merged design (3 spare MISO bytes, 9 spare MOSI). Not started - needs
-  the firmware board set up on the bench (on-target testing is Step 4 of
-  its own Steps section); paused until then.
+- **016** (curve-tracer sweep engine, P2): code complete (Steps 1-3, 5) -
+  `mode_curve_tracer.rs` added, real PWM on GPIO3, edge-triggered `But1`,
+  `TRACER_ACTIVE` gate-duty override, README updated, build/clippy/fmt
+  clean. Step 4 (on-target verification: relay/PWM sequence, safety
+  cutoff actually aborting) needs the board on the bench - not yet done.
 - **018** (bulk-read SPI transaction for sweep results, P2): hard-depends
   on 016 landing first (nothing to transport otherwise). Design is fully
   specified (two-phase request/ack/bulk-read over a distinct, larger SPI

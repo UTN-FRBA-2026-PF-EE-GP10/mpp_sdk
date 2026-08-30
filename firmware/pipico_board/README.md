@@ -305,12 +305,38 @@ logged at ~1 Hz in millivolts.
 
 `Tracer_En` (GPIO2) switches relay K1, routing the panel input to a bleed
 path for I-V curve sweeps instead of the normal SEPIC path. `Tracer_pwm`
-(GPIO3) drives the bleed PWM. Both idle low at boot, which is also normal
-MPPT operation (SEPIC path active, tracer released).
+(GPIO3, real hardware PWM at 10 kHz - `PWM_SLICE1` channel B) drives the
+bleed PWM. Both idle low/0 at boot, which is also normal MPPT operation
+(SEPIC path active, tracer released).
 
-Bring-up aid: holding **But1** (GPIO0, active-low) energizes the relay
-directly, so you can hear it click without any host tooling. Remove once
-the curve tracer has real control logic.
+**Trigger**: a single debounced press of **But1** (GPIO0, active-low)
+starts exactly one sweep; a sweep already running ignores further presses,
+and the next press only re-arms once the button is released. Runs as its
+own task (`mode_curve_tracer.rs`), independent of `FirmwareMode` - a
+`TRACER_ACTIVE` flag forces the SEPIC gate duty to 0 for the sweep's whole
+duration, regardless of whether `MppTracker` or `PowerSupply` is active.
+
+**Sweep**: `Tracer_pwm` steps linearly across its full range in 20 points
+(`TRACER_SWEEP_POINTS`), 250 ms settle per step (`TRACER_SETTLE_MS`),
+averaging 5 consecutive fresh INA229 readings per point
+(`TRACER_AVG_SAMPLES`, gated on a sample-freshness counter - not a fixed
+delay, same pattern as `power_supply` mode's `ClosedLoopState`). A safety
+cutoff (`TRACER_I_MAX_MA`, referencing the INA229's own calibrated
+full-scale; `TRACER_P_MAX_MW`) aborts the sweep - de-energizes the relay,
+zeroes the PWM, returns to idle - if breached, rather than only logging.
+The cutoff is checked continuously during the settle window
+(`TRACER_SETTLE_POLL_MS`), not only after it, so a spike right after a
+duty step is caught quickly; a stalled INA229 read also aborts the sweep
+(`TRACER_SAMPLE_TIMEOUT_MS`) rather than hanging it and the SEPIC gate
+force-zeroed forever. All constants live in `mode_curve_tracer.rs` and are
+starting points that need on-target re-tuning; there is no
+schematic-derived time constant for the bleed path to derive them from
+analytically.
+
+**Results**: dumped via `defmt`/RTT as `(V_mV, I_mA)` lines when the sweep
+completes or aborts. No Pi transport yet - see plan 018
+(`improve/2026-07-18/plans/`) for the bulk-read SPI transaction that adds
+one.
 
 ## Status indicators
 
@@ -335,7 +361,7 @@ Two independent LEDs answer two different questions:
 | 1   | GPIO0   | But1            | Button 1 input                |
 | 2   | GPIO1   | But2            | Button 2 input                |
 | 4   | GPIO2   | Tracer_En       | Curve-tracer relay enable (idle low) |
-| 5   | GPIO3   | Tracer_pwm      | Curve-tracer bleed PWM (idle low) |
+| 5   | GPIO3   | Tracer_pwm      | Curve-tracer bleed PWM, hardware PWM (idle 0 %) |
 | 6   | GPIO4   | NeoPixel_Din    | 4x WS2812 NeoPixels, packet-receive heartbeat |
 | 7   | GPIO5   | I2C_SDA         | I2C data                      |
 | 9   | GPIO6   | I2C_SCL         | I2C clock                     |
