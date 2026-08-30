@@ -58,16 +58,21 @@ class _SweepCache:
         self._lock = threading.Lock()
         self._points: list[tuple[float, float]] = []
         self._link = "no data yet"
+        # Bumped per fetched sweep so the page can tell "a new sweep
+        # landed" from "same sweep, polled again". The point count can't
+        # do that job - every completed sweep returns the same 20 points.
+        self._seq = 0
 
     def set(self, points: list[tuple[float, float]] | None, link: str) -> None:
         with self._lock:
             if points is not None:
                 self._points = points
+                self._seq += 1
             self._link = link
 
-    def snapshot(self) -> tuple[list[tuple[float, float]], str]:
+    def snapshot(self) -> tuple[list[tuple[float, float]], str, int]:
         with self._lock:
-            return list(self._points), self._link
+            return list(self._points), self._link, self._seq
 
 
 def _poll_loop(
@@ -137,11 +142,12 @@ def _make_handler(cache: _SweepCache, commands: queue.Queue[str]) -> type[BaseHT
             self.end_headers()
 
         def _serve_data(self) -> None:
-            points, link = cache.snapshot()
+            points, link, seq = cache.snapshot()
             body = json.dumps(
                 {
                     "points": [{"x": v, "y": i * 1000.0} for v, i in points],
                     "link": link,
+                    "seq": seq,
                 }
             ).encode("utf-8")
             self.send_response(200)

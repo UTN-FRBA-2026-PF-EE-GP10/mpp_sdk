@@ -228,7 +228,11 @@
   // landed yet) - a sweep is at most TRACER_SWEEP_POINTS (20) points, so
   // there is no benefit to the reference implementation's incremental
   // have=N fetch, only extra state to get wrong.
-  let lastCount = -1;
+  //
+  // Redraw is gated on the server's sweep counter, NOT the point count:
+  // every completed sweep returns the same 20 points, so diffing the
+  // length silently drops every sweep after the first.
+  let lastSeq = -1;
   const POLL_MS = isTouch ? 3000 : 2000;
 
   async function tick() {
@@ -239,7 +243,8 @@
       const arr = Array.isArray(payload.points) ? payload.points : [];
       linkStatusEl.textContent = "Link: " + (payload.link || "--");
 
-      if (arr.length !== lastCount) {
+      const seq = Number.isFinite(payload.seq) ? payload.seq : 0;
+      if (seq !== lastSeq) {
         maybeConvertIncoming(arr);
         chart.data.datasets[0].data = arr;
         chart.data.datasets[1].data = arr.map((pt) => ({ x: pt.x, y: pt.x * pt.y }));
@@ -247,7 +252,7 @@
         autoScale();
         autoScalePower();
         refreshMPPT(chart.data.datasets[0].data);
-        lastCount = arr.length;
+        lastSeq = seq;
       }
     } catch (e) {
       console.error("tick failed", e);
