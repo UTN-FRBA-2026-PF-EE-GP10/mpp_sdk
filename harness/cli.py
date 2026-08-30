@@ -28,6 +28,7 @@ _COMMANDS: dict[str, tuple[str, bool]] = {
     "export-plecs": ("scripts.export_iv_plecs", False),
     "spi-test": ("scripts.spi_test", True),
     "curve-tracer-web": ("scripts.curve_tracer_server", True),
+    "curve-tracer-bench-test": ("scripts.curve_tracer_bench_test", True),
     "quickstart": ("main", False),
 }
 

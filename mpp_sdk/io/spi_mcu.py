@@ -20,13 +20,31 @@ except ModuleNotFoundError as exc:  # pragma: no cover
 _TEMP_NOT_AVAILABLE_RAW = 0x8000
 _TEMP_NOT_AVAILABLE_CC = -32768
 
-# Curve-tracer bulk-read protocol (plan 018) - must match
+# Curve-tracer bulk-read protocol - must match
 # firmware/pipico_board/src/spi_slave_pio.rs's constants of the same name
 # and mode_curve_tracer::TRACER_SWEEP_POINTS exactly.
 _CMD_REQUEST_BULK_DUMP = 0xB1
 _BULK_MAGIC = 0xC5
 _TRACER_SWEEP_POINTS = 20
 _BULK_FRAME_LEN = 2 + _TRACER_SWEEP_POINTS * 4 + 1
+
+# Curve-tracer sweep-trigger/relay-release commands - must match
+# spi_slave_pio.rs's constants of the same name exactly.
+_CMD_START_SWEEP = 0xB2
+_CMD_RELEASE_RELAY = 0xB3
+
+# Pause between reading an armed ack and clocking the bulk transaction,
+# giving the firmware time to re-arm its DMA for the larger frame - see
+# _bulk_read(). Microseconds would do; this is generous and costs nothing
+# on a once-per-sweep transfer.
+_BULK_READ_ARM_DELAY_S = 0.002
+
+# Upper bound on request_sweep()'s poll interval: the firmware drops a
+# frame it has waited on for longer than its own FRAME_TIMEOUT (100 ms,
+# spi_slave_pio.rs) and resyncs, so polling slower than that leaves it
+# timing out between our frames instead of exchanging with us. Kept a
+# little under 100 ms for margin.
+_MAX_POLL_INTERVAL_S = 0.08
 
 
 def _to_signed_i16(raw: int) -> int:
@@ -50,14 +68,15 @@ class SpiMcuSource(SignalSource):
     counts - the firmware does the calibration). Temp is a big-endian
     ``i16`` in centi-Celsius, or the sentinel -32768 if no probe is
     connected (see ``temperature_c``). ``CHECKSUM`` is an XOR over the
-    preceding data bytes in each direction - ``DUTY_H^DUTY_L^CMD`` for
-    MOSI (``CMD`` included, ``ACK`` excluded from MISO's); a mismatched
-    frame is corrupted-but-complete (passed the firmware's own
-    frame-timeout check) and is rejected - the last-good V/I/Vout/temp are
-    kept instead (``ack`` is not, since it's a handshake edge, not a
-    reading - see ``_transact()``). ``CMD``/``ACK`` are the curve-tracer
-    bulk-read handshake bytes (plan 018, see ``request_sweep()``) - both 0
-    in normal operation, so plain ``read()``/``write()`` usage is
+    frame's data bytes in each direction - ``DUTY_H^DUTY_L^CMD`` for MOSI,
+    the eight telemetry bytes ``^ACK`` for MISO. Both handshake bytes are
+    covered because each is a command to the other side rather than a
+    reading. A mismatched frame is corrupted-but-complete (passed the
+    firmware's own frame-timeout check) and is rejected - the last-good
+    V/I/Vout/temp are kept instead, while ``ack`` reports 0 rather than
+    replaying a stale value (see ``_transact()``). ``CMD``/``ACK`` are the
+    curve-tracer bulk-read handshake bytes (see ``request_sweep()``) -
+    both 0 in normal operation, so plain ``read()``/``write()`` usage is
     unaffected.
 
     Usage::
@@ -130,8 +149,8 @@ class SpiMcuSource(SignalSource):
         """Send *duty* (and, if given, a curve-tracer bulk-read *cmd* byte).
 
         Returns ``(v_raw, i_raw, vout_raw, temp_raw, ack)`` - ``ack`` is the
-        curve-tracer bulk-read handshake byte (plan 018): 0 in normal
-        operation, ``0x80 | point_count`` on the frame acking a
+        curve-tracer bulk-read handshake byte: 0 in normal operation,
+        ``0x80 | point_count`` on the frame acking a
         ``_CMD_REQUEST_BULK_DUMP``. Returns the last-good V/I/Vout/temp
         instead if the MISO checksum doesn't match - a corrupted-but-complete
         frame must not be applied as if it were real telemetry (plan 014).
@@ -151,9 +170,14 @@ class SpiMcuSource(SignalSource):
         tx = [duty_h, duty_l, duty_h ^ duty_l ^ cmd, cmd] + [0] * 8
         rx = self._spi.xfer2(list(tx))
 
-        data = rx[0:8]
-        expected_checksum = 0
-        for byte in data:
+        # The MISO checksum covers the 8 telemetry bytes and the ack byte
+        # (rx[9]) - the latter is a command to us, not a reading, so a bit
+        # flip setting its top bit would otherwise send us off to clock an
+        # 83-byte bulk read against firmware still sending telemetry. It
+        # sits after the checksum byte in the frame; that is only byte
+        # order, both sides XOR it in the same way.
+        expected_checksum = rx[9]
+        for byte in rx[0:8]:
             expected_checksum ^= byte
         if rx[8] != expected_checksum:
             v_raw, i_raw, vout_raw, temp_raw, _stale_ack = self._last_good_raw
@@ -182,8 +206,7 @@ class SpiMcuSource(SignalSource):
         available via ``read()``/``vout``/``temperature_c`` afterward.
         """
         self._duty = max(0.0, min(1.0, duty_cycle))
-        v_raw, i_raw, vout_raw, temp_raw, _ack = self._transact(self._duty)
-        self._apply_telemetry(v_raw, i_raw, vout_raw, temp_raw)
+        self._send_cmd()
 
     # ── extras ───────────────────────────────────────────────────────────────
 
@@ -194,7 +217,7 @@ class SpiMcuSource(SignalSource):
     def request_sweep(
         self, poll_attempts: int = 20, poll_interval_s: float = 0.05
     ) -> list[tuple[float, float]] | None:
-        """Fetch the firmware's curve-tracer sweep result, if any (plan 018).
+        """Fetch the firmware's curve-tracer sweep result, if any.
 
         Three-step protocol: sends a bulk-dump request riding on a normal
         12-byte frame (current ``duty`` unchanged - a sweep already reroutes
@@ -207,22 +230,68 @@ class SpiMcuSource(SignalSource):
         ``v_scale``/``i_scale``), or ``None`` if no sweep result was ready
         to fetch within ``poll_attempts``.
 
+        The request byte is re-sent on *every* poll, not just the first, so
+        this also covers "a sweep is still running, wait for it" - the
+        firmware answers "nothing ready" (ack 0) until its result lands,
+        and only an ask that arrives after that gets armed. Asking once and
+        then polling with a bare frame would silently never retry.
+
+        ``poll_interval_s`` must stay below the firmware's own frame
+        timeout (``FRAME_TIMEOUT``, 100 ms in ``spi_slave_pio.rs``):
+        polling slower than that lets the firmware time out *between* the
+        Pi's frames, which resets its handshake state machine mid-exchange
+        and (before the matching firmware fix) dropped the very result
+        being fetched. ``_MAX_POLL_INTERVAL_S`` enforces the ceiling.
+
         Raises ``RuntimeError`` if the bulk-read frame's magic byte or
         checksum doesn't match, or its point count disagrees with the ack's
         - a real link fault, not a "nothing ready yet" case.
         """
-        v_raw, i_raw, vout_raw, temp_raw, ack = self._transact(
-            self._duty, cmd=_CMD_REQUEST_BULK_DUMP
-        )
-        self._apply_telemetry(v_raw, i_raw, vout_raw, temp_raw)
+        if poll_interval_s > _MAX_POLL_INTERVAL_S:
+            raise ValueError(
+                f"poll_interval_s={poll_interval_s} exceeds the firmware's frame timeout "
+                f"({_MAX_POLL_INTERVAL_S}s) - the firmware would time out between polls and "
+                f"reset the bulk-read handshake, so the fetch could never complete"
+            )
+
+        ack = self._send_cmd(cmd=_CMD_REQUEST_BULK_DUMP)
 
         for _ in range(poll_attempts):
             if ack & 0x80:
                 return self._bulk_read(ack & 0x7F)
             time.sleep(poll_interval_s)
-            v_raw, i_raw, vout_raw, temp_raw, ack = self._transact(self._duty)
-            self._apply_telemetry(v_raw, i_raw, vout_raw, temp_raw)
+            ack = self._send_cmd(cmd=_CMD_REQUEST_BULK_DUMP)
         return None
+
+    def start_sweep(self) -> None:
+        """Ask the firmware to start a curve-tracer sweep.
+
+        Fire-and-forget - no ack, unlike ``request_sweep()``'s bulk-dump
+        handshake. The relay may already be engaged from a previous sweep
+        (multiple sweeps can run without releasing between them, see
+        ``release_relay()``). Poll ``request_sweep()`` afterward to fetch
+        the result once the sweep completes.
+        """
+        self._send_cmd(cmd=_CMD_START_SWEEP)
+
+    def release_relay(self) -> None:
+        """Ask the firmware to disconnect the panel from the tracer's
+        bleed path and hand it back to the SEPIC.
+
+        The relay otherwise stays engaged across any number of sweeps
+        started via ``start_sweep()`` or the physical ``But1`` press - it
+        is no longer released automatically when a sweep ends.
+        """
+        self._send_cmd(cmd=_CMD_RELEASE_RELAY)
+
+    def _send_cmd(self, cmd: int = 0) -> int:
+        """Transact once at the current duty with *cmd*, apply the
+        returned telemetry, and return the ack byte - the shared shape
+        behind ``write()``/``start_sweep()``/``release_relay()``/
+        ``request_sweep()``'s polling."""
+        v_raw, i_raw, vout_raw, temp_raw, ack = self._transact(self._duty, cmd=cmd)
+        self._apply_telemetry(v_raw, i_raw, vout_raw, temp_raw)
+        return ack
 
     def _apply_telemetry(self, v_raw: int, i_raw: int, vout_raw: int, temp_raw: int) -> None:
         """Update ``read()``/``vout``/``temperature_c`` state from one frame."""
@@ -237,8 +306,17 @@ class SpiMcuSource(SignalSource):
 
         Called only once ``request_sweep()`` has seen an armed ack -
         *ack_count* is that ack's point count, cross-checked against the
-        bulk frame's own count field (plan 018's "cheap corruption signal").
+        bulk frame's own count field (a cheap corruption signal).
         """
+        # The firmware only re-arms its DMA for the larger bulk frame
+        # *after* the ack exchange completes, but its PIO shifts as soon
+        # as we assert CS - it does not wait for the CPU. Firing the bulk
+        # transaction back-to-back with the ack read (the one exchange
+        # with no natural gap in front of it) can therefore start
+        # clocking a transmitter that has not been armed yet, which reads
+        # back as a corrupted leading byte. Found on-target: bad magic
+        # bytes with the low bits shifted out.
+        time.sleep(_BULK_READ_ARM_DELAY_S)
         rx = self._spi.xfer2([0] * _BULK_FRAME_LEN)
 
         if rx[0] != _BULK_MAGIC:

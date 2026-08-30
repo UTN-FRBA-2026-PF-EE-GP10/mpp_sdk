@@ -3,9 +3,9 @@
 // script.js) - same Chart.js dual-axis I(V)/P(V) chart and unit-toggle
 // logic, trimmed for this board:
 //
-// - No /set-current or /start-measurement POST forms (this board has no
-//   settable current dial and sweeps only start via the physical But1
-//   press, per plan 016's design).
+// - No /set-current POST form (this board has no settable current dial).
+//   Start Sweep/Release Relay below replace the reference's
+//   /start-measurement form.
 // - No incremental "have=N" point-count polling protocol: a sweep here is
 //   a single bulk read of TRACER_SWEEP_POINTS (20) points, not a stream
 //   that grows one point at a time, so /data always returns the whole
@@ -186,6 +186,27 @@
     }
   }
 
+  // Start Sweep / Release Relay: empty-body POSTs, 204 on success. No
+  // response to parse - the tick() polling loop below already picks up a
+  // new sweep result once one lands.
+  async function postCommand(path, btn) {
+    btn.disabled = true;
+    try {
+      const r = await fetch(path, { method: "POST" });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+    } catch (e) {
+      console.error(path + " failed", e);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+  document
+    .getElementById("startSweepBtn")
+    .addEventListener("click", (e) => postCommand("/start-sweep", e.target));
+  document
+    .getElementById("releaseRelayBtn")
+    .addEventListener("click", (e) => postCommand("/release-relay", e.target));
+
   const mpptCurrentEl = document.getElementById("mpptCurrent");
   const mpptVoltageEl = document.getElementById("mpptVoltage");
 
@@ -207,7 +228,11 @@
   // landed yet) - a sweep is at most TRACER_SWEEP_POINTS (20) points, so
   // there is no benefit to the reference implementation's incremental
   // have=N fetch, only extra state to get wrong.
-  let lastCount = -1;
+  //
+  // Redraw is gated on the server's sweep counter, NOT the point count:
+  // every completed sweep returns the same 20 points, so diffing the
+  // length silently drops every sweep after the first.
+  let lastSeq = -1;
   const POLL_MS = isTouch ? 3000 : 2000;
 
   async function tick() {
@@ -218,7 +243,8 @@
       const arr = Array.isArray(payload.points) ? payload.points : [];
       linkStatusEl.textContent = "Link: " + (payload.link || "--");
 
-      if (arr.length !== lastCount) {
+      const seq = Number.isFinite(payload.seq) ? payload.seq : 0;
+      if (seq !== lastSeq) {
         maybeConvertIncoming(arr);
         chart.data.datasets[0].data = arr;
         chart.data.datasets[1].data = arr.map((pt) => ({ x: pt.x, y: pt.x * pt.y }));
@@ -226,7 +252,7 @@
         autoScale();
         autoScalePower();
         refreshMPPT(chart.data.datasets[0].data);
-        lastCount = arr.length;
+        lastSeq = seq;
       }
     } catch (e) {
       console.error("tick failed", e);

@@ -85,13 +85,19 @@ in millivolts, I in milliamperes (negative current clamps to 0). TEMP is a
 big-endian `i16` in centi-Celsius, or the sentinel `-32768` (`0x8000`) while
 the MAX31865 probe stays disabled (see "Panel temperature" below). See
 "Sensing" below for the sensor details. `CHECKSUM` (plan 014) is an XOR of
-the preceding data bytes in each direction - `DUTY_H^DUTY_L^CMD` for MOSI,
-`V_H^V_L^I_H^I_L^VOUT_H^VOUT_L^TEMP_H^TEMP_L` for MISO; `ACK` does NOT
-participate in MISO's (it's an edge-triggered handshake signal, not a
-telemetry reading - see below). `CMD` participates in MOSI's precisely so
-a corrupted frame can't spoof a bulk-dump request by chance (plan 018); it
-is `0x00` on every normal frame, and XOR with `0x00` is a no-op, so this
-didn't change the checksum's value for plain `write()`/`read()` traffic.
+the frame's data bytes in each direction - `DUTY_H^DUTY_L^CMD` for MOSI,
+`V_H^V_L^I_H^I_L^VOUT_H^VOUT_L^TEMP_H^TEMP_L^ACK` for MISO. `CMD` and
+`ACK` are both covered because each is a *command to the other side*
+rather than a reading: a bit flip on `CMD` would spoof a bulk-dump
+request, and one setting `ACK`'s top bit would send the Pi off to clock
+an 83-byte bulk-read transaction against firmware that is still sending
+12-byte telemetry, desyncing the wire (observed on-target, concentrated
+at sweep start when the tracer's linear current sink switches on and the
+link is at its noisiest). Both are `0x00` on every normal frame and XOR
+with `0x00` is a no-op, so this leaves the checksum value unchanged for
+plain `write()`/`read()` traffic. `ACK` sits *after* the `CHECKSUM` byte
+in the frame, which is only byte order - both sides XOR it in the same
+way.
 A checksum mismatch is treated as a corrupted-but-complete frame: the
 firmware keeps the last commanded `DUTY` (does not zero it or count it as
 a timeout) and ignores `CMD` for that frame; `SpiMcuSource`/`spi_test.py`
@@ -100,9 +106,10 @@ keep the last-good telemetry rather than propagate garbage, and report
 construct `SpiMcuSource()` (defaults already match the firmware's
 calibrated units and this checksum).
 
-`CMD`/`ACK` (plan 018) are both `0x00` in normal operation - the
-curve-tracer bulk-read handshake (see "Curve tracer" below) is the only
-thing that sets them, and only around fetching a sweep result.
+`CMD`/`ACK` are both `0x00` in normal operation - the curve-tracer
+control/bulk-read commands (see "Curve tracer" below) are the only thing
+that sets them: `0xB1` requests a bulk sweep-result dump, `0xB2` starts a
+sweep, `0xB3` releases the tracer relay.
 
 **Master clock speed**: 8 MHz is unreliable (occasional torn/garbled
 frames) - the GPIO input synchronizer latency eats too much of the 125 ns
@@ -315,26 +322,73 @@ logged at ~1 Hz in millivolts.
 ## Curve tracer
 
 `Tracer_En` (GPIO2) switches relay K1, routing the panel input to a bleed
-path for I-V curve sweeps instead of the normal SEPIC path. `Tracer_pwm`
-(GPIO3, real hardware PWM at 10 kHz - `PWM_SLICE1` channel B) drives the
-bleed PWM. Both idle low/0 at boot, which is also normal MPPT operation
+path for I-V curve sweeps instead of the normal SEPIC path. Both it and
+`Tracer_pwm` idle low/0 at boot, which is also normal MPPT operation
 (SEPIC path active, tracer released).
 
-**Trigger**: a single debounced press of **But1** (GPIO0, active-low)
-starts exactly one sweep; a sweep already running ignores further presses,
-and the next press only re-arms once the button is released. Runs as its
-own task (`mode_curve_tracer.rs`), independent of `FirmwareMode` - a
+**The bleed path is a linear current sink, not a switched load.**
+`Tracer_pwm` (GPIO3, hardware PWM at 10 kHz - `PWM_SLICE1` channel B) is
+low-pass filtered by two RC stages (R1/C29, R3/C30 - 10K + 100nF each) into
+an analog setpoint; op-amp U5 (OPA171) then servos Q3's gate until the
+voltage across the 100 mOhm sense resistor R29 matches it. Q3 runs in its
+linear region as a voltage-controlled current source, so **`Tracer_pwm`'s
+duty commands a load current**, not a switching ratio. The 10 kHz is just
+the DAC carrier - the RC stages (tau = 1 ms each) filter its ripple, and a
+setpoint step settles in ~10 ms.
+
+Two consequences worth knowing before touching the sweep:
+
+- Full scale is amps (the ESP32-C3 reference device's equivalent load is
+  ~3.9 A) while a small lit panel sources a couple hundred mA, so almost
+  the entire duty range commands more current than the panel can deliver
+  and simply pins it at short-circuit. This is what auto-ranging exists to
+  solve (see "Sweep" below).
+- Q3 dissipates that current linearly at the panel's full voltage, so the
+  sweep is bounded by the `TRACER_I_MAX_MA` / `TRACER_P_MAX_MW` cutoffs
+  (a ~23 V x 0.7 A envelope) plus a hard
+  `TRACER_SWEEP_DUTY_MAX_PERCENT` (20 %) duty ceiling as a backstop if
+  those readings are ever wrong. A sweep's worst-case dissipation is the
+  panel's own MPP, since that is where V*I peaks; two panels in series at
+  full sun is ~20 W, so the cutoffs bound the sweep below what the array
+  can deliver. Sweeps are seconds rather than continuous, but the
+  reference device's `LESSONS.md` flags MOSFET heating over repeated
+  sweeps on its unheatsinked build - worth a heatsink on Q3 and an eye on
+  its temperature if you sweep back-to-back near these limits.
+
+**Trigger**: either a single debounced press of **But1** (GPIO0,
+active-low), or the Pi sending `CMD = 0xB2` on a normal SPI frame
+(`SpiMcuSource.start_sweep()`) - both start exactly one sweep. A sweep
+already running ignores further triggers from either source, and a
+still-held button only re-arms once released. Runs as its own task
+(`mode_curve_tracer.rs`), independent of `FirmwareMode` - a
 `TRACER_ACTIVE` flag forces the SEPIC gate duty to 0 for the sweep's whole
 duration, regardless of whether `MppTracker` or `PowerSupply` is active.
 
-**Sweep**: `Tracer_pwm` steps linearly across its full range in 20 points
-(`TRACER_SWEEP_POINTS`), 250 ms settle per step (`TRACER_SETTLE_MS`),
+**Auto-range**: each sweep first finds its own top, so the 20 recorded
+points span the real curve rather than piling up past the knee. It reads
+Voc at zero load, then doubles the commanded current until the panel
+voltage collapses below `TRACER_COLLAPSE_PERCENT_OF_VOC` (15 %) of Voc -
+bracketing Isc from below - then bisects `TRACER_SCAN_BISECT_STEPS` (4)
+times to tighten it, and sweeps up to that knee plus
+`TRACER_SWEEP_HEADROOM_PERCENT` (115 %). Probes use a shorter settle
+(`TRACER_SCAN_SETTLE_MS`, 60 ms) since they only decide "collapsed yet?".
+Doubling rather than a linear scan because Isc can land anywhere from a
+fraction of a percent to most of full scale depending on panel and light.
+If Voc is under `TRACER_MIN_VOC_MV` (500 mV) there is no panel worth
+sweeping (dark, disconnected, or the relay didn't transfer) and the sweep
+aborts; if the panel never collapses even at the duty cap, the sweep runs
+to the cap and the curve stops short of Isc. This replaces the reference
+device's manual "set current range" dial.
+
+**Sweep**: `Tracer_pwm` steps linearly from 0 to that auto-ranged top in 20
+points (`TRACER_SWEEP_POINTS`), 250 ms settle per step (`TRACER_SETTLE_MS`),
 averaging 5 consecutive fresh INA229 readings per point
 (`TRACER_AVG_SAMPLES`, gated on a sample-freshness counter - not a fixed
 delay, same pattern as `power_supply` mode's `ClosedLoopState`). A safety
-cutoff (`TRACER_I_MAX_MA`, referencing the INA229's own calibrated
-full-scale; `TRACER_P_MAX_MW`) aborts the sweep - de-energizes the relay,
-zeroes the PWM, returns to idle - if breached, rather than only logging.
+cutoff (`TRACER_I_MAX_MA` 700 mA, below the INA229's 1 A full scale so a
+breach still reads accurately; `TRACER_P_MAX_MW` 16.1 W) aborts the sweep
+when breached rather than only logging: it zeroes the PWM and returns to
+idle, but leaves the relay engaged (see "Relay lifetime" below).
 The cutoff is checked continuously during the settle window
 (`TRACER_SETTLE_POLL_MS`), not only after it, so a spike right after a
 duty step is caught quickly; a stalled INA229 read also aborts the sweep
@@ -344,8 +398,15 @@ starting points that need on-target re-tuning; there is no
 schematic-derived time constant for the bleed path to derive them from
 analytically.
 
+**Relay lifetime**: `Tracer_En` stays engaged across any number of
+sweeps, no longer released automatically when a sweep ends, breach or
+not. **But1** only starts a sweep; releasing the relay is a separate,
+explicit action - send `CMD = 0xB3` (`SpiMcuSource.release_relay()`) from
+the Pi. This lets several sweeps run back-to-back without the relay
+re-clicking between them.
+
 **Results**: dumped via `defmt`/RTT as `(V_mV, I_mA)` lines when the sweep
-completes or aborts, and separately fetchable from the Pi (plan 018) via
+completes or aborts, and separately fetchable from the Pi via
 `SpiMcuSource.request_sweep()` (`mpp_sdk/io/spi_mcu.py`). The most recent
 sweep's result is held in `mode_curve_tracer.rs` until fetched once
 (`take_last_sweep()`); a three-step handshake rides on top of the steady

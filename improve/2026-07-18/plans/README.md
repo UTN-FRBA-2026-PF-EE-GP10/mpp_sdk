@@ -45,10 +45,10 @@ re-enabling; no plan file, tracked via the PR that disabled it.
 | 013 | Firmware: NeoPixel packet-receive heartbeat (GPIO4) | P3 | S-M | - | DONE (on-target confirmed at 200 kHz - 1 MHz caused NeoPixel-crosstalk MISO corruption, see plan file) |
 | 014 | Firmware: CRC/checksum + Vout/Temp fields on the SPI frame | P1 | S-M | - | DONE (on-target fault injection confirmed; plan file removed, see PR #51) |
 | 015 | SDK: harden `SpiMcuSource` (scale defaults, teardown, read()-before-write(), tests) | P1 | S-M | - | DONE (plan file removed, see PR #51) |
-| 016 | Firmware: curve-tracer sweep engine (RP2040 port, bench-only, no Pi transport yet) | P2 | L | - | IN PROGRESS (code complete: Steps 1-3, 5 done, build/clippy/fmt clean; Step 4 on-target verification pending - board being set up) |
+| 016 | Firmware: curve-tracer sweep engine (RP2040 port) | P2 | L | - | DONE (on-target confirmed: real I-V curve captured under a lamp, 21.3 V Voc -> 215 mA Isc. Bench found the bleed path is a *linear current sink*, not a switched load, so the sweep now auto-ranges to the panel's Isc - see the plan file) |
 | 017 | SDK: `mpp-sdk` CLI dispatcher for harness/examples/scripts | P3 | S-M | - | DONE |
-| 018 | Firmware+SDK: bulk-read SPI transaction for curve-tracer sweep results | P2 | L | 016 (hard) | IN PROGRESS (code complete: BulkState machine, request_sweep(), adversarially reviewed, build/clippy/fmt/pytest clean; on-target verification pending alongside 016 - board being set up) |
-| 019 | Firmware+SDK: SPI-triggered curve-tracer sweeps + explicit relay release | P2 | L | 018 (hard), 016 (hard) | TODO |
+| 018 | Firmware+SDK: bulk-read SPI transaction for curve-tracer sweep results | P2 | L | 016 (hard) | DONE (on-target confirmed: 20 points fetched over SPI. Bench fixed three handshake bugs - request sent once not per poll, held result dropped on any mid-handshake timeout, Pi polling slower than FRAME_TIMEOUT - plus checksum-protecting the ACK byte) |
+| 019 | Firmware+SDK: SPI-triggered curve-tracer sweeps + explicit relay release | P2 | L | 018 (hard), 016 (hard) | DONE (on-target confirmed: sweeps start from the Pi, relay clicks once and holds across sweeps until released, web UI plots the curve) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) |
 REJECTED (with one-line rationale).
@@ -61,33 +61,22 @@ Everything above is DONE except:
   lab PSU (or battery) + 10 Ohm load. Bench procedure, not a code change.
 - **010** (INA281 gain/shunt, P2): IN PROGRESS, `ADC_Input_Curr` still
   uncalibrated.
-- **016** (curve-tracer sweep engine, P2): code complete (Steps 1-3, 5) -
-  `mode_curve_tracer.rs` added, real PWM on GPIO3, edge-triggered `But1`,
-  `TRACER_ACTIVE` gate-duty override, README updated, build/clippy/fmt
-  clean. Step 4 (on-target verification: relay/PWM sequence, safety
-  cutoff actually aborting) needs the board on the bench - not yet done.
-- **018** (bulk-read SPI transaction for sweep results, P2): code complete
-  - `spi_slave_pio.rs`'s `BulkState` machine (`Idle`/`SendAck`/`DoBulk`),
-  `mode_curve_tracer.rs`'s `LAST_SWEEP` storage, `SpiMcuSource.
-  request_sweep()`, all adversarially reviewed, build/clippy/fmt/pytest
-  clean. Implemented ahead of 016's own on-target confirmation at the
-  operator's explicit direction, since `request_sweep()`'s visual I-V
-  curve is itself part of validating 016 works. Flagged HIGH risk since it
-  restructures `spi_pio_task`'s exchange loop, the one piece of this
-  firmware with the most documented on-target fragility (see the plan's
-  "Why this is risky") - not yet on-target confirmed, needs the board on
-  the bench alongside 016.
-- **019** (SPI-triggered sweeps + explicit relay release, P2): TODO, not
-  started. Extends 018: lets the Pi start a sweep and release the
-  curve-tracer relay over SPI (new `CMD_START_SWEEP`/`CMD_RELEASE_RELAY`
-  bytes) instead of only `But1`, and changes the relay to stay engaged
-  across multiple sweeps until explicitly released, instead of
-  auto-releasing at the end of every sweep - needed for the new
-  `scripts/curve_tracer_web/` GUI to drive sweeps directly. Flagged HIGH
-  risk for the same reason as 018 (touches `spi_pio_task`'s exchange loop)
-  plus a live safety-behavior change (a safety-cutoff abort now leaves the
-  relay engaged instead of releasing it) that needs an on-target check, not
-  just a code review.
+- **016 / 018 / 019** are DONE as of the 2026-08-26 bench session - the
+  curve tracer works end to end: a sweep is triggered from the Pi, the
+  relay holds across sweeps, 20 points come back over SPI, and the web UI
+  plots the curve. Two findings from that session are worth carrying
+  forward rather than burying in git history:
+  - The bleed path is a **linear current sink** (RC-filtered `Tracer_pwm`
+    -> OPA171 -> Q3 gate, 100 mOhm sense), not a switched resistive load.
+    Its full scale is ~4.2 A while a lit panel sources ~0.2 A, so the
+    sweep auto-ranges to the panel's own Isc each run. Plan 016 had
+    flagged "the bleed-path schematic was never reviewed" as a STOP
+    condition; it went unread until the bench produced 20 identical
+    short-circuit points.
+  - Q3 dissipates the sweep **linearly**, worst case at the panel's MPP.
+    The cutoffs now bound that to ~23 V x 0.7 A; two panels in series at
+    full sun is ~20 W, so repeated sweeps near the limit want a heatsink
+    on Q3.
 
 **011 is DONE** (not an open item, and not a teammate hand-off - it landed
 in this session, merged as PR #50: feed-forward + proportional-trim

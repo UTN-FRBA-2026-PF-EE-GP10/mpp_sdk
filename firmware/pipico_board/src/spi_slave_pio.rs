@@ -35,7 +35,7 @@ use embassy_rp::{Peri, bind_interrupts};
 use embassy_time::{Duration, with_timeout};
 use portable_atomic::Ordering;
 
-use crate::mode_curve_tracer::{self, SweepResult, TRACER_SWEEP_POINTS};
+use crate::mode_curve_tracer::{self, SweepResult, TRACER_SWEEP_POINTS, TracerCommand};
 use crate::{
     DUTY, FIRMWARE_MODE, FirmwareMode, MEAS_ADC_VOUT_MV, MEAS_I_MA, MEAS_V_MV, PACKET_COUNT,
 };
@@ -46,14 +46,34 @@ bind_interrupts!(pub struct PioIrqs {
 
 pub const FRAME_LEN: usize = 12;
 
-// Curve-tracer bulk-read protocol (plan 018): a distinct, larger SPI
-// transaction for fetching sweep results (mode_curve_tracer.rs), kept
-// separate from the steady FRAME_LEN telemetry frame it rides alongside.
-// See spi_pio_task's doc comment for the full three-step protocol.
+// Curve-tracer bulk-read protocol: a distinct, larger SPI transaction
+// for fetching sweep results (mode_curve_tracer.rs), kept separate from
+// the steady FRAME_LEN telemetry frame it rides alongside. See
+// spi_pio_task's doc comment for the full three-step protocol.
 
 /// MOSI command value (one of the 9 spare bytes, index 3) requesting a
 /// bulk-dump; unlikely to appear from a zeroed/uninitialized buffer.
 const CMD_REQUEST_BULK_DUMP: u8 = 0xB1;
+/// Starts a curve-tracer sweep - forwarded to
+/// `mode_curve_tracer::curve_tracer_task` via `TRACER_COMMAND`, same
+/// checksum protection as `CMD_REQUEST_BULK_DUMP`.
+const CMD_START_SWEEP: u8 = 0xB2;
+/// Explicitly releases the curve-tracer relay - the relay no longer
+/// auto-releases at the end of a sweep, see
+/// `mode_curve_tracer::CurveTracer::release_relay`.
+const CMD_RELEASE_RELAY: u8 = 0xB3;
+
+/// Maps a MOSI command byte to the `TracerCommand` it should signal into
+/// `curve_tracer_task`, if any - the one place that grows when a new
+/// Pi-issued tracer command is added, instead of a new copy-pasted match
+/// arm in `spi_pio_task`'s `Idle` handling each time.
+fn tracer_command_for(cmd: u8) -> Option<TracerCommand> {
+    match cmd {
+        CMD_START_SWEEP => Some(TracerCommand::StartSweep),
+        CMD_RELEASE_RELAY => Some(TracerCommand::ReleaseRelay),
+        _ => None,
+    }
+}
 /// First byte of a bulk-read response - lets the Pi tell a genuine
 /// bulk-dump frame apart from a torn/mis-synced read before trusting
 /// anything else in it.
@@ -162,12 +182,20 @@ fn xor_checksum(bytes: &[u8]) -> u8 {
 ///
 /// MISO layout: [ V_H | V_L | I_H | I_L | VOUT_H | VOUT_L | TEMP_H
 ///   | TEMP_L | CHECKSUM | ACK | 0 x 2 ]  (12 bytes total). `CHECKSUM` is
-/// the XOR of the 8 preceding data bytes only - must match `spi_mcu.py`/
-/// `spi_test.py` exactly, and plan 018's `ack` byte does NOT participate
-/// in it (the steady frame's checksum contract is unchanged from plan
-/// 014/015). `ack` is the curve-tracer bulk-read handshake byte (plan
-/// 018): `0x00` in normal operation, `0x80 | point_count` on the one
-/// frame that acks a bulk-dump request - see `spi_pio_task`'s doc comment.
+/// the XOR of the 8 telemetry bytes **and** `ack` - must match
+/// `spi_mcu.py`/`spi_test.py` exactly. `ack` is the curve-tracer bulk-read
+/// handshake byte: `0x00` in normal operation, `0x80 | point_count` on the
+/// one frame that acks a bulk-dump request - see `spi_pio_task`'s doc
+/// comment.
+///
+/// `ack` is covered by the checksum because it is a *command* to the Pi,
+/// not a reading: a bit flip setting its top bit makes the Pi issue an
+/// 83-byte bulk-read transaction against firmware that is still sending
+/// 12-byte telemetry, desyncing the wire. Found on-target - spurious
+/// bulk reads with garbage magic bytes, concentrated at sweep start when
+/// the linear current sink switches on and the link is noisiest. It sits
+/// after `CHECKSUM` in the frame but that is only byte order; both sides
+/// XOR it in the same way.
 fn build_tx_frame(v: u16, i: u16, vout: u16, temp_cc: i16, ack: u8) -> [u32; FRAME_LEN] {
     let data = [
         v.to_be_bytes(),
@@ -176,7 +204,7 @@ fn build_tx_frame(v: u16, i: u16, vout: u16, temp_cc: i16, ack: u8) -> [u32; FRA
         (temp_cc as u16).to_be_bytes(),
     ];
     let bytes: [u8; 8] = core::array::from_fn(|idx| data[idx / 2][idx % 2]);
-    let checksum = xor_checksum(&bytes);
+    let checksum = xor_checksum(&bytes) ^ ack;
 
     let mut words = [0u32; FRAME_LEN];
     let all = bytes
@@ -195,7 +223,7 @@ fn build_tx_frame(v: u16, i: u16, vout: u16, temp_cc: i16, ack: u8) -> [u32; FRA
 /// `xor_checksum` like the steady frame, just over a different byte range.
 /// `sweep.points` beyond `sweep.count` are the zeroed unfilled tail from an
 /// aborted sweep (`mode_curve_tracer::SweepResult`) - sent as-is; the Pi
-/// only trusts the first `sweep.count` points, per plan 018.
+/// only trusts the first `sweep.count` points.
 fn build_bulk_tx_frame(sweep: &SweepResult) -> [u32; BULK_FRAME_LEN] {
     let mut bytes = [0u8; BULK_FRAME_LEN - 1];
     bytes[0] = BULK_MAGIC;
@@ -221,11 +249,25 @@ fn build_bulk_tx_frame(sweep: &SweepResult) -> [u32; BULK_FRAME_LEN] {
 /// genuinely stalled/aborted transfer, not jitter.
 const FRAME_TIMEOUT: Duration = Duration::from_millis(100);
 
-/// Consecutive frame timeouts (~100 ms each) after which the SPI master is
-/// considered gone, not just briefly glitching: `spi_pio_task` forces
-/// `DUTY` to 0 so the gate stops switching instead of free-running the
-/// last commanded duty with no host watching. Resets on the next valid
-/// frame.
+/// Time budget for the one 83-byte bulk-read exchange specifically -
+/// `FRAME_TIMEOUT` alone was calibrated for `FRAME_LEN` (12) and reused
+/// unchanged here on the assumption raw SPI clock time is what matters
+/// (only ~3.3 ms more at 200 kHz), but the RX side isn't DMA-driven - it's
+/// `BULK_FRAME_LEN` (83) individual IRQ-driven `wait_pull()` word-waits
+/// instead of `FRAME_LEN`'s 12, and each one carries real executor
+/// wake/reschedule overhead on top of the raw clock time. Found on-target:
+/// the bulk-read consistently timed out under `FRAME_TIMEOUT` while every
+/// other (steady-frame) exchange, including other curve-tracer commands,
+/// worked reliably - a size-proportional overhead, not a general link
+/// problem, matches that symptom.
+const BULK_FRAME_TIMEOUT: Duration = Duration::from_millis(500);
+
+/// Consecutive frame timeouts (~100 ms each for a steady frame,
+/// `BULK_FRAME_TIMEOUT` if one happens to be the rare bulk-read exchange)
+/// after which the SPI master is considered gone, not just briefly
+/// glitching: `spi_pio_task` forces `DUTY` to 0 so the gate stops
+/// switching instead of free-running the last commanded duty with no
+/// host watching. Resets on the next valid frame.
 const LINK_LOST_TIMEOUTS: u32 = 5; // ~500 ms of total silence
 
 /// Force the state machine back to a known-clean state: halted, FIFOs
@@ -252,7 +294,7 @@ fn resync(sm: &mut StateMachine<'static, PIO0, 0>, origin: u8) {
     sm.set_enable(true);
 }
 
-/// Curve-tracer bulk-read handshake (plan 018) - drives which frame shape
+/// Curve-tracer bulk-read handshake - drives which frame shape
 /// `spi_pio_task`'s next exchange uses. All three states use `FRAME_LEN`
 /// except `DoBulk`, the one exchange that uses `BULK_FRAME_LEN`:
 ///
@@ -332,10 +374,10 @@ fn apply_duty_frame(
 }
 
 /// Builds the TX buffer for `state`'s exchange - always reads live
-/// `MEAS_*` atomics (matches the pre-plan-018 behavior of building the
-/// next telemetry frame fresh each time), padded to `MAX_FRAME_LEN`; only
-/// the first `FRAME_LEN`/`BULK_FRAME_LEN` words are ever pushed to DMA
-/// (the caller slices by the same `state` match).
+/// `MEAS_*` atomics (builds the next telemetry frame fresh each time,
+/// same as before the bulk-read handshake existed), padded to
+/// `MAX_FRAME_LEN`; only the first `FRAME_LEN`/`BULK_FRAME_LEN` words are
+/// ever pushed to DMA (the caller slices by the same `state` match).
 fn build_tx_buf_for_state(state: &BulkState) -> [u32; MAX_FRAME_LEN] {
     let mut buf = [0u32; MAX_FRAME_LEN];
     match state {
@@ -404,12 +446,13 @@ fn build_tx_buf_for_state(state: &BulkState) -> [u32; MAX_FRAME_LEN] {
 /// the master is clearly still talking, just corrupted, a different
 /// failure mode than sustained silence.
 ///
-/// `CMD`/`ACK` (plan 018) are the curve-tracer bulk-read handshake bytes -
-/// see `BulkState`'s doc comment for the full three-step protocol. They
-/// ride in the steady frame's spare bytes. `CMD` (MOSI) participates in
-/// `CHECKSUM` (`duty_h ^ duty_l ^ cmd` - see `apply_duty_frame`'s doc
-/// comment for why); `ACK` (MISO) does not (see `build_tx_frame`'s doc
-/// comment). The handshake's own third step is a **separate**, larger
+/// `CMD`/`ACK` are the curve-tracer bulk-read handshake bytes - see
+/// `BulkState`'s doc comment for the full three-step protocol. They
+/// ride in the steady frame's spare bytes. Both participate in their
+/// direction's `CHECKSUM` - `duty_h ^ duty_l ^ cmd` for MOSI (see
+/// `apply_duty_frame`), the telemetry bytes ^ `ack` for MISO (see
+/// `build_tx_frame`) - since each is a command to the other side rather
+/// than a reading. The handshake's own third step is a **separate**, larger
 /// (`BULK_FRAME_LEN`-byte) transaction, not part of this steady frame at
 /// all - `this_frame_len` below switches to it only for that one exchange.
 #[embassy_executor::task]
@@ -431,9 +474,9 @@ pub async fn spi_pio_task(
     let mut checksum_failures: u32 = 0;
 
     loop {
-        let this_frame_len = match &bulk_state {
-            BulkState::DoBulk(_) => BULK_FRAME_LEN,
-            BulkState::Idle | BulkState::SendAck(_) => FRAME_LEN,
+        let (this_frame_len, frame_timeout) = match &bulk_state {
+            BulkState::DoBulk(_) => (BULK_FRAME_LEN, BULK_FRAME_TIMEOUT),
+            BulkState::Idle | BulkState::SendAck(_) => (FRAME_LEN, FRAME_TIMEOUT),
         };
 
         let mut rx = [0u32; MAX_FRAME_LEN];
@@ -451,23 +494,32 @@ pub async fn spi_pio_task(
             )
         };
 
-        if with_timeout(FRAME_TIMEOUT, exchange).await.is_err() {
+        if with_timeout(frame_timeout, exchange).await.is_err() {
             // No Pi attached is expected/normal in PowerSupply mode
             // (mode_power_supply.rs) - suppress the WARN spam there.
             let log_link_state = FIRMWARE_MODE != FirmwareMode::PowerSupply;
 
             // Dropping `exchange` here cancels the DMA push (its Drop impl
             // aborts the channel) and the pending `wait_pull`s.
-            if log_link_state {
-                defmt::warn!("spi_pio_task: frame timeout, resyncing (duty unchanged)");
-            }
-            resync(&mut sm, origin);
             // Re-arm TX with the last-known-good V/I for the next attempt;
             // DUTY is left untouched by a single torn frame (see doc
             // comment above) but forced to 0 if the master appears gone.
             consecutive_timeouts += 1;
+            // Rate-limited like checksum_failures below - a sustained
+            // outage would otherwise flood RTT every 100 ms.
+            if log_link_state
+                && (consecutive_timeouts == 1 || consecutive_timeouts.is_multiple_of(100))
+            {
+                defmt::warn!(
+                    "spi_pio_task: frame timeout waiting for a {}-byte exchange, resyncing \
+                     (duty unchanged) ({} consecutive)",
+                    this_frame_len,
+                    consecutive_timeouts
+                );
+            }
+            resync(&mut sm, origin);
             if consecutive_timeouts == LINK_LOST_TIMEOUTS && log_link_state {
-                defmt::warn!("spi_pio_task: link lost, forcing duty to 0");
+                defmt::error!("spi_pio_task: link lost, forcing duty to 0");
             }
             if consecutive_timeouts >= LINK_LOST_TIMEOUTS {
                 DUTY.store(0, Ordering::Relaxed);
@@ -476,8 +528,19 @@ pub async fn spi_pio_task(
             // this task expecting a frame shape the Pi has moved on from -
             // always fall back to Idle, same reasoning as DUTY being safe
             // to leave unresolved on a single miss (see BulkState's doc
-            // comment).
-            bulk_state = BulkState::Idle;
+            // comment). The held sweep goes back to LAST_SWEEP rather than
+            // being dropped with the state: `take_last_sweep()` already
+            // removed it, so discarding it here destroys the only copy and
+            // the Pi's retry finds nothing. Found on-target: a Pi polling
+            // slower than FRAME_TIMEOUT made the firmware time out between
+            // every poll, so the handshake was reset - and the result
+            // thrown away - on every single attempt.
+            match core::mem::replace(&mut bulk_state, BulkState::Idle) {
+                BulkState::SendAck(sweep) | BulkState::DoBulk(sweep) => {
+                    mode_curve_tracer::restore_last_sweep(sweep);
+                }
+                BulkState::Idle => {}
+            }
             tx_buf = build_tx_buf_for_state(&bulk_state);
             continue;
         }
@@ -494,8 +557,8 @@ pub async fn spi_pio_task(
             }
             BulkState::Idle => {
                 let cmd = apply_duty_frame(&rx, &mut last_logged_duty, &mut checksum_failures);
-                if cmd == Some(CMD_REQUEST_BULK_DUMP) {
-                    match mode_curve_tracer::take_last_sweep() {
+                match cmd {
+                    Some(CMD_REQUEST_BULK_DUMP) => match mode_curve_tracer::take_last_sweep() {
                         Some(sweep) => {
                             defmt::info!(
                                 "spi_pio_task: bulk-dump request acked, {} points",
@@ -504,9 +567,14 @@ pub async fn spi_pio_task(
                             BulkState::SendAck(sweep)
                         }
                         None => BulkState::Idle,
+                    },
+                    Some(cmd) => {
+                        if let Some(tracer_cmd) = tracer_command_for(cmd) {
+                            mode_curve_tracer::TRACER_COMMAND.signal(tracer_cmd);
+                        }
+                        BulkState::Idle
                     }
-                } else {
-                    BulkState::Idle
+                    None => BulkState::Idle,
                 }
             }
         };

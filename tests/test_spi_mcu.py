@@ -54,6 +54,15 @@ def spi_mcu_source(monkeypatch):
     fake_module.SpiDev = _FakeSpiDev
     monkeypatch.setitem(sys.modules, "spidev", fake_module)
 
+    # `mpp_sdk.io.spi_mcu` may already be cached in sys.modules - e.g. from
+    # another test file's own (differently-faked, or real) `spidev` import
+    # earlier in the same pytest session. `import ... as _spidev` binds a
+    # name once at that first import and a cached module isn't re-executed,
+    # so without evicting it here, this fixture's fake would silently not
+    # take effect and every test would fail against whichever `spidev` got
+    # bound first. Force a fresh import so it binds to *this* fixture's fake.
+    monkeypatch.delitem(sys.modules, "mpp_sdk.io.spi_mcu", raising=False)
+
     from mpp_sdk.io.spi_mcu import SpiMcuSource
 
     return SpiMcuSource
@@ -72,7 +81,9 @@ def _miso_frame(
         (temp_raw >> 8) & 0xFF,
         temp_raw & 0xFF,
     ]
-    checksum = 0
+    # ack participates in the checksum (see firmware's build_tx_frame) so
+    # a flipped ack bit can't spoof "sweep ready" at the Pi.
+    checksum = ack
     for byte in data:
         checksum ^= byte
     if corrupt:
@@ -82,7 +93,7 @@ def _miso_frame(
 
 # Mirrors spi_mcu.py's private _TRACER_SWEEP_POINTS/_BULK_MAGIC/
 # _BULK_FRAME_LEN constants - must match firmware/pipico_board/src/
-# spi_slave_pio.rs's bulk-read frame shape (plan 018) exactly.
+# spi_slave_pio.rs's bulk-read frame shape exactly.
 _TEST_TRACER_SWEEP_POINTS = 20
 _TEST_BULK_MAGIC = 0xC5
 _TEST_BULK_FRAME_LEN = 2 + _TEST_TRACER_SWEEP_POINTS * 4 + 1
@@ -216,7 +227,7 @@ def test_read_after_write_succeeds(spi_mcu_source):
 def test_exit_closes_even_if_soft_stop_raises(spi_mcu_source, monkeypatch):
     src = spi_mcu_source()
 
-    def _raise(_duty):
+    def _raise(_duty, cmd=0):
         raise RuntimeError("simulated SPI fault")
 
     monkeypatch.setattr(src, "_transact", _raise)
@@ -227,7 +238,7 @@ def test_exit_closes_even_if_soft_stop_raises(spi_mcu_source, monkeypatch):
 
 
 # ------------------------------------------------------------------
-# request_sweep() - curve-tracer bulk-read protocol (plan 018)
+# request_sweep() - curve-tracer bulk-read protocol
 # ------------------------------------------------------------------
 
 
@@ -244,6 +255,40 @@ def test_request_sweep_returns_none_when_never_armed(spi_mcu_source):
     # Every response is a plain (ack=0) telemetry frame - never armed.
     result = src.request_sweep(poll_attempts=3, poll_interval_s=0)
     assert result is None
+
+
+def test_request_sweep_resends_cmd_on_every_poll(spi_mcu_source):
+    """Asking once and then polling with bare frames can never arm a sweep
+    that is still running when the first ask goes out - the firmware only
+    replies "ready" to a request that arrives *after* the result lands."""
+    src = spi_mcu_source()
+    src.request_sweep(poll_attempts=3, poll_interval_s=0)
+    # 1 initial ask + 3 polls, every one carrying the request byte.
+    assert len(src._spi.sent) == 4
+    for frame in src._spi.sent:
+        assert frame[3] == 0xB1
+
+
+def test_flipped_ack_bit_does_not_trigger_a_bulk_read(spi_mcu_source):
+    """A corrupted ack byte must fail the frame checksum rather than send
+    us clocking an 83-byte bulk read at firmware that is still sending
+    12-byte telemetry - the ack is a command to us, not a reading."""
+    src = spi_mcu_source()
+    frame = _miso_frame(v_raw=1000, i_raw=100, vout_raw=0, temp_raw=0, ack=0x00)
+    frame[9] = 0x80  # bit flip on the wire, checksum left as-built
+    src._spi.responses = [frame]
+    result = src.request_sweep(poll_attempts=0)
+    assert result is None
+    # Only the request frame went out - no oversized bulk transaction.
+    assert all(len(sent) == 12 for sent in src._spi.sent)
+
+
+def test_request_sweep_rejects_poll_interval_past_firmware_timeout(spi_mcu_source):
+    """Polling slower than the firmware's own frame timeout makes it time
+    out between our frames and reset the handshake mid-exchange."""
+    src = spi_mcu_source()
+    with pytest.raises(ValueError, match="frame timeout"):
+        src.request_sweep(poll_attempts=3, poll_interval_s=0.2)
 
 
 def test_request_sweep_still_updates_telemetry_while_polling(spi_mcu_source):
@@ -321,3 +366,31 @@ def test_request_sweep_raises_on_implausible_point_count(spi_mcu_source):
     ]
     with pytest.raises(RuntimeError, match="implausible point count"):
         src.request_sweep(poll_attempts=5, poll_interval_s=0)
+
+
+# ------------------------------------------------------------------
+# start_sweep()/release_relay() - SPI-triggered sweeps
+# ------------------------------------------------------------------
+
+
+def test_start_sweep_sends_cmd_byte(spi_mcu_source):
+    src = spi_mcu_source()
+    src.start_sweep()
+    # duty defaults to 0.0 -> duty_h=duty_l=0; checksum = 0 ^ 0 ^ 0xB2.
+    assert src._spi.sent[-1][:4] == [0x00, 0x00, 0xB2, 0xB2]
+
+
+def test_release_relay_sends_cmd_byte(spi_mcu_source):
+    src = spi_mcu_source()
+    src.release_relay()
+    # duty defaults to 0.0 -> duty_h=duty_l=0; checksum = 0 ^ 0 ^ 0xB3.
+    assert src._spi.sent[-1][:4] == [0x00, 0x00, 0xB3, 0xB3]
+
+
+def test_start_sweep_still_updates_telemetry(spi_mcu_source):
+    src = spi_mcu_source()
+    src._spi.next_rx = _miso_frame(v_raw=5000, i_raw=250, vout_raw=3300, temp_raw=0)
+    src.start_sweep()
+    v, i = src.read()
+    assert v == pytest.approx(5.0)
+    assert i == pytest.approx(0.25)

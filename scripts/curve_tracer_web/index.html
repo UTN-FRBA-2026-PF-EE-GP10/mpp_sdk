@@ -12,10 +12,11 @@
     Adapted from the ESP32-C3 reference implementation's web UI
     (https://github.com/fborello-lambda/solar_panel_curve_tracer, spiffs/) -
     same dark solar theme and Chart.js setup, trimmed to what this board
-    actually supports: no settable current range, no Pi-triggered sweep
-    start (plan 016 left the sweep trigger as the physical But1 press
-    only). This page just polls /data (scripts/curve_tracer_server.py,
-    plan 018's request_sweep()) and plots whatever it gets back.
+    actually supports: no settable current range (this board has no
+    current dial). This page polls /data (scripts/curve_tracer_server.py)
+    and plots whatever it gets back, and can trigger a sweep or release
+    the tracer relay directly - both also still work via the board's
+    physical But1 button.
     -->
     <style>
         :root {
@@ -136,6 +137,11 @@
             </div>
         </div>
 
+        <div id="tb4" class="toolbar">
+            <button id="startSweepBtn" class="btn">Start Sweep</button>
+            <button id="releaseRelayBtn" class="btn tertiary">Release Relay</button>
+        </div>
+
         <div id="tb3" class="toolbar">
             <span id="mpptCurrent" class="ctrl-label">MPPT Current: -- mA</span>
             <span id="mpptVoltage" class="ctrl-label">MPPT Voltage: -- V</span>
@@ -143,8 +149,10 @@
         </div>
 
         <p class="ctrl-label" align="center">
-            Press <b>But1</b> on the board to start a sweep - this page
-            polls for the latest result every few seconds.
+            Start Sweep triggers a sweep; the tracer relay stays engaged
+            across sweeps until Release Relay is pressed. The board's
+            physical <b>But1</b> button does the same. This page polls for
+            the latest result every few seconds.
         </p>
     </div>
 
