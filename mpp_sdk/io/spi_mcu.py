@@ -33,6 +33,13 @@ _BULK_FRAME_LEN = 2 + _TRACER_SWEEP_POINTS * 4 + 1
 _CMD_START_SWEEP = 0xB2
 _CMD_RELEASE_RELAY = 0xB3
 
+# Upper bound on request_sweep()'s poll interval: the firmware drops a
+# frame it has waited on for longer than its own FRAME_TIMEOUT (100 ms,
+# spi_slave_pio.rs) and resyncs, so polling slower than that leaves it
+# timing out between our frames instead of exchanging with us. Kept a
+# little under 100 ms for margin.
+_MAX_POLL_INTERVAL_S = 0.08
+
 
 def _to_signed_i16(raw: int) -> int:
     return raw - 65536 if raw >= 32768 else raw
@@ -210,17 +217,37 @@ class SpiMcuSource(SignalSource):
         ``v_scale``/``i_scale``), or ``None`` if no sweep result was ready
         to fetch within ``poll_attempts``.
 
+        The request byte is re-sent on *every* poll, not just the first, so
+        this also covers "a sweep is still running, wait for it" - the
+        firmware answers "nothing ready" (ack 0) until its result lands,
+        and only an ask that arrives after that gets armed. Asking once and
+        then polling with a bare frame would silently never retry.
+
+        ``poll_interval_s`` must stay below the firmware's own frame
+        timeout (``FRAME_TIMEOUT``, 100 ms in ``spi_slave_pio.rs``):
+        polling slower than that lets the firmware time out *between* the
+        Pi's frames, which resets its handshake state machine mid-exchange
+        and (before the matching firmware fix) dropped the very result
+        being fetched. ``_MAX_POLL_INTERVAL_S`` enforces the ceiling.
+
         Raises ``RuntimeError`` if the bulk-read frame's magic byte or
         checksum doesn't match, or its point count disagrees with the ack's
         - a real link fault, not a "nothing ready yet" case.
         """
+        if poll_interval_s > _MAX_POLL_INTERVAL_S:
+            raise ValueError(
+                f"poll_interval_s={poll_interval_s} exceeds the firmware's frame timeout "
+                f"({_MAX_POLL_INTERVAL_S}s) - the firmware would time out between polls and "
+                f"reset the bulk-read handshake, so the fetch could never complete"
+            )
+
         ack = self._send_cmd(cmd=_CMD_REQUEST_BULK_DUMP)
 
         for _ in range(poll_attempts):
             if ack & 0x80:
                 return self._bulk_read(ack & 0x7F)
             time.sleep(poll_interval_s)
-            ack = self._send_cmd()
+            ack = self._send_cmd(cmd=_CMD_REQUEST_BULK_DUMP)
         return None
 
     def start_sweep(self) -> None:

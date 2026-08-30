@@ -519,8 +519,19 @@ pub async fn spi_pio_task(
             // this task expecting a frame shape the Pi has moved on from -
             // always fall back to Idle, same reasoning as DUTY being safe
             // to leave unresolved on a single miss (see BulkState's doc
-            // comment).
-            bulk_state = BulkState::Idle;
+            // comment). The held sweep goes back to LAST_SWEEP rather than
+            // being dropped with the state: `take_last_sweep()` already
+            // removed it, so discarding it here destroys the only copy and
+            // the Pi's retry finds nothing. Found on-target: a Pi polling
+            // slower than FRAME_TIMEOUT made the firmware time out between
+            // every poll, so the handshake was reset - and the result
+            // thrown away - on every single attempt.
+            match core::mem::replace(&mut bulk_state, BulkState::Idle) {
+                BulkState::SendAck(sweep) | BulkState::DoBulk(sweep) => {
+                    mode_curve_tracer::restore_last_sweep(sweep);
+                }
+                BulkState::Idle => {}
+            }
             tx_buf = build_tx_buf_for_state(&bulk_state);
             continue;
         }

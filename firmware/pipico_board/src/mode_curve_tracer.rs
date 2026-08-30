@@ -121,6 +121,25 @@ pub fn take_last_sweep() -> Option<SweepResult> {
     critical_section::with(|cs| LAST_SWEEP.borrow(cs).borrow_mut().take())
 }
 
+/// Puts a taken-but-undelivered sweep back, so a torn frame partway
+/// through the bulk-read handshake doesn't destroy the result. The
+/// handshake carries the sweep *by value* once `take_last_sweep()` has
+/// removed it, so without this a single dropped frame mid-exchange loses
+/// that sweep permanently and the Pi's retry finds nothing.
+///
+/// Only fills an empty slot - a sweep that finished while the previous
+/// one was mid-handshake is newer and must not be clobbered by the stale
+/// one being handed back.
+pub fn restore_last_sweep(sweep: SweepResult) {
+    critical_section::with(|cs| {
+        let slot = LAST_SWEEP.borrow(cs);
+        let mut slot = slot.borrow_mut();
+        if slot.is_none() {
+            *slot = Some(sweep);
+        }
+    });
+}
+
 /// A curve-tracer action the Pi can request over SPI - mirrors `But1`'s
 /// two effects (start a sweep; the relay's release, previously implicit
 /// at the end of every sweep, is now explicit-only).

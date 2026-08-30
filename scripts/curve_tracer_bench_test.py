@@ -32,6 +32,10 @@ def run_sweep_and_fetch(
     dropped if that call returns before checking it, and the next call's
     differently-shaped frame then doesn't match what the firmware is
     expecting next, discarding the result on the resulting timeout/reset.
+
+    `poll_interval_s` must also stay under the firmware's 100 ms frame
+    timeout, or the firmware times out between our polls and resets the
+    handshake - see `request_sweep()`'s own docstring.
     """
     src.start_sweep()
     poll_attempts = max(1, round(timeout_s / poll_interval_s))
@@ -65,7 +69,9 @@ def main() -> None:
     parser.add_argument("--spi-speed-hz", type=int, default=200_000)
     parser.add_argument("--sweeps", type=int, default=2)
     parser.add_argument("--timeout-s", type=float, default=15.0)
-    parser.add_argument("--poll-interval-s", type=float, default=0.2)
+    # Must stay under the firmware's 100 ms FRAME_TIMEOUT - see
+    # run_sweep_and_fetch()/request_sweep().
+    parser.add_argument("--poll-interval-s", type=float, default=0.05)
     parser.add_argument("--out", default="curve_tracer_bench_test.png")
     args = parser.parse_args()
 

@@ -255,6 +255,26 @@ def test_request_sweep_returns_none_when_never_armed(spi_mcu_source):
     assert result is None
 
 
+def test_request_sweep_resends_cmd_on_every_poll(spi_mcu_source):
+    """Asking once and then polling with bare frames can never arm a sweep
+    that is still running when the first ask goes out - the firmware only
+    replies "ready" to a request that arrives *after* the result lands."""
+    src = spi_mcu_source()
+    src.request_sweep(poll_attempts=3, poll_interval_s=0)
+    # 1 initial ask + 3 polls, every one carrying the request byte.
+    assert len(src._spi.sent) == 4
+    for frame in src._spi.sent:
+        assert frame[3] == 0xB1
+
+
+def test_request_sweep_rejects_poll_interval_past_firmware_timeout(spi_mcu_source):
+    """Polling slower than the firmware's own frame timeout makes it time
+    out between our frames and reset the handshake mid-exchange."""
+    src = spi_mcu_source()
+    with pytest.raises(ValueError, match="frame timeout"):
+        src.request_sweep(poll_attempts=3, poll_interval_s=0.2)
+
+
 def test_request_sweep_still_updates_telemetry_while_polling(spi_mcu_source):
     src = spi_mcu_source()
     src._spi.responses = [_miso_frame(v_raw=5000, i_raw=250, vout_raw=3300, temp_raw=0)]
