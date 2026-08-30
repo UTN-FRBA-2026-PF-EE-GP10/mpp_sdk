@@ -15,7 +15,6 @@ Usage::
 """
 
 import argparse
-import time
 
 from mpp_sdk.io.spi_mcu import SpiMcuSource
 
@@ -23,15 +22,23 @@ from mpp_sdk.io.spi_mcu import SpiMcuSource
 def run_sweep_and_fetch(
     src: SpiMcuSource, timeout_s: float, poll_interval_s: float
 ) -> list[tuple[float, float]]:
-    """Trigger one sweep from the Pi and block until its result is ready."""
+    """Trigger one sweep from the Pi and block until its result is ready.
+
+    Must be a single `request_sweep()` call with `poll_attempts` sized to
+    cover the whole wait - the bulk-read handshake advances a step on
+    every frame the Pi sends it (see spi_slave_pio.rs's `BulkState`), so
+    retrying with a small `poll_attempts` in an external loop desyncs it:
+    an ack that only becomes visible on a call's *second* frame gets
+    dropped if that call returns before checking it, and the next call's
+    differently-shaped frame then doesn't match what the firmware is
+    expecting next, discarding the result on the resulting timeout/reset.
+    """
     src.start_sweep()
-    deadline = time.monotonic() + timeout_s
-    while time.monotonic() < deadline:
-        result = src.request_sweep(poll_attempts=1, poll_interval_s=0.0)
-        if result is not None:
-            return result
-        time.sleep(poll_interval_s)
-    raise TimeoutError(f"sweep result not ready within {timeout_s}s")
+    poll_attempts = max(1, round(timeout_s / poll_interval_s))
+    result = src.request_sweep(poll_attempts=poll_attempts, poll_interval_s=poll_interval_s)
+    if result is None:
+        raise TimeoutError(f"sweep result not ready within {timeout_s}s")
+    return result
 
 
 def plot_curves(curves: list[list[tuple[float, float]]], out_path: str) -> None:
