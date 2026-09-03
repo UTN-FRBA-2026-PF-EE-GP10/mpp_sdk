@@ -21,7 +21,7 @@ import matplotlib.pyplot as plt
 
 import mpp_sdk
 from harness import common
-from harness.panel_config import make_static_source, series_string, shaded_string
+from harness.panel_config import series_string, shaded_string
 
 N_STEPS = 2000
 INITIAL_DUTY = 0.5
@@ -35,13 +35,7 @@ SCENARIOS = [
 
 
 def final_point(make_ctl, panel):
-    src = make_static_source(panel=panel, initial_duty=INITIAL_DUTY)
-    ctl = make_ctl(INITIAL_DUTY)
-    v = i = 0.0
-    for _ in range(N_STEPS):
-        v, i = src.read()
-        src.write(ctl.step(v, i))
-    return v, v * i
+    return common.final_point(make_ctl, panel, n_steps=N_STEPS, initial_duty=INITIAL_DUTY)
 
 
 def main() -> None:

@@ -22,6 +22,7 @@ _COMMANDS: dict[str, tuple[str, bool]] = {
     "compare-rescan": ("harness.compare_rescan", False),
     "compare-bank": ("harness.compare_bank", False),
     "compare-seeds": ("harness.compare_seeds", False),
+    "compare-measured": ("harness.compare_measured", False),
     "animate": ("harness.animate", True),
     "snapshot": ("harness.snapshot", False),
     "pvlib-demo": ("examples.pvlib_demo", False),

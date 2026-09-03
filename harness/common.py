@@ -14,7 +14,7 @@ from typing import NamedTuple
 import numpy as np
 
 import mpp_sdk
-from harness.panel_config import make_dynamic_source, shaded_string
+from harness.panel_config import make_dynamic_source, make_static_source, shaded_string
 
 
 class AlgorithmSpec(NamedTuple):
@@ -60,6 +60,26 @@ def algorithm_specs(
         AlgorithmSpec("Scan&Track", "tab:purple", _scan_and_track),
         AlgorithmSpec("PSO", "tab:orange", _pso),
     ]
+
+
+def final_point(
+    make_ctl, panel, *, n_steps: int = 2000, initial_duty: float = 0.5
+) -> tuple[float, float]:
+    """Settle one controller against a static (no-dynamics) source and return
+    its final ``(V, P)`` operating point.
+
+    Shared by every comparison script that reports a single settled point
+    rather than a transient trace (``compare_static.py``,
+    ``compare_measured.py``) - this is the "static" analogue of
+    :func:`run_schedule`.
+    """
+    src = make_static_source(panel=panel, initial_duty=initial_duty)
+    ctl = make_ctl(initial_duty)
+    v = i = 0.0
+    for _ in range(n_steps):
+        v, i = src.read()
+        src.write(ctl.step(v, i))
+    return v, v * i
 
 
 def build_conditions(irradiance_pairs: Iterable[tuple[float, float]]):
@@ -125,4 +145,4 @@ def run_schedule(
     return vs, is_, ds
 
 
-__all__ = ["AlgorithmSpec", "algorithm_specs", "build_conditions", "run_schedule"]
+__all__ = ["AlgorithmSpec", "algorithm_specs", "build_conditions", "final_point", "run_schedule"]

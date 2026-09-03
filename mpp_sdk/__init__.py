@@ -22,6 +22,7 @@ from .io.noisy import NoisySource
 from .io.simulated import SimulatedSource
 from .models.base import PanelModel
 from .models.ideal import IdealSingleDiode
+from .models.measured import MeasuredPanel
 from .models.pvlib_adapter import PvlibPanelModel
 from .models.string import PvString
 from .models.tabulated import TabulatedPanel
@@ -43,6 +44,7 @@ __all__ = [
     "NoisySource",
     "PanelModel",
     "IdealSingleDiode",
+    "MeasuredPanel",
     "PvlibPanelModel",
     "PvString",
     "TabulatedPanel",
