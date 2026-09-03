@@ -49,6 +49,11 @@ re-enabling; no plan file, tracked via the PR that disabled it.
 | 017 | SDK: `mpp-sdk` CLI dispatcher for harness/examples/scripts | P3 | S-M | - | DONE |
 | 018 | Firmware+SDK: bulk-read SPI transaction for curve-tracer sweep results | P2 | L | 016 (hard) | DONE (on-target confirmed: 20 points fetched over SPI. Bench fixed three handshake bugs - request sent once not per poll, held result dropped on any mid-handshake timeout, Pi polling slower than FRAME_TIMEOUT - plus checksum-protecting the ACK byte) |
 | 019 | Firmware+SDK: SPI-triggered curve-tracer sweeps + explicit relay release | P2 | L | 018 (hard), 016 (hard) | DONE (on-target confirmed: sweeps start from the Pi, relay clicks once and holds across sweeps until released, web UI plots the curve) |
+| 020 | Firmware+SDK: stream sweep points as they are captured | P2 | M | - (023 wants it) | TODO |
+| 021 | SDK: on-disk library of captured I-V curves + measurement metadata | P1 | M | - | TODO |
+| 022 | SDK: replay measured curves through the MPPT algorithm benchmark | P1 | M | 021 (hard) | TODO |
+| 023 | GUI: React + shadcn curve workbench, served from the Pi | P2 | L | 021 (hard), 020 (soft) | TODO |
+| 024 | Bench: microcontroller-driven lamp dimmer - design spike | P3 | M | - | TODO |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) |
 REJECTED (with one-line rationale).
@@ -77,6 +82,33 @@ Everything above is DONE except:
     The cutoffs now bound that to ~23 V x 0.7 A; two panels in series at
     full sun is ~20 W, so repeated sweeps near the limit want a heatsink
     on Q3.
+
+### Next phase: from one curve to a measurement campaign (2026-08-26)
+
+Plans 020-024 come from the operator's goal after the tracer started
+working: capture *many* curves - one panel flat, a second tilted to
+emulate partial shading, later under a controllable dimmer - and replay
+them through the algorithm benchmark to predict how each MPPT algorithm
+will behave on the real array before one is committed to firmware.
+
+Recommended order, and why:
+
+1. **021** (curve library) first. It is the foundation both 022 and 023
+   build on, it needs no hardware protocol changes, and defining the
+   metadata schema early means neither of them has to migrate data later.
+2. **022** (measured-curve replay) next. This is where the value lands:
+   `MeasuredPanel` implements the existing `PanelModel` ABC, so the whole
+   comparison harness runs against real curves with **zero algorithm
+   changes** - the seam AGENTS.md exists to protect.
+3. **020** (streaming) and **023** (React GUI) after, in either order.
+   023 is nicer with 020 but does not need it; 020 is the only one of the
+   four that reopens `spi_pio_task`'s exchange loop, which is this
+   firmware's most on-target-fragile code, so it carries the most risk for
+   the least thesis value. Sequence it when the protocol is otherwise quiet.
+4. **024** (dimmer) is a spike, not an implementation, and the operator
+   put it a month out. Its Step 2 (low-light stability check) is worth
+   doing early regardless - it needs no new hardware and would constrain
+   every dimmer option.
 
 **011 is DONE** (not an open item, and not a teammate hand-off - it landed
 in this session, merged as PR #50: feed-forward + proportional-trim
