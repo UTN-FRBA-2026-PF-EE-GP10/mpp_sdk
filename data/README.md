@@ -5,6 +5,15 @@
   `data/plecs/README.md`.
 - `data/bench/` — where measured bench data (e.g. plan 003's duty-sweep
   CSVs) will land, one CSV per run.
+- `data/curves/` — captured curve-tracer sweeps, one JSON file per sweep,
+  written by `mpp_sdk.curves.library.save`. Git-ignored: this is operator
+  measurement data, not repo content. Each file holds `schema`,
+  `captured_at`, `label`, `measurement` (grouping key: `baseline`,
+  `partial-shade`, `tilt-sweep`, `dimmer`, `other` - see
+  `mpp_sdk/curves/record.py`'s `MEASUREMENT_KINDS`), `panels` (id + tilt
+  per panel in the array), `notes`, and `points` (`v`/`i` pairs in
+  volts/amps, ordered as swept). See `mpp_sdk/curves/record.py` for the
+  full schema and `mpp_sdk/curves/library.py` for the file layout.
 
 ## Before committing any measured file
 
