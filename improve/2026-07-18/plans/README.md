@@ -50,7 +50,7 @@ re-enabling; no plan file, tracked via the PR that disabled it.
 | 018 | Firmware+SDK: bulk-read SPI transaction for curve-tracer sweep results | P2 | L | 016 (hard) | DONE (on-target confirmed: 20 points fetched over SPI. Bench fixed three handshake bugs - request sent once not per poll, held result dropped on any mid-handshake timeout, Pi polling slower than FRAME_TIMEOUT - plus checksum-protecting the ACK byte) |
 | 019 | Firmware+SDK: SPI-triggered curve-tracer sweeps + explicit relay release | P2 | L | 018 (hard), 016 (hard) | DONE (on-target confirmed: sweeps start from the Pi, relay clicks once and holds across sweeps until released, web UI plots the curve) |
 | 020 | Firmware+SDK: stream sweep points as they are captured | P2 | M | - (023 wants it) | TODO |
-| 021 | SDK: on-disk library of captured I-V curves + measurement metadata | P1 | M | - | TODO |
+| 021 | SDK: on-disk library of captured I-V curves + measurement metadata | P1 | M | - | DONE (code complete: `mpp_sdk/curves/` + `POST /save-curve`/`GET /curves`/`GET /measurement-kinds`, no-hardware smoke-tested. Step 6's vanilla-JS capture UI was skipped by operator direction - capture UI work now goes straight to plan 023's React frontend instead. Two real curves captured on the bench across differing `measurement` values is still open - needs the board) |
 | 022 | SDK: replay measured curves through the MPPT algorithm benchmark | P1 | M | 021 (hard) | TODO |
 | 023 | GUI: React + shadcn curve workbench, served from the Pi | P2 | L | 021 (hard), 020 (soft) | TODO |
 | 024 | Bench: microcontroller-driven lamp dimmer - design spike | P3 | M | - | TODO |

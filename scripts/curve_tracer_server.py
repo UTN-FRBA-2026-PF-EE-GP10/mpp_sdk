@@ -34,6 +34,10 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+from mpp_sdk.curves import MEASUREMENT_KINDS, CurveRecord, PanelSetup
+from mpp_sdk.curves import library as curve_library
+from mpp_sdk.curves.record import now_utc
+
 _WEB_ROOT = Path(__file__).parent / "curve_tracer_web"
 _STATIC_FILES = {
     "/": "index.html",
@@ -126,6 +130,12 @@ def _make_handler(cache: _SweepCache, commands: queue.Queue[str]) -> type[BaseHT
             if self.path == "/data":
                 self._serve_data()
                 return
+            if self.path == "/curves":
+                self._serve_curve_list()
+                return
+            if self.path == "/measurement-kinds":
+                self._serve_json(list(MEASUREMENT_KINDS))
+                return
             filename = _STATIC_FILES.get(self.path)
             if filename is None:
                 self.send_error(404)
@@ -133,6 +143,9 @@ def _make_handler(cache: _SweepCache, commands: queue.Queue[str]) -> type[BaseHT
             self._serve_static(filename)
 
         def do_POST(self) -> None:  # noqa: N802
+            if self.path == "/save-curve":
+                self._save_curve()
+                return
             cmd = _POST_COMMANDS.get(self.path)
             if cmd is None:
                 self.send_error(404)
@@ -143,18 +156,13 @@ def _make_handler(cache: _SweepCache, commands: queue.Queue[str]) -> type[BaseHT
 
         def _serve_data(self) -> None:
             points, link, seq = cache.snapshot()
-            body = json.dumps(
+            self._serve_json(
                 {
                     "points": [{"x": v, "y": i * 1000.0} for v, i in points],
                     "link": link,
                     "seq": seq,
                 }
-            ).encode("utf-8")
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
+            )
 
         def _serve_static(self, filename: str) -> None:
             path = _WEB_ROOT / filename
@@ -164,6 +172,66 @@ def _make_handler(cache: _SweepCache, commands: queue.Queue[str]) -> type[BaseHT
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
+
+        def _serve_json(self, payload: object, status: int = 200) -> None:
+            body = json.dumps(payload).encode("utf-8")
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def _serve_curve_list(self) -> None:
+            directory = curve_library.default_dir()
+            paths = sorted(directory.glob("*.json")) if directory.exists() else []
+            entries = []
+            for path in paths:
+                # Curve files are hand-edited by operators (see library.load's
+                # docstring), so a single malformed or empty-points file must
+                # not take the whole listing down - report it and move on.
+                try:
+                    r = curve_library.load(path)
+                    entries.append(
+                        {
+                            "path": str(path),
+                            "captured_at": r.captured_at.isoformat(),
+                            "label": r.label,
+                            "measurement": r.measurement,
+                            "n_points": len(r.points),
+                            "voc": r.open_circuit_voltage,
+                            "isc": r.short_circuit_current,
+                            "p_mpp": r.mpp()[2],
+                        }
+                    )
+                except ValueError as exc:
+                    entries.append({"path": str(path), "error": str(exc)})
+            self._serve_json(entries)
+
+        def _save_curve(self) -> None:
+            points, _link, _seq = cache.snapshot()
+            if not points:
+                self._serve_json({"error": "no sweep captured yet"}, status=409)
+                return
+            length = int(self.headers.get("Content-Length", "0"))
+            try:
+                body = json.loads(self.rfile.read(length)) if length else {}
+                record = CurveRecord(
+                    captured_at=now_utc(),
+                    label=body.get("label", ""),
+                    measurement=body.get("measurement", "other"),
+                    panels=tuple(PanelSetup.from_dict(p) for p in body.get("panels", [])),
+                    points=tuple(points),
+                    notes=body.get("notes", ""),
+                )
+            except (json.JSONDecodeError, KeyError, TypeError, AttributeError) as exc:
+                # Server binds 0.0.0.0 by default, so a malformed request
+                # (bad JSON, or a panel missing "id"/"tilt_deg") must get a
+                # clean error back, not an unhandled traceback that aborts
+                # the connection.
+                self._serve_json({"error": f"bad request body: {exc}"}, status=400)
+                return
+            path = curve_library.save(record)
+            self._serve_json({"path": str(path)})
 
     return Handler
 
