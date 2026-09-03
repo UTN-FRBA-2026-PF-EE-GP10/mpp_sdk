@@ -52,7 +52,7 @@ re-enabling; no plan file, tracked via the PR that disabled it.
 | 020 | Firmware+SDK: stream sweep points as they are captured | P2 | M | - (023 wants it) | TODO |
 | 021 | SDK: on-disk library of captured I-V curves + measurement metadata | P1 | M | - | DONE (code complete: `mpp_sdk/curves/` + `POST /save-curve`/`GET /curves`/`GET /measurement-kinds`, no-hardware smoke-tested. Step 6's vanilla-JS capture UI was skipped by operator direction - capture UI work now goes straight to plan 023's React frontend instead. Two real curves captured on the bench across differing `measurement` values is still open - needs the board) |
 | 022 | SDK: replay measured curves through the MPPT algorithm benchmark | P1 | M | 021 (hard) | TODO |
-| 023 | GUI: React + shadcn curve workbench, served from the Pi | P2 | L | 021 (hard), 020 (soft) | TODO |
+| 023 | GUI: React + shadcn curve workbench, served from the Pi | P2 | L | 021 (hard), 020 (hard) | IN PROGRESS (`frontend/` scaffolded - Vite+React+TS+Tailwind+shadcn/ui, builds clean to `frontend/dist`; UI is mock-data only, not yet wired to a backend. Operator redirected the API layer to FastAPI instead of this plan's stdlib-`http.server` design when a real backend is built - update this plan's Design section before resuming. Build output intentionally NOT yet pointed at `scripts/curve_tracer_web/` - that switch is a STOP-worthy step once the app is real) |
 | 024 | Bench: microcontroller-driven lamp dimmer - design spike | P3 | M | - | TODO |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) |
@@ -109,6 +109,27 @@ Recommended order, and why:
    put it a month out. Its Step 2 (low-light stability check) is worth
    doing early regardless - it needs no new hardware and would constrain
    every dimmer option.
+
+**2026-09-02 operator redirect**: 021 landed (see its table row). Rather
+than 022 next, the operator asked to jump to the frontend - React + pnpm
+scaffolded directly (`frontend/`, mock data, no backend wiring yet) so its
+shape (measurement-kind cards, a live capture pane with point-by-point
+drawing, a Pi-connection indicator) can be iterated on without the board.
+Two real deviations from this plan set to track:
+
+- **API layer**: build a FastAPI backend when the frontend needs real data,
+  not stdlib `http.server`. Plan 023's STOP conditions explicitly rejected
+  a web framework here ("adding Flask/FastAPI here would pull a runtime
+  dependency onto the Pi that this design deliberately avoids") - the
+  operator has decided that tradeoff is worth it for a cleaner API surface.
+  Update plan 023's Design section before resuming it, rather than treating
+  the STOP condition as still governing.
+- **020 is now a hard dependency of the live pane**, not soft: the operator
+  wants each captured point's `(index, V, I)` pushed from the Pico as it's
+  measured, which is exactly plan 020's progress-frame design. Point-by-point
+  drawing in `frontend/` is mocked (`useMockSweep`) until 020 lands - treat
+  plan 020's own risk warnings (MED-HIGH, reopens `spi_pio_task`) as fully
+  in force before touching firmware for this.
 
 **011 is DONE** (not an open item, and not a teammate hand-off - it landed
 in this session, merged as PR #50: feed-forward + proportional-trim
