@@ -17,12 +17,13 @@ __all__ = [
     "DynamicSimulatedSource",
     "NoisySource",
     "SpiMcuSource",
+    "SweepProgress",
 ]
 
 
 def __getattr__(name: str):
-    if name == "SpiMcuSource":
-        from .spi_mcu import SpiMcuSource  # noqa: PLC0415
+    if name in ("SpiMcuSource", "SweepProgress"):
+        from . import spi_mcu  # noqa: PLC0415
 
-        return SpiMcuSource
+        return getattr(spi_mcu, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

@@ -33,10 +33,14 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from mpp_sdk.curves import MEASUREMENT_KINDS, CurveRecord, PanelSetup
 from mpp_sdk.curves import library as curve_library
 from mpp_sdk.curves.record import now_utc
+
+if TYPE_CHECKING:
+    from mpp_sdk.io.spi_mcu import SweepProgress
 
 _WEB_ROOT = Path(__file__).parent / "curve_tracer_web"
 _STATIC_FILES = {
@@ -66,6 +70,12 @@ class _SweepCache:
         # landed" from "same sweep, polled again". The point count can't
         # do that job - every completed sweep returns the same 20 points.
         self._seq = 0
+        # Keyed by point index rather than a plain list: poll_sweep_progress()
+        # is lossy by design (a missed poll just means a gap, not a retry),
+        # so points can arrive with holes - sorting by index at snapshot
+        # time keeps `partial` in sweep order regardless.
+        self._partial: dict[int, tuple[float, float]] = {}
+        self._active = False
 
     def set(self, points: list[tuple[float, float]] | None, link: str) -> None:
         with self._lock:
@@ -74,9 +84,38 @@ class _SweepCache:
                 self._seq += 1
             self._link = link
 
-    def snapshot(self) -> tuple[list[tuple[float, float]], str, int]:
+    def set_progress(self, progress: SweepProgress | None) -> None:
+        """Update the in-progress-sweep view from one
+        `SpiMcuSource.poll_sweep_progress()` result. `None` (a lossy poll
+        miss, or no sweep has ever run) leaves `partial`/`active` as they
+        were - see that method's docstring."""
+        if progress is None:
+            return
         with self._lock:
-            return list(self._points), self._link, self._seq
+            if progress.active:
+                # A new sweep started if we weren't already mid-sweep, or
+                # if this point's index isn't past the highest one we've
+                # already recorded - indices only increase within a sweep,
+                # so seeing one at or below our high-water mark means the
+                # previous sweep's tail got skipped and this is the next
+                # sweep's own early point. Checking index == 0 alone isn't
+                # enough: poll_sweep_progress() is lossy and each
+                # _poll_loop iteration can easily take longer than the
+                # firmware needs to capture several points, so a new
+                # sweep's very first point is often missed entirely - that
+                # would otherwise leave the previous sweep's leftover
+                # points bleeding into this one's `partial`.
+                if not self._active or not self._partial or progress.index < max(self._partial):
+                    self._partial = {}
+                self._partial[progress.index] = (progress.voltage, progress.current)
+            self._active = progress.active
+
+    def snapshot(
+        self,
+    ) -> tuple[list[tuple[float, float]], str, int, list[tuple[float, float]], bool]:
+        with self._lock:
+            partial = [self._partial[idx] for idx in sorted(self._partial)]
+            return list(self._points), self._link, self._seq, partial, self._active
 
 
 def _poll_loop(
@@ -118,6 +157,13 @@ def _poll_loop(
                 cache.set(None, f"error: {exc}")
             else:
                 cache.set(result, "ok" if result is not None else "waiting for sweep")
+
+            # Independent of the bulk-read fetch above - a failure there
+            # must not stop live progress from still being reported this
+            # same iteration. Never raises (see its docstring): a dropped
+            # or corrupted progress poll is reported as None, not an error.
+            cache.set_progress(src.poll_sweep_progress())
+
             time.sleep(period_s)
 
 
@@ -155,10 +201,12 @@ def _make_handler(cache: _SweepCache, commands: queue.Queue[str]) -> type[BaseHT
             self.end_headers()
 
         def _serve_data(self) -> None:
-            points, link, seq = cache.snapshot()
+            points, link, seq, partial, active = cache.snapshot()
             self._serve_json(
                 {
                     "points": [{"x": v, "y": i * 1000.0} for v, i in points],
+                    "partial": [{"x": v, "y": i * 1000.0} for v, i in partial],
+                    "active": active,
                     "link": link,
                     "seq": seq,
                 }

@@ -208,6 +208,49 @@ pub fn restore_last_sweep(sweep: SweepResult) {
     });
 }
 
+/// One point's worth of in-progress sweep state, for the Pi to draw a
+/// sweep point-by-point instead of waiting for the bulk read at the end.
+/// Lossy by design - unlike `SweepResult`, a dropped update is not a lost
+/// measurement, since the bulk read remains the authoritative source once
+/// the sweep completes.
+#[derive(Clone, Copy)]
+pub struct SweepProgress {
+    /// Index of the point just captured, `0..TRACER_SWEEP_POINTS`.
+    pub index: u8,
+    pub v_mv: u16,
+    pub i_ma: u16,
+    /// `false` once the sweep this point belongs to has finished (or
+    /// aborted) - the Pi switches from drawing `partial` to trusting the
+    /// bulk-read `points` once it sees this go false.
+    pub active: bool,
+    /// `true` only on the one extra publish after the sweep loop exits,
+    /// marking "no more points are coming" distinct from the per-point
+    /// updates during the sweep (which are all `final_point: false`).
+    pub final_point: bool,
+}
+
+/// Most recent sweep-progress update, if any sweep has ever run.
+/// `critical_section::Mutex` for the same single-executor reasoning as
+/// `LAST_SWEEP` - see its doc comment.
+static PROGRESS: Mutex<RefCell<Option<SweepProgress>>> = Mutex::new(RefCell::new(None));
+
+/// Publishes one progress update - called by `run_sweep` after each
+/// captured point, and once more at the end with `active: false`.
+fn publish_progress(p: SweepProgress) {
+    critical_section::with(|cs| {
+        *PROGRESS.borrow(cs).borrow_mut() = Some(p);
+    });
+}
+
+/// Peeks (does not consume) the most recent progress update, `None` only
+/// if no sweep has ever run yet. Unlike `take_last_sweep`, this must not
+/// consume: a dropped progress frame is not a lost measurement (the bulk
+/// read still has it), and consuming would make a torn frame silently
+/// skip reporting a point that in fact happened.
+pub fn peek_progress() -> Option<SweepProgress> {
+    critical_section::with(|cs| *PROGRESS.borrow(cs).borrow())
+}
+
 /// A curve-tracer action the Pi can request over SPI - mirrors `But1`'s
 /// two effects (start a sweep; the relay's release, previously implicit
 /// at the end of every sweep, is now explicit-only).
@@ -514,6 +557,13 @@ impl CurveTracer {
 
             *point = (v_mv, i_ma);
             points_captured = step + 1;
+            publish_progress(SweepProgress {
+                index: step as u8,
+                v_mv,
+                i_ma,
+                active: true,
+                final_point: false,
+            });
         }
 
         // Always stop driving the bleed load and hand the gate back,
@@ -538,6 +588,28 @@ impl CurveTracer {
         for (idx, (v_mv, i_ma)) in points[..points_captured].iter().enumerate() {
             defmt::info!("curve_tracer: point {}: V={} mV I={} mA", idx, v_mv, i_ma);
         }
+
+        // One last progress update marking the sweep over - `active: false`
+        // is what tells the Pi to stop drawing `partial` and trust the bulk
+        // read instead. Index 0xFF (same sentinel as "no sweep has ever
+        // run") if the sweep produced zero points (e.g. auto_range aborted
+        // immediately) - there is no real last point to report.
+        let (last_v_mv, last_i_ma) = if points_captured > 0 {
+            points[points_captured - 1]
+        } else {
+            (0, 0)
+        };
+        publish_progress(SweepProgress {
+            index: if points_captured > 0 {
+                (points_captured - 1) as u8
+            } else {
+                0xFF
+            },
+            v_mv: last_v_mv,
+            i_ma: last_i_ma,
+            active: false,
+            final_point: true,
+        });
 
         // Publish for the SPI bulk-read path - overwrites whatever the
         // previous sweep left, fetched or not; only the most recent

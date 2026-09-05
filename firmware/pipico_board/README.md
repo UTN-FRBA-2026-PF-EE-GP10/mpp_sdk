@@ -109,7 +109,8 @@ calibrated units and this checksum).
 `CMD`/`ACK` are both `0x00` in normal operation - the curve-tracer
 control/bulk-read commands (see "Curve tracer" below) are the only thing
 that sets them: `0xB1` requests a bulk sweep-result dump, `0xB2` starts a
-sweep, `0xB3` releases the tracer relay.
+sweep, `0xB3` releases the tracer relay, `0xB4` polls the streamed
+in-progress-sweep state (see "Curve tracer" - streaming below).
 
 **Master clock speed**: 8 MHz is unreliable (occasional torn/garbled
 frames) - the GPIO input synchronizer latency eats too much of the 125 ns
@@ -425,6 +426,37 @@ A frame timeout at any point in the handshake (Pi didn't follow through,
 or a torn frame) resets straight back to normal telemetry rather than
 leaving `spi_pio_task` expecting a frame shape that never arrives - see
 `BulkState`'s doc comment in `spi_slave_pio.rs`.
+
+**Streaming**: alongside the bulk read above (which stays authoritative -
+this is an additional, optional view of a sweep *in progress*, not a
+replacement), the Pi can poll each point as `run_sweep` captures it
+instead of waiting for the whole sweep to finish. `mode_curve_tracer.rs`
+publishes a `SweepProgress` (`index`, `V_mV`, `I_mA`, `active`,
+`final_point`) after every captured point, plus once more with
+`active: false` when the sweep ends (breach or not) - `peek_progress()`
+reads it without consuming, so a dropped poll is not a lost measurement.
+
+The Pi requests one snapshot via `CMD = 0xB4` (`SpiMcuSource.poll_sweep_progress()`)
+on an ordinary frame; same one-exchange lag as the bulk-read ack above -
+the *next* exchange's MISO carries the reply, reusing the steady frame's
+spare bytes rather than growing it:
+
+```text
+[ IDX | V_H | V_L | I_H | I_L | FLAGS | 0x00 | 0x00 | CHECKSUM | ACK | 0x00 x 2 ]
+```
+
+`IDX` is `0..TRACER_SWEEP_POINTS`, or `0xFF` for two distinct cases that
+share the sentinel: no sweep has ever run yet (`FLAGS` bit 1 clear), or a
+sweep that captured zero points, e.g. `auto_range()` aborted immediately
+(`FLAGS` bit 1 set - there's no real last point to report, but it is a
+real "sweep is over" update and must not be read as "nothing new").
+`FLAGS` bit 0 is `active`, bit 1 is `final_point` - `final_point` is what
+tells the two `0xFF` cases apart, so a consumer must check it before
+treating `IDX == 0xFF` as "no update". `CHECKSUM`/`ACK` follow the same
+XOR-over-payload convention as the telemetry frame (`ACK` is always `0x00`
+here - a progress reply never also acks a bulk-dump request). Frame length
+is unchanged at 12 bytes - unlike the bulk read, this fits entirely inside
+the steady frame's existing shape.
 
 ## Status indicators
 

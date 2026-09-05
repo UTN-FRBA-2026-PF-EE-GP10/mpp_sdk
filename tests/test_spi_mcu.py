@@ -394,3 +394,144 @@ def test_start_sweep_still_updates_telemetry(spi_mcu_source):
     v, i = src.read()
     assert v == pytest.approx(5.0)
     assert i == pytest.approx(0.25)
+
+
+# ------------------------------------------------------------------
+# poll_sweep_progress() - point-by-point streaming
+# ------------------------------------------------------------------
+
+
+def _progress_frame(
+    index: int,
+    v_mv: int,
+    i_ma: int,
+    *,
+    active: bool,
+    final_point: bool,
+    corrupt: bool = False,
+) -> list[int]:
+    flags = (0b01 if active else 0) | (0b10 if final_point else 0)
+    data = [
+        index & 0xFF,
+        (v_mv >> 8) & 0xFF,
+        v_mv & 0xFF,
+        (i_ma >> 8) & 0xFF,
+        i_ma & 0xFF,
+        flags,
+        0,
+        0,
+    ]
+    checksum = 0
+    for byte in data:
+        checksum ^= byte
+    if corrupt:
+        checksum ^= 0x01
+    return [*data, checksum, 0, 0, 0]  # ack=0 (a progress reply never also acks a bulk request)
+
+
+def test_poll_sweep_progress_sends_stream_poll_then_a_plain_frame(spi_mcu_source):
+    """One-iteration-lag protocol: the poll command rides the first
+    exchange, the response to it rides the second."""
+    src = spi_mcu_source()
+    src._spi.responses = [
+        _miso_frame(v_raw=0, i_raw=0, vout_raw=0, temp_raw=0),
+        _progress_frame(3, 12000, 150, active=True, final_point=False),
+    ]
+    src.poll_sweep_progress()
+    assert len(src._spi.sent) == 2
+    assert src._spi.sent[0][3] == 0xB4  # CMD_STREAM_POLL
+    assert src._spi.sent[1][3] == 0x00  # plain duty frame
+
+
+def test_poll_sweep_progress_parses_a_mid_sweep_point(spi_mcu_source):
+    from mpp_sdk.io.spi_mcu import SweepProgress
+
+    src = spi_mcu_source()
+    src._spi.responses = [
+        _miso_frame(v_raw=0, i_raw=0, vout_raw=0, temp_raw=0),
+        _progress_frame(3, 12000, 150, active=True, final_point=False),
+    ]
+    progress = src.poll_sweep_progress()
+    assert progress == SweepProgress(
+        index=3,
+        voltage=pytest.approx(12.0),
+        current=pytest.approx(0.15),
+        active=True,
+        final_point=False,
+    )
+
+
+def test_poll_sweep_progress_first_exchange_updates_telemetry_not_progress_fields(spi_mcu_source):
+    """The first exchange's response is the firmware's previous (ordinary
+    telemetry) state, not the progress frame - read()/vout() must reflect
+    it same as any other command byte."""
+    src = spi_mcu_source()
+    src._spi.responses = [
+        _miso_frame(v_raw=5000, i_raw=250, vout_raw=3300, temp_raw=0),
+        _progress_frame(3, 12000, 150, active=True, final_point=False),
+    ]
+    src.poll_sweep_progress()
+    v, i = src.read()
+    assert v == pytest.approx(5.0)
+    assert i == pytest.approx(0.25)
+
+
+def test_poll_sweep_progress_no_sweep_yet_returns_none(spi_mcu_source):
+    src = spi_mcu_source()
+    src._spi.responses = [
+        _miso_frame(v_raw=0, i_raw=0, vout_raw=0, temp_raw=0),
+        _progress_frame(0xFF, 0, 0, active=False, final_point=False),
+    ]
+    assert src.poll_sweep_progress() is None
+
+
+def test_poll_sweep_progress_corrupted_frame_returns_none_not_garbage(spi_mcu_source):
+    src = spi_mcu_source()
+    src._spi.responses = [
+        _miso_frame(v_raw=0, i_raw=0, vout_raw=0, temp_raw=0),
+        _progress_frame(3, 12000, 150, active=True, final_point=False, corrupt=True),
+    ]
+    assert src.poll_sweep_progress() is None
+
+
+def test_poll_sweep_progress_reports_the_final_point_flag(spi_mcu_source):
+    src = spi_mcu_source()
+    src._spi.responses = [
+        _miso_frame(v_raw=0, i_raw=0, vout_raw=0, temp_raw=0),
+        _progress_frame(19, 8000, 210, active=False, final_point=True),
+    ]
+    progress = src.poll_sweep_progress()
+    assert progress.active is False
+    assert progress.final_point is True
+    assert progress.index == 19
+
+
+def test_poll_sweep_progress_zero_point_sweep_reports_final_not_none(spi_mcu_source):
+    """A sweep that captured zero points (e.g. auto_range() aborted
+    immediately) still uses index 0xFF for its one real "sweep is over"
+    update - same sentinel as "no sweep has ever run" - but sets
+    final_point, which is what tells the two apart. Losing that distinction
+    would leave a consumer's `active` state stuck forever."""
+    src = spi_mcu_source()
+    src._spi.responses = [
+        _miso_frame(v_raw=0, i_raw=0, vout_raw=0, temp_raw=0),
+        _progress_frame(0xFF, 0, 0, active=False, final_point=True),
+    ]
+    progress = src.poll_sweep_progress()
+    assert progress is not None
+    assert progress.active is False
+    assert progress.final_point is True
+
+
+def test_poll_sweep_progress_out_of_range_index_returns_none(spi_mcu_source):
+    """An index that is neither a valid point (0..TRACER_SWEEP_POINTS) nor
+    the no-sweep-yet sentinel (0xFF) isn't trustworthy as a progress frame
+    at all - most likely our CMD_STREAM_POLL request was dropped (a MOSI
+    checksum failure on the first exchange) and this second exchange's MISO
+    is just ordinary telemetry, not a progress reply."""
+    src = spi_mcu_source()
+    src._spi.responses = [
+        _miso_frame(v_raw=0, i_raw=0, vout_raw=0, temp_raw=0),
+        _progress_frame(42, 12000, 150, active=True, final_point=False),
+    ]
+    assert src.poll_sweep_progress() is None
