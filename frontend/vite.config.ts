@@ -3,10 +3,9 @@ import react from '@vitejs/plugin-react'
 import path from 'node:path'
 import { defineConfig } from 'vite'
 
-// Build output stays in frontend/dist (gitignored) for now - this is a
-// mock-data prototype, not yet the production build plan 023 will commit
-// to scripts/curve_tracer_web/. Point outDir there only once this frontend
-// is actually wired to a real backend and replaces the vanilla JS UI.
+// Build output is committed to scripts/curve_tracer_web/ on purpose: the Pi
+// serves prebuilt static files from curve_tracer_server.py and must not
+// need Node installed at runtime.
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
@@ -15,4 +14,16 @@ export default defineConfig({
     },
   },
   base: './',
+  build: {
+    outDir: '../scripts/curve_tracer_web',
+    emptyOutDir: true,
+  },
+  server: {
+    // `pnpm dev` only serves the frontend - proxy API calls to a
+    // separately-running `mpp-sdk curve-tracer-web` (default :8000) so
+    // fetch('/api/...') works the same as it does from the built app.
+    proxy: {
+      '/api': 'http://localhost:8000',
+    },
+  },
 })

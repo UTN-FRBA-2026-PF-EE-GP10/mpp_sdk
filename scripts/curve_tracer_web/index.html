@@ -1,163 +1,17 @@
 <!doctype html>
-<html>
-
-<head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-    <title>Curve Tracer</title>
-    <link rel="icon"
-        href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%2210 0 100 100%22><text y=%22.90em%22 font-size=%2290%22>%F0%9F%8C%9E</text></svg>">
-    </link>
-    <!--
-    Adapted from the ESP32-C3 reference implementation's web UI
-    (https://github.com/fborello-lambda/solar_panel_curve_tracer, spiffs/) -
-    same dark solar theme and Chart.js setup, trimmed to what this board
-    actually supports: no settable current range (this board has no
-    current dial). This page polls /data (scripts/curve_tracer_server.py)
-    and plots whatever it gets back, and can trigger a sweep or release
-    the tracer relay directly - both also still work via the board's
-    physical But1 button.
-    -->
-    <style>
-        :root {
-            /* orange / sun theme */
-            --bg: #0b1220;
-            --fg: #fff8ec;
-            --muted: #ffcc99;
-            --accent: #ff9800;
-        }
-
-        html,
-        body {
-            height: 100%;
-            margin: 0;
-            background: var(--bg);
-            color: var(--fg);
-            font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial
-        }
-
-        #wrap {
-            max-width: 820px;
-            margin: 12px auto;
-            padding: 12px
-        }
-
-        h1 {
-            font-size: 18px;
-            margin: 0 0 8px 0;
-            color: var(--fg)
-        }
-
-        .toolbar {
-            display: flex;
-            gap: 12px;
-            align-items: center;
-            margin-bottom: 8px;
-            flex-wrap: wrap;
-            justify-content: center;
-        }
-
-        #chartBox {
-            background: #000;
-            border-radius: 8px;
-            overflow: hidden;
-            padding: 8px;
-            display: flex;
-            flex-direction: column;
-            height: 360px;
-            min-height: 240px;
-        }
-
-        canvas {
-            display: block;
-            width: 100%;
-            height: 100%;
-            box-sizing: border-box;
-            flex: 1 1 auto;
-        }
-
-        @media (max-width:420px) {
-            canvas {
-                height: 44vh;
-            }
-        }
-
-        .ctrl-label {
-            font-size: 12px;
-            color: var(--muted);
-        }
-
-        .btn {
-            display: inline-block;
-            padding: 6px 12px;
-            border: none;
-            border-radius: 999px;
-            background: linear-gradient(135deg, var(--accent), #ffb74d);
-            color: var(--bg);
-            font-weight: 600;
-            cursor: pointer;
-            box-shadow: 0 6px 14px rgba(255, 152, 0, 0.12), inset 0 -2px 0 rgba(0, 0, 0, 0.08);
-            transition: transform 100ms ease, box-shadow 100ms ease, filter 120ms;
-        }
-
-        .btn:hover {
-            transform: translateY(-2px);
-            filter: brightness(1.02);
-        }
-
-        .btn:active {
-            transform: translateY(0);
-            box-shadow: 0 3px 8px rgba(0, 0, 0, 0.12);
-        }
-
-        .btn.tertiary {
-            background: linear-gradient(135deg, #ffa726, #ffcc80);
-            color: var(--bg);
-        }
-    </style>
-</head>
-
-<body>
-    <div id="wrap">
-        <h1 align="center">Solar Panel I-V Curve 📏📝</h1>
-
-        <div id="tb1" class="toolbar">
-            <span id="linkStatus" class="ctrl-label">Link: --</span>
-        </div>
-
-        <div id="chartBox">
-            <canvas id="chartCanvas"></canvas>
-        </div>
-
-        <div id="tb2" class="toolbar">
-            <div class="controls">
-                <button id="autoBtn" class="btn">Auto</button>
-                <button id="autoPowerBtn" class="btn">Auto Power</button>
-                <button id="unitBtn" class="btn tertiary">A/mA</button>
-            </div>
-        </div>
-
-        <div id="tb4" class="toolbar">
-            <button id="startSweepBtn" class="btn">Start Sweep</button>
-            <button id="releaseRelayBtn" class="btn tertiary">Release Relay</button>
-        </div>
-
-        <div id="tb3" class="toolbar">
-            <span id="mpptCurrent" class="ctrl-label">MPPT Current: -- mA</span>
-            <span id="mpptVoltage" class="ctrl-label">MPPT Voltage: -- V</span>
-            <span id="info" class="ctrl-label">points: 0</span>
-        </div>
-
-        <p class="ctrl-label" align="center">
-            Start Sweep triggers a sweep; the tracer relay stays engaged
-            across sweeps until Release Relay is pressed. The board's
-            physical <b>But1</b> button does the same. This page polls for
-            the latest result every few seconds.
-        </p>
-    </div>
-
-    <script src="/chart.umd.min.js"></script>
-    <script src="/script.js"></script>
-</body>
-
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>%F0%9F%8C%9E</text></svg>"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Curve Workbench</title>
+    <script type="module" crossorigin src="./assets/index-CFmQnAZ4.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-DSvm6Gey.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
 </html>

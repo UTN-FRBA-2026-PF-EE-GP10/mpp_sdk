@@ -1,21 +1,18 @@
-"""Minimal HTTP server: serves the curve-tracer web UI and a `/data` JSON
-endpoint backed by `SpiMcuSource.request_sweep()`.
+"""FastAPI server: serves the built curve-tracer React frontend (`frontend/`,
+see its README) and a JSON API backed by `SpiMcuSource` / `mpp_sdk.curves`.
 
-Standard-library only (`http.server`) - this is meant to run on the same
-Raspberry Pi that already talks to the RP2040 over SPI, so no extra
-dependency is worth adding just to view an I-V curve in a browser. The
-static page under `curve_tracer_web/` is adapted from
-https://github.com/fborello-lambda/solar_panel_curve_tracer's `spiffs/`
-(MIT licensed) - same dark-theme Chart.js UI, trimmed to what this board
-supports (no settable current dial).
+Needs the `web` extra (`uv sync --extra web`) for `fastapi`/`uvicorn`, and
+`hardware` for real SPI access - both optional so the base install stays
+lean (AGENTS.md). A background thread calls `request_sweep()` /
+`poll_sweep_progress()` in a loop and caches the latest result; route
+handlers just read the cache, so a slow SPI round-trip never blocks a page
+load. `spidev` isn't documented thread-safe, so that same thread is the
+only thing that ever touches `SpiMcuSource` - the start-sweep/release-relay
+routes hand their request off through a queue instead of calling into it
+directly from a request-handling thread.
 
-A background thread calls `request_sweep()` in a loop (it already polls
-the firmware's ack internally) and caches the latest result; HTTP
-handlers just read the cache, so a slow SPI round-trip never blocks a
-page load. `spidev` isn't documented thread-safe, so that same thread is
-the only thing that ever touches `SpiMcuSource` - the Start Sweep/Release
-Relay POST endpoints hand their request off through a queue instead of
-calling into it directly from a handler thread.
+API routes are under `/api/` so they never collide with the frontend's
+static assets, which are mounted at `/`.
 
 Usage::
 
@@ -27,11 +24,9 @@ Usage::
 from __future__ import annotations
 
 import argparse
-import json
 import queue
 import threading
 import time
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -39,24 +34,20 @@ from mpp_sdk.curves import MEASUREMENT_KINDS, CurveRecord, PanelSetup
 from mpp_sdk.curves import library as curve_library
 from mpp_sdk.curves.record import now_utc
 
+try:
+    from fastapi import FastAPI, HTTPException
+    from fastapi.staticfiles import StaticFiles
+    from pydantic import BaseModel
+except ModuleNotFoundError as exc:  # pragma: no cover
+    raise ModuleNotFoundError(
+        "fastapi is required for the curve-tracer server. "
+        "Install it with: uv add 'mpp-sdk[web]' (or --extra web)"
+    ) from exc
+
 if TYPE_CHECKING:
     from mpp_sdk.io.spi_mcu import SweepProgress
 
 _WEB_ROOT = Path(__file__).parent / "curve_tracer_web"
-_STATIC_FILES = {
-    "/": "index.html",
-    "/index.html": "index.html",
-    "/script.js": "script.js",
-    "/chart.umd.min.js": "chart.umd.min.js",
-}
-_POST_COMMANDS = {
-    "/start-sweep": "start_sweep",
-    "/release-relay": "release_relay",
-}
-_CONTENT_TYPES = {
-    ".html": "text/html; charset=utf-8",
-    ".js": "text/javascript; charset=utf-8",
-}
 
 
 class _SweepCache:
@@ -167,124 +158,105 @@ def _poll_loop(
             time.sleep(period_s)
 
 
-def _make_handler(cache: _SweepCache, commands: queue.Queue[str]) -> type[BaseHTTPRequestHandler]:
-    class Handler(BaseHTTPRequestHandler):
-        def log_message(self, fmt: str, *args: object) -> None:  # noqa: A002
-            pass  # keep stdout to the poll loop's own status, not per-request access logs
+class _PanelSetupIn(BaseModel):
+    id: str
+    tilt_deg: float
 
-        def do_GET(self) -> None:  # noqa: N802
-            if self.path == "/data":
-                self._serve_data()
-                return
-            if self.path == "/curves":
-                self._serve_curve_list()
-                return
-            if self.path == "/measurement-kinds":
-                self._serve_json(list(MEASUREMENT_KINDS))
-                return
-            filename = _STATIC_FILES.get(self.path)
-            if filename is None:
-                self.send_error(404)
-                return
-            self._serve_static(filename)
 
-        def do_POST(self) -> None:  # noqa: N802
-            if self.path == "/save-curve":
-                self._save_curve()
-                return
-            cmd = _POST_COMMANDS.get(self.path)
-            if cmd is None:
-                self.send_error(404)
-                return
-            commands.put_nowait(cmd)
-            self.send_response(204)
-            self.end_headers()
+class _SaveCurveRequest(BaseModel):
+    label: str = ""
+    measurement: str = "other"
+    panels: list[_PanelSetupIn] = []
+    notes: str = ""
 
-        def _serve_data(self) -> None:
-            points, link, seq, partial, active = cache.snapshot()
-            self._serve_json(
-                {
-                    "points": [{"x": v, "y": i * 1000.0} for v, i in points],
-                    "partial": [{"x": v, "y": i * 1000.0} for v, i in partial],
-                    "active": active,
-                    "link": link,
-                    "seq": seq,
-                }
-            )
 
-        def _serve_static(self, filename: str) -> None:
-            path = _WEB_ROOT / filename
-            body = path.read_bytes()
-            self.send_response(200)
-            self.send_header("Content-Type", _CONTENT_TYPES[path.suffix])
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
+def create_app(cache: _SweepCache, commands: queue.Queue[str]) -> FastAPI:
+    """Build the FastAPI app against a given cache/command queue - a
+    parameter rather than a module global so tests can construct one
+    against a fake cache with no hardware and no running poll thread."""
+    app = FastAPI(title="curve-tracer")
 
-        def _serve_json(self, payload: object, status: int = 200) -> None:
-            body = json.dumps(payload).encode("utf-8")
-            self.send_response(status)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
+    @app.get("/api/data")
+    def get_data() -> dict:
+        points, link, seq, partial, active = cache.snapshot()
+        return {
+            "points": [{"x": v, "y": i * 1000.0} for v, i in points],
+            "partial": [{"x": v, "y": i * 1000.0} for v, i in partial],
+            "active": active,
+            "link": link,
+            "seq": seq,
+        }
 
-        def _serve_curve_list(self) -> None:
-            directory = curve_library.default_dir()
-            paths = sorted(directory.glob("*.json")) if directory.exists() else []
-            entries = []
-            for path in paths:
-                # Curve files are hand-edited by operators (see library.load's
-                # docstring), so a single malformed or empty-points file must
-                # not take the whole listing down - report it and move on.
-                try:
-                    r = curve_library.load(path)
-                    entries.append(
-                        {
-                            "path": str(path),
-                            "captured_at": r.captured_at.isoformat(),
-                            "label": r.label,
-                            "measurement": r.measurement,
-                            "n_points": len(r.points),
-                            "voc": r.open_circuit_voltage,
-                            "isc": r.short_circuit_current,
-                            "p_mpp": r.mpp()[2],
-                        }
-                    )
-                except ValueError as exc:
-                    entries.append({"path": str(path), "error": str(exc)})
-            self._serve_json(entries)
+    @app.get("/api/measurement-kinds")
+    def get_measurement_kinds() -> list[str]:
+        return list(MEASUREMENT_KINDS)
 
-        def _save_curve(self) -> None:
-            points, _link, _seq = cache.snapshot()
-            if not points:
-                self._serve_json({"error": "no sweep captured yet"}, status=409)
-                return
-            length = int(self.headers.get("Content-Length", "0"))
+    @app.get("/api/curves")
+    def get_curves() -> list[dict]:
+        directory = curve_library.default_dir()
+        paths = sorted(directory.glob("*.json")) if directory.exists() else []
+        entries = []
+        for path in paths:
+            # Curve files are hand-edited by operators (see library.load's
+            # docstring), so a single malformed or empty-points file must
+            # not take the whole listing down - report it and move on.
             try:
-                body = json.loads(self.rfile.read(length)) if length else {}
-                record = CurveRecord(
-                    captured_at=now_utc(),
-                    label=body.get("label", ""),
-                    measurement=body.get("measurement", "other"),
-                    panels=tuple(PanelSetup.from_dict(p) for p in body.get("panels", [])),
-                    points=tuple(points),
-                    notes=body.get("notes", ""),
+                r = curve_library.load(path)
+                entries.append(
+                    {
+                        "path": str(path),
+                        "captured_at": r.captured_at.isoformat(),
+                        "label": r.label,
+                        "measurement": r.measurement,
+                        "panels": [p.to_dict() for p in r.panels],
+                        "n_points": len(r.points),
+                        "voc": r.open_circuit_voltage,
+                        "isc": r.short_circuit_current,
+                        "p_mpp": r.mpp()[2],
+                    }
                 )
-            except (json.JSONDecodeError, KeyError, TypeError, AttributeError) as exc:
-                # Server binds 0.0.0.0 by default, so a malformed request
-                # (bad JSON, or a panel missing "id"/"tilt_deg") must get a
-                # clean error back, not an unhandled traceback that aborts
-                # the connection.
-                self._serve_json({"error": f"bad request body: {exc}"}, status=400)
-                return
-            path = curve_library.save(record)
-            self._serve_json({"path": str(path)})
+            except ValueError as exc:
+                entries.append({"path": str(path), "error": str(exc)})
+        return entries
 
-    return Handler
+    @app.post("/api/save-curve")
+    def post_save_curve(body: _SaveCurveRequest) -> dict:
+        points, _link, _seq, _partial, _active = cache.snapshot()
+        if not points:
+            raise HTTPException(status_code=409, detail="no sweep captured yet")
+        record = CurveRecord(
+            captured_at=now_utc(),
+            label=body.label,
+            measurement=body.measurement,
+            panels=tuple(PanelSetup(id=p.id, tilt_deg=p.tilt_deg) for p in body.panels),
+            points=tuple(points),
+            notes=body.notes,
+        )
+        path = curve_library.save(record)
+        return {"path": str(path)}
+
+    @app.post("/api/start-sweep", status_code=204)
+    def post_start_sweep() -> None:
+        commands.put_nowait("start_sweep")
+
+    @app.post("/api/release-relay", status_code=204)
+    def post_release_relay() -> None:
+        commands.put_nowait("release_relay")
+
+    if _WEB_ROOT.exists():
+        # Mounted last: FastAPI/Starlette match routes in registration
+        # order, so the decorated /api/* routes above always win over this
+        # catch-all. `html=True` serves index.html at "/"; the frontend has
+        # no client-side router, so there's no unknown-path fallback to
+        # provide - anything else under here 404s normally.
+        app.mount("/", StaticFiles(directory=_WEB_ROOT, html=True), name="frontend")
+
+    return app
 
 
 def main() -> None:
+    import uvicorn
+
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--host", default="0.0.0.0")
     parser.add_argument("--port", type=int, default=8000)
@@ -316,14 +288,9 @@ def main() -> None:
     )
     poll_thread.start()
 
-    server = ThreadingHTTPServer((args.host, args.port), _make_handler(cache, commands))
+    app = create_app(cache, commands)
     print(f"Serving curve-tracer UI on http://{args.host}:{args.port}/ (Ctrl+C to stop)")
-    try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        pass
-    finally:
-        server.server_close()
+    uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
 
 
 if __name__ == "__main__":

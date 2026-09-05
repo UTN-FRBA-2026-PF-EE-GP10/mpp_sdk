@@ -1,7 +1,7 @@
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
-import { MEASUREMENT_KIND_INFO, type CurveRecord, type MeasurementKind } from '@/types'
+import { getMeasurementKindInfo, type CurveRecord } from '@/types'
 
 export function MeasurementKindCard({
   kind,
@@ -9,12 +9,12 @@ export function MeasurementKindCard({
   selected,
   onSelect,
 }: {
-  kind: MeasurementKind
+  kind: string
   records: CurveRecord[]
   selected: boolean
   onSelect: () => void
 }) {
-  const info = MEASUREMENT_KIND_INFO[kind]
+  const info = getMeasurementKindInfo(kind)
   return (
     <Card
       role="button"

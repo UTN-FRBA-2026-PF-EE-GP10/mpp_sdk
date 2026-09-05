@@ -6,30 +6,40 @@ React + TypeScript curve-tracer UI (plan 023), scaffolded with
 dependency - only the pieces actually used live under
 `src/components/ui/`).
 
-**Current status**: mock-data prototype only. Nothing here talks to the Pi
-yet - `src/lib/mockCurves.ts` and `src/hooks/useMockSweep.ts` stand in for
-the real `GET /curves` library and plan 020's per-point streaming. See
-`improve/2026-07-18/plans/README.md`'s 2026-09-02 note on plan 023 for the
-two decisions that diverge from that plan's original design (a FastAPI
-backend instead of stdlib `http.server`; point-by-point streaming promoted
-from a soft to a hard dependency).
+**Current status**: wired to a real backend -
+`scripts/curve_tracer_server.py`'s FastAPI app (`mpp-sdk[web]`). `src/lib/api.ts`
+is the one place that talks to it (`GET /api/data`/`/api/curves`/
+`/api/measurement-kinds`, `POST /api/save-curve`/`/api/start-sweep`/
+`/api/release-relay`) and the one place the mA/A unit boundary is crossed.
+This replaced the earlier mock-data prototype and the vanilla-JS page
+under `scripts/curve_tracer_web/` (now the build output directory below,
+not source). See `improve/2026-07-18/plans/README.md`'s notes on plan 023
+for the two decisions that diverge from that plan's original design (a
+FastAPI backend instead of stdlib `http.server`; point-by-point streaming
+promoted from a soft to a hard dependency - plan 020 landed first).
 
 ## Develop
 
 ```bash
 pnpm install
-pnpm dev       # http://localhost:5173
+pnpm dev       # http://localhost:5173 - proxies /api/* to :8000 (vite.config.ts)
 ```
+
+Run the backend alongside it in another terminal:
+`uv run mpp-sdk curve-tracer-web` (needs `uv sync --extra web --extra hardware`;
+without a board attached, `/api/data` just reports `link: "error: ..."`
+forever - the API itself still works for browsing/saving curves).
 
 ## Build
 
 ```bash
-pnpm build     # tsc -b && vite build -> frontend/dist/ (gitignored)
+pnpm build     # tsc -b && vite build -> scripts/curve_tracer_web/
 ```
 
-Build output is **not yet** committed to `scripts/curve_tracer_web/` -
-that switch (replacing the vanilla-JS UI the Pi currently serves) happens
-once this app is wired to a real backend, per plan 023.
+Build output is **committed** on purpose (plan 023): the Pi serves
+prebuilt static files from `curve_tracer_server.py` and must not need Node
+installed at runtime. Rebuild and commit the output whenever `src/`
+changes - nothing regenerates it automatically.
 
 ## Dependencies, and why
 
