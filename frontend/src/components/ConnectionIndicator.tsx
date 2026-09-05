@@ -1,23 +1,25 @@
 import { cn } from '@/lib/utils'
-import type { ConnectionStatus } from '@/types'
+import { isLiveConnection, type ConnectionStatus } from '@/types'
 
 const LABEL: Record<ConnectionStatus, string> = {
   connecting: 'Connecting...',
   connected: 'Pi connected',
   disconnected: 'Disconnected',
+  demo: 'Demo mode - simulated',
 }
 
 const DOT_CLASS: Record<ConnectionStatus, string> = {
   connecting: 'bg-amber-500',
   connected: 'bg-emerald-500',
   disconnected: 'bg-red-500',
+  demo: 'bg-sky-500',
 }
 
 export function ConnectionIndicator({ status }: { status: ConnectionStatus }) {
   return (
     <div className="flex items-center gap-2 rounded-full border px-3 py-1 text-sm text-muted-foreground">
       <span className="relative flex size-2.5">
-        {status === 'connected' && (
+        {isLiveConnection(status) && (
           <span
             className={cn(
               'absolute inline-flex size-full animate-ping rounded-full opacity-60',

@@ -7,6 +7,7 @@ const POLL_MS = 2000
 function statusFromLink(link: string): ConnectionStatus {
   if (link === 'no data yet') return 'connecting'
   if (link.startsWith('error')) return 'disconnected'
+  if (link === 'demo') return 'demo' // curve_tracer_server.py --demo - simulated, no board
   return 'connected' // "ok" or "waiting for sweep" - the Pi is talking to the Pico either way
 }
 

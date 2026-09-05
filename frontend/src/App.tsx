@@ -4,7 +4,7 @@ import { CurveWorkbench } from '@/components/CurveWorkbench'
 import { MeasurementKindCard } from '@/components/MeasurementKindCard'
 import { useConnectionStatus } from '@/hooks/useConnectionStatus'
 import { fetchCurves, fetchMeasurementKinds } from '@/lib/api'
-import { MEASUREMENT_KINDS, type CurveRecord } from '@/types'
+import { isLiveConnection, MEASUREMENT_KINDS, type CurveRecord } from '@/types'
 
 export default function App() {
   const connectionStatus = useConnectionStatus()
@@ -72,7 +72,7 @@ export default function App() {
         key={selected}
         kind={selected}
         records={byKind.get(selected) ?? []}
-        connected={connectionStatus === 'connected'}
+        connected={isLiveConnection(connectionStatus)}
         onSaved={() => setReloadToken((t) => t + 1)}
       />
     </div>
