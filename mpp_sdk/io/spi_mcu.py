@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from dataclasses import dataclass
 
 from .base import SignalSource
 
@@ -33,6 +34,14 @@ _BULK_FRAME_LEN = 2 + _TRACER_SWEEP_POINTS * 4 + 1
 _CMD_START_SWEEP = 0xB2
 _CMD_RELEASE_RELAY = 0xB3
 
+# Curve-tracer streaming-progress poll - must match spi_slave_pio.rs's
+# CMD_STREAM_POLL and mode_curve_tracer.rs's SweepProgress/PROGRESS_FLAG_*
+# exactly.
+_CMD_STREAM_POLL = 0xB4
+_PROGRESS_NO_SWEEP_INDEX = 0xFF
+_PROGRESS_FLAG_ACTIVE = 0b01
+_PROGRESS_FLAG_FINAL = 0b10
+
 # Pause between reading an armed ack and clocking the bulk transaction,
 # giving the firmware time to re-arm its DMA for the larger frame - see
 # _bulk_read(). Microseconds would do; this is generous and costs nothing
@@ -49,6 +58,24 @@ _MAX_POLL_INTERVAL_S = 0.08
 
 def _to_signed_i16(raw: int) -> int:
     return raw - 65536 if raw >= 32768 else raw
+
+
+@dataclass(frozen=True)
+class SweepProgress:
+    """One in-progress-sweep update, from ``SpiMcuSource.poll_sweep_progress()``.
+
+    ``voltage``/``current`` are already scaled to physical units, same
+    convention as ``read()``. ``active`` goes ``False`` on the one extra
+    update published when a sweep ends (see ``final_point``) - a consumer
+    should stop drawing further updates and trust the next bulk-read
+    result instead once it sees that.
+    """
+
+    index: int
+    voltage: float
+    current: float
+    active: bool
+    final_point: bool
 
 
 class SpiMcuSource(SignalSource):
@@ -77,7 +104,9 @@ class SpiMcuSource(SignalSource):
     replaying a stale value (see ``_transact()``). ``CMD``/``ACK`` are the
     curve-tracer bulk-read handshake bytes (see ``request_sweep()``) -
     both 0 in normal operation, so plain ``read()``/``write()`` usage is
-    unaffected.
+    unaffected. ``poll_sweep_progress()`` uses the same ``CMD``/``ACK``
+    bytes for a different, one-exchange-lag handshake (see its docstring) -
+    the two are mutually exclusive per exchange, never both at once.
 
     Usage::
 
@@ -145,6 +174,38 @@ class SpiMcuSource(SignalSource):
 
     # ── internal ──────────────────────────────────────────────────────────────
 
+    def _xfer_checked(self, duty: float, cmd: int) -> tuple[list[int], int] | None:
+        """Low-level full-duplex exchange shared by ``_transact()`` and
+        ``poll_sweep_progress()``: sends *duty*/*cmd* as a normal MOSI frame
+        and validates the MISO checksum, without interpreting the 8 payload
+        bytes' meaning - that differs between a telemetry frame and a
+        progress frame, both otherwise the same shape. Returns
+        ``(payload_bytes, ack)`` on a valid frame, ``None`` on a checksum
+        mismatch (a corrupted-but-complete frame, plan 014).
+        """
+        duty_u16 = max(0, min(65535, round(duty * 65535)))
+        duty_h, duty_l = duty_u16 >> 8, duty_u16 & 0xFF
+        # `cmd` participates in the checksum (matches
+        # spi_slave_pio.rs's apply_duty_frame) so a corrupted frame can't
+        # spoof a bulk-dump request by chance; `cmd` is 0 on every call
+        # except request_sweep()'s/poll_sweep_progress()'s first, so XOR
+        # with 0 leaves the normal write()/read() checksum unchanged.
+        tx = [duty_h, duty_l, duty_h ^ duty_l ^ cmd, cmd] + [0] * 8
+        rx = self._spi.xfer2(list(tx))
+
+        # The MISO checksum covers the 8 payload bytes and the ack byte
+        # (rx[9]) - the latter is a command to us, not a reading, so a bit
+        # flip setting its top bit would otherwise send us off to clock an
+        # 83-byte bulk read against firmware still sending telemetry. It
+        # sits after the checksum byte in the frame; that is only byte
+        # order, both sides XOR it in the same way.
+        expected_checksum = rx[9]
+        for byte in rx[0:8]:
+            expected_checksum ^= byte
+        if rx[8] != expected_checksum:
+            return None
+        return rx[0:8], rx[9]
+
     def _transact(self, duty: float, cmd: int = 0) -> tuple[int, int, int, int, int]:
         """Send *duty* (and, if given, a curve-tracer bulk-read *cmd* byte).
 
@@ -160,34 +221,16 @@ class SpiMcuSource(SignalSource):
         spuriously re-triggering ``_bulk_read()`` - a checksum failure
         always reports ``ack=0`` ("nothing new this frame") instead.
         """
-        duty_u16 = max(0, min(65535, round(duty * 65535)))
-        duty_h, duty_l = duty_u16 >> 8, duty_u16 & 0xFF
-        # `cmd` participates in the checksum (matches
-        # spi_slave_pio.rs's apply_duty_frame) so a corrupted frame can't
-        # spoof a bulk-dump request by chance; `cmd` is 0 on every call
-        # except request_sweep()'s first, so XOR with 0 leaves the normal
-        # write()/read() checksum unchanged.
-        tx = [duty_h, duty_l, duty_h ^ duty_l ^ cmd, cmd] + [0] * 8
-        rx = self._spi.xfer2(list(tx))
-
-        # The MISO checksum covers the 8 telemetry bytes and the ack byte
-        # (rx[9]) - the latter is a command to us, not a reading, so a bit
-        # flip setting its top bit would otherwise send us off to clock an
-        # 83-byte bulk read against firmware still sending telemetry. It
-        # sits after the checksum byte in the frame; that is only byte
-        # order, both sides XOR it in the same way.
-        expected_checksum = rx[9]
-        for byte in rx[0:8]:
-            expected_checksum ^= byte
-        if rx[8] != expected_checksum:
+        result = self._xfer_checked(duty, cmd)
+        if result is None:
             v_raw, i_raw, vout_raw, temp_raw, _stale_ack = self._last_good_raw
             return v_raw, i_raw, vout_raw, temp_raw, 0
 
-        v_raw = (rx[0] << 8) | rx[1]
-        i_raw = (rx[2] << 8) | rx[3]
-        vout_raw = (rx[4] << 8) | rx[5]
-        temp_raw = (rx[6] << 8) | rx[7]
-        ack = rx[9]
+        payload, ack = result
+        v_raw = (payload[0] << 8) | payload[1]
+        i_raw = (payload[2] << 8) | payload[3]
+        vout_raw = (payload[4] << 8) | payload[5]
+        temp_raw = (payload[6] << 8) | payload[7]
         self._last_good_raw = (v_raw, i_raw, vout_raw, temp_raw, ack)
         return self._last_good_raw
 
@@ -262,6 +305,70 @@ class SpiMcuSource(SignalSource):
             time.sleep(poll_interval_s)
             ack = self._send_cmd(cmd=_CMD_REQUEST_BULK_DUMP)
         return None
+
+    def poll_sweep_progress(self) -> SweepProgress | None:
+        """Poll the firmware's in-progress sweep state, for point-by-point
+        drawing instead of waiting for a sweep to finish.
+
+        Two-exchange protocol, mirroring the one-iteration lag in
+        ``spi_slave_pio.rs``'s ``BulkState`` machine: the first exchange's
+        MOSI carries ``_CMD_STREAM_POLL`` (its MISO is still whatever the
+        firmware's previous state held - ordinary telemetry, applied via
+        ``_apply_telemetry`` same as any other command byte); the *second*
+        exchange's MISO carries the progress frame the firmware built in
+        response, which is **not** telemetry-shaped and must not be passed
+        to ``_apply_telemetry``.
+
+        Returns ``None`` if no sweep has ever run yet, if either exchange's
+        checksum fails, or if the payload doesn't look like a progress frame
+        at all (see below) - this is a lossy, best-effort read (the bulk
+        read remains authoritative once a sweep completes), so a dropped
+        update is not reported as an error. Otherwise returns a
+        ``SweepProgress`` - once a sweep has run, this keeps returning its
+        final state (``active=False``) until the next sweep starts, since
+        the firmware peeks rather than consumes.
+        """
+        self._send_cmd(cmd=_CMD_STREAM_POLL)
+        result = self._xfer_checked(self._duty, cmd=0)
+        if result is None:
+            return None
+
+        payload, _ack = result
+        index = payload[0]
+        flags = payload[5]
+        final_point = bool(flags & _PROGRESS_FLAG_FINAL)
+
+        if index == _PROGRESS_NO_SWEEP_INDEX:
+            # 0xFF is also what a sweep that captured zero points (e.g.
+            # auto_range() aborted immediately) reports as its one real
+            # "sweep is over" update - there's no last point to give it a
+            # real index, but it's not the same as "no sweep has ever run"
+            # and must not be swallowed as one, or a consumer's `active`
+            # state never gets the memo that the sweep ended. `final_point`
+            # is what tells the two apart on the wire.
+            if not final_point:
+                return None
+        elif index >= _TRACER_SWEEP_POINTS:
+            # Not a valid point index, and not the no-sweep-yet sentinel
+            # either. Most likely our CMD_STREAM_POLL request itself was
+            # dropped (e.g. a MOSI checksum failure on that first exchange)
+            # so the firmware never left Idle, and this second exchange's
+            # MISO is just ordinary telemetry rather than a progress reply -
+            # unlike the bulk-read handshake, there is no ack bit here to
+            # confirm the reply is really what was asked for, so treat an
+            # out-of-range index as "not trustworthy" rather than risk
+            # rendering a bogus point built from misread V/I bytes.
+            return None
+
+        v_raw = (payload[1] << 8) | payload[2]
+        i_raw = (payload[3] << 8) | payload[4]
+        return SweepProgress(
+            index=index,
+            voltage=v_raw * self._v_scale + self._v_offset,
+            current=i_raw * self._i_scale + self._i_offset,
+            active=bool(flags & _PROGRESS_FLAG_ACTIVE),
+            final_point=final_point,
+        )
 
     def start_sweep(self) -> None:
         """Ask the firmware to start a curve-tracer sweep.

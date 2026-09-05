@@ -6,11 +6,11 @@
 // - No /set-current POST form (this board has no settable current dial).
 //   Start Sweep/Release Relay below replace the reference's
 //   /start-measurement form.
-// - No incremental "have=N" point-count polling protocol: a sweep here is
-//   a single bulk read of TRACER_SWEEP_POINTS (20) points, not a stream
-//   that grows one point at a time, so /data always returns the whole
-//   last sweep and this script just diffs the point count to know when a
-//   new sweep landed.
+// - No incremental "have=N" point-count polling protocol - /data exposes
+//   two arrays instead: `partial` (the in-progress sweep, drawn live while
+//   `active`) and `points` (the last completed sweep, a single bulk read
+//   of TRACER_SWEEP_POINTS (20) points, picked up via the `seq` counter
+//   once `active` goes false).
 (function () {
   const css = getComputedStyle(document.documentElement);
   const ACCENT = css.getPropertyValue("--accent").trim() || "#ff9800";
@@ -224,14 +224,18 @@
     mpptVoltageEl.textContent = `MPPT Voltage: ${best.x.toFixed(3)} V`;
   }
 
-  // Polling: /data always returns the full last sweep (or [] if none has
-  // landed yet) - a sweep is at most TRACER_SWEEP_POINTS (20) points, so
-  // there is no benefit to the reference implementation's incremental
-  // have=N fetch, only extra state to get wrong.
+  // Polling: while `active`, /data's `partial` array grows one point at a
+  // time as the firmware streams them (lossy - a missed poll just means a
+  // gap, not a stall) and is drawn every tick, not gated on `seq` - it has
+  // no seq of its own, and waiting for one would show nothing move.
   //
-  // Redraw is gated on the server's sweep counter, NOT the point count:
-  // every completed sweep returns the same 20 points, so diffing the
-  // length silently drops every sweep after the first.
+  // Once `active` goes false, switch to `points` (the last completed
+  // sweep, at most TRACER_SWEEP_POINTS (20) points) - gated on the
+  // server's sweep counter, NOT the point count: every completed sweep
+  // returns the same 20 points, so diffing the length silently drops
+  // every sweep after the first. `points` is always authoritative over
+  // `partial` for a finished sweep, since streaming can drop points that
+  // the bulk read still has.
   let lastSeq = -1;
   const POLL_MS = isTouch ? 3000 : 2000;
 
@@ -240,19 +244,31 @@
       const r = await fetch("/data", { cache: "no-store" });
       if (!r.ok) throw new Error("HTTP " + r.status);
       const payload = await r.json();
-      const arr = Array.isArray(payload.points) ? payload.points : [];
+      const active = Boolean(payload.active);
       linkStatusEl.textContent = "Link: " + (payload.link || "--");
 
-      const seq = Number.isFinite(payload.seq) ? payload.seq : 0;
-      if (seq !== lastSeq) {
-        maybeConvertIncoming(arr);
-        chart.data.datasets[0].data = arr;
-        chart.data.datasets[1].data = arr.map((pt) => ({ x: pt.x, y: pt.x * pt.y }));
-        infoEl.textContent = "points: " + arr.length;
+      if (active) {
+        const partial = Array.isArray(payload.partial) ? payload.partial : [];
+        maybeConvertIncoming(partial);
+        chart.data.datasets[0].data = partial;
+        chart.data.datasets[1].data = partial.map((pt) => ({ x: pt.x, y: pt.x * pt.y }));
+        infoEl.textContent = "capturing... " + partial.length + " points";
         autoScale();
         autoScalePower();
         refreshMPPT(chart.data.datasets[0].data);
-        lastSeq = seq;
+      } else {
+        const seq = Number.isFinite(payload.seq) ? payload.seq : 0;
+        if (seq !== lastSeq) {
+          const arr = Array.isArray(payload.points) ? payload.points : [];
+          maybeConvertIncoming(arr);
+          chart.data.datasets[0].data = arr;
+          chart.data.datasets[1].data = arr.map((pt) => ({ x: pt.x, y: pt.x * pt.y }));
+          infoEl.textContent = "points: " + arr.length;
+          autoScale();
+          autoScalePower();
+          refreshMPPT(chart.data.datasets[0].data);
+          lastSeq = seq;
+        }
       }
     } catch (e) {
       console.error("tick failed", e);

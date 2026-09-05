@@ -35,7 +35,9 @@ use embassy_rp::{Peri, bind_interrupts};
 use embassy_time::{Duration, with_timeout};
 use portable_atomic::Ordering;
 
-use crate::mode_curve_tracer::{self, SweepResult, TRACER_SWEEP_POINTS, TracerCommand};
+use crate::mode_curve_tracer::{
+    self, SweepProgress, SweepResult, TRACER_SWEEP_POINTS, TracerCommand,
+};
 use crate::{
     DUTY, FIRMWARE_MODE, FirmwareMode, MEAS_ADC_VOUT_MV, MEAS_I_MA, MEAS_V_MV, PACKET_COUNT,
 };
@@ -62,6 +64,18 @@ const CMD_START_SWEEP: u8 = 0xB2;
 /// auto-releases at the end of a sweep, see
 /// `mode_curve_tracer::CurveTracer::release_relay`.
 const CMD_RELEASE_RELAY: u8 = 0xB3;
+/// Requests one `SweepProgress` snapshot, published in the *next*
+/// exchange's MISO (see `BulkState::SendProgress`'s doc comment) - not a
+/// `TracerCommand`, since it doesn't go to `curve_tracer_task` at all,
+/// only reads a value that task already publishes as a side effect of
+/// `run_sweep`.
+const CMD_STREAM_POLL: u8 = 0xB4;
+/// Sentinel `SweepProgress.index` meaning "no sweep has ever run yet" -
+/// distinct from every real index (`0..TRACER_SWEEP_POINTS`, well under
+/// `u8::MAX`).
+const PROGRESS_NO_SWEEP_INDEX: u8 = 0xFF;
+const PROGRESS_FLAG_ACTIVE: u8 = 0b01;
+const PROGRESS_FLAG_FINAL: u8 = 0b10;
 
 /// Maps a MOSI command byte to the `TracerCommand` it should signal into
 /// `curve_tracer_task`, if any - the one place that grows when a new
@@ -243,6 +257,37 @@ fn build_bulk_tx_frame(sweep: &SweepResult) -> [u32; BULK_FRAME_LEN] {
     words
 }
 
+/// Build a progress TX frame: `[ IDX | V_H | V_L | I_H | I_L | FLAGS | 0
+/// | 0 | CHECKSUM | ACK | 0 x 2 ]` - same `FRAME_LEN` (12 bytes) and
+/// checksum/ack layout as `build_tx_frame`, just a different payload
+/// meaning for this one exchange. `ack` is always 0 here: a progress
+/// reply never also acks a bulk-dump request (they're different `Idle`
+/// transitions).
+fn build_progress_tx_frame(progress: &SweepProgress) -> [u32; FRAME_LEN] {
+    let mut flags = 0u8;
+    if progress.active {
+        flags |= PROGRESS_FLAG_ACTIVE;
+    }
+    if progress.final_point {
+        flags |= PROGRESS_FLAG_FINAL;
+    }
+    let v = progress.v_mv.to_be_bytes();
+    let i = progress.i_ma.to_be_bytes();
+    let bytes = [progress.index, v[0], v[1], i[0], i[1], flags, 0, 0];
+    let ack = 0u8;
+    let checksum = xor_checksum(&bytes) ^ ack;
+
+    let mut words = [0u32; FRAME_LEN];
+    let all = bytes
+        .iter()
+        .chain(core::iter::once(&checksum))
+        .chain(core::iter::once(&ack));
+    for (word, byte) in words.iter_mut().zip(all) {
+        *word = (*byte as u32) << 24;
+    }
+    words
+}
+
 /// Time budget for one 12-byte frame's RX side. At the Pi's control period
 /// (1 kHz nominal) a normal frame completes in microseconds even at a
 /// conservative SPI clock; 100 ms is generous headroom that only trips on a
@@ -314,10 +359,20 @@ fn resync(sm: &mut StateMachine<'static, PIO0, 0>, origin: u8) {
 /// A frame timeout at any point (Pi didn't follow through, or a torn
 /// frame) resets straight to `Idle` rather than trying to resume mid
 /// handshake - see the timeout branch in `spi_pio_task`.
+///
+/// `SendProgress(SweepProgress)`: a one-exchange reply to
+/// `CMD_STREAM_POLL`, entered from `Idle` the same way `SendAck` is -
+/// the snapshot is captured (via `mode_curve_tracer::peek_progress`)
+/// while still in `Idle`, then carried into this state so the frame-shape
+/// decision and the data sent are read from the same value in the same
+/// iteration. Unlike the bulk-read handshake this is only ever one
+/// `FRAME_LEN` exchange (progress fits in the steady frame's spare
+/// bytes), so it always returns straight to `Idle` afterward.
 enum BulkState {
     Idle,
     SendAck(SweepResult),
     DoBulk(SweepResult),
+    SendProgress(SweepProgress),
 }
 
 /// Applies one `FRAME_LEN` exchange's RX as a normal duty-update frame -
@@ -383,6 +438,9 @@ fn build_tx_buf_for_state(state: &BulkState) -> [u32; MAX_FRAME_LEN] {
     match state {
         BulkState::DoBulk(sweep) => {
             buf[..BULK_FRAME_LEN].copy_from_slice(&build_bulk_tx_frame(sweep));
+        }
+        BulkState::SendProgress(progress) => {
+            buf[..FRAME_LEN].copy_from_slice(&build_progress_tx_frame(progress));
         }
         BulkState::SendAck(sweep) => {
             let v = MEAS_V_MV.load(Ordering::Relaxed);
@@ -476,7 +534,9 @@ pub async fn spi_pio_task(
     loop {
         let (this_frame_len, frame_timeout) = match &bulk_state {
             BulkState::DoBulk(_) => (BULK_FRAME_LEN, BULK_FRAME_TIMEOUT),
-            BulkState::Idle | BulkState::SendAck(_) => (FRAME_LEN, FRAME_TIMEOUT),
+            BulkState::Idle | BulkState::SendAck(_) | BulkState::SendProgress(_) => {
+                (FRAME_LEN, FRAME_TIMEOUT)
+            }
         };
 
         let mut rx = [0u32; MAX_FRAME_LEN];
@@ -539,7 +599,10 @@ pub async fn spi_pio_task(
                 BulkState::SendAck(sweep) | BulkState::DoBulk(sweep) => {
                     mode_curve_tracer::restore_last_sweep(sweep);
                 }
-                BulkState::Idle => {}
+                // Nothing to restore: `peek_progress()` doesn't consume,
+                // so a dropped `SendProgress` frame just means the next
+                // poll re-reads the same (still-current) snapshot.
+                BulkState::Idle | BulkState::SendProgress(_) => {}
             }
             tx_buf = build_tx_buf_for_state(&bulk_state);
             continue;
@@ -555,6 +618,13 @@ pub async fn spi_pio_task(
                 apply_duty_frame(&rx, &mut last_logged_duty, &mut checksum_failures);
                 BulkState::DoBulk(sweep)
             }
+            BulkState::SendProgress(_) => {
+                // Same shape as SendAck above: this exchange's RX is a
+                // normal duty-update frame, not something to inspect for a
+                // second command - one progress reply is one exchange.
+                apply_duty_frame(&rx, &mut last_logged_duty, &mut checksum_failures);
+                BulkState::Idle
+            }
             BulkState::Idle => {
                 let cmd = apply_duty_frame(&rx, &mut last_logged_duty, &mut checksum_failures);
                 match cmd {
@@ -568,6 +638,17 @@ pub async fn spi_pio_task(
                         }
                         None => BulkState::Idle,
                     },
+                    Some(CMD_STREAM_POLL) => {
+                        let progress =
+                            mode_curve_tracer::peek_progress().unwrap_or(SweepProgress {
+                                index: PROGRESS_NO_SWEEP_INDEX,
+                                v_mv: 0,
+                                i_ma: 0,
+                                active: false,
+                                final_point: false,
+                            });
+                        BulkState::SendProgress(progress)
+                    }
                     Some(cmd) => {
                         if let Some(tracer_cmd) = tracer_command_for(cmd) {
                             mode_curve_tracer::TRACER_COMMAND.signal(tracer_cmd);
