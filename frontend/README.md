@@ -30,6 +30,12 @@ Run the backend alongside it in another terminal:
 without a board attached, `/api/data` just reports `link: "error: ..."`
 forever - the API itself still works for browsing/saving curves).
 
+No board and no Pi at hand? `uv run mpp-sdk curve-tracer-web --demo` swaps
+in a simulated sweep source (`scripts/curve_tracer_demo_source.py`) - only
+needs `uv sync --extra web`, runs on any machine, and behaves like the
+real thing from the frontend's perspective (`link` reports `"demo"`,
+shown as a distinct status in the connection indicator).
+
 ## Build
 
 ```bash

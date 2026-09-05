@@ -39,7 +39,15 @@ export interface CurveRecord {
   p_mpp: number
 }
 
-export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected'
+export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'demo'
+
+/** True for any status where a sweep can actually be triggered/drawn -
+ * 'connected' (real Pi) and 'demo' (simulated source) both qualify. Kept
+ * in one place so a future status doesn't need updating at every call site
+ * that cares about "is this live enough to interact with". */
+export function isLiveConnection(status: ConnectionStatus): boolean {
+  return status === 'connected' || status === 'demo'
+}
 
 const MEASUREMENT_KIND_INFO: Record<MeasurementKind, { title: string; description: string }> = {
   baseline: {

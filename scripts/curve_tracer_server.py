@@ -19,6 +19,10 @@ Usage::
     python scripts/curve_tracer_server.py
     # or: mpp-sdk curve-tracer-web
     # then open http://<pi-host>:8000/ in a browser
+
+    # --demo: simulated sweeps (curve_tracer_demo_source.py), no board or
+    # spidev needed - runs on any machine, only needs the `web` extra:
+    mpp-sdk curve-tracer-web --demo
 """
 
 from __future__ import annotations
@@ -116,10 +120,33 @@ def _poll_loop(
     device: int,
     speed_hz: int,
     period_s: float,
+    *,
+    demo: bool = False,
 ) -> None:
-    from mpp_sdk.io.spi_mcu import SpiMcuSource
+    if demo:
+        # Duck-typed against SpiMcuSource (start_sweep/release_relay/
+        # request_sweep/poll_sweep_progress + context manager) - imported
+        # only here, and never mpp_sdk.io.spi_mcu, so demo mode needs
+        # neither `spidev` nor a board.
+        from scripts.curve_tracer_demo_source import DemoSweepSource
 
-    with SpiMcuSource(bus=bus, device=device, speed_hz=speed_hz) as src:
+        source_cm = DemoSweepSource()
+
+        # Demo mode reports one link state regardless of whether a result
+        # is ready this iteration - "ok" vs "waiting for sweep" is a real
+        # link's two states, not a meaningful distinction for a source that
+        # never fails to link in the first place.
+        def link_for(result: object) -> str:
+            return "demo"
+    else:
+        from mpp_sdk.io.spi_mcu import SpiMcuSource
+
+        source_cm = SpiMcuSource(bus=bus, device=device, speed_hz=speed_hz)
+
+        def link_for(result: object) -> str:
+            return "ok" if result is not None else "waiting for sweep"
+
+    with source_cm as src:
         while True:
             # At most one queued command per iteration, not a drain loop -
             # the firmware's TRACER_COMMAND signal is single-slot
@@ -147,7 +174,7 @@ def _poll_loop(
             except RuntimeError as exc:
                 cache.set(None, f"error: {exc}")
             else:
-                cache.set(result, "ok" if result is not None else "waiting for sweep")
+                cache.set(result, link_for(result))
 
             # Independent of the bulk-read fetch above - a failure there
             # must not stop live progress from still being reported this
@@ -270,6 +297,12 @@ def main() -> None:
         help="delay between request_sweep() calls (each already polls internally) - "
         "also bounds how long a queued Start Sweep/Release Relay command waits",
     )
+    parser.add_argument(
+        "--demo",
+        action="store_true",
+        help="use a simulated sweep source instead of SpiMcuSource - no board, no spidev, "
+        "runs on any machine. For trying out the frontend away from the bench.",
+    )
     args = parser.parse_args()
 
     cache = _SweepCache()
@@ -284,12 +317,14 @@ def main() -> None:
             args.spi_speed_hz,
             args.poll_period_s,
         ),
+        kwargs={"demo": args.demo},
         daemon=True,
     )
     poll_thread.start()
 
     app = create_app(cache, commands)
-    print(f"Serving curve-tracer UI on http://{args.host}:{args.port}/ (Ctrl+C to stop)")
+    mode = " [DEMO MODE - simulated sweeps, no hardware]" if args.demo else ""
+    print(f"Serving curve-tracer UI on http://{args.host}:{args.port}/{mode} (Ctrl+C to stop)")
     uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
 
 
