@@ -49,10 +49,10 @@ re-enabling; no plan file, tracked via the PR that disabled it.
 | 017 | SDK: `mpp-sdk` CLI dispatcher for harness/examples/scripts | P3 | S-M | - | DONE |
 | 018 | Firmware+SDK: bulk-read SPI transaction for curve-tracer sweep results | P2 | L | 016 (hard) | DONE (on-target confirmed: 20 points fetched over SPI. Bench fixed three handshake bugs - request sent once not per poll, held result dropped on any mid-handshake timeout, Pi polling slower than FRAME_TIMEOUT - plus checksum-protecting the ACK byte) |
 | 019 | Firmware+SDK: SPI-triggered curve-tracer sweeps + explicit relay release | P2 | L | 018 (hard), 016 (hard) | DONE (on-target confirmed: sweeps start from the Pi, relay clicks once and holds across sweeps until released, web UI plots the curve) |
-| 020 | Firmware+SDK: stream sweep points as they are captured | P2 | M | - (023 wants it) | IN PROGRESS (code complete: `SweepProgress`/`CMD_STREAM_POLL` (0xB4) in firmware, `SpiMcuSource.poll_sweep_progress()`, server `partial`/`active` fields, vanilla UI draws live. `cargo build`/`clippy -D warnings`/`fmt --check` and `uv run pytest` all clean - **on-target verification not done, needs the board**: point-by-point draw, agreement with the bulk-read curve, and no increase in frame-timeout/link-lost rate are all unverified) |
+| 020 | Firmware+SDK: stream sweep points as they are captured | P2 | M | - (023 wants it) | IN PROGRESS (code complete: `SweepProgress`/`CMD_STREAM_POLL` (0xB4) in firmware, `SpiMcuSource.poll_sweep_progress()`, server `partial`/`active` fields consumed by plan 023's React frontend (`useLiveSweep`). `cargo build`/`clippy -D warnings`/`fmt --check` and `uv run pytest` all clean - **on-target verification not done, needs the board**: point-by-point draw, agreement with the bulk-read curve, and no increase in frame-timeout/link-lost rate are all unverified) |
 | 021 | SDK: on-disk library of captured I-V curves + measurement metadata | P1 | M | - | DONE (code complete: `mpp_sdk/curves/` + `POST /save-curve`/`GET /curves`/`GET /measurement-kinds`, no-hardware smoke-tested. Step 6's vanilla-JS capture UI was skipped by operator direction - capture UI work now goes straight to plan 023's React frontend instead. Two real curves captured on the bench across differing `measurement` values is still open - needs the board) |
 | 022 | SDK: replay measured curves through the MPPT algorithm benchmark | P1 | M | 021 (hard) | DONE (`MeasuredPanel` implements `PanelModel` with zero changes to it, `SimulatedSource`, or any algorithm - seam check in the PR settles near the measured MPP. `mpp-sdk compare-measured` produces one figure per measurement kind. Real per-kind comparison, e.g. global trackers beating local ones on a `partial-shade` capture, is still open - needs real curves from the board) |
-| 023 | GUI: React + shadcn curve workbench, served from the Pi | P2 | L | 021 (hard), 020 (hard) | IN PROGRESS (`frontend/` scaffolded - Vite+React+TS+Tailwind+shadcn/ui, builds clean to `frontend/dist`; UI is mock-data only, not yet wired to a backend. Operator redirected the API layer to FastAPI instead of this plan's stdlib-`http.server` design when a real backend is built - update this plan's Design section before resuming. Build output intentionally NOT yet pointed at `scripts/curve_tracer_web/` - that switch is a STOP-worthy step once the app is real) |
+| 023 | GUI: React + shadcn curve workbench, served from the Pi | P2 | L | 021 (hard), 020 (hard) | DONE-ish (`frontend/` - Vite+React+TS+Tailwind+shadcn/ui - wired to a real backend: `scripts/curve_tracer_server.py` was rewritten from stdlib `http.server` to **FastAPI** per operator direction (this plan's original STOP condition against a web framework was deliberately overridden), serving `/api/curves`, `/api/measurement-kinds`, `/api/data` (partial/active from plan 020), `/api/save-curve`, `/api/start-sweep`, `/api/release-relay`. Vanilla-JS page removed; build output now committed to `scripts/curve_tracer_web/` as designed. `pnpm build`/`tsc` and `uv run pytest` (new `tests/test_curve_tracer_server.py`, FastAPI `TestClient`, no hardware) both clean. Not marked plain DONE: on-target capture-to-pane round trip is unverified - needs the board - and 020 itself is still IN PROGRESS) |
 | 024 | Bench: microcontroller-driven lamp dimmer - design spike | P3 | M | - | TODO |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) |
@@ -117,19 +117,19 @@ shape (measurement-kind cards, a live capture pane with point-by-point
 drawing, a Pi-connection indicator) can be iterated on without the board.
 Two real deviations from this plan set to track:
 
-- **API layer**: build a FastAPI backend when the frontend needs real data,
-  not stdlib `http.server`. Plan 023's STOP conditions explicitly rejected
-  a web framework here ("adding Flask/FastAPI here would pull a runtime
-  dependency onto the Pi that this design deliberately avoids") - the
-  operator has decided that tradeoff is worth it for a cleaner API surface.
-  Update plan 023's Design section before resuming it, rather than treating
-  the STOP condition as still governing.
-- **020 is now a hard dependency of the live pane**, not soft: the operator
-  wants each captured point's `(index, V, I)` pushed from the Pico as it's
-  measured, which is exactly plan 020's progress-frame design. Point-by-point
-  drawing in `frontend/` is mocked (`useMockSweep`) until 020 lands - treat
-  plan 020's own risk warnings (MED-HIGH, reopens `spi_pio_task`) as fully
-  in force before touching firmware for this.
+- **API layer**: 2026-09-05, done - `scripts/curve_tracer_server.py` was
+  rewritten from stdlib `http.server` to FastAPI (`mpp-sdk[web]`). Plan
+  023's STOP conditions explicitly rejected a web framework here ("adding
+  Flask/FastAPI here would pull a runtime dependency onto the Pi that this
+  design deliberately avoids") - the operator decided that tradeoff was
+  worth it for a cleaner API surface, so treat that STOP condition as
+  superseded, not still governing, if this plan file is ever revisited.
+- **020 is a hard dependency of the live pane**, not soft: the operator
+  wanted each captured point's `(index, V, I)` pushed from the Pico as it's
+  measured, which is plan 020's progress-frame design - it landed
+  (2026-09-05, code complete, on-target pending) and `frontend/`'s
+  `useLiveSweep` consumes it for real over `GET /api/data`'s
+  `partial`/`active` fields (no more mock).
 
 **011 is DONE** (not an open item, and not a teammate hand-off - it landed
 in this session, merged as PR #50: feed-forward + proportional-trim

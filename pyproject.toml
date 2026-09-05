@@ -14,8 +14,13 @@ dependencies = [
 pvlib = ["pvlib>=0.10"]
 # Hardware-side dependencies for the eventual SpiMcuSource (Phase 5a).
 hardware = ["spidev; platform_system == 'Linux'"]
+# FastAPI backend for the curve-tracer web workbench (scripts/curve_tracer_server.py)
+# - serves the built React frontend (frontend/, see its README) and the
+# curve-library/live-sweep API it talks to. Needs `hardware` too for real
+# SPI access; installable alone for API-route testing without a board.
+web = ["fastapi", "uvicorn"]
 # Convenience: install everything optional in one go.
-all = ["pvlib>=0.10", "spidev; platform_system == 'Linux'"]
+all = ["pvlib>=0.10", "spidev; platform_system == 'Linux'", "fastapi", "uvicorn"]
 
 [project.scripts]
 mpp-sdk = "harness.cli:main"
@@ -26,6 +31,7 @@ dev = [
     "pytest>=8",
     "ruff>=0.6",
     "pre-commit>=4",
+    "httpx2",  # fastapi.testclient.TestClient's transport, for testing scripts/curve_tracer_server.py
 ]
 # Docs site (MkDocs Material). `uv run --group docs mkdocs serve`.
 docs = [

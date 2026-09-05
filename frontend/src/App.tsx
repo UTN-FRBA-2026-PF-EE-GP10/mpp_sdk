@@ -1,24 +1,43 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ConnectionIndicator } from '@/components/ConnectionIndicator'
 import { CurveWorkbench } from '@/components/CurveWorkbench'
 import { MeasurementKindCard } from '@/components/MeasurementKindCard'
 import { useConnectionStatus } from '@/hooks/useConnectionStatus'
-import { MOCK_LIBRARY } from '@/lib/mockCurves'
-import { MEASUREMENT_KINDS, type MeasurementKind } from '@/types'
+import { fetchCurves, fetchMeasurementKinds } from '@/lib/api'
+import { MEASUREMENT_KINDS, type CurveRecord } from '@/types'
 
 export default function App() {
   const connectionStatus = useConnectionStatus()
-  const [selected, setSelected] = useState<MeasurementKind>('baseline')
+  const [selected, setSelected] = useState<string>('baseline')
+  // Seeded with the known vocabulary so cards render before the first
+  // fetch lands; GET /api/measurement-kinds and any kind already present
+  // in the library (an operator can save under a kind this list never
+  // anticipated - see mpp_sdk/curves/record.py) both fold in on top.
+  const [seedKinds, setSeedKinds] = useState<string[]>([...MEASUREMENT_KINDS])
+  const [records, setRecords] = useState<CurveRecord[]>([])
+  const [reloadToken, setReloadToken] = useState(0)
+
+  useEffect(() => {
+    fetchMeasurementKinds()
+      .then((fetched) => setSeedKinds((prev) => Array.from(new Set([...prev, ...fetched]))))
+      .catch((e) => console.error('fetching measurement kinds failed', e))
+  }, [])
+
+  useEffect(() => {
+    fetchCurves()
+      .then(setRecords)
+      .catch((e) => console.error('fetching curves failed', e))
+  }, [reloadToken])
 
   const byKind = useMemo(() => {
-    const groups = new Map<MeasurementKind, typeof MOCK_LIBRARY>()
-    for (const kind of MEASUREMENT_KINDS) groups.set(kind, [])
-    for (const record of MOCK_LIBRARY) {
-      const bucket = groups.get(record.measurement as MeasurementKind) ?? groups.get('other')
-      bucket?.push(record)
+    const groups = new Map<string, CurveRecord[]>()
+    for (const kind of seedKinds) groups.set(kind, [])
+    for (const record of records) {
+      if (!groups.has(record.measurement)) groups.set(record.measurement, [])
+      groups.get(record.measurement)?.push(record)
     }
     return groups
-  }, [])
+  }, [seedKinds, records])
 
   return (
     <div className="mx-auto flex min-h-svh max-w-5xl flex-col gap-6 px-4 py-8">
@@ -38,7 +57,7 @@ export default function App() {
       </header>
 
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {MEASUREMENT_KINDS.map((kind) => (
+        {Array.from(byKind.keys()).map((kind) => (
           <MeasurementKindCard
             key={kind}
             kind={kind}
@@ -54,18 +73,8 @@ export default function App() {
         kind={selected}
         records={byKind.get(selected) ?? []}
         connected={connectionStatus === 'connected'}
+        onSaved={() => setReloadToken((t) => t + 1)}
       />
-
-      <p className="pb-4 text-center text-xs text-muted-foreground">
-        Showing mock data - not yet wired to the Pi (
-        <a
-          className="underline underline-offset-2"
-          href="https://github.com/UTN-FRBA-2026-PF-EE-GP10/mpp_sdk"
-        >
-          mpp-sdk
-        </a>
-        , plan 023).
-      </p>
     </div>
   )
 }
