@@ -122,6 +122,23 @@ controller's configured start duty for the Voc-side trap case; the ground
 truth $P_\text{mpp}$ comes from a calibration duty sweep with the
 condition held - the rig is its own instrument.
 
+## Measured curves: replaying real panel data
+
+`mpp_sdk.curves` captures I-V sweeps from the curve tracer (RP2040
+firmware sweeping the bench panel's whole voltage range, streamed to the
+Pi over SPI - see `frontend/README.md` for the web workbench), and
+`MeasuredPanel` implements the same `PanelModel` interface as any
+synthetic model. That means the comparison harness
+(`mpp-sdk compare-measured`) runs the full algorithm bank against an
+actual captured curve with **zero algorithm changes** - a step past layer
+1's "same curve, both simulators" claim above: this replaces the panel
+model with what the panel actually did, not a model of it.
+
+This is what lets partial-shading scenarios (one panel physically tilted
+or shaded relative to the other) be graded against the array's real P-V
+shape instead of an inferred multi-modal curve, before any algorithm is
+committed to firmware.
+
 ## The numbers the simulation assumes
 
 | Quantity | Value | Where |
