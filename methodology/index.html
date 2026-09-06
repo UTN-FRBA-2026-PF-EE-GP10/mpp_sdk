@@ -469,6 +469,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#measured-curves-replaying-real-panel-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Measured curves: replaying real panel data
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#the-numbers-the-simulation-assumes" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -836,6 +847,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#measured-curves-replaying-real-panel-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Measured curves: replaying real panel data
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#the-numbers-the-simulation-assumes" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1015,6 +1037,20 @@ layers 1 and 2. On the bench, the scenarios map to one shade cloth of
 controller's configured start duty for the Voc-side trap case; the ground
 truth <span class="arithmatex">\(P_\text{mpp}\)</span> comes from a calibration duty sweep with the
 condition held - the rig is its own instrument.</p>
+<h2 id="measured-curves-replaying-real-panel-data">Measured curves: replaying real panel data<a class="headerlink" href="#measured-curves-replaying-real-panel-data" title="Permanent link">&para;</a></h2>
+<p><code>mpp_sdk.curves</code> captures I-V sweeps from the curve tracer (RP2040
+firmware sweeping the bench panel's whole voltage range, streamed to the
+Pi over SPI - see <code>frontend/README.md</code> for the web workbench), and
+<code>MeasuredPanel</code> implements the same <code>PanelModel</code> interface as any
+synthetic model. That means the comparison harness
+(<code>mpp-sdk compare-measured</code>) runs the full algorithm bank against an
+actual captured curve with <strong>zero algorithm changes</strong> - a step past layer
+1's "same curve, both simulators" claim above: this replaces the panel
+model with what the panel actually did, not a model of it.</p>
+<p>This is what lets partial-shading scenarios (one panel physically tilted
+or shaded relative to the other) be graded against the array's real P-V
+shape instead of an inferred multi-modal curve, before any algorithm is
+committed to firmware.</p>
 <h2 id="the-numbers-the-simulation-assumes">The numbers the simulation assumes<a class="headerlink" href="#the-numbers-the-simulation-assumes" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
