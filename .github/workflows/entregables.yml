@@ -41,6 +41,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v6
         with:
+          version: "0.11.7"
           enable-cache: true
 
       # Pull the most recent successful artifact from this same workflow on
