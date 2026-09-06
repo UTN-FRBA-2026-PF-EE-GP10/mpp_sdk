@@ -103,6 +103,15 @@ class _SweepCache:
                 if not self._active or not self._partial or progress.index < max(self._partial):
                     self._partial = {}
                 self._partial[progress.index] = (progress.voltage, progress.current)
+            else:
+                # `partial` only means anything mid-sweep - a sweep that
+                # aborts with zero points (e.g. a dark/disconnected panel)
+                # publishes only this one inactive update, with no
+                # preceding active=True call to have triggered the reset
+                # above, so without this a previous unrelated sweep's
+                # partial would linger and be served as if it belonged to
+                # this (empty) one.
+                self._partial = {}
             self._active = progress.active
 
     def snapshot(

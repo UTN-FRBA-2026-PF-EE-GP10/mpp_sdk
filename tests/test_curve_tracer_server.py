@@ -88,6 +88,22 @@ def test_data_reflects_live_progress_while_active(client):
     assert payload["partial"] == [{"x": 21.3, "y": 6.0}]
 
 
+def test_a_zero_point_sweep_clears_a_previous_sweeps_stale_partial(client):
+    """A sweep that aborts with zero points (e.g. auto_range() finds no
+    panel) publishes only one inactive update, with no preceding
+    active=True calls of its own - `partial` must not keep serving the
+    previous, unrelated sweep's leftover points as if they belonged to
+    this (empty) one."""
+    client.cache.set_progress(_FakeProgress(0, 21.3, 0.006, active=True))
+    client.cache.set_progress(_FakeProgress(1, 20.1, 0.105, active=True))
+
+    client.cache.set_progress(_FakeProgress(255, 0.0, 0.0, active=False, final_point=True))
+
+    payload = client.get("/api/data").json()
+    assert payload["active"] is False
+    assert payload["partial"] == []
+
+
 # ------------------------------------------------------------------
 # GET /api/measurement-kinds
 # ------------------------------------------------------------------

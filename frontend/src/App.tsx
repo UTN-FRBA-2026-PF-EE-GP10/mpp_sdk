@@ -36,6 +36,13 @@ export default function App() {
       if (!groups.has(record.measurement)) groups.set(record.measurement, [])
       groups.get(record.measurement)?.push(record)
     }
+    // Newest first: GET /api/curves returns records in on-disk filename
+    // order, which sorts ascending by capture time (oldest first) - both
+    // MeasurementKindCard's "Latest: ..." and the workbench's saved-curves
+    // table read `records[0]`/render in this order assuming newest-first.
+    for (const bucket of groups.values()) {
+      bucket.sort((a, b) => b.captured_at.localeCompare(a.captured_at))
+    }
     return groups
   }, [seedKinds, records])
 
