@@ -70,6 +70,9 @@ uv add "mpp-sdk[pvlib]"
 # With SPI hardware dependencies (Phase 5 — SpiMcuSource)
 uv add "mpp-sdk[hardware]"
 
+# With the curve-tracer FastAPI web backend (mpp-sdk curve-tracer-web)
+uv add "mpp-sdk[web]"
+
 # Everything at once
 uv add "mpp-sdk[all]"
 ```
@@ -118,6 +121,22 @@ uv run mpp-sdk animate --shade     # forwards extra flags to the target script
 Each script also stays directly runnable on its own (e.g.
 `uv run harness/compare_dynamic.py`) — `mpp-sdk` is just a single place to
 discover them all.
+
+### Curve-tracer web workbench
+
+A React frontend + FastAPI backend for capturing, browsing, and replaying
+real panel I-V curves — see [`frontend/README.md`](frontend/README.md) for
+the full picture. Try it with no hardware at all:
+
+```bash
+uv sync --extra web
+uv run mpp-sdk curve-tracer-web --demo
+# open http://localhost:8000/
+```
+
+Drop `--demo` (and add `--extra hardware`) once a Raspberry Pi + RP2040
+board is wired up per
+[`firmware/pipico_board/README.md`](firmware/pipico_board/README.md).
 
 ## Layout
 
@@ -211,6 +230,24 @@ expectations, contributor liability, and LLM-usage policy — lives in
       (t, V, I, D) trace dumps for PLECS / bench replay
 - [ ] Auto-generated paper figures
 
+### Curve tracer
+
+Captures real panel I-V curves and replays them through the same
+comparison harness as any synthetic model — the seam [`AGENTS.md`](./AGENTS.md)
+exists to protect. See [`frontend/README.md`](frontend/README.md) for the
+UI and [`firmware/pipico_board/README.md`](firmware/pipico_board/README.md)'s
+"Curve tracer" section for the sweep engine.
+
+- [x] On-disk curve library with measurement metadata (`mpp_sdk.curves`)
+- [x] `MeasuredPanel(PanelModel)` — a captured curve replays through the
+      algorithm benchmark (`mpp-sdk compare-measured`) with zero algorithm
+      changes
+- [x] FastAPI backend + React frontend (`mpp-sdk curve-tracer-web`;
+      `--demo` mode needs no hardware)
+- [x] Firmware streams sweep points as they're captured (code complete,
+      on-target verification pending)
+- [ ] Controllable dimmer for repeatable illumination sweeps (design spike)
+
 ### Hardware (future — see [`PLAN.md`](./PLAN.md))
 
 The power stage is driven by an **RP2040 (Pi Pico, firmware in Rust)** connected
@@ -233,6 +270,8 @@ build/flash/calibration instructions.
 - [x] CI workflow (`uv sync`, `pytest`, demo smoke run)
 - [x] `data/` — provenanced benchmark profiles and panel curves
 - [x] `mpp-sdk` CLI — single dispatcher over every harness/example/script
+- [x] Curve-tracer web workbench — `frontend/` (React) + FastAPI backend,
+      `mpp-sdk curve-tracer-web [--demo]`
 
 ## Context
 
