@@ -89,9 +89,9 @@ class _SweepCache:
         with self._lock:
             if progress.active:
                 # A new sweep started if we weren't already mid-sweep, or
-                # if this point's index isn't past the highest one we've
+                # if this point's index is below the highest one we've
                 # already recorded - indices only increase within a sweep,
-                # so seeing one at or below our high-water mark means the
+                # so seeing one below our high-water mark means the
                 # previous sweep's tail got skipped and this is the next
                 # sweep's own early point. Checking index == 0 alone isn't
                 # enough: poll_sweep_progress() is lossy and each

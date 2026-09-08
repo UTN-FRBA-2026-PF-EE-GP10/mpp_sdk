@@ -104,6 +104,45 @@ def test_a_zero_point_sweep_clears_a_previous_sweeps_stale_partial(client):
     assert payload["partial"] == []
 
 
+def test_an_index_below_the_high_water_mark_starts_a_new_sweep(client):
+    """A new sweep's own early point (low index) arriving while the cache
+    still thinks the previous, higher-indexed sweep is active must replace
+    `partial`, not merge with it - see set_progress()'s comment on why
+    index==0 alone isn't a reliable "new sweep" signal."""
+    client.cache.set_progress(_FakeProgress(5, 15.0, 0.050, active=True))
+    client.cache.set_progress(_FakeProgress(6, 14.5, 0.060, active=True))
+
+    # Next sweep's first observed point - index 1, well below the previous
+    # sweep's high-water mark of 6 - arrives while `active` is still True
+    # (no intervening inactive update, matching how a fast next sweep can
+    # actually be observed by a lossy poller).
+    client.cache.set_progress(_FakeProgress(1, 21.0, 0.010, active=True))
+
+    payload = client.get("/api/data").json()
+    assert payload["active"] is True
+    assert payload["partial"] == [{"x": 21.0, "y": 10.0}]
+
+
+def test_redelivering_the_current_max_index_does_not_reset_partial(client):
+    """poll_sweep_progress() is peek-not-consume (see SpiMcuSource /
+    DemoSweepSource docstrings) - a slow poller can observe the same
+    in-progress point more than once before the sweep advances. That must
+    not be mistaken for a new sweep starting (the reset condition is
+    index < max, strictly), and must not lose earlier points."""
+    client.cache.set_progress(_FakeProgress(0, 21.3, 0.006, active=True))
+    client.cache.set_progress(_FakeProgress(1, 20.1, 0.105, active=True))
+
+    # Same index (1) delivered again, same sweep still active.
+    client.cache.set_progress(_FakeProgress(1, 20.1, 0.105, active=True))
+
+    payload = client.get("/api/data").json()
+    assert payload["active"] is True
+    assert payload["partial"] == [
+        {"x": 21.3, "y": 6.0},
+        {"x": 20.1, "y": 105.0},
+    ]
+
+
 # ------------------------------------------------------------------
 # GET /api/measurement-kinds
 # ------------------------------------------------------------------
