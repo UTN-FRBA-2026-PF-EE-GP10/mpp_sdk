@@ -63,6 +63,7 @@ re-enabling; no plan file, tracked via the PR that disabled it.
 | 031 | SDK: `SweepSource` Protocol formalizing `SpiMcuSource`/`DemoSweepSource`'s duck-typed interface | P3 | S-M | - | TODO |
 | 032 | Frontend: add vitest + tests for `useLiveSweep`/`useConnectionStatus` | P3 | M | - | TODO |
 | 033 | Frontend: extract shared `usePolling` hook from `useLiveSweep`/`useConnectionStatus` | P3 | S | 032 (hard) | TODO |
+| 034 | SDK+scripts: capture and analyze a real closed-loop MPPT run ("runs") | P2 | L | - | TODO |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) |
 REJECTED (with one-line rationale).
@@ -229,6 +230,22 @@ from scratch by a future audit:
   the algorithm benchmark") gets past a handful of ad hoc captures, but
   premature while the operator is still capturing one or two curves per
   bench session.
+
+### Plan 034: closed-loop hardware runs (2026-09-08, operator request)
+
+Not from an audit - the operator asked directly for a new capability:
+capture a static I-V curve, then run a real registered algorithm against
+the live panel/converter (not simulation, not a curve replay) for a while,
+recording `(t, V, I, D)` the way the curve tracer already streams sweep
+points, save curve+run together, and plot the real curve with the
+algorithm's dynamic trajectory overlaid. This is Phase 5a's actual payoff
+(AGENTS.md: the algorithm "lives on the Pi" against a real
+`SpiMcuSource`) - nothing in the repo has exercised that path yet, only
+simulated it or replayed a static curve through it. Scoped to one static
+scenario for now, no firmware changes (`FirmwareMode::MppTracker` already
+does what's needed), and a new client-side safety abort since this is the
+first script to drive the SEPIC continuously with a live algorithm rather
+than a bounded probe or a fixed test duty.
 
 ## Audit trail (2026-07-18 audit)
 
