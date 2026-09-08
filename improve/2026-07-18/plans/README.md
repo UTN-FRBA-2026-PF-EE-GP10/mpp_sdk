@@ -54,18 +54,29 @@ re-enabling; no plan file, tracked via the PR that disabled it.
 | 022 | SDK: replay measured curves through the MPPT algorithm benchmark | P1 | M | 021 (hard) | DONE (`MeasuredPanel` implements `PanelModel` with zero changes to it, `SimulatedSource`, or any algorithm - seam check in the PR settles near the measured MPP. `mpp-sdk compare-measured` produces one figure per measurement kind. Real per-kind comparison, e.g. global trackers beating local ones on a `partial-shade` capture, is still open - needs real curves from the board) |
 | 023 | GUI: React + shadcn curve workbench, served from the Pi | P2 | L | 021 (hard), 020 (hard) | DONE-ish (`frontend/` - Vite+React+TS+Tailwind+shadcn/ui - wired to a real backend: `scripts/curve_tracer_server.py` was rewritten from stdlib `http.server` to **FastAPI** per operator direction (this plan's original STOP condition against a web framework was deliberately overridden), serving `/api/curves`, `/api/measurement-kinds`, `/api/data` (partial/active from plan 020), `/api/save-curve`, `/api/start-sweep`, `/api/release-relay`. Vanilla-JS page removed; build output now committed to `scripts/curve_tracer_web/` as designed. `pnpm build`/`tsc` and `uv run pytest` (new `tests/test_curve_tracer_server.py`, FastAPI `TestClient`, no hardware) both clean. `--demo` flag added afterward (`scripts/curve_tracer_demo_source.py`, `mpp-sdk curve-tracer-web --demo`): a wall-clock-paced simulated sweep, needs only the `web` extra, so the frontend can be exercised on any machine with no board. Not marked plain DONE: on-target capture-to-pane round trip is unverified - needs the board - and 020 itself is still IN PROGRESS) |
 | 024 | Bench: microcontroller-driven lamp dimmer - design spike | P3 | M | - | TODO |
+| 025 | Frontend: CI coverage for `frontend/` (typecheck, lint, build) | P2 | M | - | TODO |
+| 026 | Firmware: unit tests for the curve-tracer safety cutoff (`breach`) via a new host-testable `safety-checks` sibling crate | P2 | S-M | - | TODO |
+| 027 | SDK: sequence tests for `_SweepCache.set_progress`'s reset heuristic (index-skip, duplicate-poll) | P2 | S | - | TODO |
+| 028 | SDK: `MeasuredPanel` Voc-extrapolation guard tests (tight-gap, non-negative-slope) | P2 | S | - | TODO |
+| 029 | SDK: dedup the harness's P-V-curve-plus-final-points plot body (`compare_static.py`/`compare_measured.py`) | P3 | S-M | - | TODO |
+| 030 | SDK: dedup `ScanAndTrack`/`ParticleSwarm`'s shared validation/restart-trigger/handoff scaffold | P3 | M | - | TODO |
+| 031 | SDK: `SweepSource` Protocol formalizing `SpiMcuSource`/`DemoSweepSource`'s duck-typed interface | P3 | S-M | - | TODO |
+| 032 | Frontend: add vitest + tests for `useLiveSweep`/`useConnectionStatus` | P3 | M | - | TODO |
+| 033 | Frontend: extract shared `usePolling` hook from `useLiveSweep`/`useConnectionStatus` | P3 | S | 032 (hard) | TODO |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) |
 REJECTED (with one-line rationale).
 
 ## Remaining backlog
 
-Everything above is DONE except:
+The older backlog (plans 001-019) is DONE except:
 
 - **003** (bench duty sweep, P1): needs 002 flashed on the target plus a
   lab PSU (or battery) + 10 Ohm load. Bench procedure, not a code change.
 - **010** (INA281 gain/shunt, P2): IN PROGRESS, `ADC_Input_Curr` still
   uncalibrated.
+- Plans **020-024** are tracked in "Next phase" below; plans **025-033**
+  are the open September-audit follow-ups documented later in this file.
 - **016 / 018 / 019** are DONE as of the 2026-08-26 bench session - the
   curve tracer works end to end: a sweep is triggered from the Pi, the
   relay holds across sweeps, 20 points come back over SPI, and the web UI
@@ -140,6 +151,84 @@ not a reopening of 011.
 Execution-order/parallelization detail for the now-DONE plans (001-009,
 011-015) is historical - see git history on this file rather than
 maintaining it here.
+
+### September 2026 audit (2026-09-06)
+
+A full `/improve` audit run across the whole repo (four parallel category
+subagents: correctness/security, tests/tech debt, dependencies/DX, and
+docs/direction, plus this session's own vetting pass) at commit `ff010a4`,
+after the FastAPI backend + `--demo` mode work landed. 15 findings, vetted
+and presented to the operator; the operator chose to fix the six highest-
+confidence items directly in this same session rather than plan them:
+
+- **#1** (stale partial curve on a zero-point aborted sweep) and **#2**
+  (wrong "Latest" label - `MeasurementKindCard` picked the oldest record,
+  not the most recent) - both correctness bugs, fixed together in PR #67.
+  #1 was already silently mitigated client-side by an earlier session's
+  review fix (`useLiveSweep` already cleared `partial` on `!active`) - the
+  server-side `_SweepCache.set_progress` fix landed anyway, for
+  defense-in-depth.
+- **#3** (`.pre-commit-config.yaml`'s `ruff-pre-commit` rev drifted behind
+  the version CI actually runs) and **#4** (`astral-sh/setup-uv@v6` left
+  unpinned to a specific `uv` version across all 5 workflow steps) - CI/
+  tooling drift, fixed together in PR #68.
+- **#5** (root `README.md` never mentioned the curve-tracer web workbench
+  or `--demo`) and **#6** (`docs/methodology.md` never mentioned
+  `MeasuredPanel`/`compare-measured`) - a duplicate finding independently
+  raised by both the deps/DX subagent and the docs/direction subagent,
+  merged into one row - docs gaps, fixed together in PR #69.
+
+Findings **#7-#15** (all test-coverage or tech-debt items, none urgent)
+became plans **025-033** above rather than being fixed inline - each plan
+is fully self-contained (see each file's own "Why this matters"/"Current
+state" for the finding it implements). Two dependency notes worth
+surfacing here:
+
+- **032 must land before 033** (hard dependency, marked in 033's own
+  frontier row and enforced by a STOP-condition check at the top of the
+  plan file itself): 033 refactors `useLiveSweep`/`useConnectionStatus`'s
+  shared polling scaffold, and wants 032's black-box hook tests in place
+  first as the regression safety net.
+- Everything else (025-031) is independent and can execute in any order -
+  025 (frontend CI) and 026 (firmware safety-check tests) are the two
+  most self-contained (net-new files, no shared-code risk); 029/030 touch
+  existing, working control-adjacent code and are the two most worth
+  reading in full before starting, even though both are LOW/MED risk by
+  design (see each plan's "Verification strategy").
+
+### Direction findings from the 2026-09-06 audit (not planned - operator's call)
+
+Per the `/improve` skill, direction findings are presented separately from
+bugs/debt - they're options to weigh, not problems to rank. None were
+turned into a plan this round; recorded here so they aren't re-discovered
+from scratch by a future audit:
+
+- **No delete/rename for a saved curve capture.** `mpp_sdk/curves/library.py`
+  (`save`/`load_all`/`group_by_measurement`) has no corresponding
+  `delete`/`rename`, and neither does the web workbench - a mis-labeled or
+  bad capture can only be removed by finding the file on disk by hand. Low
+  effort if wanted (one new library function + one API route + one UI
+  button), but the operator hasn't hit this in practice yet at the current
+  capture volume.
+- **`scripts/export_iv_plecs.py` doesn't export measured curves.** It
+  exports a synthetic `PanelModel`'s I-V curve as a PLECS lookup table
+  (used by the sim-to-real layer-1 comparison, see
+  `docs/methodology.md`'s "three-layer comparison") but has no path from a
+  saved `CurveRecord`/`MeasuredPanel` to the same PLECS format - so a real
+  captured curve can't yet be replayed into PLECS the same way a synthetic
+  one can. Would close a real gap in the sim-to-real story once PLECS
+  comparison work actually starts consuming it (see the existing
+  "considered and rejected" note below on this same script from the
+  2026-07-18 audit: "watch-item until the PLECS comparison actually
+  consumes it" - still true).
+- **No bench-session-planning UI.** The web workbench captures and reviews
+  curves one at a time; there's no view for "here's today's planned
+  sequence of captures across panel/tilt/measurement-kind combinations,
+  here's which are done." Valuable once a measurement campaign (plans
+  020-024's stated goal - "capture *many* curves... replay them through
+  the algorithm benchmark") gets past a handful of ad hoc captures, but
+  premature while the operator is still capturing one or two curves per
+  bench session.
 
 ## Audit trail (2026-07-18 audit)
 
