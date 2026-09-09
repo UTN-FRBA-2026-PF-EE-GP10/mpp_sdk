@@ -889,16 +889,17 @@ and stays trapped on whatever peak the change leaves it on. Two mechanisms
 are available:</p>
 <ul>
 <li><strong>Change-detection restart</strong> (on by default): a <code>PowerChangeDetector</code>
-  watches <span class="arithmatex">\(P = V\,I\)</span> during Stage 2 and restarts Stage 1 when the power moves
-  by more than <code>restart_threshold</code> (relative) for <code>restart_samples</code>
-  consecutive steps — the <span class="arithmatex">\(|\Delta P|/P\)</span> condition used by PSO-MPPT
-  restart schemes. The detector arms itself only once the power is stable
-  after hand-off, so the converter's own settling transient (the scan ends at
-  <span class="arithmatex">\(D_\max\)</span> with the input capacitor drained — at low irradiance the recharge
-  is panel-current-limited and spans many control periods) cannot trigger a
-  spurious restart loop. Its reference follows the power while it stays
-  in-band, so it fires on <em>steps</em>, not on slow drifts the tracker follows
-  anyway.</li>
+  watches <span class="arithmatex">\(P = V\,I\)</span> during Stage 2 and restarts Stage 1 when the power
+  moves by more than <code>restart_threshold</code> (relative) for <code>restart_samples</code>
+  consecutive steps - the <span class="arithmatex">\(|\Delta P|/P\)</span> condition used by PSO-MPPT
+  restart schemes. The detector arms itself only once the power is
+  stable after hand-off. This matters because the scan ends at <span class="arithmatex">\(D_\max\)</span>
+  with the input capacitor drained, and at low irradiance the recharge is
+  panel-current-limited and spans many control periods - without the
+  arming delay, that recovery transient alone could trigger a spurious
+  restart loop. The reference follows the power while it stays in-band,
+  so the detector fires on <em>steps</em>, not on slow drifts the tracker
+  follows anyway.</li>
 <li><strong>Periodic re-scan</strong> every <span class="arithmatex">\(M\)</span> control steps (<code>rescan_period</code>, off by
   default):</li>
 </ul>

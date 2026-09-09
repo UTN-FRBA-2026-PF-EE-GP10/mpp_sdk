@@ -915,9 +915,9 @@ The fitness of a position is the measured power <span class="arithmatex">\(P = V
 so the first pass doubles as a coarse scan that brackets the global peak's basin.</p>
 <h2 id="sequential-evaluation">Sequential evaluation<a class="headerlink" href="#sequential-evaluation" title="Permanent link">&para;</a></h2>
 <p>The rig can only test one duty at a time (one panel, one converter), so
-particles are evaluated <strong>one per control step</strong>. A full PSO iteration therefore
-takes <span class="arithmatex">\(n_\text{particles}\)</span> control steps: command each particle's duty, read its
-power on the next step, update <span class="arithmatex">\(p_i\)</span> and <span class="arithmatex">\(g\)</span>.</p>
+particles are evaluated <strong>one per control step</strong>. A full PSO iteration
+takes <span class="arithmatex">\(n_\text{particles}\)</span> control steps: command each particle's duty,
+read its power on the next step, then update <span class="arithmatex">\(p_i\)</span> and <span class="arithmatex">\(g\)</span>.</p>
 <h2 id="update-rule">Update rule<a class="headerlink" href="#update-rule" title="Permanent link">&para;</a></h2>
 <p>After every particle in an iteration has been evaluated, positions and
 velocities are updated with the canonical PSO equations:</p>
@@ -939,13 +939,13 @@ alone would keep jittering as particles never fully stop.</p>
 <h2 id="restart-on-shading-change">Restart on shading change<a class="headerlink" href="#restart-on-shading-change" title="Permanent link">&para;</a></h2>
 <p>Once handed off, the controller is a plain P&amp;O and cannot escape a local
 maximum when the shading pattern changes. A <code>PowerChangeDetector</code> (on by
-default) watches <span class="arithmatex">\(P = V\,I\)</span> during tracking: a sustained relative change
+default) watches <span class="arithmatex">\(P = V\,I\)</span> during tracking. A sustained relative change
 beyond <code>restart_threshold</code> re-seeds the particles evenly across the duty
-range — stale personal/global bests are forgotten, not reused — and re-runs
-the whole search. This is the <span class="arithmatex">\(|\Delta P|/P\)</span> restart condition from the
-PSO-MPPT literature [Liu et al. 2012]. The detector arms only once the power
-is stable after hand-off, so the converter's own settling transient cannot
-trigger a restart loop.</p>
+range - stale personal/global bests are forgotten, not reused - and
+re-runs the whole search. This is the <span class="arithmatex">\(|\Delta P|/P\)</span> restart condition
+from the PSO-MPPT literature [Liu et al. 2012]. The detector arms only
+once the power is stable after hand-off, so the converter's own settling
+transient cannot trigger a restart loop.</p>
 <p>The detector is blind to one case: a shading change that relocates the
 global peak while barely moving the tracked power (e.g. the shade swapping
 from one panel to the other). The optional <code>rescan_period</code> re-runs the
@@ -967,12 +967,12 @@ energy cost each period — the same knob <code>ScanAndTrack</code> has. See
 max_iterations, track_step, seed, restart_threshold, restart_samples,
 rescan_period, …)</code>. A fixed <code>seed</code> makes runs reproducible, as required by
 the project's reproducibility policy.</p>
-<p>Swarm size matters more than it looks on a real (or dynamic-simulated) rig:
-each particle's fitness is measured one control period after commanding it,
-while the input capacitor is still slewing, so the first (coarse-scan)
-iteration sees lag-corrupted powers. On the 2-panel Hissuma rig at a 1 kHz
-loop, 6 particles locate the global basin for only ~60 % of seeds after a
-shading change; 8 particles are reliable.</p>
+<p>Swarm size matters more than it looks on a real (or dynamic-simulated)
+rig. Each particle's fitness is measured one control period after
+commanding it, while the input capacitor is still slewing, so the first
+(coarse-scan) iteration sees lag-corrupted powers. On the 2-panel Hissuma
+rig at a 1 kHz loop, 6 particles locate the global basin for only ~60 %
+of seeds after a shading change. 8 particles are reliable.</p>
 <p>Because the swarm's convergence depends on the RNG stream, <code>harness/compare_seeds.py</code>
 runs PSO (8 particles) over 30 seeds on the cyclic schedule: eta energy
 93.9 % +/- 0.7 and 7.9 +/- 1.7 trapped plateaus, against the deterministic

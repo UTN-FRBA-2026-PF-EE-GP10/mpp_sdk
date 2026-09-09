@@ -849,10 +849,10 @@ deviated from its reference by more than <code>threshold</code> (relative, defau
 P|/P\)</span> restart condition used by PSO-MPPT schemes [Liu et al. 2012].</p>
 <ul>
 <li><strong>Arming after reset</strong>: after a reset (construction, or right after a
-  search hands off) the detector simply follows the raw samples until
-  <code>samples</code> consecutive readings agree within the band before it arms. This
-  makes it immune to the electrical settling transient that follows the jump
-  to a newly-found peak, with no plant-specific hold-off constant needed.</li>
+  search hands off) the detector follows the raw samples until <code>samples</code>
+  consecutive readings agree within the band, then arms. This makes it
+  immune to the electrical settling transient after the jump to a
+  newly-found peak, with no plant-specific hold-off constant needed.</li>
 <li><strong>In-band reference follow</strong>: once armed, the reference follows the power
   only while it stays inside the band (an EMA; <code>smoothing=1.0</code> by default
   pins it to the last in-band sample). The converter's own continuous
@@ -883,12 +883,12 @@ loss, as a fraction of available energy, is modelled as</p>
 <div class="arithmatex">\[L(P) = \frac{A}{P} + B \cdot P,\]</div>
 <p>where the first term is the search tax and the second is trap exposure:</p>
 <ul>
-<li><strong><span class="arithmatex">\(A\)</span> (search tax)</strong>: a periodic re-search costs a fixed energy <span class="arithmatex">\(e_s\)</span>,
-  measured in a steady-full-sun calibration run where re-scanning is the
-  <em>only</em> loss (backstop off vs. backstop on every <code>CAL_PERIOD</code> steps, same
-  unchanging condition - the extra energy lost divided by the re-search
-  count gives <span class="arithmatex">\(e_s\)</span>). Over <span class="arithmatex">\(N\)</span> schedule steps there are about <span class="arithmatex">\(N/P\)</span>
-  periodic re-searches, so <span class="arithmatex">\(A = e_s \cdot N / E_\text{available}\)</span>.</li>
+<li><strong><span class="arithmatex">\(A\)</span> (search tax)</strong>: a periodic re-search costs a fixed energy <span class="arithmatex">\(e_s\)</span>.
+  This is measured in a steady-full-sun calibration run where re-scanning
+  is the <em>only</em> loss (backstop off vs. backstop on every <code>CAL_PERIOD</code>
+  steps, same unchanging condition): the extra energy lost, divided by
+  the re-search count, gives <span class="arithmatex">\(e_s\)</span>. Over <span class="arithmatex">\(N\)</span> schedule steps there are
+  about <span class="arithmatex">\(N/P\)</span> periodic re-searches, so <span class="arithmatex">\(A = e_s \cdot N / E_\text{available}\)</span>.</li>
 <li><strong><span class="arithmatex">\(B\)</span> (trap exposure)</strong>: with the backstop off, stealth traps cost a
   fraction <span class="arithmatex">\(L_\text{off}\)</span> of the available energy (measured on the same
   backstop-off run used for the calibration above). A trap persists until
@@ -901,10 +901,11 @@ loss, as a fraction of available energy, is modelled as</p>
 <p>which lands on the empirical best: Scan&amp;Track's eta energy peaks at
 <strong>95.0 %</strong> at period <strong>1000</strong> (the nearest swept value to <span class="arithmatex">\(P^\star\)</span>).
 Over-frequent re-scanning (period 250) actually traps <em>more</em> often, not
-less - each sweep is itself a window during which a mid-scan shading change
-can go undetected, so shortening the period below the plateau timescale adds
-risk instead of removing it. <code>harness/compare_rescan.py</code> regenerates this
-table and the accompanying figure (<code>harness/output/compare_rescan.png</code>).</p>
+less. Each sweep is itself a window during which a mid-scan shading
+change can go undetected, so shortening the period below the plateau
+timescale adds risk instead of removing it. <code>harness/compare_rescan.py</code>
+regenerates this table and the accompanying figure
+(<code>harness/output/compare_rescan.png</code>).</p>
 <h2 id="measured-behavior">Measured behavior<a class="headerlink" href="#measured-behavior" title="Permanent link">&para;</a></h2>
 <p>Local trackers (no restart policy) trap in roughly half the shaded plateaus
 of the cyclic schedule, settling at 44-67 % of available power on those
@@ -916,7 +917,7 @@ up to ~1 s re-acquisition when only the backstop can free them.</p>
 30 seeds on the cyclic schedule and reports eta <strong>93.9 % +/- 0.7</strong> and
 <strong>7.9 +/- 1.7</strong> trapped plateaus, against the deterministic Scan&amp;Track at
 <strong>95.0 %</strong> eta and <strong>5</strong> traps with zero variance. Scan&amp;Track beats PSO's
-mean on both metrics and removes seed-to-seed variance entirely, which is
+mean on both metrics and removes seed-to-seed variance entirely. That is
 why it is the MCU deployment candidate - see <code>scan_and_track.md</code> and
 <code>particle_swarm.md</code> for the per-algorithm detail.</p>
 <h2 id="references">References<a class="headerlink" href="#references" title="Permanent link">&para;</a></h2>
