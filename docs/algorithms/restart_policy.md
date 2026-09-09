@@ -27,10 +27,10 @@ deviated from its reference by more than `threshold` (relative, default
 P|/P$ restart condition used by PSO-MPPT schemes [Liu et al. 2012].
 
 - **Arming after reset**: after a reset (construction, or right after a
-  search hands off) the detector simply follows the raw samples until
-  `samples` consecutive readings agree within the band before it arms. This
-  makes it immune to the electrical settling transient that follows the jump
-  to a newly-found peak, with no plant-specific hold-off constant needed.
+  search hands off) the detector follows the raw samples until `samples`
+  consecutive readings agree within the band, then arms. This makes it
+  immune to the electrical settling transient after the jump to a
+  newly-found peak, with no plant-specific hold-off constant needed.
 - **In-band reference follow**: once armed, the reference follows the power
   only while it stays inside the band (an EMA; `smoothing=1.0` by default
   pins it to the last in-band sample). The converter's own continuous
@@ -68,12 +68,12 @@ $$L(P) = \frac{A}{P} + B \cdot P,$$
 
 where the first term is the search tax and the second is trap exposure:
 
-- **$A$ (search tax)**: a periodic re-search costs a fixed energy $e_s$,
-  measured in a steady-full-sun calibration run where re-scanning is the
-  *only* loss (backstop off vs. backstop on every `CAL_PERIOD` steps, same
-  unchanging condition - the extra energy lost divided by the re-search
-  count gives $e_s$). Over $N$ schedule steps there are about $N/P$
-  periodic re-searches, so $A = e_s \cdot N / E_\text{available}$.
+- **$A$ (search tax)**: a periodic re-search costs a fixed energy $e_s$.
+  This is measured in a steady-full-sun calibration run where re-scanning
+  is the *only* loss (backstop off vs. backstop on every `CAL_PERIOD`
+  steps, same unchanging condition): the extra energy lost, divided by
+  the re-search count, gives $e_s$. Over $N$ schedule steps there are
+  about $N/P$ periodic re-searches, so $A = e_s \cdot N / E_\text{available}$.
 - **$B$ (trap exposure)**: with the backstop off, stealth traps cost a
   fraction $L_\text{off}$ of the available energy (measured on the same
   backstop-off run used for the calibration above). A trap persists until
@@ -88,10 +88,11 @@ $$P^\star = \sqrt{A / B} \approx 1034 \text{ control steps},$$
 which lands on the empirical best: Scan&Track's eta energy peaks at
 **95.0 %** at period **1000** (the nearest swept value to $P^\star$).
 Over-frequent re-scanning (period 250) actually traps *more* often, not
-less - each sweep is itself a window during which a mid-scan shading change
-can go undetected, so shortening the period below the plateau timescale adds
-risk instead of removing it. `harness/compare_rescan.py` regenerates this
-table and the accompanying figure (`harness/output/compare_rescan.png`).
+less. Each sweep is itself a window during which a mid-scan shading
+change can go undetected, so shortening the period below the plateau
+timescale adds risk instead of removing it. `harness/compare_rescan.py`
+regenerates this table and the accompanying figure
+(`harness/output/compare_rescan.png`).
 
 ## Measured behavior
 
@@ -106,7 +107,7 @@ Stochastic search is measured the same way, over seeds rather than periods:
 30 seeds on the cyclic schedule and reports eta **93.9 % +/- 0.7** and
 **7.9 +/- 1.7** trapped plateaus, against the deterministic Scan&Track at
 **95.0 %** eta and **5** traps with zero variance. Scan&Track beats PSO's
-mean on both metrics and removes seed-to-seed variance entirely, which is
+mean on both metrics and removes seed-to-seed variance entirely. That is
 why it is the MCU deployment candidate - see `scan_and_track.md` and
 `particle_swarm.md` for the per-algorithm detail.
 

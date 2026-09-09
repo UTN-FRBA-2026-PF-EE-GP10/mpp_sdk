@@ -51,16 +51,17 @@ and stays trapped on whatever peak the change leaves it on. Two mechanisms
 are available:
 
 - **Change-detection restart** (on by default): a `PowerChangeDetector`
-  watches $P = V\,I$ during Stage 2 and restarts Stage 1 when the power moves
-  by more than `restart_threshold` (relative) for `restart_samples`
-  consecutive steps — the $|\Delta P|/P$ condition used by PSO-MPPT
-  restart schemes. The detector arms itself only once the power is stable
-  after hand-off, so the converter's own settling transient (the scan ends at
-  $D_\max$ with the input capacitor drained — at low irradiance the recharge
-  is panel-current-limited and spans many control periods) cannot trigger a
-  spurious restart loop. Its reference follows the power while it stays
-  in-band, so it fires on *steps*, not on slow drifts the tracker follows
-  anyway.
+  watches $P = V\,I$ during Stage 2 and restarts Stage 1 when the power
+  moves by more than `restart_threshold` (relative) for `restart_samples`
+  consecutive steps - the $|\Delta P|/P$ condition used by PSO-MPPT
+  restart schemes. The detector arms itself only once the power is
+  stable after hand-off. This matters because the scan ends at $D_\max$
+  with the input capacitor drained, and at low irradiance the recharge is
+  panel-current-limited and spans many control periods - without the
+  arming delay, that recovery transient alone could trigger a spurious
+  restart loop. The reference follows the power while it stays in-band,
+  so the detector fires on *steps*, not on slow drifts the tracker
+  follows anyway.
 - **Periodic re-scan** every $M$ control steps (`rescan_period`, off by
   default):
 
