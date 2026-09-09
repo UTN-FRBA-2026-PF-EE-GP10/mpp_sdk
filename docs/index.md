@@ -22,6 +22,7 @@ One page each, with the equations and references:
 - [Fuzzy Logic](algorithms/fuzzy_logic.md) — graduated-step local tracker
 - [Scan-and-Track](algorithms/scan_and_track.md) — global MPPT (scan + local refine)
 - [Particle Swarm](algorithms/particle_swarm.md) — global MPPT (population search)
+- [Restart Policy](algorithms/restart_policy.md) — when a global tracker re-searches
 
 The first three are **local** trackers (they get trapped on local maxima under
 partial shading); the last two are **global** methods that escape the trap.
