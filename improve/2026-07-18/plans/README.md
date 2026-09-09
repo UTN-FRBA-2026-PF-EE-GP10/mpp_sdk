@@ -61,7 +61,7 @@ re-enabling; no plan file, tracked via the PR that disabled it.
 | 029 | SDK: dedup the harness's P-V-curve-plus-final-points plot body (`compare_static.py`/`compare_measured.py`) | P3 | S-M | - | DONE (plan file removed, see PR history) |
 | 030 | SDK: dedup `ScanAndTrack`/`ParticleSwarm`'s shared validation/restart-trigger/handoff scaffold | P3 | M | - | DONE (plan file removed, see PR history) |
 | 031 | SDK: `SweepSource` Protocol formalizing `SpiMcuSource`/`DemoSweepSource`'s duck-typed interface | P3 | S-M | - | DONE (plan file removed, see PR history) |
-| 032 | Frontend: add vitest + tests for `useLiveSweep`/`useConnectionStatus` | P3 | M | - | TODO |
+| 032 | Frontend: add vitest + tests for `useLiveSweep`/`useConnectionStatus` | P3 | M | - | DONE (plan file removed, see PR history) |
 | 033 | Frontend: extract shared `usePolling` hook from `useLiveSweep`/`useConnectionStatus` | P3 | S | 032 (hard) | TODO |
 | 034 | SDK+scripts: capture and analyze a real closed-loop MPPT run ("runs") | P2 | L | - | TODO |
 | 035 | Docs: measurement-procedure checklist page (curves, tilt steps, runs) | P2 | M | 034 (hard, Step 4 only) | TODO |
