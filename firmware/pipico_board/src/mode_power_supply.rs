@@ -1,18 +1,15 @@
-//! `FirmwareMode::PowerSupply`: local, autonomous Vout regulation for
-//! standalone bench characterization - ignores the Pi's commanded `DUTY`
-//! for gate control (the SPI frame still exchanges normally for
-//! telemetry). Never touches `MppTracker`'s duty (`main.rs`). See plan 011's
-//! history for the full design rationale, including why the SPI
-//! link-lost watchdog does NOT apply here.
+//! `FirmwareMode::PowerSupply`: autonomous Vout regulation for standalone
+//! bench tests, with no Pi needed. It ignores the Pi's commanded `DUTY`
+//! and never touches `MppTracker`'s duty (`main.rs`). The SPI link-lost
+//! watchdog does not apply here, since this mode must keep running with
+//! no Pi attached.
 
 use portable_atomic::Ordering;
 
 use crate::{ADC_SAMPLE_COUNT, DUTY_MAX, MEAS_ADC_VOUT_MV, MEAS_V_MV};
 
-/// `OpenLoop`: fixed `POWER_SUPPLY_FIXED_DUTY`, no feedback - a sanity
-/// check for the SEPIC transfer-ratio math and ADC/PWM wiring, meant to
-/// run before trusting `ClosedLoop`. `ClosedLoop`: regulates `Vout` to
-/// `POWER_SUPPLY_VOUT_MV` automatically.
+/// `OpenLoop` checks the SEPIC transfer-ratio math and ADC/PWM wiring
+/// before trusting `ClosedLoop`'s feedback.
 #[allow(dead_code)]
 #[derive(Clone, Copy, PartialEq, Eq, defmt::Format)]
 pub enum PowerSupplyLoop {
@@ -22,42 +19,37 @@ pub enum PowerSupplyLoop {
 
 pub const POWER_SUPPLY_LOOP: PowerSupplyLoop = PowerSupplyLoop::ClosedLoop;
 
-/// `OpenLoop` bench-test duty: D = 0.5 (unity gain, V_out = V_in at
-/// D = 0.5). Bench value for a 5 V lab PSU input into the 10R/5W load.
+/// D = 0.5 is unity gain (`V_out = V_in`). Bench value for a 5 V lab PSU
+/// into the 10R/5W load.
 pub const POWER_SUPPLY_FIXED_DUTY: u16 = 32768;
 
-/// `ClosedLoop` target output voltage in millivolts. Bench value: 5 V
-/// from a 5 V lab PSU input into the 10R/5W load.
+/// Bench value: 5 V from a 5 V lab PSU into the 10R/5W load.
 pub const POWER_SUPPLY_VOUT_MV: u16 = 5000;
 
-/// Proportional gain: raw step (before clamping) is `err_mv /
-/// GAIN_DIVISOR`. Tuned on-target - both bench trim speed and load-step
-/// recovery were too slow at the initial 50/200.
+/// Tuned on-target: 50/200 was too slow, both for trim speed and
+/// load-step recovery.
 const GAIN_DIVISOR: u16 = 20;
-/// Per-sample step bounds (duty counts, out of 65535) - one step per
-/// fresh ADC sample (~10 Hz), so a single step moves duty by at most
-/// ~1.2 %. Watch for oscillation before raising further.
+/// One step per fresh ADC sample (~10 Hz), so a step moves duty by at
+/// most ~1.2 %. Raise with care — watch for oscillation.
 const MIN_STEP: u16 = 1;
 const MAX_STEP: u16 = 800;
 
-/// Below this, `MEAS_V_MV` (INA229) is "not a real reading yet" (e.g.
-/// before its first successful read, which defaults to 0) rather than a
-/// genuine near-zero Vin - `feedforward_duty` would otherwise compute a
-/// duty near 100 % as Vin -> 0.
+/// Below this, treat `MEAS_V_MV` as not-yet-real (its default before the
+/// first successful read is 0), not a real near-zero Vin. Otherwise
+/// `feedforward_duty` computes near-100 % duty as Vin -> 0.
 const MIN_VALID_VIN_MV: u16 = 500;
 
-/// One-time feed-forward jump: the ideal (lossless) SEPIC ratio
-/// `V_out = V_in * D/(1-D)` solved for `D = V_out/(V_in + V_out)`, applied
-/// directly instead of climbing there via proportional steps from
-/// `ps_duty = 0` (too slow on real hardware). The trim in `step()` then
-/// closes the remaining gap from real losses this ideal formula ignores.
+/// Jumps straight to the ideal SEPIC ratio's duty
+/// (`D = V_out/(V_in + V_out)`) instead of climbing there step by step
+/// from zero, which is too slow on real hardware. `step()`'s trim then
+/// closes the gap from the real losses this ideal formula ignores.
 fn feedforward_duty(vin_mv: u16, vout_target_mv: u16) -> u16 {
     let vin = vin_mv as u32;
     let vout = vout_target_mv as u32;
     ((vout * 65535 / (vin + vout)) as u16).min(DUTY_MAX)
 }
 
-/// Owned by `main()`'s loop - exactly one instance ever runs.
+/// One instance, owned by `main()`'s loop.
 pub struct ClosedLoopState {
     ps_duty: u16,
     last_adc_sample_seen: Option<u32>,
@@ -73,23 +65,21 @@ impl ClosedLoopState {
         }
     }
 
-    /// Re-seeds as if from a cold start. Called by `main()` when the
-    /// curve-tracer relay hands the panel back to the SEPIC path after a
-    /// sweep: `compute_duty()` is never called while the sweep is running
-    /// (the gate is force-held at 0 instead), so `ps_duty` would otherwise
-    /// still hold its stale pre-sweep value and jump straight back to it -
-    /// bypassing `MIN_STEP`/`MAX_STEP` - the instant the sweep ends. The
-    /// actual duty applied throughout the sweep was 0, not `ps_duty`, so
-    /// resuming as a fresh cold start (one `feedforward_duty` jump, then
-    /// proportional trim) matches reality instead of replaying stale state.
+    /// Re-seeds as if from a cold start. `main()` calls this when the
+    /// curve-tracer relay hands the panel back after a sweep: `ps_duty`
+    /// would otherwise still hold its stale pre-sweep value and jump
+    /// straight to it, skipping `MIN_STEP`/`MAX_STEP` — but the duty
+    /// actually applied during the sweep was 0, not `ps_duty`. Starting
+    /// cold (a `feedforward_duty` jump, then trim) matches reality.
     pub fn reset(&mut self) {
         *self = Self::new();
     }
 
-    /// Steps at most once per fresh ADC sample (~10 Hz), gated on
-    /// `ADC_SAMPLE_COUNT` rather than on `MEAS_ADC_VOUT_MV`'s value - see
-    /// that static's doc comment in `main.rs` for why. Called every 1 ms
-    /// main-loop tick regardless; most calls are no-ops.
+    /// Steps at most once per fresh ADC sample (~10 Hz) — gated on
+    /// `ADC_SAMPLE_COUNT`, not `MEAS_ADC_VOUT_MV`'s value, since a
+    /// repeated value does not mean a stale sample (see that static's
+    /// doc comment in `main.rs`). Called every 1 ms regardless; most
+    /// calls are no-ops.
     fn step(&mut self) -> u16 {
         let sample = ADC_SAMPLE_COUNT.load(Ordering::Relaxed);
         if self.last_adc_sample_seen == Some(sample) {
@@ -98,8 +88,7 @@ impl ClosedLoopState {
         self.last_adc_sample_seen = Some(sample);
 
         if !self.seeded {
-            // Safe no-op each sample until Vin looks real - see
-            // MIN_VALID_VIN_MV.
+            // No-op until Vin looks real — see MIN_VALID_VIN_MV.
             let vin_mv = MEAS_V_MV.load(Ordering::Relaxed);
             if vin_mv >= MIN_VALID_VIN_MV {
                 self.ps_duty = feedforward_duty(vin_mv, POWER_SUPPLY_VOUT_MV);
@@ -120,7 +109,6 @@ impl ClosedLoopState {
     }
 }
 
-/// Compute this tick's gate duty for `PowerSupply` mode.
 pub fn compute_duty(closed_loop: &mut ClosedLoopState) -> u16 {
     match POWER_SUPPLY_LOOP {
         PowerSupplyLoop::OpenLoop => POWER_SUPPLY_FIXED_DUTY.min(DUTY_MAX),
