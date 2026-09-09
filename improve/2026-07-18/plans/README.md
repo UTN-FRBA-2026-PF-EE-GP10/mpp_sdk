@@ -58,7 +58,7 @@ re-enabling; no plan file, tracked via the PR that disabled it.
 | 026 | Firmware: unit tests for the curve-tracer safety cutoff (`breach`) via a new host-testable `safety-checks` sibling crate | P2 | S-M | - | DONE (plan file removed, see PR history) |
 | 027 | SDK: sequence tests for `_SweepCache.set_progress`'s reset heuristic (index-skip, duplicate-poll) | P2 | S | - | DONE (plan file removed, see PR history) |
 | 028 | SDK: `MeasuredPanel` Voc-extrapolation guard tests (tight-gap, non-negative-slope) | P2 | S | - | DONE (plan file removed, see PR history) |
-| 029 | SDK: dedup the harness's P-V-curve-plus-final-points plot body (`compare_static.py`/`compare_measured.py`) | P3 | S-M | - | TODO |
+| 029 | SDK: dedup the harness's P-V-curve-plus-final-points plot body (`compare_static.py`/`compare_measured.py`) | P3 | S-M | - | DONE (plan file removed, see PR history) |
 | 030 | SDK: dedup `ScanAndTrack`/`ParticleSwarm`'s shared validation/restart-trigger/handoff scaffold | P3 | M | - | TODO |
 | 031 | SDK: `SweepSource` Protocol formalizing `SpiMcuSource`/`DemoSweepSource`'s duck-typed interface | P3 | S-M | - | TODO |
 | 032 | Frontend: add vitest + tests for `useLiveSweep`/`useConnectionStatus` | P3 | M | - | TODO |

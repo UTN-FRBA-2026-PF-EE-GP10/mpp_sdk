@@ -125,3 +125,71 @@ def test_run_schedule_noise_isolation():
     assert vs_clean == pytest.approx(vs_noisy)
     assert is_clean == pytest.approx(is_noisy)
     assert ds_clean == pytest.approx(ds_noisy)
+
+
+# ------------------------------------------------------------------
+# plot_pv_with_final_points
+# ------------------------------------------------------------------
+
+
+def test_plot_pv_with_final_points_calls_the_factory_once_plus_once_per_algorithm():
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    from harness.common import plot_pv_with_final_points
+    from mpp_sdk.models import IdealSingleDiode
+
+    calls = []
+
+    def panel_factory():
+        calls.append(1)
+        return IdealSingleDiode()
+
+    specs = algorithm_specs()
+    algorithms = [(s.label, s.make) for s in specs]
+    colors = ["tab:blue"] * len(algorithms)
+
+    fig, ax = plt.subplots()
+    try:
+        p_mpp, results = plot_pv_with_final_points(ax, panel_factory, algorithms, colors, n_steps=5)
+    finally:
+        plt.close(fig)
+
+    # One call for the curve/MPP, one per algorithm - this is the contract
+    # a fresh-panel-per-scenario caller (compare_static.py) relies on.
+    assert len(calls) == 1 + len(algorithms)
+    assert p_mpp > 0
+    assert [r.label for r in results] == [label for label, _ in algorithms]
+
+
+def test_plot_pv_with_final_points_reuses_a_single_instance_when_the_factory_does():
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    from harness.common import plot_pv_with_final_points
+    from mpp_sdk.models import IdealSingleDiode
+
+    panel = IdealSingleDiode()
+    calls = []
+
+    def panel_factory():
+        calls.append(panel)
+        return panel
+
+    specs = algorithm_specs()
+    algorithms = [(s.label, s.make) for s in specs]
+    colors = ["tab:blue"] * len(algorithms)
+
+    fig, ax = plt.subplots()
+    try:
+        plot_pv_with_final_points(ax, panel_factory, algorithms, colors, n_steps=5)
+    finally:
+        plt.close(fig)
+
+    # Every returned object is the exact same instance - this is the
+    # contract compare_measured.py's `lambda: panel` relies on.
+    assert all(c is panel for c in calls)
