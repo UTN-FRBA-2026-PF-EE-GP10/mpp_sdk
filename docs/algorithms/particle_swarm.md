@@ -28,9 +28,9 @@ so the first pass doubles as a coarse scan that brackets the global peak's basin
 ## Sequential evaluation
 
 The rig can only test one duty at a time (one panel, one converter), so
-particles are evaluated **one per control step**. A full PSO iteration therefore
-takes $n_\text{particles}$ control steps: command each particle's duty, read its
-power on the next step, update $p_i$ and $g$.
+particles are evaluated **one per control step**. A full PSO iteration
+takes $n_\text{particles}$ control steps: command each particle's duty,
+read its power on the next step, then update $p_i$ and $g$.
 
 ## Update rule
 
@@ -60,13 +60,13 @@ alone would keep jittering as particles never fully stop.
 
 Once handed off, the controller is a plain P&O and cannot escape a local
 maximum when the shading pattern changes. A `PowerChangeDetector` (on by
-default) watches $P = V\,I$ during tracking: a sustained relative change
+default) watches $P = V\,I$ during tracking. A sustained relative change
 beyond `restart_threshold` re-seeds the particles evenly across the duty
-range — stale personal/global bests are forgotten, not reused — and re-runs
-the whole search. This is the $|\Delta P|/P$ restart condition from the
-PSO-MPPT literature [Liu et al. 2012]. The detector arms only once the power
-is stable after hand-off, so the converter's own settling transient cannot
-trigger a restart loop.
+range - stale personal/global bests are forgotten, not reused - and
+re-runs the whole search. This is the $|\Delta P|/P$ restart condition
+from the PSO-MPPT literature [Liu et al. 2012]. The detector arms only
+once the power is stable after hand-off, so the converter's own settling
+transient cannot trigger a restart loop.
 
 The detector is blind to one case: a shading change that relocates the
 global peak while barely moving the tracked power (e.g. the shade swapping
@@ -92,12 +92,12 @@ max_iterations, track_step, seed, restart_threshold, restart_samples,
 rescan_period, …)`. A fixed `seed` makes runs reproducible, as required by
 the project's reproducibility policy.
 
-Swarm size matters more than it looks on a real (or dynamic-simulated) rig:
-each particle's fitness is measured one control period after commanding it,
-while the input capacitor is still slewing, so the first (coarse-scan)
-iteration sees lag-corrupted powers. On the 2-panel Hissuma rig at a 1 kHz
-loop, 6 particles locate the global basin for only ~60 % of seeds after a
-shading change; 8 particles are reliable.
+Swarm size matters more than it looks on a real (or dynamic-simulated)
+rig. Each particle's fitness is measured one control period after
+commanding it, while the input capacitor is still slewing, so the first
+(coarse-scan) iteration sees lag-corrupted powers. On the 2-panel Hissuma
+rig at a 1 kHz loop, 6 particles locate the global basin for only ~60 %
+of seeds after a shading change. 8 particles are reliable.
 
 Because the swarm's convergence depends on the RNG stream, `harness/compare_seeds.py`
 runs PSO (8 particles) over 30 seeds on the cyclic schedule: eta energy
