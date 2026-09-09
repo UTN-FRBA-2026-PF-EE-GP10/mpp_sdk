@@ -185,9 +185,9 @@ pub fn init(
 const TEMP_NOT_AVAILABLE_CC: i16 = i16::MIN;
 
 /// XOR checksum over the given data bytes - catches single/few-bit
-/// corruption cheaply on both a `no_std` target and in plain Python (see
-/// plan 014). Shared by both frame directions so the formula only lives
-/// in one place.
+/// corruption cheaply on both a `no_std` target and in plain Python.
+/// Shared by both frame directions so the formula only lives in one
+/// place.
 fn xor_checksum(bytes: &[u8]) -> u8 {
     bytes.iter().fold(0, |acc, b| acc ^ b)
 }
@@ -413,8 +413,8 @@ fn apply_duty_frame(
         }
         Some(cmd)
     } else {
-        // Corrupted-but-complete frame (plan 014): keep the last-good
-        // DUTY rather than apply garbage, and don't act on `cmd` either -
+        // Corrupted-but-complete frame: keep the last-good DUTY rather
+        // than apply garbage, and don't act on `cmd` either -
         // a corrupted frame's command byte is not trustworthy. Rate
         // limited - a jammed link could otherwise flood RTT every frame.
         *checksum_failures += 1;
@@ -496,7 +496,7 @@ fn build_tx_buf_for_state(state: &BulkState) -> [u32; MAX_FRAME_LEN] {
 /// MISO (Pico→RPi): [ V_H | V_L | I_H | I_L | VOUT_H | VOUT_L | TEMP_H
 ///   | TEMP_L | CHECKSUM | ACK | 0 x 2 ]
 ///
-/// `CHECKSUM` (plan 014) is an XOR over the preceding data bytes in each
+/// `CHECKSUM` is an XOR over the preceding data bytes in each
 /// direction (`xor_checksum`) - it does not grow the frame, both
 /// directions still 12 bytes. A MOSI checksum mismatch is treated like a
 /// torn frame: `DUTY` is left at its last-good value (never zeroed by a
