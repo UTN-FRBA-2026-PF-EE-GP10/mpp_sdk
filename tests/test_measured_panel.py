@@ -66,6 +66,40 @@ def test_extrapolate_true_exceeds_measured_max_voltage():
     assert panel.open_circuit_voltage > 21.3
 
 
+def test_extrapolation_skipped_when_last_gap_is_much_tighter_than_average():
+    """avg_spacing here is 20.05/5 = 4.01 V; the last gap (20.05 - 20 =
+    0.05 V) is far under 10% of that, so the slope estimate from just
+    those two points is too unstable to trust - extrapolation must be
+    skipped and Voc must fall back to the measured maximum."""
+    sweep = [
+        (0.0, 0.215),
+        (5.0, 0.212),
+        (10.0, 0.205),
+        (15.0, 0.19),
+        (20.0, 0.1),
+        (20.05, 0.005),
+    ]
+    panel = MeasuredPanel.from_points(sweep, extrapolate=True)
+    assert panel.open_circuit_voltage == pytest.approx(20.05)
+
+
+def test_extrapolation_skipped_when_the_final_slope_is_not_negative():
+    """The last two points' slope here is (0.06 - 0.05) / 3 = +0.0033 -
+    non-negative, so projecting forward would not converge to I=0 at a
+    higher voltage. Extrapolation must be skipped and Voc must fall back
+    to the measured maximum."""
+    sweep = [
+        (0.0, 0.215),
+        (5.0, 0.212),
+        (10.0, 0.205),
+        (15.0, 0.19),
+        (18.0, 0.05),
+        (21.0, 0.06),
+    ]
+    panel = MeasuredPanel.from_points(sweep, extrapolate=True)
+    assert panel.open_circuit_voltage == pytest.approx(21.0)
+
+
 # ------------------------------------------------------------------
 # Scalar / array in-out
 # ------------------------------------------------------------------
