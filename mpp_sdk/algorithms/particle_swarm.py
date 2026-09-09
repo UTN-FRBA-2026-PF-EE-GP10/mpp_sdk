@@ -3,9 +3,9 @@
 import math
 import random
 
+from . import restart
 from .base import MPPTAlgorithm
 from .perturb_observe import PerturbAndObserve
-from .restart import PowerChangeDetector
 
 
 class ParticleSwarm(MPPTAlgorithm):
@@ -83,16 +83,13 @@ class ParticleSwarm(MPPTAlgorithm):
         restart_samples: int = 3,
         rescan_period: int | None = None,
     ) -> None:
-        if not 0.0 <= min_duty < max_duty <= 1.0:
-            raise ValueError(f"need 0 <= min_duty < max_duty <= 1; got {min_duty=}, {max_duty=}")
+        restart._validate_duty_range(min_duty, max_duty)
         if n_particles < 2:
             raise ValueError(f"n_particles must be >= 2; got {n_particles=}")
         if max_iterations < 1:
             raise ValueError(f"max_iterations must be >= 1; got {max_iterations=}")
-        if not (math.isfinite(track_step) and track_step > 0):
-            raise ValueError(f"track_step must be a finite positive number; got {track_step=}")
-        if rescan_period is not None and rescan_period <= 0:
-            raise ValueError(f"rescan_period must be positive or None; got {rescan_period=}")
+        restart._validate_finite_positive("track_step", track_step)
+        restart._validate_rescan_period(rescan_period)
         self._rescan_period = rescan_period
         self._min = min_duty
         self._max = max_duty
@@ -103,11 +100,7 @@ class ParticleSwarm(MPPTAlgorithm):
         self._track_step = track_step
         self._rng = random.Random(seed)
         self._n = n_particles
-        self._detector = (
-            None
-            if restart_threshold is None
-            else PowerChangeDetector(threshold=restart_threshold, samples=restart_samples)
-        )
+        self._detector = restart._make_restart_detector(restart_threshold, restart_samples)
 
         self._seed_swarm()
         self._duty = self._x[0]
@@ -150,11 +143,8 @@ class ParticleSwarm(MPPTAlgorithm):
     def step(self, voltage: float, current: float) -> float:
         if not self._optimizing:
             self._steps_tracking += 1
-            rescan_due = (
-                self._rescan_period is not None and self._steps_tracking >= self._rescan_period
-            )
-            if rescan_due or (
-                self._detector is not None and self._detector.update(voltage * current)
+            if restart._restart_due(
+                self._detector, self._rescan_period, self._steps_tracking, voltage * current
             ):
                 self._seed_swarm()  # shading changed (or backstop expired) — re-search
 
@@ -181,11 +171,8 @@ class ParticleSwarm(MPPTAlgorithm):
             self._iteration += 1
             if self._iteration >= self._max_iter:
                 self._optimizing = False
-                self._tracker = PerturbAndObserve(
-                    initial_duty=self._gbest_x,
-                    step_size=self._track_step,
-                    min_duty=self._min,
-                    max_duty=self._max,
+                self._tracker = restart._make_local_tracker(
+                    self._gbest_x, self._track_step, self._min, self._max
                 )
                 self._duty = self._gbest_x
                 return self._gbest_x

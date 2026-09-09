@@ -2,9 +2,9 @@
 
 import math
 
+from . import restart
 from .base import MPPTAlgorithm
 from .perturb_observe import PerturbAndObserve
-from .restart import PowerChangeDetector
 
 
 class ScanAndTrack(MPPTAlgorithm):
@@ -70,24 +70,16 @@ class ScanAndTrack(MPPTAlgorithm):
         restart_threshold: float | None = 0.2,
         restart_samples: int = 3,
     ) -> None:
-        if not 0.0 <= min_duty < max_duty <= 1.0:
-            raise ValueError(f"need 0 <= min_duty < max_duty <= 1; got {min_duty=}, {max_duty=}")
-        if not (math.isfinite(scan_step) and scan_step > 0):
-            raise ValueError(f"scan_step must be a finite positive number; got {scan_step=}")
-        if not (math.isfinite(track_step) and track_step > 0):
-            raise ValueError(f"track_step must be a finite positive number; got {track_step=}")
-        if rescan_period is not None and rescan_period <= 0:
-            raise ValueError(f"rescan_period must be positive or None; got {rescan_period=}")
+        restart._validate_duty_range(min_duty, max_duty)
+        restart._validate_finite_positive("scan_step", scan_step)
+        restart._validate_finite_positive("track_step", track_step)
+        restart._validate_rescan_period(rescan_period)
         self._min = min_duty
         self._max = max_duty
         self._scan_step = scan_step
         self._track_step = track_step
         self._rescan_period = rescan_period
-        self._detector = (
-            None
-            if restart_threshold is None
-            else PowerChangeDetector(threshold=restart_threshold, samples=restart_samples)
-        )
+        self._detector = restart._make_restart_detector(restart_threshold, restart_samples)
 
         self._scan_duties = self._build_scan_grid()
         self._begin_scan()
@@ -110,14 +102,10 @@ class ScanAndTrack(MPPTAlgorithm):
     def step(self, voltage: float, current: float) -> float:
         self._steps_since_scan += 1
 
-        if not self._scanning:
-            rescan_due = (
-                self._rescan_period is not None and self._steps_since_scan >= self._rescan_period
-            )
-            if rescan_due or (
-                self._detector is not None and self._detector.update(voltage * current)
-            ):
-                self._begin_scan()
+        if not self._scanning and restart._restart_due(
+            self._detector, self._rescan_period, self._steps_since_scan, voltage * current
+        ):
+            self._begin_scan()
 
         if self._scanning:
             # The measurement we just received belongs to the previously
@@ -135,11 +123,8 @@ class ScanAndTrack(MPPTAlgorithm):
             # Scan complete — pick the global-best duty and start tracking.
             best_idx = max(range(len(self._powers)), key=self._powers.__getitem__)
             best_duty = self._scan_duties[best_idx]
-            self._tracker = PerturbAndObserve(
-                initial_duty=best_duty,
-                step_size=self._track_step,
-                min_duty=self._min,
-                max_duty=self._max,
+            self._tracker = restart._make_local_tracker(
+                best_duty, self._track_step, self._min, self._max
             )
             self._scanning = False
             self._steps_since_scan = 0
