@@ -3,8 +3,8 @@ frontend be exercised on any machine, no Pi/Pico/`spidev` required.
 
 Implements exactly the four methods `_poll_loop` calls on a source
 (`start_sweep`, `release_relay`, `request_sweep`, `poll_sweep_progress`)
-plus the context-manager protocol - duck-typed against `SpiMcuSource`,
-not a subclass, so this module pulls in nothing beyond the stdlib and
+plus the context-manager protocol. Duck-typed against `SpiMcuSource`, not
+a subclass, so this module pulls in nothing beyond the stdlib -
 `SpiMcuSource`/`spidev` are never imported in demo mode.
 
 `poll_sweep_progress()`'s return value is duck-typed against

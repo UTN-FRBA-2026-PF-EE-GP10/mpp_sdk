@@ -1,8 +1,8 @@
 // Typed client for scripts/curve_tracer_server.py's FastAPI routes. This
 // is the one place the mA/A boundary is crossed: GET /api/data's points
-// are milliamps (the UI's unit), while everything else (the curve
-// library, /api/curves) stores amps - see CurvePoint's volts/amps
-// convention in types.ts.
+// are milliamps (the UI's unit). Everything else (the curve library,
+// /api/curves) stores amps - see CurvePoint's volts/amps convention in
+// types.ts.
 
 import type { CurvePoint, CurveRecord, PanelSetup } from '@/types'
 
@@ -31,11 +31,11 @@ function fromWirePoints(points: WireDataPoint[] | undefined): CurvePoint[] {
   return (points ?? []).map((p) => ({ v: p.x, i: p.y / 1000 }))
 }
 
-// FastAPI's own validation errors (a bad body on POST /api/save-curve, e.g.
-// a panel missing "tilt_deg") send `detail` as a list of {loc, msg, type}
-// objects, not a string - `HTTPException(detail=...)` elsewhere in the app
-// still sends a plain string. Handle both rather than letting `String()`
-// flatten the array case into "[object Object]".
+// FastAPI's own validation errors (a bad body on POST /api/save-curve,
+// e.g. a panel missing "tilt_deg") send `detail` as a list of
+// {loc, msg, type} objects, not a string. `HTTPException(detail=...)`
+// elsewhere in the app still sends a plain string. Handle both, so
+// `String()` doesn't flatten the array case into "[object Object]".
 function formatDetail(detail: unknown): string {
   if (typeof detail === 'string') return detail
   if (Array.isArray(detail)) {

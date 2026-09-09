@@ -5,11 +5,11 @@ import type { CurvePoint } from '@/types'
 const POLL_MS = 700
 
 /**
- * Polls GET /api/data on a timer: while `active`, `partial` is drawn live
- * (redrawn every tick - it has no seq of its own, and waiting for one
- * would show nothing move); once `active` goes false, `points` (the last
- * completed sweep) takes over, gated on the server's `seq` counter so a
- * sweep isn't re-applied on every poll.
+ * Polls GET /api/data on a timer. While `active`, `partial` is drawn
+ * live, redrawn every tick - it has no seq of its own, and waiting for
+ * one would show nothing move. Once `active` goes false, `points` (the
+ * last completed sweep) takes over, gated on the server's `seq` counter
+ * so a sweep is not re-applied on every poll.
  */
 export function useLiveSweep() {
   const [partial, setPartial] = useState<CurvePoint[]>([])
@@ -29,12 +29,12 @@ export function useLiveSweep() {
         if (data.active) {
           setPartial(data.partial)
         } else {
-          // Once a sweep is no longer active, `points` (gated on `seq`) is
-          // authoritative - see this hook's docstring. Clearing `partial`
-          // here too matters when a sweep never completes (link drop,
-          // relay released mid-capture): otherwise a stale `partial` from
-          // the aborted attempt keeps rendering in LiveChart, which falls
-          // back to `partial` whenever `points` is still empty.
+          // Once a sweep is no longer active, `points` (gated on `seq`)
+          // is authoritative - see this hook's docstring. Clearing
+          // `partial` here also matters when a sweep never completes
+          // (link drop, relay released mid-capture): otherwise a stale
+          // `partial` keeps rendering in LiveChart, which falls back to
+          // `partial` whenever `points` is still empty.
           setPartial([])
           if (data.seq !== lastSeq.current) {
             setPoints(data.points)

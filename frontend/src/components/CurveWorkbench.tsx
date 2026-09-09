@@ -123,9 +123,9 @@ export function CurveWorkbench({
   const { partial, points, active, start, releaseRelay } = useLiveSweep()
   // Deliberately excludes `active`: POST /api/save-curve persists the
   // cache's last *completed* sweep (see curve_tracer_server.py's
-  // post_save_curve), not whatever `partial` is currently drawing. Allowing
-  // Save while a new sweep is in flight would silently save the previous
-  // sweep's points under the label/panels meant for the one in progress.
+  // post_save_curve), not whatever `partial` is currently drawing.
+  // Allowing Save mid-sweep would silently save the previous sweep's
+  // points under the label meant for the one still in progress.
   const hasCapture = !active && points.length > 0
 
   return (

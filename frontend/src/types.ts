@@ -23,10 +23,11 @@ export interface CurvePoint {
   i: number
 }
 
-// Matches GET /api/curves's entry shape exactly (scripts/curve_tracer_server.py's
-// get_curves): the library-list endpoint reports a point *count*, not the
-// points themselves, and doesn't echo back notes - both live only in the
-// on-disk record and the save-curve request body (see SaveCurveInput).
+// Matches GET /api/curves's entry shape exactly (curve_tracer_server.py's
+// get_curves). The library-list endpoint reports a point *count*, not
+// the points themselves, and does not echo back notes - both live only
+// in the on-disk record and the save-curve request body (see
+// SaveCurveInput).
 export interface CurveRecord {
   path: string
   captured_at: string
@@ -41,10 +42,10 @@ export interface CurveRecord {
 
 export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'demo'
 
-/** True for any status where a sweep can actually be triggered/drawn -
+/** True for any status where a sweep can actually be triggered or drawn:
  * 'connected' (real Pi) and 'demo' (simulated source) both qualify. Kept
- * in one place so a future status doesn't need updating at every call site
- * that cares about "is this live enough to interact with". */
+ * in one place, so a future status only needs updating here, not at
+ * every call site that cares about "is this live enough to use". */
 export function isLiveConnection(status: ConnectionStatus): boolean {
   return status === 'connected' || status === 'demo'
 }
@@ -75,9 +76,9 @@ const MEASUREMENT_KIND_INFO: Record<MeasurementKind, { title: string; descriptio
 /**
  * Measurement kinds are operator-defined free text on the backend (see
  * `mpp_sdk/curves/record.py`'s `MEASUREMENT_KINDS` docstring - "not an
- * enum"), so a kind fetched from `GET /api/measurement-kinds` or present
- * in a saved curve may not be one of the five seeded above. Falls back to
- * the kind's own name rather than throwing or hiding the card.
+ * enum"). So a kind from `GET /api/measurement-kinds`, or in a saved
+ * curve, may not be one of the five seeded above. Falls back to the
+ * kind's own name instead of throwing or hiding the card.
  */
 export function getMeasurementKindInfo(kind: string): { title: string; description: string } {
   return (
