@@ -36,26 +36,21 @@ ALGORITHMS = [(s.label, s.make) for s in common.algorithm_specs()]
 
 def _plot_record(ax, record, colors) -> None:
     panel = MeasuredPanel(record)
-    v_curve, i_curve = panel.iv_curve(n=400)
-    p_curve = v_curve * i_curve
-    v_mpp, _, p_mpp = panel.mpp()
-
-    ax.plot(v_curve, p_curve, "k-", lw=1.5, label="P-V curve", zorder=1)
-    ax.plot(v_mpp, p_mpp, "k*", ms=14, zorder=3, label=f"MPP ({p_mpp:.3f} W)")
-
-    for (label, make_ctl), color in zip(ALGORITHMS, colors, strict=False):
-        v_f, p_f = common.final_point(make_ctl, panel, n_steps=N_STEPS, initial_duty=INITIAL_DUTY)
-        eta = p_f / p_mpp if p_mpp else 0.0
-        ax.plot(v_f, p_f, "o", color=color, ms=10, zorder=4, label=f"{label}: {p_f:.3f} W")
+    p_mpp, results = common.plot_pv_with_final_points(
+        ax,
+        lambda: panel,
+        ALGORITHMS,
+        colors,
+        n_steps=N_STEPS,
+        initial_duty=INITIAL_DUTY,
+        decimals=3,
+        mpp_label="MPP",
+        legend_fontsize=7,
+    )
+    for label, v_f, p_f, eta in results:
         print(f"{record.label:<32}{label:<10}{v_f:<9.2f}{p_f:<9.3f}{eta * 100:5.1f} %")
 
     ax.set_title(record.label, fontsize=10)
-    ax.set_xlabel("Voltage [V]")
-    ax.set_ylabel("Power [W]")
-    ax.legend(fontsize=7)
-    ax.grid(True, alpha=0.3)
-    ax.set_xlim(left=0)
-    ax.set_ylim(bottom=0)
 
 
 def main() -> None:

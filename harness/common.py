@@ -82,6 +82,73 @@ def final_point(
     return v, v * i
 
 
+class FinalPointResult(NamedTuple):
+    """One algorithm's settled operating point, as returned by
+    :func:`plot_pv_with_final_points` for the caller's own table print."""
+
+    label: str
+    v: float
+    p: float
+    eta: float
+
+
+def plot_pv_with_final_points(
+    ax,
+    panel_factory: Callable[[], object],
+    algorithms: Iterable[tuple[str, Callable[[float], object]]],
+    colors,
+    *,
+    n_steps: int = 2000,
+    initial_duty: float = 0.5,
+    n_curve_points: int = 400,
+    decimals: int = 2,
+    mpp_label: str = "global MPP",
+    legend_fontsize: int = 8,
+) -> tuple[float, list[FinalPointResult]]:
+    """Draw one P-V curve with the global MPP starred and every algorithm's
+    settled final operating point marked - the shared plot body of
+    `compare_static.py` and `compare_measured.py`.
+
+    ``panel_factory`` is called once for the curve/MPP and once per
+    algorithm (matching `final_point`'s signature) - **not** memoized here.
+    Pass a factory that returns a fresh panel each call (as
+    `compare_static.py`'s per-scenario ``panel_fn`` does) or one that
+    always returns the same instance (``lambda: panel``, as
+    `compare_measured.py` needs for a `MeasuredPanel` built once from a
+    `CurveRecord`) depending on which behavior the call site needs - this
+    function does not decide that for you.
+
+    Sets everything about the axes except its title (callers' title calls
+    differ in text and kwargs) and does not print or save anything -
+    returns ``(p_mpp, results)`` so the caller can print its own table.
+    """
+    panel = panel_factory()
+    v_curve, i_curve = panel.iv_curve(n=n_curve_points)
+    p_curve = v_curve * i_curve
+    v_mpp, _, p_mpp = panel.mpp()
+
+    ax.plot(v_curve, p_curve, "k-", lw=1.5, label="P-V curve", zorder=1)
+    ax.plot(v_mpp, p_mpp, "k*", ms=14, zorder=3, label=f"{mpp_label} ({p_mpp:.{decimals}f} W)")
+
+    results = []
+    for (label, make_ctl), color in zip(algorithms, colors, strict=False):
+        v_f, p_f = final_point(
+            make_ctl, panel_factory(), n_steps=n_steps, initial_duty=initial_duty
+        )
+        eta = p_f / p_mpp if p_mpp else 0.0
+        ax.plot(v_f, p_f, "o", color=color, ms=10, zorder=4, label=f"{label}: {p_f:.{decimals}f} W")
+        results.append(FinalPointResult(label, v_f, p_f, eta))
+
+    ax.set_xlabel("Voltage [V]")
+    ax.set_ylabel("Power [W]")
+    ax.legend(fontsize=legend_fontsize)
+    ax.grid(True, alpha=0.3)
+    ax.set_xlim(left=0)
+    ax.set_ylim(bottom=0)
+
+    return p_mpp, results
+
+
 def build_conditions(irradiance_pairs: Iterable[tuple[float, float]]):
     """Tabulate each distinct irradiance pair once: ``{irr: (panel, p_mpp)}``."""
     conditions = {}

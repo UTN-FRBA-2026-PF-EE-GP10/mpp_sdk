@@ -34,10 +34,6 @@ SCENARIOS = [
 ]
 
 
-def final_point(make_ctl, panel):
-    return common.final_point(make_ctl, panel, n_steps=N_STEPS, initial_duty=INITIAL_DUTY)
-
-
 def main() -> None:
     fig, axes = plt.subplots(1, 2, figsize=(13, 5))
     fig.suptitle("Static MPPT comparison — final operating point", fontweight="bold")
@@ -48,27 +44,12 @@ def main() -> None:
     print("-" * 68)
 
     for ax, (title, panel_fn) in zip(axes, SCENARIOS, strict=True):
-        panel = panel_fn()
-        v_curve, i_curve = panel.iv_curve(n=400)
-        p_curve = v_curve * i_curve
-        v_mpp, _, p_mpp = panel.mpp()
-
-        ax.plot(v_curve, p_curve, "k-", lw=1.5, label="P-V curve", zorder=1)
-        ax.plot(v_mpp, p_mpp, "k*", ms=14, zorder=3, label=f"global MPP ({p_mpp:.2f} W)")
-
-        for (label, make_ctl), color in zip(ALGORITHMS, colors, strict=False):
-            v_f, p_f = final_point(make_ctl, panel_fn())
-            eta = p_f / p_mpp
-            ax.plot(v_f, p_f, "o", color=color, ms=10, zorder=4, label=f"{label}: {p_f:.2f} W")
+        p_mpp, results = common.plot_pv_with_final_points(
+            ax, panel_fn, ALGORITHMS, colors, n_steps=N_STEPS, initial_duty=INITIAL_DUTY
+        )
+        for label, v_f, p_f, eta in results:
             print(f"{title:<32}{label:<10}{v_f:<9.2f}{p_f:<9.2f}{eta * 100:5.1f} %")
-
         ax.set_title(title)
-        ax.set_xlabel("Voltage [V]")
-        ax.set_ylabel("Power [W]")
-        ax.legend(fontsize=8)
-        ax.grid(True, alpha=0.3)
-        ax.set_xlim(left=0)
-        ax.set_ylim(bottom=0)
 
     out = Path(__file__).parent / "output" / "compare_static.png"
     fig.tight_layout()
