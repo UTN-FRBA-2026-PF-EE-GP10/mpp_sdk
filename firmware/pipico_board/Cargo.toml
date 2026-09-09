@@ -24,6 +24,8 @@ defmt-rtt = "1.0"
 # embassy-rp, needs to be a direct dep to name the type).
 smart-leds = "0.4.0"
 
+safety-checks = { path = "../safety-checks" }
+
 [profile.release]
 debug = 2
 lto = "fat"
