@@ -6,8 +6,8 @@
 //!
 //! Register map, SPI frame format and scaling constants below were checked
 //! against the INA229 datasheet (SLYS023A, Rev. A, May 2022):
-//! <https://www.ti.com/lit/ds/symlink/ina229.pdf>. One correction versus the
-//! plan this driver was built from: the SPI mode. See "SPI frame" below.
+//! <https://www.ti.com/lit/ds/symlink/ina229.pdf>. See "SPI frame" below
+//! for the SPI mode this device actually needs.
 //!
 //! ## SPI frame
 //!
@@ -22,12 +22,12 @@
 //!
 //! ## Bus ownership
 //!
-//! SPI transactions here are a handful of bytes at 1 MHz (tens of
-//! microseconds). Rather than pull in DMA channels + interrupt bindings for
-//! negligible benefit, this driver uses the RP2040's blocking SPI0
-//! peripheral (`Spi<'_, SPI0, Blocking>`) directly from the async
-//! `ina_task` in `main.rs`, which owns the bus and one `Output` per chip
-//! select exclusively (no shared-bus crate, per `AGENTS.md`).
+//! SPI transactions here are a handful of bytes at 1 MHz - tens of
+//! microseconds. That is too little benefit for DMA channels and interrupt
+//! bindings, so this driver uses the RP2040's blocking SPI0 peripheral
+//! (`Spi<'_, SPI0, Blocking>`) directly from the async `ina_task` in
+//! `main.rs`. That task owns the bus and one `Output` per chip select
+//! exclusively (no shared-bus crate, per `AGENTS.md`).
 
 use embassy_rp::gpio::Output;
 use embassy_rp::peripherals::SPI0;
