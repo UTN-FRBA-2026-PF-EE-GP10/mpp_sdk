@@ -2,6 +2,8 @@
 
 import math
 
+from .perturb_observe import PerturbAndObserve
+
 
 class PowerChangeDetector:
     """Detects a sustained relative change in tracked power.
@@ -106,3 +108,53 @@ class PowerChangeDetector:
             self.reset()
             return True
         return False
+
+
+def _validate_duty_range(min_duty: float, max_duty: float) -> None:
+    if not 0.0 <= min_duty < max_duty <= 1.0:
+        raise ValueError(f"need 0 <= min_duty < max_duty <= 1; got {min_duty=}, {max_duty=}")
+
+
+def _validate_finite_positive(name: str, value: float) -> None:
+    if not (math.isfinite(value) and value > 0):
+        raise ValueError(f"{name} must be a finite positive number; got {name}={value!r}")
+
+
+def _validate_rescan_period(rescan_period: int | None) -> None:
+    if rescan_period is not None and rescan_period <= 0:
+        raise ValueError(f"rescan_period must be positive or None; got {rescan_period=}")
+
+
+def _make_restart_detector(
+    restart_threshold: float | None, restart_samples: int
+) -> PowerChangeDetector | None:
+    return (
+        None
+        if restart_threshold is None
+        else PowerChangeDetector(threshold=restart_threshold, samples=restart_samples)
+    )
+
+
+def _restart_due(
+    detector: PowerChangeDetector | None,
+    rescan_period: int | None,
+    steps_since_restart: int,
+    power: float,
+) -> bool:
+    """True if the periodic backstop is due, or the change detector fires on
+    this sample. Preserves the original short-circuit order deliberately:
+    when the backstop already fired, ``detector.update(power)`` is **not**
+    called - see this plan's "The short-circuit trap" for why that matters
+    (the detector is stateful; skipping or double-feeding a sample changes
+    its behavior on every later call). Do not split this into two separate
+    statements."""
+    rescan_due = rescan_period is not None and steps_since_restart >= rescan_period
+    return rescan_due or (detector is not None and detector.update(power))
+
+
+def _make_local_tracker(
+    duty: float, track_step: float, min_duty: float, max_duty: float
+) -> PerturbAndObserve:
+    return PerturbAndObserve(
+        initial_duty=duty, step_size=track_step, min_duty=min_duty, max_duty=max_duty
+    )
