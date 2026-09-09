@@ -29,6 +29,7 @@ nav:
   - General Information: general_information.md
   - Rationale: rationale.md
   - Methodology: methodology.md
+  - Measurement Procedure: measurement_procedure.md
   - Algorithms:
       - Perturb & Observe: algorithms/perturb_observe.md
       - Incremental Conductance: algorithms/incremental_conductance.md
