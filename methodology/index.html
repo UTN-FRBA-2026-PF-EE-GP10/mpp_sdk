@@ -909,8 +909,8 @@ the system overview see <code>general_information.md</code>; for design decision
 global maximum of the P-V curve for the current irradiance and
 temperature. Every metric compares what the controller actually captured
 against that ideal. The reference comes from the same panel model the
-simulation runs on (<code>TabulatedPanel.mpp()</code>), so the simulated world and
-the grading curve are identical by construction.</p>
+simulation runs on (<code>TabulatedPanel.mpp()</code>). So the simulated world and
+the grading curve are identical, by construction.</p>
 <h2 id="three-harnesses-three-questions">Three harnesses, three questions<a class="headerlink" href="#three-harnesses-three-questions" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -948,27 +948,27 @@ the grading curve are identical by construction.</p>
 </tr>
 </tbody>
 </table>
-<p>The split matters: a rich, chaotic, seeded schedule is ideal for <em>ranking</em>
-but impossible to reproduce with a real sun, while bench scenarios must be
-simple. Asking one experiment to do both jobs would do both badly.</p>
+<p>The split matters. A rich, chaotic, seeded schedule is ideal for
+<em>ranking</em>, but impossible to reproduce with a real sun. Bench scenarios
+must stay simple. One experiment cannot do both jobs well.</p>
 <p><code>compare_static.py</code>, <code>compare_dynamic.py</code> and <code>animate.py</code> predate the
 methodology and remain as smoke tests and demos.</p>
 <h2 id="the-metrics">The metrics<a class="headerlink" href="#the-metrics" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>eta energy</strong> <span class="arithmatex">\(= \sum_k P_k \,/\, \sum_k P_{\text{mpp},k}\)</span>: captured
   energy over ideally-available energy across the whole run, with a
-  time-varying reference (<code>metrics.energy_efficiency</code>). The headline
-  energy bill. It is <em>energy-weighted</em>: deep-shade segments offer little
-  energy, so failing them dents this number surprisingly little. Always
+  time-varying reference (<code>metrics.energy_efficiency</code>). This is the
+  headline energy bill. It is <em>energy-weighted</em>: deep-shade segments
+  offer little energy, so failing them barely dents this number. Always
   read it together with the trap columns.</li>
 <li><strong>success / trapped</strong>: how many held conditions (plateaus) ended within
   5 % of <span class="arithmatex">\(P_\text{mpp}\)</span>, and for the trapped ones, the settled fraction of
-  available power (mean and worst). This is the honest pain number: "when
-  trapped, the controller delivers X % of what the panel could give".</li>
-<li><strong>re-acquisition</strong>: time from a condition change until the power is back
-  inside the 5 % band and stays there. Local trackers re-acquire in
-  ~10 ms or never (trapped); global trackers always re-acquire but pay
-  their search time, bounded by the rescan period.</li>
+  available power (mean and worst). This is the honest pain number: when
+  trapped, the controller delivers X % of what the panel could give.</li>
+<li><strong>re-acquisition</strong>: time from a condition change until the power returns
+  inside the 5 % band and stays there. Local trackers re-acquire in ~10 ms,
+  or never (trapped). Global trackers always re-acquire, but pay their
+  search time, bounded by the rescan period.</li>
 <li>Building blocks in <code>mpp_sdk.metrics</code>: <code>tracking_efficiency</code>,
   <code>final_efficiency</code>, <code>settling_time</code>, <code>steady_state_ripple</code>,
   <code>overshoot</code>, <code>trap_depth</code>. Each harness prints a plain-language guide
@@ -976,48 +976,50 @@ methodology and remain as smoke tests and demos.</p>
 </ul>
 <h2 id="why-global-trackers-need-a-trigger-policy">Why global trackers need a trigger policy<a class="headerlink" href="#why-global-trackers-need-a-trigger-policy" title="Permanent link">&para;</a></h2>
 <p>A global search (full duty sweep, or a PSO pass) physically drives the
-converter across its range: exploration costs energy, so it cannot run
-continuously. After the search, a local P&amp;O holds the found peak. The open
-question is <em>when to search again</em>, and it moves the results more than the
-choice of search itself. Two mechanisms, both on the controller side and
-both fed only by <span class="arithmatex">\((V, I)\)</span>:</p>
+converter across its range. Exploration costs energy, so it cannot run
+continuously. After the search, a local P&amp;O holds the found peak. The
+open question is <em>when to search again</em> — it moves the results more than
+the choice of search itself does. Two mechanisms, both on the controller
+side and both fed only by <span class="arithmatex">\((V, I)\)</span>:</p>
 <ol>
 <li><strong>Step detector</strong> (<code>PowerChangeDetector</code>, on by default): restart when
-   <span class="arithmatex">\(|\Delta P|/P &gt; 20\,\%\)</span> for 3 consecutive control steps, with the
-   reference following the power while it stays in band. It arms only once
-   the power is stable after a search, so the converter's own recovery
-   transient (the input capacitor recharging, panel-current-limited at low
+   <span class="arithmatex">\(|\Delta P|/P &gt; 20\,\%\)</span> for 3 consecutive control steps. The reference
+   follows the power while it stays in band. It arms only once the power
+   is stable after a search, so the converter's own recovery transient
+   (the input capacitor recharging, panel-current-limited at low
    irradiance) cannot cause a restart loop. It fires on <em>steps</em> only.</li>
 <li><strong>Periodic backstop</strong> (<code>rescan_period</code>): re-search every <span class="arithmatex">\(N\)</span> tracking
-   steps unconditionally. It exists for the step detector's blind spot:
-   changes that reshape the curve without moving the tracked power, which
-   includes every <em>slow ramp</em> into partial shading. Its cost is one search
-   per period (a few percent of energy at 1 s); its benefit is bounding
-   the worst-case trapped time to the period.</li>
+   steps, unconditionally. This covers the step detector's blind spot:
+   changes that reshape the curve without moving the tracked power,
+   which includes every <em>slow ramp</em> into partial shading. Its cost is one
+   search per period (a few percent of energy at 1 s). Its benefit is
+   bounding the worst-case trapped time to the period.</li>
 </ol>
 <p>Measured on the cyclic schedule: local trackers trap in roughly half the
-shaded plateaus at 44-67 % of available power; the configured global
-trackers cut traps to a handful at the price of up to ~1 s re-acquisition
-when only the backstop can free them. The deployed period (1000 steps) is
-not a guess: an expected-loss model derives an optimum <span class="arithmatex">\(P^\star \approx
-1034\)</span> that lands on the empirically measured best (eta peaks at 95.0 % at
-period 1000) - see <code>algorithms/restart_policy.md</code> for the full derivation.</p>
+shaded plateaus, at 44-67 % of available power. The configured global
+trackers cut traps to a handful, at the price of up to ~1 s
+re-acquisition when only the backstop can free them. The deployed period
+(1000 steps) is not a guess: an expected-loss model derives an optimum
+<span class="arithmatex">\(P^\star \approx 1034\)</span>, which lands on the empirically measured best (eta
+peaks at 95.0 % at period 1000). See <code>algorithms/restart_policy.md</code> for
+the full derivation.</p>
 <h2 id="measurement-noise">Measurement noise<a class="headerlink" href="#measurement-noise" title="Permanent link">&para;</a></h2>
 <p>Real sense chains are noisy, and clean-sim numbers flatter the simple
 methods. <code>NoisySource</code> adds seeded Gaussian noise to the <span class="arithmatex">\((V, I)\)</span> samples
-the controller sees (the plant stays clean; grading uses true power),
-specified as a fraction of the hardware full scale (40 V / 1 A).</p>
-<p>The theory of the observed cliff: fixed-step P&amp;O decides direction from
-the <em>sign</em> of the power change across a duty perturbation. Near the MPP
-that change is tiny, so once per-sample noise exceeds it the decision is a
-coin flip and the tracker random-walks away (this is the classical
-step-size design constraint, Femia et al. 2005). On this rig the cliff
-sits between 0.25 % and 0.5 % of full scale; global searches keep a ~60 %
-floor at levels that reduce P&amp;O to ~19 %, because each sweep yanks the
-operating point back near the peak.</p>
+the controller sees. The plant stays clean; grading uses true power. The
+noise is specified as a fraction of the hardware full scale (40 V / 1 A).</p>
+<p>Why the cliff happens: fixed-step P&amp;O decides direction from the <em>sign</em>
+of the power change across a duty perturbation. Near the MPP that change
+is tiny. Once per-sample noise exceeds it, the decision is a coin flip
+and the tracker random-walks away (the classical step-size design
+constraint, Femia et al. 2005). On this rig the cliff sits between
+0.25 % and 0.5 % of full scale. Global searches keep a ~60 % floor at
+levels that reduce P&amp;O to ~19 %, because each sweep yanks the operating
+point back near the peak.</p>
 <h2 id="sim-to-real-the-three-layer-comparison">Sim-to-real: the three-layer comparison<a class="headerlink" href="#sim-to-real-the-three-layer-comparison" title="Permanent link">&para;</a></h2>
 <p>Closed-loop waveforms from different environments are never compared
-directly; the claim is split so a disagreement points at the broken layer:</p>
+directly. The claim is split, so a disagreement points at the broken
+layer:</p>
 <ol>
 <li><strong>Plant vs plant</strong> (validates <code>DynamicSimulatedSource</code> against the
    PLECS switched model): replay the <em>same recorded duty sequence</em>
@@ -1031,25 +1033,25 @@ directly; the claim is split so a disagreement points at the broken layer:</p>
 <li><strong>Closed loop</strong>: run the test-case bank in each environment and compare
    the metrics tables within documented tolerances.</li>
 </ol>
-<p><code>compare_bank.py</code> dumps a <span class="arithmatex">\((t, V, I, D)\)</span> CSV per run precisely to feed
-layers 1 and 2. On the bench, the scenarios map to one shade cloth of
-~30 % transmission (cover on, cover off, steady shade) plus the
-controller's configured start duty for the Voc-side trap case; the ground
-truth <span class="arithmatex">\(P_\text{mpp}\)</span> comes from a calibration duty sweep with the
-condition held - the rig is its own instrument.</p>
+<p><code>compare_bank.py</code> dumps a <span class="arithmatex">\((t, V, I, D)\)</span> CSV per run, to feed layers 1 and
+2. On the bench, the scenarios map to one shade cloth of ~30 %
+transmission (cover on, cover off, steady shade), plus the controller's
+configured start duty for the Voc-side trap case. The ground truth
+<span class="arithmatex">\(P_\text{mpp}\)</span> comes from a calibration duty sweep with the condition
+held — the rig is its own instrument.</p>
 <h2 id="measured-curves-replaying-real-panel-data">Measured curves: replaying real panel data<a class="headerlink" href="#measured-curves-replaying-real-panel-data" title="Permanent link">&para;</a></h2>
-<p><code>mpp_sdk.curves</code> captures I-V sweeps from the curve tracer (RP2040
-firmware sweeping the bench panel's whole voltage range, streamed to the
-Pi over SPI - see <code>frontend/README.md</code> for the web workbench), and
-<code>MeasuredPanel</code> implements the same <code>PanelModel</code> interface as any
-synthetic model. That means the comparison harness
-(<code>mpp-sdk compare-measured</code>) runs the full algorithm bank against an
-actual captured curve with <strong>zero algorithm changes</strong> - a step past layer
-1's "same curve, both simulators" claim above: this replaces the panel
-model with what the panel actually did, not a model of it.</p>
-<p>This is what lets partial-shading scenarios (one panel physically tilted
-or shaded relative to the other) be graded against the array's real P-V
-shape instead of an inferred multi-modal curve, before any algorithm is
+<p><code>mpp_sdk.curves</code> captures I-V sweeps from the curve tracer. RP2040
+firmware sweeps the bench panel's whole voltage range and streams the
+result to the Pi over SPI (see <code>frontend/README.md</code> for the web
+workbench). <code>MeasuredPanel</code> implements the same <code>PanelModel</code> interface as
+any synthetic model. So the comparison harness (<code>mpp-sdk
+compare-measured</code>) runs the full algorithm bank against an actual
+captured curve, with <strong>zero algorithm changes</strong>. This goes a step past
+layer 1's "same curve, both simulators" claim above: it replaces the
+panel model with what the panel actually did, not a model of it.</p>
+<p>This lets partial-shading scenarios (one panel physically tilted or
+shaded relative to the other) be graded against the array's real P-V
+shape, instead of an inferred multi-modal curve, before any algorithm is
 committed to firmware.</p>
 <h2 id="the-numbers-the-simulation-assumes">The numbers the simulation assumes<a class="headerlink" href="#the-numbers-the-simulation-assumes" title="Permanent link">&para;</a></h2>
 <table>
@@ -1095,10 +1097,10 @@ committed to firmware.</p>
 </table>
 <h2 id="reproducibility">Reproducibility<a class="headerlink" href="#reproducibility" title="Permanent link">&para;</a></h2>
 <p>Every stochastic element is seeded: the cyclic schedule, the PSO swarm,
-the noise stream. Re-running any harness reproduces its numbers exactly;
-changing a seed is a deliberate, visible act. This is a PLAN-level rule
+the noise stream. Re-running any harness reproduces its numbers exactly.
+Changing a seed is a deliberate, visible act. This is a PLAN-level rule,
 because every figure in the paper must be regenerable from a command.
-Stochastic algorithms are reported as mean +/- std over 30 seeds
+Stochastic algorithms are reported as mean ± std over 30 seeds
 (<code>compare_seeds.py</code>), never a single seed.</p>
 
 

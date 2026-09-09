@@ -862,11 +862,11 @@ PV theory needed to be productive.</p>
 <h2 id="what-this-project-is">What this project is<a class="headerlink" href="#what-this-project-is" title="Permanent link">&para;</a></h2>
 <p><code>mpp-sdk</code> is a Python SDK for <strong>designing, comparing, and deploying Maximum
 Power Point Tracking (MPPT) algorithms</strong> for photovoltaic (PV) systems. It
-backs an Electronics Engineering thesis whose final deliverable is an
-MPPT algorithm running on a microcontroller, validated end-to-end through the
-same codebase that compares it against the classical methods.</p>
-<p>The guiding principle: <strong>the same controller code runs in simulation today and
-on real hardware tomorrow</strong>, with no changes — only the underlying source is
+backs an Electronics Engineering thesis. The final deliverable is an MPPT
+algorithm running on a microcontroller, validated end to end through the
+same codebase that compares it against classical methods.</p>
+<p>The guiding principle: <strong>the same controller code runs in simulation today
+and on real hardware tomorrow, unchanged.</strong> Only the underlying source is
 swapped.</p>
 <h2 id="the-physical-system">The physical system<a class="headerlink" href="#the-physical-system" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code>  PV panels  ──►  SEPIC converter  ──►  load
@@ -880,18 +880,18 @@ swapped.</p>
                             Raspberry Pi 5 (Python SDK)
 </code></pre></div>
 <ul>
-<li><strong>Panels:</strong> two Hissuma PSF10MONO (10 W each) in <strong>series</strong>. Series wiring is
-  deliberate — it is what makes partial-shading experiments meaningful (see
-  <em>Why series</em> below).</li>
+<li><strong>Panels:</strong> two Hissuma PSF10MONO (10 W each) in <strong>series</strong>. Series wiring
+  is deliberate: it is what makes partial-shading experiments meaningful
+  (see <em>Why series</em> below).</li>
 <li><strong>SEPIC converter:</strong> a DC-DC stage whose duty cycle <span class="arithmatex">\(D\)</span> sets the panel
-  operating point. SEPIC is chosen because the panel MPP voltage can sit
-  <strong>above or below</strong> the load voltage without changing topology.</li>
-<li><strong>RP2040 (Raspberry Pi Pico):</strong> drives the converter PWM, reads voltage and
-  current (INA229 power monitor over SPI, plus an INA281 sense amplifier into
-  the on-chip ADC as an analog cross-check), and talks to the Pi over SPI.
-  Firmware is in <strong>Rust</strong>. It is also the deployment target for the final
-  algorithm.</li>
-<li><strong>Raspberry Pi 5:</strong> hosts the Python SDK and the algorithm during
+  operating point. SEPIC is the choice because the panel MPP voltage can
+  sit above or below the load voltage, with no change in topology.</li>
+<li><strong>RP2040 (Raspberry Pi Pico):</strong> drives the converter PWM, reads voltage
+  and current (an INA229 power monitor over SPI, plus an INA281 sense
+  amplifier into the on-chip ADC as an analog cross-check), and talks to
+  the Pi over SPI. Firmware is in <strong>Rust</strong>. It is also the deployment
+  target for the final algorithm.</li>
+<li><strong>Raspberry Pi 5:</strong> hosts the Python SDK, and the algorithm during
   hardware-in-the-loop (HIL) testing.</li>
 </ul>
 <h2 id="the-four-sdk-pillars">The four SDK pillars<a class="headerlink" href="#the-four-sdk-pillars" title="Permanent link">&para;</a></h2>
@@ -948,26 +948,26 @@ uniform light</em>. The MPP moves with conditions, which is why a closed-loop
 tracker is needed rather than a fixed operating point.</p>
 <h2 id="what-pvlib-contributes">What pvlib contributes<a class="headerlink" href="#what-pvlib-contributes" title="Permanent link">&para;</a></h2>
 <p><a href="https://pvlib-python.readthedocs.io/"><code>pvlib</code></a> is the de-facto open-source
-library for PV <strong>performance modelling</strong>. It provides validated single- and
-two-diode I-V solvers, temperature/irradiance models, and the <code>bishop88</code>
-partial-shading method.</p>
-<p>What pvlib does <strong>not</strong> provide: closed-loop MPPT controllers, time-stepping
-control simulation, or any hardware abstraction. It returns <em>the</em> MPP for a
-given panel and environment — not a controller that discovers it from a stream
-of <span class="arithmatex">\((V, I)\)</span> measurements.</p>
-<p><code>mpp-sdk</code> fills exactly that gap and <strong>adopts</strong> pvlib rather than competing with
-it: <code>PvlibPanelModel</code> wraps pvlib's solver behind the SDK's <code>PanelModel</code>
-interface, so controllers benefit from validated panel physics without
-re-implementing them. We fit the De Soto 5-parameter model from the panel's
-datasheet values (Voc, Isc, Vmp, Imp + temperature coefficients).</p>
+library for PV <strong>performance modelling</strong>. It provides validated single-
+and two-diode I-V solvers, temperature/irradiance models, and the
+<code>bishop88</code> partial-shading method.</p>
+<p>pvlib does <strong>not</strong> provide closed-loop MPPT controllers, time-stepping
+control simulation, or any hardware abstraction. It returns <em>the</em> MPP for
+a given panel and environment. It does not discover the MPP from a stream
+of <span class="arithmatex">\((V, I)\)</span> measurements, the way a controller does.</p>
+<p><code>mpp-sdk</code> fills that gap and <strong>adopts</strong> pvlib rather than competing with
+it. <code>PvlibPanelModel</code> wraps pvlib's solver behind the SDK's <code>PanelModel</code>
+interface, so controllers get validated panel physics with no
+re-implementation. We fit the De Soto 5-parameter model from the panel's
+datasheet values (Voc, Isc, Vmp, Imp, and temperature coefficients).</p>
 <h2 id="why-series-partial-shading">Why series (partial shading)<a class="headerlink" href="#why-series-partial-shading" title="Permanent link">&para;</a></h2>
 <p>Two panels in <strong>series</strong> share one current. When one is shaded, its bypass
-diode conducts over part of the curve, producing a <strong>multi-peak</strong> P-V curve.
-Classical trackers (P&amp;O, InCond, fuzzy) follow the local gradient and can get
-<strong>stuck on a local maximum</strong> — losing power. This is the motivation for a
-<em>global</em> MPPT method (scan-and-track), and the series string is what lets us
-demonstrate it. Two panels in <strong>parallel</strong> would keep a single-peak curve and
-hide the effect.</p>
+diode conducts over part of the curve. That produces a <strong>multi-peak</strong> P-V
+curve. Classical trackers (P&amp;O, InCond, fuzzy) follow the local gradient
+and can get <strong>stuck on a local maximum</strong>, losing power. This is why a
+<em>global</em> MPPT method (scan-and-track) is needed, and the series string is
+what lets us demonstrate it. Two panels in <strong>parallel</strong> would keep a
+single-peak curve and hide the effect.</p>
 <p>Hardware limits for the series string: <span class="arithmatex">\(V_\text{oc} \approx 34\)</span> V,
 <span class="arithmatex">\(I_\text{sc} \approx 0.79\)</span> A — the SEPIC is designed for <span class="arithmatex">\(\le 40\)</span> V, <span class="arithmatex">\(\le 1\)</span> A.</p>
 <h2 id="getting-started">Getting started<a class="headerlink" href="#getting-started" title="Permanent link">&para;</a></h2>

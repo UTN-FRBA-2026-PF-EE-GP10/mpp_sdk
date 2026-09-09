@@ -961,133 +961,140 @@ see <code>general_information.md</code>; for <em>what each algorithm does</em>, 
 <code>docs/algorithms/</code>.</p>
 <h2 id="why-a-control-sdk-at-all">Why a control SDK at all<a class="headerlink" href="#why-a-control-sdk-at-all" title="Permanent link">&para;</a></h2>
 <p>The Python PV ecosystem has a strong <strong>modelling</strong> library (<code>pvlib</code>) but no
-shared <strong>control</strong> library. Most MPPT comparison work in the literature uses
-MATLAB/Simulink with code that is rarely released and per-paper bespoke
-metrics, making cross-paper comparison and sim-to-real validation hard to
-reproduce. <code>mpp-sdk</code> aims to be the missing piece: a uniform
-<code>MPPTAlgorithm.step(V, I) → D</code> interface so adding a controller is a one-file
-change, and a comparison harness so every algorithm is measured the same way.</p>
+shared <strong>control</strong> library. Most MPPT comparison work in the literature
+uses MATLAB/Simulink, with code that is rarely released and per-paper
+bespoke metrics. That makes cross-paper comparison and sim-to-real
+validation hard to reproduce. <code>mpp-sdk</code> is the missing piece: a uniform
+<code>MPPTAlgorithm.step(V, I) → D</code> interface, so adding a controller is a
+one-file change, plus a comparison harness that measures every algorithm
+the same way.</p>
 <h2 id="why-the-hardware-abstraction-seam">Why the hardware-abstraction seam<a class="headerlink" href="#why-the-hardware-abstraction-seam" title="Permanent link">&para;</a></h2>
 <p>The single most important design decision is the <code>SignalSource</code> seam. An
-algorithm only sees <code>read() → (V, I)</code> and <code>write(D)</code>. This buys three things:</p>
+algorithm only sees <code>read() → (V, I)</code> and <code>write(D)</code>. This buys three
+things:</p>
 <ol>
-<li><strong>Sim-to-real parity.</strong> The exact same controller code runs against a
-   simulated panel and against the real SEPIC board. No "simulation version"
-   and "hardware version" to drift apart.</li>
-<li><strong>Independent verification.</strong> Each pillar (models, converters, algorithms,
-   IO) is tested in isolation. A leaky abstraction shows up as a test that
-   needs two pillars at once — a signal to fix the seam, not the test.</li>
-<li><strong>A natural MCU deployment target.</strong> The seam is exactly where the firmware
-   boundary falls: the RP2040 <em>is</em> a <code>SignalSource</code> from the Pi's point of view.</li>
+<li><strong>Sim-to-real parity.</strong> The same controller code runs against a
+   simulated panel and against the real SEPIC board. There is no separate
+   "simulation version" and "hardware version" to drift apart.</li>
+<li><strong>Independent verification.</strong> Each pillar (models, converters,
+   algorithms, IO) is tested in isolation. A test that needs two pillars
+   at once means the abstraction leaks — fix the seam, not the test.</li>
+<li><strong>A natural MCU deployment target.</strong> The seam sits exactly where the
+   firmware boundary falls: from the Pi's point of view, the RP2040 <em>is</em>
+   a <code>SignalSource</code>.</li>
 </ol>
 <h2 id="why-sepic">Why SEPIC<a class="headerlink" href="#why-sepic" title="Permanent link">&para;</a></h2>
-<p>A SEPIC (Single-Ended Primary-Inductance Converter) can step the panel voltage
-<strong>up or down</strong>, so the panel MPP voltage may sit on either side of the load
-voltage without changing topology. For an academic demonstrator that sweeps a
-wide irradiance range, this avoids redesigning the power stage for each
-operating condition. The reflected input resistance
-<span class="arithmatex">\(R_\text{eff}(D) = R_\text{load}\left(\tfrac{1-D}{D}\right)^2\)</span> is monotonic in
-the duty cycle, giving a clean, single-valued mapping from <span class="arithmatex">\(D\)</span> to operating
-point.</p>
+<p>A SEPIC (Single-Ended Primary-Inductance Converter) can step the panel
+voltage <strong>up or down</strong>. The panel MPP voltage can sit on either side of
+the load voltage, with no change in topology. For a demonstrator that
+sweeps a wide irradiance range, this avoids redesigning the power stage
+for each operating condition. The reflected input resistance
+<span class="arithmatex">\(R_\text{eff}(D) = R_\text{load}\left(\tfrac{1-D}{D}\right)^2\)</span> is
+monotonic in the duty cycle. That gives a clean, single-valued mapping
+from <span class="arithmatex">\(D\)</span> to the operating point.</p>
 <h3 id="continuous-vs-discontinuous-conduction-mode-ccmdcm">Continuous vs discontinuous conduction mode (CCM/DCM)<a class="headerlink" href="#continuous-vs-discontinuous-conduction-mode-ccmdcm" title="Permanent link">&para;</a></h3>
-<p>In ideal Continuous Conduction Mode (CCM), the voltage transfer ratio is strictly
-<span class="arithmatex">\(V_\text{out} = V_\text{in} \cdot \frac{D}{1-D}\)</span>. However, on the physical bench,
-the converter operates in Discontinuous Conduction Mode (DCM) at light loads
-(high load resistance). In DCM, the inductor current falls to zero within each
-switching cycle, breaking the continuous flux-balance assumption and causing the
-output voltage to rise above the ideal CCM ratio.</p>
+<p>In ideal Continuous Conduction Mode (CCM), the voltage transfer ratio is
+strictly <span class="arithmatex">\(V_\text{out} = V_\text{in} \cdot \frac{D}{1-D}\)</span>. On the physical
+bench, the converter runs in Discontinuous Conduction Mode (DCM) at light
+loads (high load resistance). In DCM, the inductor current falls to zero
+within each switching cycle. That breaks the continuous flux-balance
+assumption and pushes the output voltage above the ideal CCM ratio.</p>
 <p>During bench bring-up (plan 002), at a fixed commanded duty <span class="arithmatex">\(D = 0.5\)</span> and
-<span class="arithmatex">\(V_\text{in} = 3.3\text{ V}\)</span>, the measured output voltage varied dramatically
+<span class="arithmatex">\(V_\text{in} = 3.3\text{ V}\)</span>, the measured output voltage varied a lot
 with load:</p>
 <ul>
-<li><strong>~3.3 V into a 10 <span class="arithmatex">\(\Omega\)</span> load</strong> (matching the ideal CCM ratio
-  <span class="arithmatex">\(3.3 \cdot \frac{0.5}{1-0.5} = 3.3\text{ V}\)</span>)</li>
-<li><strong>~6.0 V into a 10 k<span class="arithmatex">\(\Omega\)</span> load</strong> (DCM boost behavior under light load)</li>
-<li><strong>~7.0 V open-circuit</strong> (unloaded DCM ceiling)</li>
+<li><strong>~3.3 V into a 10 <span class="arithmatex">\(\Omega\)</span> load</strong> — matches the ideal CCM ratio
+  <span class="arithmatex">\(3.3 \cdot \frac{0.5}{1-0.5} = 3.3\text{ V}\)</span>.</li>
+<li><strong>~6.0 V into a 10 k<span class="arithmatex">\(\Omega\)</span> load</strong> — DCM boost behavior under light
+  load.</li>
+<li><strong>~7.0 V open-circuit</strong> — the unloaded DCM ceiling.</li>
 </ul>
-<p>Understanding this operating regime transition is vital for hardware
-validation and characterization.</p>
+<p>Knowing this regime transition matters for hardware validation and
+characterization.</p>
 <h3 id="firmware-operating-modes">Firmware operating modes<a class="headerlink" href="#firmware-operating-modes" title="Permanent link">&para;</a></h3>
-<p>To simplify converter characterization on the bench without needing a
-host-side control loop, the RP2040 firmware supports two operating modes
+<p>To simplify converter characterization on the bench, with no host-side
+control loop needed, the RP2040 firmware has two operating modes
 (<code>FIRMWARE_MODE</code>):</p>
 <ul>
-<li><strong><code>FirmwareMode::MppTracker</code></strong>: The RP2040 acts as a pure hardware I/O
-  proxy. The algorithm on the Raspberry Pi receives <span class="arithmatex">\((V, I)\)</span> measurements and
-  commands duty cycle <span class="arithmatex">\(D\)</span> over SPI. A link-lost watchdog forces <span class="arithmatex">\(D = 0\)</span> if
-  SPI communication drops for <span class="arithmatex">\(&gt; 500\text{ ms}\)</span>.</li>
-<li><strong><code>FirmwareMode::PowerSupply</code></strong>: The RP2040 operates as an autonomous
-  closed-loop bench power supply, regulating output voltage <span class="arithmatex">\(V_\text{out}\)</span> to
-  a fixed setpoint (<code>POWER_SUPPLY_VOUT_MV</code>, e.g., 12 V) using on-chip ADC
-  feedback (<code>MEAS_ADC_VOUT_MV</code>). In this mode, the local regulator continues
-  operating standalone even if the host SPI connection drops.</li>
+<li><strong><code>FirmwareMode::MppTracker</code></strong>: the RP2040 acts as a pure hardware I/O
+  proxy. The algorithm on the Raspberry Pi reads <span class="arithmatex">\((V, I)\)</span> and commands the
+  duty cycle <span class="arithmatex">\(D\)</span> over SPI. A link-lost watchdog forces <span class="arithmatex">\(D = 0\)</span> if SPI
+  communication drops for more than 500 ms.</li>
+<li><strong><code>FirmwareMode::PowerSupply</code></strong>: the RP2040 runs as an autonomous
+  closed-loop bench power supply. It regulates output voltage
+  <span class="arithmatex">\(V_\text{out}\)</span> to a fixed setpoint (<code>POWER_SUPPLY_VOUT_MV</code>, e.g. 12 V)
+  using on-chip ADC feedback (<code>MEAS_ADC_VOUT_MV</code>). In this mode the local
+  regulator keeps running even if the host SPI connection drops.</li>
 </ul>
-<p>For full implementation details, setpoint configuration, and watchdog
-behavior - including a step-by-step walkthrough of the <code>ClosedLoop</code>
-feed-forward-plus-trim algorithm - see
-<a href="https://github.com/UTN-FRBA-2026-PF-EE-GP10/mpp_sdk/blob/main/firmware/pipico_board/README.md#operating-modes"><code>firmware/pipico_board/README.md</code>'s "Operating Modes"
-section</a>
-(outside <code>docs/</code>, so linked directly on GitHub rather than as a relative
-mkdocs path).</p>
+<p>For implementation details, setpoint configuration, and watchdog
+behavior — including the <code>ClosedLoop</code> feed-forward-plus-trim algorithm —
+see <a href="https://github.com/UTN-FRBA-2026-PF-EE-GP10/mpp_sdk/blob/main/firmware/pipico_board/README.md#operating-modes"><code>firmware/pipico_board/README.md</code>'s "Operating Modes"
+section</a>.
+That file lives outside <code>docs/</code>, so it is linked directly on GitHub.</p>
 <h2 id="why-these-algorithms-in-this-order">Why these algorithms, in this order<a class="headerlink" href="#why-these-algorithms-in-this-order" title="Permanent link">&para;</a></h2>
 <ol>
 <li><strong>P&amp;O</strong> — the baseline every MPPT paper compares against. Fixed-step,
-   minimal state, trivially portable to an MCU.</li>
-<li><strong>Incremental Conductance</strong> — the other classical method; has an explicit
-   "at-the-MPP" condition that reduces steady-state oscillation.</li>
-<li><strong>Fuzzy logic</strong> — a <em>local</em> tracker with a graduated step. Included to show
-   the speed/oscillation trade-off can be eased without a panel model. It is
-   <strong>not</strong> global, and saying so plainly is part of the contribution.</li>
+   minimal state, trivial to port to an MCU.</li>
+<li><strong>Incremental Conductance</strong> — the other classical method. It has an
+   explicit "at-the-MPP" condition that reduces steady-state oscillation.</li>
+<li><strong>Fuzzy logic</strong> — a <em>local</em> tracker with a graduated step. It shows
+   that the speed/oscillation trade-off can be eased without a panel
+   model. It is <strong>not</strong> global, and saying so plainly is part of the
+   contribution.</li>
 <li><strong>Scan-and-track</strong> and <strong>Particle Swarm Optimization</strong> — the genuine
-   <strong>global</strong> MPPT methods, needed to escape the local maxima that partial
-   shading creates. Scan-and-track is deterministic and the easiest to bound in
-   static RAM and defend mathematically; PSO is the popular population-based
-   alternative. Both ship so the paper can compare them, but scan-and-track is
-   the leading candidate for the MCU port.</li>
+   <strong>global</strong> MPPT methods, needed to escape the local maxima that
+   partial shading creates. Scan-and-track is deterministic, and the
+   easiest to bound in static RAM and defend mathematically. PSO is the
+   popular population-based alternative. Both ship so the paper can
+   compare them, but scan-and-track is the leading candidate for the MCU
+   port.</li>
 </ol>
-<p>The ordering matters: each algorithm needs at least one predecessor to compare
-against, and the metrics only become clear once several controllers run side by
-side.</p>
+<p>The order matters: each algorithm needs at least one predecessor to
+compare against, and the metrics only make sense once several
+controllers run side by side.</p>
 <h2 id="why-a-dynamic-source-not-just-static">Why a dynamic source, not just static<a class="headerlink" href="#why-a-dynamic-source-not-just-static" title="Permanent link">&para;</a></h2>
-<p>The simplest simulation jumps instantly to the operating point — a snapshot,
-not a trajectory. To see <em>how long</em> an algorithm takes, whether it overshoots,
-and how it oscillates, the source models the SEPIC input capacitor:</p>
+<p>The simplest simulation jumps instantly to the operating point: a
+snapshot, not a trajectory. To see <em>how long</em> an algorithm takes, whether
+it overshoots, and how it oscillates, the source models the SEPIC input
+capacitor:</p>
 <div class="arithmatex">\[C\frac{dV}{dt} = I_\text{panel}(V) - \frac{V}{R_\text{eff}(D)}.\]</div>
-<p><code>DynamicSimulatedSource</code> integrates this each control step. This is still a
-<em>quasi-static</em> electrical model (no switching ripple) — switching-level fidelity
-is left to PLECS, which simulates the converter cycle by cycle. The two are
-complementary: the SDK validates the <strong>algorithm</strong>, PLECS validates the
-<strong>hardware</strong>.</p>
+<p><code>DynamicSimulatedSource</code> integrates this each control step. This is still
+a <em>quasi-static</em> electrical model, with no switching ripple. Switching-
+level fidelity is PLECS's job — it simulates the converter cycle by
+cycle. The two are complementary: the SDK validates the <strong>algorithm</strong>,
+PLECS validates the <strong>hardware</strong>.</p>
 <h2 id="why-a-restart-policy-instead-of-a-smarter-detector">Why a restart policy instead of a smarter detector<a class="headerlink" href="#why-a-restart-policy-instead-of-a-smarter-detector" title="Permanent link">&para;</a></h2>
-<p>Once a global tracker hands off to its local stage it is blind to new
-peaks, so <em>something</em> must decide when to search again. We use two
+<p>Once a global tracker hands off to its local stage, it is blind to new
+peaks. So <em>something</em> must decide when to search again. We use two
 deliberately simple mechanisms (see <code>methodology.md</code>): a step detector on
-<span class="arithmatex">\(|\Delta P|/P\)</span> for abrupt changes, and a periodic re-search for everything
-the detector cannot see (slow ramps, power-preserving peak moves). The
-split is honest about information: with only <span class="arithmatex">\((V, I)\)</span> at one operating
-point, gradual curve reshaping is <em>provably</em> invisible, so the right tool
-is a bounded-cost backstop, not a cleverer detector. Both mechanisms are a
-few scalars of state, which keeps them inside the MCU portability budget.</p>
+<span class="arithmatex">\(|\Delta P|/P\)</span> for abrupt changes, and a periodic re-search for
+everything the detector cannot see (slow ramps, power-preserving peak
+moves). The split is honest about what the controller can know: with
+only <span class="arithmatex">\((V, I)\)</span> at one operating point, gradual curve reshaping is
+<em>provably</em> invisible. So the right tool is a bounded-cost backstop, not a
+cleverer detector. Both mechanisms need only a few scalars of state,
+which keeps them inside the MCU portability budget.</p>
 <h2 id="why-noise-lives-in-a-source-wrapper">Why noise lives in a source wrapper<a class="headerlink" href="#why-noise-lives-in-a-source-wrapper" title="Permanent link">&para;</a></h2>
-<p>Measurement noise belongs to the acquisition chain, not to the plant or
-the controller. <code>NoisySource</code> wraps any <code>SignalSource</code> and perturbs only
-what the controller <em>sees</em>, which keeps models and algorithms free of
-noise flags and makes the noise level an explicit, seeded experiment
-parameter. The same wrapper later doubles as a bench sanity check: measure
-the real sense chain's sigma, run the harness at that level, and the
-simulated degradation should bracket the measured one.</p>
+<p>Measurement noise belongs to the acquisition chain, not the plant or the
+controller. <code>NoisySource</code> wraps any <code>SignalSource</code> and perturbs only what
+the controller <em>sees</em>. That keeps models and algorithms free of noise
+flags, and makes the noise level an explicit, seeded experiment
+parameter. The same wrapper doubles as a bench sanity check later:
+measure the real sense chain's sigma, run the harness at that level, and
+the simulated degradation should bracket the measured one.</p>
 <h2 id="why-tabulated-panels-in-the-harness">Why tabulated panels in the harness<a class="headerlink" href="#why-tabulated-panels-in-the-harness" title="Permanent link">&para;</a></h2>
-<p><code>PvString</code> solves a nested bisection through a pvlib-backed solver — far too
-slow to call thousands of times in a dynamic run. <code>TabulatedPanel</code> samples the
-I-V curve once and interpolates thereafter, which makes the dynamic and
-animated harnesses tractable without changing the physics the algorithm sees.</p>
+<p><code>PvString</code> solves a nested bisection through a pvlib-backed solver — far
+too slow to call thousands of times in a dynamic run. <code>TabulatedPanel</code>
+samples the I-V curve once and interpolates after that. This makes the
+dynamic and animated harnesses fast enough to use, with no change to the
+physics the algorithm sees.</p>
 <h2 id="on-the-use-of-ai">On the use of AI<a class="headerlink" href="#on-the-use-of-ai" title="Permanent link">&para;</a></h2>
-<p>The project uses LLM assistance as a deliberate productivity choice under an
-explicit policy (disclosed in <code>PLAN.md</code>): every change is human-reviewed,
-tested, and the human author remains accountable for correctness. The framework
-and scaffolding are AI-leveraged so the team's limited hours go to the original
-contributions — hardware design, algorithm analysis, and experimental
-validation.</p>
+<p>The project uses LLM assistance as a deliberate productivity choice,
+under an explicit policy (disclosed in <code>PLAN.md</code>): every change is
+human-reviewed and tested, and the human author stays accountable for
+correctness. The framework and scaffolding are AI-leveraged so the
+team's limited hours go to the original contributions: hardware design,
+algorithm analysis, and experimental validation.</p>
 
 
 
