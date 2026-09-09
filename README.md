@@ -136,6 +136,13 @@ Drop `--demo` (and add `--extra hardware`) once a Raspberry Pi + RP2040
 board is wired up per
 [`firmware/pipico_board/README.md`](firmware/pipico_board/README.md).
 
+### Closed-loop runs
+
+`mpp-sdk run-algorithm --algorithm "P&O" --duration-s 10 --label bench-check`
+sweeps a ground-truth I-V curve, then runs a registered algorithm against
+the live board for a while, recording `(t, V, I, D)`. Plot it with
+`mpp-sdk plot-run`. Needs real hardware (`--extra hardware`).
+
 ## Layout
 
 ```text

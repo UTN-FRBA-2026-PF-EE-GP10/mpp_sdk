@@ -14,6 +14,13 @@
   per panel in the array), `notes`, and `points` (`v`/`i` pairs in
   volts/amps, ordered as swept). See `mpp_sdk/curves/record.py` for the
   full schema and `mpp_sdk/curves/library.py` for the file layout.
+- `data/runs/` — captured closed-loop MPPT runs, one JSON file per run,
+  written by `mpp_sdk.runs.library.save` (via `mpp-sdk run-algorithm`).
+  Git-ignored, same reasoning as `data/curves/`. Each file holds `schema`,
+  `captured_at`, `label`, `algorithm`, `curve_ref` (paired curve's
+  filename under `data/curves/`, or `null`), `aborted`, `notes`, and
+  `samples` (`t`/`v`/`i`/`d` per control step). See
+  `mpp_sdk/runs/record.py` for the full schema.
 
 ## Before committing any measured file
 

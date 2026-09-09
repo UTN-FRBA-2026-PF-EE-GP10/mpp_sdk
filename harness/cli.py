@@ -30,6 +30,8 @@ _COMMANDS: dict[str, tuple[str, bool]] = {
     "spi-test": ("scripts.spi_test", True),
     "curve-tracer-web": ("scripts.curve_tracer_server", True),
     "curve-tracer-bench-test": ("scripts.curve_tracer_bench_test", True),
+    "run-algorithm": ("scripts.run_algorithm", True),
+    "plot-run": ("scripts.plot_run", True),
     "quickstart": ("main", False),
 }
 

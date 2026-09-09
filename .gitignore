@@ -37,3 +37,4 @@ entregables/**/*.pptx
 # Captured I-V curves - operator measurement data, not repo content.
 # See data/README.md and AGENTS.md "What not to commit".
 data/curves/
+data/runs/
