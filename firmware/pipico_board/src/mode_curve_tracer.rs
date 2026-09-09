@@ -23,6 +23,7 @@ use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::signal::Signal;
 use embassy_time::{Duration, Timer, with_timeout};
 use portable_atomic::{AtomicU32, Ordering};
+use safety_checks::breach;
 
 use crate::{MEAS_I_MA, MEAS_V_MV, RELAY_ENGAGED, TRACER_ACTIVE};
 
@@ -99,25 +100,6 @@ const TRACER_SAMPLE_TIMEOUT_MS: u64 = 500;
 /// monitors during its own settle wait either, a gap worth *not*
 /// carrying over here).
 const TRACER_SETTLE_POLL_MS: u64 = 10;
-
-/// Safety cutoff: current. Bench-chosen envelope for the tracer load
-/// (~23 V x 0.7 A), below the INA229's own 1 A full scale
-/// (`ina229::I_MAX_MA`) so the sensor can still resolve a breach rather
-/// than saturating at it.
-const TRACER_I_MAX_MA: u16 = 700;
-
-/// Safety cutoff: power, in milliwatts - the 23 V x 0.7 A envelope above.
-///
-/// This is dissipated **linearly in Q3** (TO-220, see `TRACER_PWM_MAX`),
-/// not in a resistor, and a sweep's worst case is the panel's own MPP
-/// since that is where V*I peaks. Two panels in series at full sun is
-/// ~20 W (`docs/general_information.md`), so this bounds the sweep below
-/// what the array can deliver. Tolerable because a sweep is seconds, not
-/// continuous - the ESP32-C3 reference device's `LESSONS.md` flags
-/// MOSFET heating during repeated sweeps as a real effect on its own
-/// (unheatsinked) build, so back-to-back sweeps at this limit want a
-/// heatsink on Q3 and an eye on how hot it gets.
-const TRACER_P_MAX_MW: u32 = 16_100;
 
 /// Debounce window for `But1`'s falling edge - rejects contact-bounce
 /// glitches shorter than this before committing to a sweep.
@@ -345,17 +327,12 @@ impl CurveTracer {
     /// `TRACER_SETTLE_MS`, returning `true` the instant the safety cutoff
     /// is breached instead of only checking after the fact - see
     /// `TRACER_SETTLE_POLL_MS`'s doc comment for why.
-    fn breach(v_mv: u16, i_ma: u16) -> bool {
-        let p_mw = v_mv as u32 * i_ma as u32 / 1000;
-        i_ma > TRACER_I_MAX_MA || p_mw > TRACER_P_MAX_MW
-    }
-
     async fn settle_and_monitor_for(&self, settle_ms: u64) -> bool {
         let mut waited_ms = 0u64;
         while waited_ms < settle_ms {
             let v_mv = MEAS_V_MV.load(Ordering::Relaxed);
             let i_ma = MEAS_I_MA.load(Ordering::Relaxed);
-            if Self::breach(v_mv, i_ma) {
+            if breach(v_mv, i_ma) {
                 return true;
             }
             Timer::after_millis(TRACER_SETTLE_POLL_MS).await;
@@ -381,7 +358,7 @@ impl CurveTracer {
             return None;
         }
         let (v_mv, i_ma) = self.average_point().await?;
-        if Self::breach(v_mv, i_ma) {
+        if breach(v_mv, i_ma) {
             defmt::warn!(
                 "curve_tracer: safety cutoff at probed duty {} (V={} mV I={} mA), aborting",
                 duty,
@@ -544,7 +521,7 @@ impl CurveTracer {
                 break;
             };
 
-            if Self::breach(v_mv, i_ma) {
+            if breach(v_mv, i_ma) {
                 defmt::warn!(
                     "curve_tracer: safety cutoff at step {} (V={} mV I={} mA), aborting sweep",
                     step,
