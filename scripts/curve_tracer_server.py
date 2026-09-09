@@ -3,13 +3,13 @@ see its README) and a JSON API backed by `SpiMcuSource` / `mpp_sdk.curves`.
 
 Needs the `web` extra (`uv sync --extra web`) for `fastapi`/`uvicorn`, and
 `hardware` for real SPI access - both optional so the base install stays
-lean (AGENTS.md). A background thread calls `request_sweep()` /
-`poll_sweep_progress()` in a loop and caches the latest result; route
-handlers just read the cache, so a slow SPI round-trip never blocks a page
-load. `spidev` isn't documented thread-safe, so that same thread is the
-only thing that ever touches `SpiMcuSource` - the start-sweep/release-relay
-routes hand their request off through a queue instead of calling into it
-directly from a request-handling thread.
+lean (AGENTS.md). A background thread calls `request_sweep()` and
+`poll_sweep_progress()` in a loop and caches the latest result. Route
+handlers just read the cache, so a slow SPI round trip never blocks a
+page load. `spidev` is not documented thread-safe, so that same thread is
+the only thing that ever touches `SpiMcuSource` - the start-sweep/
+release-relay routes hand their request off through a queue instead of
+calling into it directly from a request-handling thread.
 
 API routes are under `/api/` so they never collide with the frontend's
 static assets, which are mounted at `/`.
@@ -89,28 +89,25 @@ class _SweepCache:
         with self._lock:
             if progress.active:
                 # A new sweep started if we weren't already mid-sweep, or
-                # if this point's index is below the highest one we've
-                # already recorded - indices only increase within a sweep,
-                # so seeing one below our high-water mark means the
-                # previous sweep's tail got skipped and this is the next
-                # sweep's own early point. Checking index == 0 alone isn't
-                # enough: poll_sweep_progress() is lossy and each
-                # _poll_loop iteration can easily take longer than the
-                # firmware needs to capture several points, so a new
-                # sweep's very first point is often missed entirely - that
-                # would otherwise leave the previous sweep's leftover
-                # points bleeding into this one's `partial`.
+                # if this point's index is below the highest one we
+                # already recorded. Indices only increase within a sweep,
+                # so an index below our high-water mark means the previous
+                # sweep's tail got skipped and this is the next sweep's
+                # own early point. Checking index == 0 alone is not
+                # enough: poll_sweep_progress() is lossy, and a new
+                # sweep's very first point is often missed entirely -
+                # otherwise the previous sweep's leftover points would
+                # bleed into this one's `partial`.
                 if not self._active or not self._partial or progress.index < max(self._partial):
                     self._partial = {}
                 self._partial[progress.index] = (progress.voltage, progress.current)
             else:
-                # `partial` only means anything mid-sweep - a sweep that
+                # `partial` only means anything mid-sweep. A sweep that
                 # aborts with zero points (e.g. a dark/disconnected panel)
-                # publishes only this one inactive update, with no
-                # preceding active=True call to have triggered the reset
-                # above, so without this a previous unrelated sweep's
-                # partial would linger and be served as if it belonged to
-                # this (empty) one.
+                # publishes only this one inactive update, with no prior
+                # active=True call to trigger the reset above - without
+                # this, a previous unrelated sweep's partial would linger
+                # and be served as if it belonged to this (empty) one.
                 self._partial = {}
             self._active = progress.active
 
@@ -134,17 +131,17 @@ def _poll_loop(
 ) -> None:
     if demo:
         # Duck-typed against SpiMcuSource (start_sweep/release_relay/
-        # request_sweep/poll_sweep_progress + context manager) - imported
-        # only here, and never mpp_sdk.io.spi_mcu, so demo mode needs
-        # neither `spidev` nor a board.
+        # request_sweep/poll_sweep_progress + context manager). Imported
+        # only here, never mpp_sdk.io.spi_mcu, so demo mode needs neither
+        # `spidev` nor a board.
         from scripts.curve_tracer_demo_source import DemoSweepSource
 
         source_cm = DemoSweepSource()
 
         # Demo mode reports one link state regardless of whether a result
         # is ready this iteration - "ok" vs "waiting for sweep" is a real
-        # link's two states, not a meaningful distinction for a source that
-        # never fails to link in the first place.
+        # link's two states, not meaningful for a source that never fails
+        # to link in the first place.
         def link_for(result: object) -> str:
             return "demo"
     else:
@@ -157,12 +154,12 @@ def _poll_loop(
 
     with source_cm as src:
         while True:
-            # At most one queued command per iteration, not a drain loop -
-            # the firmware's TRACER_COMMAND signal is single-slot
-            # ("latest wins"), so sending two commands back-to-back with
-            # no SPI round trip in between risks the second silently
-            # overwriting the first before it's consumed. This bounds
-            # each command to about one `request_sweep()` cycle apart.
+            # At most one queued command per iteration, not a drain loop:
+            # the firmware's TRACER_COMMAND signal is single-slot ("latest
+            # wins"), so two commands sent back-to-back with no SPI round
+            # trip in between risk the second silently overwriting the
+            # first before it is consumed. This bounds each command to
+            # about one `request_sweep()` cycle apart.
             if not commands.empty():
                 cmd = commands.get_nowait()
                 try:
@@ -171,7 +168,7 @@ def _poll_loop(
                     elif cmd == "release_relay":
                         src.release_relay()
                 except RuntimeError as exc:
-                    # Same failure mode as request_sweep() below - a
+                    # Same failure mode as request_sweep() below: a
                     # transient SPI fault must not kill this thread, or
                     # every future command and sweep result silently stops
                     # working with no visible error. Still falls through
