@@ -8,12 +8,12 @@ PV theory needed to be productive.
 
 `mpp-sdk` is a Python SDK for **designing, comparing, and deploying Maximum
 Power Point Tracking (MPPT) algorithms** for photovoltaic (PV) systems. It
-backs an Electronics Engineering thesis whose final deliverable is an
-MPPT algorithm running on a microcontroller, validated end-to-end through the
-same codebase that compares it against the classical methods.
+backs an Electronics Engineering thesis. The final deliverable is an MPPT
+algorithm running on a microcontroller, validated end to end through the
+same codebase that compares it against classical methods.
 
-The guiding principle: **the same controller code runs in simulation today and
-on real hardware tomorrow**, with no changes — only the underlying source is
+The guiding principle: **the same controller code runs in simulation today
+and on real hardware tomorrow, unchanged.** Only the underlying source is
 swapped.
 
 ## The physical system
@@ -30,18 +30,18 @@ swapped.
                             Raspberry Pi 5 (Python SDK)
 ```
 
-- **Panels:** two Hissuma PSF10MONO (10 W each) in **series**. Series wiring is
-  deliberate — it is what makes partial-shading experiments meaningful (see
-  *Why series* below).
+- **Panels:** two Hissuma PSF10MONO (10 W each) in **series**. Series wiring
+  is deliberate: it is what makes partial-shading experiments meaningful
+  (see *Why series* below).
 - **SEPIC converter:** a DC-DC stage whose duty cycle $D$ sets the panel
-  operating point. SEPIC is chosen because the panel MPP voltage can sit
-  **above or below** the load voltage without changing topology.
-- **RP2040 (Raspberry Pi Pico):** drives the converter PWM, reads voltage and
-  current (INA229 power monitor over SPI, plus an INA281 sense amplifier into
-  the on-chip ADC as an analog cross-check), and talks to the Pi over SPI.
-  Firmware is in **Rust**. It is also the deployment target for the final
-  algorithm.
-- **Raspberry Pi 5:** hosts the Python SDK and the algorithm during
+  operating point. SEPIC is the choice because the panel MPP voltage can
+  sit above or below the load voltage, with no change in topology.
+- **RP2040 (Raspberry Pi Pico):** drives the converter PWM, reads voltage
+  and current (an INA229 power monitor over SPI, plus an INA281 sense
+  amplifier into the on-chip ADC as an analog cross-check), and talks to
+  the Pi over SPI. Firmware is in **Rust**. It is also the deployment
+  target for the final algorithm.
+- **Raspberry Pi 5:** hosts the Python SDK, and the algorithm during
   hardware-in-the-loop (HIL) testing.
 
 ## The four SDK pillars
@@ -82,30 +82,30 @@ tracker is needed rather than a fixed operating point.
 ## What pvlib contributes
 
 [`pvlib`](https://pvlib-python.readthedocs.io/) is the de-facto open-source
-library for PV **performance modelling**. It provides validated single- and
-two-diode I-V solvers, temperature/irradiance models, and the `bishop88`
-partial-shading method.
+library for PV **performance modelling**. It provides validated single-
+and two-diode I-V solvers, temperature/irradiance models, and the
+`bishop88` partial-shading method.
 
-What pvlib does **not** provide: closed-loop MPPT controllers, time-stepping
-control simulation, or any hardware abstraction. It returns *the* MPP for a
-given panel and environment — not a controller that discovers it from a stream
-of $(V, I)$ measurements.
+pvlib does **not** provide closed-loop MPPT controllers, time-stepping
+control simulation, or any hardware abstraction. It returns *the* MPP for
+a given panel and environment. It does not discover the MPP from a stream
+of $(V, I)$ measurements, the way a controller does.
 
-`mpp-sdk` fills exactly that gap and **adopts** pvlib rather than competing with
-it: `PvlibPanelModel` wraps pvlib's solver behind the SDK's `PanelModel`
-interface, so controllers benefit from validated panel physics without
-re-implementing them. We fit the De Soto 5-parameter model from the panel's
-datasheet values (Voc, Isc, Vmp, Imp + temperature coefficients).
+`mpp-sdk` fills that gap and **adopts** pvlib rather than competing with
+it. `PvlibPanelModel` wraps pvlib's solver behind the SDK's `PanelModel`
+interface, so controllers get validated panel physics with no
+re-implementation. We fit the De Soto 5-parameter model from the panel's
+datasheet values (Voc, Isc, Vmp, Imp, and temperature coefficients).
 
 ## Why series (partial shading)
 
 Two panels in **series** share one current. When one is shaded, its bypass
-diode conducts over part of the curve, producing a **multi-peak** P-V curve.
-Classical trackers (P&O, InCond, fuzzy) follow the local gradient and can get
-**stuck on a local maximum** — losing power. This is the motivation for a
-*global* MPPT method (scan-and-track), and the series string is what lets us
-demonstrate it. Two panels in **parallel** would keep a single-peak curve and
-hide the effect.
+diode conducts over part of the curve. That produces a **multi-peak** P-V
+curve. Classical trackers (P&O, InCond, fuzzy) follow the local gradient
+and can get **stuck on a local maximum**, losing power. This is why a
+*global* MPPT method (scan-and-track) is needed, and the series string is
+what lets us demonstrate it. Two panels in **parallel** would keep a
+single-peak curve and hide the effect.
 
 Hardware limits for the series string: $V_\text{oc} \approx 34$ V,
 $I_\text{sc} \approx 0.79$ A — the SEPIC is designed for $\le 40$ V, $\le 1$ A.

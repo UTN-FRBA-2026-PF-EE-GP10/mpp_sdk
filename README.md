@@ -19,39 +19,37 @@ assessment.
 
 The Python PV ecosystem has a strong **modelling** library
 ([`pvlib-python`](https://pvlib-python.readthedocs.io/)) but no shared
-**control** library — pvlib gives you the panel physics, not the
-closed-loop algorithms that decide where on the I-V curve to operate.
-Most MPPT comparison work in the literature uses MATLAB / Simulink with
-code that is rarely released and per-paper bespoke metrics, which makes
-cross-paper comparisons and sim-to-real validation hard to reproduce
-[Subudhi & Pradhan 2013].
+**control** library. pvlib gives you the panel physics. It does not give
+you the closed-loop algorithms that decide where on the I-V curve to
+operate. Most MPPT comparison work in the literature uses MATLAB/Simulink,
+with code that is rarely released and per-paper bespoke metrics. That
+makes cross-paper comparisons and sim-to-real validation hard to
+reproduce [Subudhi & Pradhan 2013].
 
-`mpp-sdk` is built to close that gap with four concrete contributions:
+`mpp-sdk` closes that gap with four contributions:
 
-1. **A uniform `MPPTAlgorithm.step(V, I) → D` interface** — adding a new
-   controller is a one-file PR, and the comparison harness sees it like
+1. **A uniform `MPPTAlgorithm.step(V, I) → D` interface.** A new
+   controller is a one-file PR, and the comparison harness treats it like
    every other algorithm.
-2. **A hardware-abstraction seam (`SignalSource`)** — the same algorithm
-   code runs against a `SimulatedSource` *or* a real power-electronics
+2. **A hardware-abstraction seam (`SignalSource`).** The same algorithm
+   code runs against a `SimulatedSource` or a real power-electronics
    board, with no branches in the algorithm.
-3. **A microcontroller-as-deployment-target architecture.** The power
-   stage is driven by a small MCU (Raspberry Pi Pico / RP2040) connected
-   to the Raspberry Pi 5 over SPI.
-   This isolates the fast-switching / high-current side from the Pi
-   *and* gives us the natural deployment target: once an algorithm has
-   been validated against the framework, it is ported to the MCU and
-   re-run end-to-end against the same physical rig.
-4. **A reproducible comparison harness** — dynamic irradiance profiles, shared
-   metrics (tracking efficiency, settling time, steady-state oscillation, trap
-   depth), and paper figures regenerated from code.
+3. **A microcontroller as the deployment target.** A small MCU
+   (Raspberry Pi Pico / RP2040) drives the power stage, connected to the
+   Raspberry Pi 5 over SPI. This isolates the fast-switching, high-current
+   side from the Pi, and gives the project its deployment target: once an
+   algorithm is validated in the framework, it is ported to the MCU and
+   re-run end to end on the same physical rig.
+4. **A reproducible comparison harness.** Dynamic irradiance profiles,
+   shared metrics (tracking efficiency, settling time, steady-state
+   oscillation, trap depth), and paper figures regenerated from code.
 
-> **The end deliverable of the thesis is an MCU-deployable algorithm
-> that fits comfortably inside a Pico-class chip yet performs
-> competitively with classical methods**, designed and validated
-> end-to-end through the same codebase that compares it against the
-> established literature. That MCU-deployment requirement is also a
-> useful design constraint: it biases the work toward fixed-step,
-> minimal-state methods that happen to be the easiest to analyse.
+> **The thesis deliverable is an MCU-deployable algorithm that fits a
+> Pico-class chip and performs competitively with classical methods.**
+> The same codebase both develops it and compares it against the
+> established literature. The MCU-deployment requirement is also a useful
+> design constraint: it favors fixed-step, minimal-state methods, which
+> also happen to be the easiest to analyse.
 
 The full viability assessment, related-work survey, and risk mitigations
 live in [`PLAN.md`](./PLAN.md).
@@ -108,9 +106,9 @@ and plots the I-V / P-V curves with the calculated MPP and the algorithm's
 operating-point trajectory.
 
 Every other runnable script under `harness/`, `examples/`, and `scripts/`
-(13 in total; `examples/pno_demo.py` is a thin shim to this same
-`main.py` quickstart, so it isn't a separate entry) is also reachable
-through one dispatcher, `mpp-sdk`:
+is also reachable through one dispatcher, `mpp-sdk`
+(`examples/pno_demo.py` is a thin shim to this same `main.py` quickstart,
+so it is not a separate entry):
 
 ```bash
 uv run mpp-sdk --help              # list every runnable script
@@ -146,6 +144,7 @@ mpp_sdk/
 ├── converters/     # Power-stage models      (SEPICConverter)
 ├── algorithms/     # MPPT controllers        (MPPTAlgorithm ABC; P&O, InCond, fuzzy, scan, PSO)
 ├── io/             # Hardware-abstraction    (SignalSource ABC; simulated, dynamic)
+├── curves/         # Captured I-V curve library (CurveRecord, feeds MeasuredPanel)
 ├── metrics.py      # Comparison metrics
 └── visualization.py
 
@@ -153,30 +152,29 @@ harness/            # Comparison scripts (static, dynamic, live, cyclic ranking,
 docs/               # Algorithm references, rationale, general information
 ```
 
-The control variable is always the SEPIC **duty cycle**; the
-measured quantities are always panel terminal **voltage** and **current**.
-Richer panel models may depend on temperature, irradiance, or measured
-curves, but those inputs live on the *model* — the controller never sees
-them.
+The control variable is always the SEPIC **duty cycle**. The measured
+quantities are always panel terminal **voltage** and **current**. Richer
+panel models may depend on temperature, irradiance, or a measured curve,
+but those inputs live on the *model* — the controller never sees them.
 
 ## Where mpp-sdk sits relative to pvlib
 
 [`pvlib-python`](https://pvlib-python.readthedocs.io/) is the de-facto
 open-source reference for photovoltaic system *performance modelling* in
-Python — solar position, irradiance decomposition / transposition,
-single- and two-diode I-V solvers, the `bishop88` reverse-bias method
-that underpins partial-shading analysis, temperature models, and
-inverter / energy-yield calculations [Anderson et al. 2023].
+Python: solar position, irradiance decomposition and transposition,
+single- and two-diode I-V solvers, the `bishop88` reverse-bias method for
+partial-shading analysis, temperature models, and inverter/energy-yield
+calculations [Anderson et al. 2023].
 
 **pvlib does not provide closed-loop MPPT controllers, time-stepping
 controller simulation, or hardware abstraction.** Its analytical
 `bishop88_mpp` and single-diode MPP solvers return *the* maximum power
-point given panel parameters; they do not implement Perturb & Observe,
+point given panel parameters. They do not implement Perturb & Observe,
 Incremental Conductance, fuzzy logic, or any other tracking algorithm
-that has to discover the MPP from a stream of (V, I) measurements.
+that discovers the MPP from a stream of (V, I) measurements.
 
-`mpp-sdk` fills exactly that gap and is **complementary** to pvlib, not
-a replacement:
+`mpp-sdk` fills that gap. It is **complementary** to pvlib, not a
+replacement:
 
 | Concern                                  | pvlib            | mpp-sdk            |
 | ---------------------------------------- | ---------------- | ------------------ |
@@ -188,11 +186,9 @@ a replacement:
 | Hardware abstraction (`SignalSource`)    | no               | yes (RPi5 planned) |
 | Algorithm benchmark / comparison harness | no               | yes (planned)      |
 
-Concretely, the plan is to ship a `PvlibPanelModel(PanelModel)` adapter
-in Phase 2 so that any pvlib-grade module can be dropped behind our
-controller and converter pipeline without change. We do not intend to
-re-implement panel physics that pvlib already provides under a more
-authoritative implementation.
+The `PvlibPanelModel(PanelModel)` adapter (shipped) drops any pvlib-grade
+model behind our controller and converter pipeline, unchanged. We do not
+re-implement panel physics that pvlib already provides.
 
 ## Roadmap
 
@@ -243,7 +239,8 @@ UI and [`firmware/pipico_board/README.md`](firmware/pipico_board/README.md)'s
       algorithm benchmark (`mpp-sdk compare-measured`) with zero algorithm
       changes
 - [x] FastAPI backend + React frontend (`mpp-sdk curve-tracer-web`;
-      `--demo` mode needs no hardware)
+      `--demo` mode needs no hardware; on-target capture round trip
+      unverified)
 - [x] Firmware streams sweep points as they're captured (code complete,
       on-target verification pending)
 - [ ] Controllable dimmer for repeatable illumination sweeps (design spike)
@@ -276,34 +273,32 @@ build/flash/calibration instructions.
 ## Context
 
 This SDK supports an **Electronics Engineering thesis** on MPPT algorithm
-comparison. See [`PLAN.md`](./PLAN.md) for the full project plan, including
-the contributor-liability statement, the policy on acknowledging LLM
-usage, the viability / related-work analysis, and the requirement that
-**each part of the SDK must work and be verified in isolation** before it
-is integrated.
+comparison. [`PLAN.md`](./PLAN.md) has the full project plan: the
+contributor-liability statement, the LLM-usage disclosure policy, the
+viability and related-work analysis, and one hard rule — **each part of
+the SDK must work and be verified in isolation** before it is integrated.
 
 ## On the use of AI
 
 This project uses large language models (Claude, ChatGPT, Copilot) as
-part of its day-to-day toolchain — and treats that usage as a deliberate
-methodological choice rather than something to apologise for.
+part of its day-to-day toolchain. That is a deliberate choice, not
+something to apologise for.
 
-The thesis is being developed **without external funding**, by a
-three-person team with limited weekly hours, in a research landscape
-where comparable groups routinely operate with either dedicated funding
-or AI-assisted workflows (or both). Refusing to use AI would not buy us
-purity; it would simply widen the resource gap between this work and
-the well-resourced groups it has to be benchmarked against. We use AI
-for the same reason we use `pvlib` instead of re-implementing
-single-diode physics: because the leverage is real and the alternative
-is to do less science.
+The thesis has **no external funding**. The team is three people with
+limited weekly hours. Comparable research groups routinely have either
+dedicated funding or AI-assisted workflows, or both. Refusing to use AI
+would not buy us purity — it would just widen the resource gap between
+this work and the groups it is benchmarked against. We use AI for the
+same reason we use `pvlib` instead of re-implementing single-diode
+physics: the leverage is real, and the alternative is to do less
+science.
 
-That choice comes with explicit guardrails — disclosure, human
-verification of every change, citation of the underlying references,
-and human authorship of all numerical results, experimental claims, and
-conclusions. The full policy lives in [`PLAN.md`](./PLAN.md#use-of-large-language-models),
-together with a per-layer exposure table that makes it easy to audit
-where AI helped and where it didn't.
+That choice has explicit guardrails: disclosure, human verification of
+every change, citation of the underlying references, and human
+authorship of all numerical results, experimental claims, and
+conclusions. The full policy, with a per-layer table of where AI helped
+and where it did not, lives in
+[`PLAN.md`](./PLAN.md#use-of-large-language-models).
 
 ## References
 
