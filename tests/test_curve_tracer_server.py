@@ -70,6 +70,7 @@ def test_data_defaults_before_anything_is_cached(client):
         "active": False,
         "link": "no data yet",
         "seq": 0,
+        "command_error": None,
     }
 
 
@@ -232,3 +233,34 @@ def test_release_relay_enqueues_the_command(client):
     r = client.post("/api/release-relay")
     assert r.status_code == 204
     assert client.commands.get_nowait() == "release_relay"
+
+
+# ------------------------------------------------------------------
+# Command-error visibility (_SweepCache.set_command_error)
+# ------------------------------------------------------------------
+
+
+def test_command_error_is_reported_via_api_data(client):
+    client.cache.set_command_error("release_relay failed: SPI timeout")
+    payload = client.get("/api/data").json()
+    assert payload["command_error"] == "release_relay failed: SPI timeout"
+
+
+def test_command_error_survives_a_later_telemetry_update(client):
+    """A command can fail on a transient glitch while the very next
+    request_sweep() call (same _poll_loop iteration) succeeds. The error
+    must still be visible afterward - cache.set() must not clobber it."""
+    client.cache.set_command_error("start_sweep failed: SPI timeout")
+    client.cache.set([(21.3, 0.006)], "ok")
+
+    payload = client.get("/api/data").json()
+    assert payload["link"] == "ok"
+    assert payload["command_error"] == "start_sweep failed: SPI timeout"
+
+
+def test_command_error_clears_on_the_next_successful_command(client):
+    client.cache.set_command_error("release_relay failed: SPI timeout")
+    client.cache.set_command_error(None)
+
+    payload = client.get("/api/data").json()
+    assert payload["command_error"] is None
