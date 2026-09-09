@@ -64,6 +64,8 @@ re-enabling; no plan file, tracked via the PR that disabled it.
 | 032 | Frontend: add vitest + tests for `useLiveSweep`/`useConnectionStatus` | P3 | M | - | TODO |
 | 033 | Frontend: extract shared `usePolling` hook from `useLiveSweep`/`useConnectionStatus` | P3 | S | 032 (hard) | TODO |
 | 034 | SDK+scripts: capture and analyze a real closed-loop MPPT run ("runs") | P2 | L | - | TODO |
+| 035 | Docs: measurement-procedure checklist page (curves, tilt steps, runs) | P2 | M | 034 (hard, Step 4 only) | TODO |
+| 036 | SEPIC control-theory learning spike (PID -> optimal control+observer -> Kalman) | P3 | L | - | TODO |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) |
 REJECTED (with one-line rationale).
