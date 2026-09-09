@@ -11,7 +11,7 @@ function statusFromLink(link: string): ConnectionStatus {
   return 'connected' // "ok" or "waiting for sweep" - the Pi is talking to the Pico either way
 }
 
-/** Derived from GET /api/data's `link` field, not just HTTP reachability -
+/** Derived from GET /api/data's `link` field, not just HTTP reachability:
  * the server can be up while the Pico link itself is down. */
 export function useConnectionStatus(): ConnectionStatus {
   const [status, setStatus] = useState<ConnectionStatus>('connecting')

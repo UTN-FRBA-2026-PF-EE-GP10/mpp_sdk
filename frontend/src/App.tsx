@@ -10,9 +10,9 @@ export default function App() {
   const connectionStatus = useConnectionStatus()
   const [selected, setSelected] = useState<string>('baseline')
   // Seeded with the known vocabulary so cards render before the first
-  // fetch lands; GET /api/measurement-kinds and any kind already present
-  // in the library (an operator can save under a kind this list never
-  // anticipated - see mpp_sdk/curves/record.py) both fold in on top.
+  // fetch lands. GET /api/measurement-kinds and any kind already in the
+  // library (an operator can save under a kind this list never
+  // anticipated - see mpp_sdk/curves/record.py) fold in on top.
   const [seedKinds, setSeedKinds] = useState<string[]>([...MEASUREMENT_KINDS])
   const [records, setRecords] = useState<CurveRecord[]>([])
   const [reloadToken, setReloadToken] = useState(0)
@@ -37,9 +37,8 @@ export default function App() {
       groups.get(record.measurement)?.push(record)
     }
     // Newest first: GET /api/curves returns records in on-disk filename
-    // order, which sorts ascending by capture time (oldest first) - both
-    // MeasurementKindCard's "Latest: ..." and the workbench's saved-curves
-    // table read `records[0]`/render in this order assuming newest-first.
+    // order, oldest first. MeasurementKindCard's "Latest: ..." and the
+    // workbench's saved-curves table both assume records[0] is newest.
     for (const bucket of groups.values()) {
       bucket.sort((a, b) => b.captured_at.localeCompare(a.captured_at))
     }
@@ -52,12 +51,11 @@ export default function App() {
         <div className="max-w-2xl">
           <h1 className="text-2xl font-semibold tracking-tight">Curve Workbench</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Every I-V sweep captured off the bench, grouped by what kind of measurement it
-            is: a flat baseline, a panel tilted to emulate partial shading, a tilt sweep, or
-            (later) a controllable dimmer. Pick a card to see its curves and trigger a new
-            capture. This replays the sweep into the MPPT algorithm benchmark so each
-            controller's behaviour on the real array can be predicted before it is
-            committed to firmware.
+            Every I-V sweep captured off the bench, grouped by measurement kind: a flat
+            baseline, a panel tilted for partial shading, a tilt sweep, or (later) a
+            controllable dimmer. Pick a card to see its curves or capture a new one. Each
+            sweep replays into the MPPT algorithm benchmark, so you can predict how a
+            controller will behave on the real array before it goes to firmware.
           </p>
         </div>
         <ConnectionIndicator status={connectionStatus} />
