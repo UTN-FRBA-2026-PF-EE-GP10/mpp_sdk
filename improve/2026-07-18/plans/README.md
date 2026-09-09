@@ -64,7 +64,7 @@ re-enabling; no plan file, tracked via the PR that disabled it.
 | 032 | Frontend: add vitest + tests for `useLiveSweep`/`useConnectionStatus` | P3 | M | - | DONE (plan file removed, see PR history) |
 | 033 | Frontend: extract shared `usePolling` hook from `useLiveSweep`/`useConnectionStatus` | P3 | S | 032 (hard) | DONE (plan file removed, see PR history) |
 | 034 | SDK+scripts: capture and analyze a real closed-loop MPPT run ("runs") | P2 | L | - | IN PROGRESS (Steps 1-6 code complete: `mpp_sdk/runs/`, `run_algorithm.py`/`plot_run.py`, CLI wiring, tests all green, no hardware. Step 7's on-target check needs the board - not done) |
-| 035 | Docs: measurement-procedure checklist page (curves, tilt steps, runs) | P2 | M | 034 (hard, Step 4 only) | TODO |
+| 035 | Docs: measurement-procedure checklist page (curves, tilt steps, runs) | P2 | M | 034 (hard, Step 4 only) | DONE (plan file removed, see PR history) |
 | 036 | SEPIC control-theory learning spike (PID -> optimal control+observer -> Kalman) | P3 | L | - | TODO |
 | 037 | Surface asynchronous command failures in the workbench UI | P1 | S remaining | 032 (soft) | IN PROGRESS (server + typed client done; visible UI in `CurveWorkbench.tsx` left for hands-on design) |
 | 038 | Save the displayed capture, not an unversioned latest sweep (save/display race) | P1 | M | 037 (soft), 032 (soft) | TODO |

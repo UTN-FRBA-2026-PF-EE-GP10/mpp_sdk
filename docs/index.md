@@ -12,6 +12,9 @@ Tracking** (MPPT) algorithms for photovoltaic systems.
 - **[Methodology](methodology.md)** — how the harnesses measure MPPT
   performance, what each metric means, the restart trigger policy, noise
   robustness, and the sim-to-real (PLECS / bench) comparison protocol.
+- **[Measurement Procedure](measurement_procedure.md)** - the checklist
+  for capturing a curve, running a tilt-sweep series, and running a
+  closed-loop run on the bench.
 
 ## Algorithm references
 
