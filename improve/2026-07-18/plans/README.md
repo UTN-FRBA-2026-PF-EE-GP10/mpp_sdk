@@ -66,6 +66,8 @@ re-enabling; no plan file, tracked via the PR that disabled it.
 | 034 | SDK+scripts: capture and analyze a real closed-loop MPPT run ("runs") | P2 | L | - | TODO |
 | 035 | Docs: measurement-procedure checklist page (curves, tilt steps, runs) | P2 | M | 034 (hard, Step 4 only) | TODO |
 | 036 | SEPIC control-theory learning spike (PID -> optimal control+observer -> Kalman) | P3 | L | - | TODO |
+| 037 | Surface asynchronous command failures in the workbench UI | P1 | S remaining | 032 (soft) | IN PROGRESS (server + typed client done; visible UI in `CurveWorkbench.tsx` left for hands-on design) |
+| 038 | Save the displayed capture, not an unversioned latest sweep (save/display race) | P1 | M | 037 (soft), 032 (soft) | TODO |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) |
 REJECTED (with one-line rationale).
@@ -248,6 +250,22 @@ scenario for now, no firmware changes (`FirmwareMode::MppTracker` already
 does what's needed), and a new client-side safety abort since this is the
 first script to drive the SEPIC continuously with a live algorithm rather
 than a bounded probe or a fixed test duty.
+
+### Plans 037-038: a second, concurrent session's findings (2026-09-08)
+
+037 and 038 were written by a different Claude Code session running
+against this same local checkout at the same time as the operator's main
+session - both landed as untracked files mid-turn, with no coordination
+beyond each plan's own "another session was actively changing these
+files" note. No git-level conflict resulted (nothing from that session
+was ever committed), but the same underlying bug (037: a command
+failure's error gets overwritten by the next successful telemetry poll)
+was independently found and fixed by both sessions at once. The main
+session's fix landed first (see 037's own "Progress" note for exactly
+what it covers and what is still open); 038 is a distinct, unimplemented
+finding (a save/display race between the operator's displayed capture and
+whatever the cache holds by the time Save's request lands) worth keeping
+as its own plan.
 
 ## Audit trail (2026-07-18 audit)
 

@@ -17,6 +17,7 @@ interface DataResponse {
   active: boolean
   link: string
   seq: number
+  command_error: string | null
 }
 
 export interface LiveSweepState {
@@ -25,6 +26,10 @@ export interface LiveSweepState {
   active: boolean
   link: string
   seq: number
+  // Set when the last Start Measurement/Release Relay click failed -
+  // null otherwise. Not surfaced in the UI yet; available here for
+  // whoever wires up an error toast/banner next.
+  commandError: string | null
 }
 
 function fromWirePoints(points: WireDataPoint[] | undefined): CurvePoint[] {
@@ -67,6 +72,7 @@ export async function fetchLiveSweep(): Promise<LiveSweepState> {
     active: Boolean(payload.active),
     link: payload.link ?? '--',
     seq: Number.isFinite(payload.seq) ? payload.seq : 0,
+    commandError: payload.command_error ?? null,
   }
 }
 

@@ -71,6 +71,13 @@ class _SweepCache:
         # time keeps `partial` in sweep order regardless.
         self._partial: dict[int, tuple[float, float]] = {}
         self._active = False
+        # Set by a failed start_sweep()/release_relay(), cleared by the
+        # next attempt that succeeds. Kept separate from `_link`: a
+        # command can fail on a transient glitch while the very next
+        # request_sweep() call (same poll iteration) succeeds, and `set()`
+        # would otherwise overwrite the error before any client ever sees
+        # it - this field survives that overwrite instead.
+        self._command_error: str | None = None
 
     def set(self, points: list[tuple[float, float]] | None, link: str) -> None:
         with self._lock:
@@ -78,6 +85,14 @@ class _SweepCache:
                 self._points = points
                 self._seq += 1
             self._link = link
+
+    def set_command_error(self, error: str | None) -> None:
+        """Record the outcome of the last start_sweep()/release_relay()
+        attempt - `None` on success, a message on failure. Call with
+        `None` on every success so a stale failure does not linger past
+        a retry that worked."""
+        with self._lock:
+            self._command_error = error
 
     def set_progress(self, progress: SweepProgress | None) -> None:
         """Update the in-progress-sweep view from one
@@ -113,10 +128,17 @@ class _SweepCache:
 
     def snapshot(
         self,
-    ) -> tuple[list[tuple[float, float]], str, int, list[tuple[float, float]], bool]:
+    ) -> tuple[list[tuple[float, float]], str, int, list[tuple[float, float]], bool, str | None]:
         with self._lock:
             partial = [self._partial[idx] for idx in sorted(self._partial)]
-            return list(self._points), self._link, self._seq, partial, self._active
+            return (
+                list(self._points),
+                self._link,
+                self._seq,
+                partial,
+                self._active,
+                self._command_error,
+            )
 
 
 def _poll_loop(
@@ -168,13 +190,14 @@ def _poll_loop(
                     elif cmd == "release_relay":
                         src.release_relay()
                 except RuntimeError as exc:
-                    # Same failure mode as request_sweep() below: a
-                    # transient SPI fault must not kill this thread, or
+                    # A transient SPI fault must not kill this thread, or
                     # every future command and sweep result silently stops
                     # working with no visible error. Still falls through
                     # to the request_sweep() poll and the sleep below,
                     # rather than looping tightly on a persistent fault.
-                    cache.set(None, f"error: {exc}")
+                    cache.set_command_error(f"{cmd} failed: {exc}")
+                else:
+                    cache.set_command_error(None)
             try:
                 result = src.request_sweep()
             except RuntimeError as exc:
@@ -211,13 +234,14 @@ def create_app(cache: _SweepCache, commands: queue.Queue[str]) -> FastAPI:
 
     @app.get("/api/data")
     def get_data() -> dict:
-        points, link, seq, partial, active = cache.snapshot()
+        points, link, seq, partial, active, command_error = cache.snapshot()
         return {
             "points": [{"x": v, "y": i * 1000.0} for v, i in points],
             "partial": [{"x": v, "y": i * 1000.0} for v, i in partial],
             "active": active,
             "link": link,
             "seq": seq,
+            "command_error": command_error,
         }
 
     @app.get("/api/measurement-kinds")
@@ -254,7 +278,7 @@ def create_app(cache: _SweepCache, commands: queue.Queue[str]) -> FastAPI:
 
     @app.post("/api/save-curve")
     def post_save_curve(body: _SaveCurveRequest) -> dict:
-        points, _link, _seq, _partial, _active = cache.snapshot()
+        points, _link, _seq, _partial, _active, _command_error = cache.snapshot()
         if not points:
             raise HTTPException(status_code=409, detail="no sweep captured yet")
         record = CurveRecord(
