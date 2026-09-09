@@ -50,6 +50,7 @@ except ModuleNotFoundError as exc:  # pragma: no cover
 
 if TYPE_CHECKING:
     from mpp_sdk.io.spi_mcu import SweepProgress
+    from mpp_sdk.io.sweep_source import SweepSource
 
 _WEB_ROOT = Path(__file__).parent / "curve_tracer_web"
 
@@ -152,13 +153,12 @@ def _poll_loop(
     demo: bool = False,
 ) -> None:
     if demo:
-        # Duck-typed against SpiMcuSource (start_sweep/release_relay/
-        # request_sweep/poll_sweep_progress + context manager). Imported
-        # only here, never mpp_sdk.io.spi_mcu, so demo mode needs neither
+        # Implements mpp_sdk.io.sweep_source.SweepSource. Imported only
+        # here, never mpp_sdk.io.spi_mcu, so demo mode needs neither
         # `spidev` nor a board.
         from scripts.curve_tracer_demo_source import DemoSweepSource
 
-        source_cm = DemoSweepSource()
+        source_cm: SweepSource = DemoSweepSource()
 
         # Demo mode reports one link state regardless of whether a result
         # is ready this iteration - "ok" vs "waiting for sweep" is a real
@@ -169,7 +169,7 @@ def _poll_loop(
     else:
         from mpp_sdk.io.spi_mcu import SpiMcuSource
 
-        source_cm = SpiMcuSource(bus=bus, device=device, speed_hz=speed_hz)
+        source_cm: SweepSource = SpiMcuSource(bus=bus, device=device, speed_hz=speed_hz)
 
         def link_for(result: object) -> str:
             return "ok" if result is not None else "waiting for sweep"

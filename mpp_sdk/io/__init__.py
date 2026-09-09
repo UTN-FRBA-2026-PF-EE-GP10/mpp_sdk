@@ -10,6 +10,7 @@ from .base import SignalSource
 from .dynamic import DynamicSimulatedSource
 from .noisy import NoisySource
 from .simulated import SimulatedSource
+from .sweep_source import SweepProgressLike, SweepSource
 
 __all__ = [
     "SignalSource",
@@ -18,6 +19,8 @@ __all__ = [
     "NoisySource",
     "SpiMcuSource",
     "SweepProgress",
+    "SweepSource",
+    "SweepProgressLike",
 ]
 
 
