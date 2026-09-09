@@ -15,7 +15,7 @@ MEASUREMENT_KINDS = (
     "baseline",  # all panels same tilt, uniform illumination
     "partial-shade",  # one panel tilted/shaded relative to the other
     "tilt-sweep",  # a series varying one panel's tilt
-    "dimmer",  # varying illumination (plan 024)
+    "dimmer",  # varying illumination via a controllable lamp dimmer
     "other",
 )
 """Seed vocabulary for `CurveRecord.measurement`. Not an enum: an operator

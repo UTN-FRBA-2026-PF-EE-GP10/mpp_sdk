@@ -84,7 +84,7 @@ class SpiMcuSource(SignalSource):
     The Pico firmware acts as SPI slave on SPI1 (GPIO10-13). Every
     ``write()`` call sends a 12-byte full-duplex frame (see
     ``firmware/pipico_board/README.md``'s "Operating Modes"/"Sensing"
-    sections and plan 014 for the full byte-level design)::
+    sections for the full byte-level design)::
 
         MOSI (RPi -> Pico): [ DUTY_H | DUTY_L | CHECKSUM | CMD | 0x00 x 8 ]
         MISO (Pico -> RPi): [ V_H | V_L | I_H | I_L | VOUT_H | VOUT_L
@@ -140,8 +140,8 @@ class SpiMcuSource(SignalSource):
         speed_hz:
             SPI clock frequency. 200 kHz is the current bench-validated
             speed (see ``scripts/spi_test.py``) - higher speeds have shown
-            electrical crosstalk from the GPIO4 NeoPixel strip (plan 013),
-            re-check that file before raising this.
+            electrical crosstalk from the GPIO4 NeoPixel strip, re-check
+            that file before raising this.
         mode:
             SPI mode (0-3). Must match firmware (default 0: CPOL=0, CPHA=0).
         v_scale, i_scale:
@@ -181,7 +181,7 @@ class SpiMcuSource(SignalSource):
         bytes' meaning - that differs between a telemetry frame and a
         progress frame, both otherwise the same shape. Returns
         ``(payload_bytes, ack)`` on a valid frame, ``None`` on a checksum
-        mismatch (a corrupted-but-complete frame, plan 014).
+        mismatch (a corrupted-but-complete frame).
         """
         duty_u16 = max(0, min(65535, round(duty * 65535)))
         duty_h, duty_l = duty_u16 >> 8, duty_u16 & 0xFF
@@ -214,7 +214,7 @@ class SpiMcuSource(SignalSource):
         ``0x80 | point_count`` on the frame acking a
         ``_CMD_REQUEST_BULK_DUMP``. Returns the last-good V/I/Vout/temp
         instead if the MISO checksum doesn't match - a corrupted-but-complete
-        frame must not be applied as if it were real telemetry (plan 014).
+        frame must not be applied as if it were real telemetry.
         ``ack`` is different: it's an edge-triggered handshake signal, not a
         physical reading, so replaying a stale cached value (possibly from
         an already-consumed sweep, or from before any sweep existed) risks

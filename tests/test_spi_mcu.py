@@ -150,7 +150,7 @@ def test_temperature_sentinel_reads_as_none(spi_mcu_source):
 
 
 # ------------------------------------------------------------------
-# Checksum rejection (plan 014)
+# Checksum rejection
 # ------------------------------------------------------------------
 
 

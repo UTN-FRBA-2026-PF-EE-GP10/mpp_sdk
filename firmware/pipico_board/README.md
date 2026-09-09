@@ -84,7 +84,7 @@ DUTY is a u16 (0 = 0 %, 65535 = 100 %). V/I/VOUT are u16, saturating: V/VOUT
 in millivolts, I in milliamperes (negative current clamps to 0). TEMP is a
 big-endian `i16` in centi-Celsius, or the sentinel `-32768` (`0x8000`) while
 the MAX31865 probe stays disabled (see "Panel temperature" below). See
-"Sensing" below for the sensor details. `CHECKSUM` (plan 014) is an XOR of
+"Sensing" below for the sensor details. `CHECKSUM` is an XOR of
 the frame's data bytes in each direction - `DUTY_H^DUTY_L^CMD` for MOSI,
 `V_H^V_L^I_H^I_L^VOUT_H^VOUT_L^TEMP_H^TEMP_L^ACK` for MISO. `CMD` and
 `ACK` are both covered because each is a *command to the other side*
@@ -115,8 +115,8 @@ in-progress-sweep state (see "Curve tracer" - streaming below).
 **Master clock speed**: 8 MHz is unreliable (occasional torn/garbled
 frames) - the GPIO input synchronizer latency eats too much of the 125 ns
 bit period, worse on jumper-wire signal integrity than a real PCB trace
-would be. 1 MHz was bench-validated as reliable during plan 004's
-bring-up, before the GPIO4 NeoPixel strip (plan 013) was wired in.
+would be. 1 MHz was bench-validated as reliable, before the GPIO4
+NeoPixel strip was wired in.
 
 With the NeoPixels actively switching, 1 MHz started producing
 corrupted-but-complete MISO frames (e.g. `I_raw` reading exactly `0x8000`,
@@ -202,7 +202,7 @@ Gate duty is bounded by `DUTY_MAX` (95 %) in both sub-modes, same as
 **Watchdog behavior**: in `PowerSupply` mode, the SPI link-lost watchdog does
 **not** force gate duty to zero - the local regulator keeps running
 standalone with no SPI host attached, since that's the point of a bench
-supply (explicit operator decision, see plan 011's history). The SPI slave
+supply. The SPI slave
 task itself keeps running unconditionally so telemetry stays available if a
 Pi is connected, but its "frame timeout"/"link lost" WARN logs are
 suppressed in `PowerSupply` mode - no Pi attached is expected there, not a
@@ -316,9 +316,9 @@ logged at ~1 Hz in millivolts.
   Pico's `ADC_VREF` pin (physical pin 35). This closed about a quarter of
   the original ~9% `ADC_PWR` vs INA229 discrepancy; the remaining ~4.5% is
   within the divider's 1% resistor tolerance plus RP2040 ADC gain error
-  (no factory calibration exists to correct the latter, see plan 010's
-  progress note). Re-measure and update this constant if the divider
-  resistors or reference circuit ever change.
+  (no factory calibration exists to correct the latter). Re-measure and
+  update this constant if the divider resistors or reference circuit ever
+  change.
 
 ## Curve tracer
 
