@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { fetchLiveSweep, releaseRelay as releaseRelayRequest, startSweep as startSweepRequest } from '@/lib/api'
+import type { LiveSweepState } from '@/lib/api'
 import type { CurvePoint } from '@/types'
+import { usePolling } from './usePolling'
 
 const POLL_MS = 700
 
@@ -17,43 +19,30 @@ export function useLiveSweep() {
   const [active, setActive] = useState(false)
   const lastSeq = useRef(-1)
 
-  useEffect(() => {
-    let cancelled = false
-    let timer: ReturnType<typeof setTimeout>
-
-    async function tick() {
-      try {
-        const data = await fetchLiveSweep()
-        if (cancelled) return
-        setActive(data.active)
-        if (data.active) {
-          setPartial(data.partial)
-        } else {
-          // Once a sweep is no longer active, `points` (gated on `seq`)
-          // is authoritative - see this hook's docstring. Clearing
-          // `partial` here also matters when a sweep never completes
-          // (link drop, relay released mid-capture): otherwise a stale
-          // `partial` keeps rendering in LiveChart, which falls back to
-          // `partial` whenever `points` is still empty.
-          setPartial([])
-          if (data.seq !== lastSeq.current) {
-            setPoints(data.points)
-            lastSeq.current = data.seq
-          }
-        }
-      } catch (e) {
-        console.error('polling /api/data failed', e)
-      } finally {
-        if (!cancelled) timer = setTimeout(tick, POLL_MS)
+  const handleData = (data: LiveSweepState) => {
+    setActive(data.active)
+    if (data.active) {
+      setPartial(data.partial)
+    } else {
+      // Once a sweep is no longer active, `points` (gated on `seq`) is
+      // authoritative - see this hook's docstring. Clearing `partial`
+      // here too matters when a sweep never completes (link drop,
+      // relay released mid-capture): otherwise a stale `partial` from
+      // the aborted attempt keeps rendering in LiveChart, which falls
+      // back to `partial` whenever `points` is still empty.
+      setPartial([])
+      if (data.seq !== lastSeq.current) {
+        setPoints(data.points)
+        lastSeq.current = data.seq
       }
     }
-    tick()
+  }
 
-    return () => {
-      cancelled = true
-      clearTimeout(timer)
-    }
-  }, [])
+  const handleError = (e: unknown) => {
+    console.error('polling /api/data failed', e)
+  }
+
+  usePolling(fetchLiveSweep, handleData, handleError, POLL_MS)
 
   const start = useCallback(() => {
     startSweepRequest().catch((e) => console.error('start-sweep failed', e))

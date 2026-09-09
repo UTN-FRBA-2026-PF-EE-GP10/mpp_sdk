@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { fetchLiveSweep } from '@/lib/api'
+import type { LiveSweepState } from '@/lib/api'
 import type { ConnectionStatus } from '@/types'
+import { usePolling } from './usePolling'
 
 const POLL_MS = 2000
 
@@ -16,27 +18,10 @@ function statusFromLink(link: string): ConnectionStatus {
 export function useConnectionStatus(): ConnectionStatus {
   const [status, setStatus] = useState<ConnectionStatus>('connecting')
 
-  useEffect(() => {
-    let cancelled = false
-    let timer: ReturnType<typeof setTimeout>
+  const handleData = (data: LiveSweepState) => setStatus(statusFromLink(data.link))
+  const handleError = (_error: unknown) => setStatus('disconnected')
 
-    async function tick() {
-      try {
-        const data = await fetchLiveSweep()
-        if (!cancelled) setStatus(statusFromLink(data.link))
-      } catch {
-        if (!cancelled) setStatus('disconnected')
-      } finally {
-        if (!cancelled) timer = setTimeout(tick, POLL_MS)
-      }
-    }
-    tick()
-
-    return () => {
-      cancelled = true
-      clearTimeout(timer)
-    }
-  }, [])
+  usePolling(fetchLiveSweep, handleData, handleError, POLL_MS)
 
   return status
 }
