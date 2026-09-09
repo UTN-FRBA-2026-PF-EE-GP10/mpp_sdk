@@ -108,6 +108,10 @@ class SpiMcuSource(SignalSource):
     bytes for a different, one-exchange-lag handshake (see its docstring) -
     the two are mutually exclusive per exchange, never both at once.
 
+    Its sweep-control methods (``start_sweep``, ``release_relay``,
+    ``request_sweep``, ``poll_sweep_progress``) plus the context-manager
+    protocol satisfy ``mpp_sdk.io.sweep_source.SweepSource``.
+
     Usage::
 
         with SpiMcuSource() as src:

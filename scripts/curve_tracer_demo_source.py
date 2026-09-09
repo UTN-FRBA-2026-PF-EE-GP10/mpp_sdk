@@ -1,17 +1,15 @@
 """Fake curve-tracer source for `curve_tracer_server.py --demo`: lets the
 frontend be exercised on any machine, no Pi/Pico/`spidev` required.
 
-Implements exactly the four methods `_poll_loop` calls on a source
-(`start_sweep`, `release_relay`, `request_sweep`, `poll_sweep_progress`)
-plus the context-manager protocol. Duck-typed against `SpiMcuSource`, not
-a subclass, so this module pulls in nothing beyond the stdlib -
+Implements `mpp_sdk.io.sweep_source.SweepSource`, structurally - not a
+subclass, so this module pulls in nothing beyond the stdlib -
 `SpiMcuSource`/`spidev` are never imported in demo mode.
 
-`poll_sweep_progress()`'s return value is duck-typed against
-`SweepProgress` (`index`/`voltage`/`current`/`active`/`final_point`)
-rather than importing that class - it lives in `mpp_sdk.io.spi_mcu`,
-which requires `spidev` at import time, exactly what demo mode exists to
-avoid needing.
+`poll_sweep_progress()`'s return value likewise satisfies
+`mpp_sdk.io.sweep_source.SweepProgressLike` rather than importing
+`SweepProgress` itself - that class lives in `mpp_sdk.io.spi_mcu`, which
+requires `spidev` at import time, exactly what demo mode exists to avoid
+needing.
 """
 
 from __future__ import annotations
