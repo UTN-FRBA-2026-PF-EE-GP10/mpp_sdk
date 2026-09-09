@@ -2,7 +2,7 @@
 #![no_main]
 
 mod ina229;
-// MAX31865 disabled - no compatible probe to test with right now (see PR body).
+// MAX31865 disabled: no compatible probe on the bench right now.
 // mod max31865;
 mod mode_curve_tracer;
 mod mode_power_supply;
@@ -37,43 +37,42 @@ bind_interrupts!(struct Pio1Irqs {
 // Shared state (written by SPI/ADC tasks, read by main).
 pub static DUTY: AtomicU16 = AtomicU16::new(0); // 0 % initial - safe boot state
 
-// 0.95 * 65535, mirrors the SDK's max_duty. Defense-in-depth: the raw SPI
-// DUTY word is applied unvalidated by the master, and on a SEPIC an
-// unclamped 100 % duty ramps the inductor current unbounded. Frame-integrity
-// hardening is spi_slave_pio.rs's job; this is the guard behind it.
+// 0.95 * 65535, mirrors the SDK's max_duty. The Pi sends the raw SPI DUTY
+// word unvalidated, and an unclamped 100 % duty ramps a SEPIC's inductor
+// current unbounded. spi_slave_pio.rs guards frame integrity; this guards
+// the value it carries.
 const DUTY_MAX: u16 = 62258;
 pub static MEAS_V_MV: AtomicU16 = AtomicU16::new(0);
 pub static MEAS_I_MA: AtomicU16 = AtomicU16::new(0);
-// MAX31865 disabled - no compatible probe to test with right now (see PR body).
+// MAX31865 disabled: no compatible probe on the bench right now.
 // pub static MEAS_T_CC: AtomicI16 = AtomicI16::new(0);
-// On-chip ADC readings, in millivolts. PWR/VOUT are calibrated (divider
-// scaling applied); Input_Curr (the INA281 cross-check for MEAS_I_MA) is
-// still raw pin mV - its gain/shunt aren't resolved yet.
+// On-chip ADC, in millivolts. PWR/VOUT are calibrated (divider scaling
+// applied). Input_Curr (the INA281 cross-check for MEAS_I_MA) is still
+// raw pin mV - its gain/shunt are not resolved yet.
 pub static MEAS_ADC_PWR_MV: AtomicU16 = AtomicU16::new(0);
 pub static MEAS_ADC_VOUT_MV: AtomicU16 = AtomicU16::new(0);
 pub static MEAS_ADC_IIN_MV: AtomicU16 = AtomicU16::new(0);
-// Bumped once per successfully-received SPI frame (spi_slave_pio.rs) -
-// drives the NeoPixel packet heartbeat.
+// Bumped once per SPI frame received (spi_slave_pio.rs). Drives the
+// NeoPixel packet heartbeat.
 pub static PACKET_COUNT: AtomicU32 = AtomicU32::new(0);
 // Bumped once per onchip_adc_task poll (~100 ms). mode_power_supply's
 // ClosedLoop gates its control step on this, not on MEAS_ADC_VOUT_MV's
-// value - the reading can repeat across samples (e.g. Vout not moving yet
-// at boot), and gating on value-equality instead of sample-freshness
-// stalls the controller the first time that happens.
+// value: a reading can repeat across samples (e.g. Vout not moving yet at
+// boot), and gating on value-equality instead of sample-freshness would
+// stall the controller the first time that happens.
 pub static ADC_SAMPLE_COUNT: AtomicU32 = AtomicU32::new(0);
-// True for the duration of a curve-tracer sweep (mode_curve_tracer.rs) -
-// the gate must not be driven by either FirmwareMode while a sweep is
-// actively stepping the bleed PWM. See the one-line override in main()'s
-// loop below. Does NOT by itself mean the panel is back on the SEPIC path
-// once it clears - see RELAY_ENGAGED for that.
+// True for the duration of a curve-tracer sweep (mode_curve_tracer.rs).
+// Neither FirmwareMode may drive the gate while a sweep is stepping the
+// bleed PWM - see the override in main()'s loop below. This does not by
+// itself mean the panel is back on the SEPIC path once it clears - see
+// RELAY_ENGAGED for that.
 pub static TRACER_ACTIVE: AtomicBool = AtomicBool::new(false);
-// True whenever the curve-tracer relay has the panel routed off the SEPIC
-// path onto the bleed path (mode_curve_tracer.rs) - covers the whole
-// window from "relay energized" to "relay explicitly released", which can
-// now span multiple sweeps, not just TRACER_ACTIVE's narrower "a sweep is
-// actively running" window. The gate must not be driven while this is
-// true either, or the SEPIC would be switching with the panel
-// disconnected from its input.
+// True whenever the curve-tracer relay has routed the panel onto the
+// bleed path (mode_curve_tracer.rs) - the whole window from "relay
+// energized" to "relay explicitly released", which can span multiple
+// sweeps, wider than TRACER_ACTIVE's "a sweep is running right now". The
+// gate must not be driven while this is true either, or the SEPIC would
+// switch with its input disconnected.
 pub static RELAY_ENGAGED: AtomicBool = AtomicBool::new(false);
 
 /// Polls the INA229 over SPI0 at the SDK's control period
@@ -82,13 +81,13 @@ pub static RELAY_ENGAGED: AtomicBool = AtomicBool::new(false);
 async fn sensors_task(
     mut spi: Spi<'static, embassy_rp::peripherals::SPI0, embassy_rp::spi::Blocking>,
     mut cs_ina: Output<'static>,
-    // Held high, untouched: MAX31865 disabled right now (see PR body).
+    // Held high, untouched: MAX31865 disabled right now.
     _cs_tp100: Output<'static>,
 ) {
     let mut ina = Ina229::new();
 
     // Retry with backoff instead of panicking: a wiring/power fault on the
-    // sensing board must not take down the Pi SPI link, which should keep
+    // sensing board must not take down the Pi SPI link. It should keep
     // running and report zeros until the sensor comes up.
     let mut backoff_ms = 100u64;
     loop {
@@ -103,7 +102,7 @@ async fn sensors_task(
     }
     defmt::info!("INA229 ready");
 
-    // MAX31865 disabled - no compatible probe to test with right now (see PR body).
+    // MAX31865 disabled: no compatible probe on the bench right now.
     // let mut max = Max31865::new();
     // let mut max_ok = match max.init(&mut spi, &mut cs_tp100) {
     //     Ok(()) => {
@@ -132,7 +131,7 @@ async fn sensors_task(
 
         tick = tick.wrapping_add(1);
 
-        // MAX31865 disabled - no compatible probe to test with right now (see PR body).
+        // MAX31865 disabled: no compatible probe on the bench right now.
         // if tick % 100 == 0 {
         //     if max_ok {
         //         match max.read_temp_centi_c(&mut spi, &mut cs_tp100) {
@@ -198,10 +197,10 @@ async fn onchip_adc_task(
         (raw as u32 * ADC_VREF_MV / 4095) as u16
     }
 
-    // Scales by the divider's total-to-bottom-leg (10k) resistance ratio,
-    // matching the currently-shorted jumper state. Saturates instead of
-    // wrapping: on `Full`, inputs above ~65.5 V (still within that range's
-    // ~75.6 V full scale) would otherwise overflow u16 silently.
+    // Scales by the divider's total-to-bottom-leg (10k) ratio, matching
+    // the currently-shorted jumper state. Saturates instead of wrapping:
+    // on `Full`, inputs above ~65.5 V (still within that range's ~75.6 V
+    // full scale) would otherwise overflow u16 silently.
     fn divider_to_actual_mv(adc_mv: u16) -> u16 {
         let mv = match ADC_DIVIDER_RANGE {
             AdcDividerRange::Full => adc_mv as u32 * 235 / 10, // 3x 75k + 10k
@@ -249,7 +248,7 @@ async fn onchip_adc_task(
 const NEOPIXEL_COUNT: usize = 4;
 
 /// Flashes the GPIO4 NeoPixel strip briefly on every SPI frame the Pi
-/// successfully sends, dark otherwise - a packet-received heartbeat,
+/// sends successfully, dark otherwise - a packet-received heartbeat,
 /// separate from GPIO14's firmware-alive one. Runs on PIO1 (PIO0 is
 /// owned by the SPI slave) with its own DMA channel, decoupled from
 /// `spi_pio_task` via `PACKET_COUNT` so it can never affect that task's
@@ -384,12 +383,11 @@ async fn main(spawner: Spawner) {
     let mut tracer_holding_panel = false;
 
     loop {
-        // The gate must stay off both while a sweep is actively running
-        // (TRACER_ACTIVE) AND for as long as the relay stays engaged
-        // afterward (RELAY_ENGAGED, which can now outlive TRACER_ACTIVE -
-        // see its doc comment) - driving the SEPIC while the panel is
-        // routed off to the bleed path switches into a disconnected
-        // input.
+        // The gate must stay off both while a sweep is running
+        // (TRACER_ACTIVE) and for as long as the relay stays engaged
+        // afterward (RELAY_ENGAGED can outlive TRACER_ACTIVE - see its
+        // doc comment). Driving the SEPIC while the relay holds the panel
+        // on the bleed path would switch into a disconnected input.
         let tracer_holds_panel =
             TRACER_ACTIVE.load(Ordering::Relaxed) || RELAY_ENGAGED.load(Ordering::Relaxed);
         let duty = if tracer_holds_panel {
@@ -397,12 +395,12 @@ async fn main(spawner: Spawner) {
         } else {
             if tracer_holding_panel {
                 // Falling edge: the relay just handed the panel back to
-                // the SEPIC path. compute_duty() was skipped the whole
-                // time the panel was held (see above), so PowerSupply
-                // mode's closed loop must not resume from its stale
-                // pre-hold ps_duty - see ClosedLoopState::reset()'s doc
-                // comment. A no-op in MppTracker mode (no closed-loop
-                // state to go stale there).
+                // the SEPIC path. compute_duty() was skipped for the
+                // whole hold, so PowerSupply mode's closed loop must not
+                // resume from its stale pre-hold ps_duty - see
+                // ClosedLoopState::reset()'s doc comment. A no-op in
+                // MppTracker mode, which has no closed-loop state to go
+                // stale.
                 psu_closed_loop.reset();
             }
             match FIRMWARE_MODE {
