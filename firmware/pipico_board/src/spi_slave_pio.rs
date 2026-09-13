@@ -39,7 +39,8 @@ use crate::mode_curve_tracer::{
     self, SweepProgress, SweepResult, TRACER_SWEEP_POINTS, TracerCommand,
 };
 use crate::{
-    DUTY, FIRMWARE_MODE, FirmwareMode, MEAS_ADC_VOUT_MV, MEAS_I_MA, MEAS_V_MV, PACKET_COUNT,
+    DUTY, FIRMWARE_MODE, FirmwareMode, MEAS_ADC_VOUT_MV, MEAS_I_MA, MEAS_T_CC, MEAS_V_MV,
+    PACKET_COUNT,
 };
 
 bind_interrupts!(pub struct PioIrqs {
@@ -189,6 +190,7 @@ pub fn init(
 /// centi-Celsius reading, so it's unambiguous on the Python side rather
 /// than a real (if extreme) value. Swap for a live `MEAS_T_CC` read once
 /// the sensor is re-enabled.
+#[allow(dead_code)]
 const TEMP_NOT_AVAILABLE_CC: i16 = i16::MIN;
 
 /// XOR checksum over the given data bytes - catches single/few-bit
@@ -493,12 +495,13 @@ fn build_tx_buf_for_state(state: &BulkState) -> [u32; MAX_FRAME_LEN] {
             let v = MEAS_V_MV.load(Ordering::Relaxed);
             let i = MEAS_I_MA.load(Ordering::Relaxed);
             let vout = MEAS_ADC_VOUT_MV.load(Ordering::Relaxed);
+            let temp = MEAS_T_CC.load(Ordering::Relaxed);
             let ack = 0x80 | (sweep.count as u8);
             buf[..FRAME_LEN].copy_from_slice(&build_tx_frame(
                 v,
                 i,
                 vout,
-                TEMP_NOT_AVAILABLE_CC,
+                temp,
                 ack,
             ));
         }
@@ -506,7 +509,8 @@ fn build_tx_buf_for_state(state: &BulkState) -> [u32; MAX_FRAME_LEN] {
             let v = MEAS_V_MV.load(Ordering::Relaxed);
             let i = MEAS_I_MA.load(Ordering::Relaxed);
             let vout = MEAS_ADC_VOUT_MV.load(Ordering::Relaxed);
-            buf[..FRAME_LEN].copy_from_slice(&build_tx_frame(v, i, vout, TEMP_NOT_AVAILABLE_CC, 0));
+            let temp = MEAS_T_CC.load(Ordering::Relaxed);
+            buf[..FRAME_LEN].copy_from_slice(&build_tx_frame(v, i, vout, temp, 0));
         }
     }
     buf
