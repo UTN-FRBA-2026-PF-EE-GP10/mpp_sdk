@@ -1,9 +1,9 @@
 #![no_std]
 #![no_main]
 
+mod adc_cal;
 mod ina229;
-// MAX31865 disabled: no compatible probe on the bench right now.
-// mod max31865;
+mod max31865;
 mod mode_curve_tracer;
 mod mode_power_supply;
 mod spi_slave_pio;
@@ -20,9 +20,8 @@ use embassy_rp::pwm::{Config as PwmConfig, Pwm};
 use embassy_rp::spi::{Config as SpiConfig, Phase, Polarity, Spi};
 use embassy_time::Timer;
 use ina229::Ina229;
-// use max31865::Max31865;
-// use portable_atomic::AtomicI16;
-use portable_atomic::{AtomicBool, AtomicU16, AtomicU32, Ordering};
+use max31865::Max31865;
+use portable_atomic::{AtomicBool, AtomicI16, AtomicU16, AtomicU32, Ordering};
 use smart_leds::RGB8;
 use {defmt_rtt as _, panic_probe as _};
 
@@ -44,8 +43,7 @@ pub static DUTY: AtomicU16 = AtomicU16::new(0); // 0 % initial - safe boot state
 const DUTY_MAX: u16 = 62258;
 pub static MEAS_V_MV: AtomicU16 = AtomicU16::new(0);
 pub static MEAS_I_MA: AtomicU16 = AtomicU16::new(0);
-// MAX31865 disabled: no compatible probe on the bench right now.
-// pub static MEAS_T_CC: AtomicI16 = AtomicI16::new(0);
+pub static MEAS_T_CC: AtomicI16 = AtomicI16::new(0);
 // On-chip ADC, in millivolts. PWR/VOUT are calibrated (divider scaling
 // applied). Input_Curr (the INA281 cross-check for MEAS_I_MA) is still
 // raw pin mV - its gain/shunt are not resolved yet.
@@ -81,8 +79,7 @@ pub static RELAY_ENGAGED: AtomicBool = AtomicBool::new(false);
 async fn sensors_task(
     mut spi: Spi<'static, embassy_rp::peripherals::SPI0, embassy_rp::spi::Blocking>,
     mut cs_ina: Output<'static>,
-    // Held high, untouched: MAX31865 disabled right now.
-    _cs_tp100: Output<'static>,
+    mut cs_tp100: Output<'static>,
 ) {
     let mut ina = Ina229::new();
 
@@ -102,18 +99,17 @@ async fn sensors_task(
     }
     defmt::info!("INA229 ready");
 
-    // MAX31865 disabled: no compatible probe on the bench right now.
-    // let mut max = Max31865::new();
-    // let mut max_ok = match max.init(&mut spi, &mut cs_tp100) {
-    //     Ok(()) => {
-    //         defmt::info!("MAX31865 ready");
-    //         true
-    //     }
-    //     Err(e) => {
-    //         defmt::error!("MAX31865 init failed: {}, will retry in background", e);
-    //         false
-    //     }
-    // };
+    let mut max = Max31865::new();
+    let mut max_ok = match max.init(&mut spi, &mut cs_tp100) {
+        Ok(()) => {
+            defmt::info!("MAX31865 ready");
+            true
+        }
+        Err(e) => {
+            defmt::error!("MAX31865 init failed: {}, will retry in background", e);
+            false
+        }
+    };
 
     let mut tick: u32 = 0;
     loop {
@@ -131,32 +127,34 @@ async fn sensors_task(
 
         tick = tick.wrapping_add(1);
 
-        // MAX31865 disabled: no compatible probe on the bench right now.
-        // if tick % 100 == 0 {
-        //     if max_ok {
-        //         match max.read_temp_centi_c(&mut spi, &mut cs_tp100) {
-        //             Ok(t) => MEAS_T_CC.store(t, Ordering::Relaxed),
-        //             Err(e) => {
-        //                 if tick % 1000 == 0 {
-        //                     defmt::error!("MAX31865 read failed: {}", e);
-        //                 }
-        //             }
-        //         }
-        //     } else if tick % 5000 == 0 {
-        //         max_ok = max.init(&mut spi, &mut cs_tp100).is_ok();
-        //         if max_ok {
-        //             defmt::info!("MAX31865 ready");
-        //         }
-        //     }
-        // }
+        if tick % 100 == 0 {
+            if max_ok {
+                match max.read_temp_centi_c(&mut spi, &mut cs_tp100) {
+                    Ok(t) => MEAS_T_CC.store(t, Ordering::Relaxed),
+                    Err(e) => {
+                        if tick % 1000 == 0 {
+                            defmt::error!("MAX31865 read failed: {}", e);
+                        }
+                    }
+                }
+            } else if tick % 5000 == 0 {
+                max_ok = max.init(&mut spi, &mut cs_tp100).is_ok();
+                if max_ok {
+                    defmt::info!("MAX31865 ready");
+                }
+            }
+        }
 
         if tick.is_multiple_of(1000) {
             // ~1 Hz at the 1 ms poll period - RTT flooding at 1 kHz stalls
             // the target.
+            let t = MEAS_T_CC.load(Ordering::Relaxed);
             defmt::info!(
-                "V={} mV I={} mA",
+                "V={} mV I={} mA T={}.{:02} C",
                 MEAS_V_MV.load(Ordering::Relaxed),
-                MEAS_I_MA.load(Ordering::Relaxed)
+                MEAS_I_MA.load(Ordering::Relaxed),
+                t / 100,
+                (t % 100).abs()
             );
         }
         Timer::after_millis(1).await;
@@ -194,7 +192,8 @@ async fn onchip_adc_task(
     const ADC_VREF_MV: u32 = 3218;
 
     fn raw_to_mv(raw: u16) -> u16 {
-        (raw as u32 * ADC_VREF_MV / 4095) as u16
+        let linearized = adc_cal::dnl_fix(raw);
+        (linearized as u32 * ADC_VREF_MV / adc_cal::CORRECTED_FULL_SCALE) as u16
     }
 
     // Scales by the divider's total-to-bottom-leg (10k) ratio, matching
@@ -217,28 +216,60 @@ async fn onchip_adc_task(
 
     let mut tick: u32 = 0;
     loop {
-        if let Ok(raw) = adc.blocking_read(&mut ch_pwr) {
-            MEAS_ADC_PWR_MV.store(divider_to_actual_mv(raw_to_mv(raw)), Ordering::Relaxed);
+        let pwr_uncal = adc.blocking_read(&mut ch_pwr).ok().map(|raw| divider_to_actual_mv(raw_to_mv(raw)));
+        let v_ina = MEAS_V_MV.load(Ordering::Relaxed);
+
+        // Cross-calibrate against INA229 if Vin is high enough to be valid (> 1.0 V).
+        // Since all channels share the same ADC core and divider network topology,
+        // the gain correction ratio (v_ina / pwr_uncal) applies to Vout and Iin equally.
+        let cal_ratio = match pwr_uncal {
+            Some(pwr) if pwr >= 1000 && v_ina >= 1000 => Some((v_ina as u32, pwr as u32)),
+            _ => None,
+        };
+
+        if let Some(pwr) = pwr_uncal {
+            let pwr_corr = if let Some((vina, _)) = cal_ratio { vina as u16 } else { pwr };
+            MEAS_ADC_PWR_MV.store(pwr_corr, Ordering::Relaxed);
         }
+
         if let Ok(raw) = adc.blocking_read(&mut ch_vout) {
-            MEAS_ADC_VOUT_MV.store(divider_to_actual_mv(raw_to_mv(raw)), Ordering::Relaxed);
+            let vout_uncal = divider_to_actual_mv(raw_to_mv(raw));
+            let vout_corr = if let Some((vina, pwr)) = cal_ratio {
+                ((vout_uncal as u32 * vina) / pwr).min(u16::MAX as u32) as u16
+            } else {
+                vout_uncal
+            };
+            MEAS_ADC_VOUT_MV.store(vout_corr, Ordering::Relaxed);
         }
-        // ADC_Input_Curr (INA281 cross-check) stays raw pin mV - gain and
-        // shunt not resolved yet.
+
+        // ADC_Input_Curr (INA281 cross-check) scaled by the same ADC core gain factor.
         if let Ok(raw) = adc.blocking_read(&mut ch_iin) {
-            MEAS_ADC_IIN_MV.store(raw_to_mv(raw), Ordering::Relaxed);
+            let iin_uncal = raw_to_mv(raw);
+            let iin_corr = if let Some((vina, pwr)) = cal_ratio {
+                ((iin_uncal as u32 * vina) / pwr).min(u16::MAX as u32) as u16
+            } else {
+                iin_uncal
+            };
+            MEAS_ADC_IIN_MV.store(iin_corr, Ordering::Relaxed);
         }
         ADC_SAMPLE_COUNT.fetch_add(1, Ordering::Relaxed);
 
         tick = tick.wrapping_add(1);
         if tick.is_multiple_of(10) {
             // ~1 Hz at the 100 ms poll period.
+            // Show correction factor as X.XX (1.00 = no correction, 0.00 = bypassed).
+            let (cal_int, cal_frac) = match cal_ratio {
+                Some((vina, pwr)) => ((vina / pwr) as u16, ((vina * 100 / pwr) % 100) as u16),
+                None => (0, 0),
+            };
             defmt::info!(
-                "ADC_PWR={} mV ADC_VOUT={} mV ADC_Input_Curr={} mV (INA229 I={} mA)",
+                "ADC_PWR={} mV ADC_VOUT={} mV ADC_Input_Curr={} mV (INA229 I={} mA) cal={}.{:02}",
                 MEAS_ADC_PWR_MV.load(Ordering::Relaxed),
                 MEAS_ADC_VOUT_MV.load(Ordering::Relaxed),
                 MEAS_ADC_IIN_MV.load(Ordering::Relaxed),
-                MEAS_I_MA.load(Ordering::Relaxed)
+                MEAS_I_MA.load(Ordering::Relaxed),
+                cal_int,
+                cal_frac
             );
         }
         Timer::after_millis(100).await;

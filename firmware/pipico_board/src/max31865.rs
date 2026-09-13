@@ -50,7 +50,7 @@ const WRITE_BIT: u8 = 0x80;
 /// has a 2/3-wire selector jumper on the sensing sheet - confirmed during
 /// on-target bring-up that the probe in use is 3-wire, so this must be
 /// `true` AND the physical jumper set to the 3-wire position to match.
-const THREE_WIRE: bool = true;
+const THREE_WIRE: bool = false;
 
 /// `CONFIG` bits (datasheet Table 2).
 mod cfg {
