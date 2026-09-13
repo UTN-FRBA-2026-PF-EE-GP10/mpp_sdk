@@ -299,9 +299,10 @@ additional uncertainty of a ported algorithm.
 - [ ] MCU firmware (HIL mode): ADC sense, hardware-PWM drive,
       SPI-slave handler, and a small command set (set duty, read
       sample, read calibration, soft-stop on watchdog timeout).
-- [ ] Calibration procedure: ADC scale / offset, sense-resistor value,
-      PWM frequency, soft duty-cycle limits, SPI clock, watchdog
-      timeout.
+- [x] Calibration procedure: ADC DNL correction (`adc_cal::dnl_fix`,
+      RP2040-E11) and live INA229 cross-calibration of all on-chip ADC
+      channels (no offline step needed). Remaining: sense-resistor value,
+      PWM frequency, soft duty-cycle limits, SPI clock, watchdog timeout.
 - [ ] Bench validation: reproduce a simulated tracking efficiency on
       real hardware within a documented tolerance.
 - [ ] Outdoor test with a small PV panel under varying irradiance.
