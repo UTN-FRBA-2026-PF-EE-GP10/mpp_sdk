@@ -316,9 +316,11 @@ additional uncertainty of a ported algorithm.
       replace the earlier XOR checksum, which missed a framing defect
       found on the bench.
 - [ ] Calibration procedure: ADC scale / offset done for `ADC_PWR` and
-      `ADC_VOUT` and checked on target; `ADC_Input_Curr` still needs the
-      INA281 gain/shunt, and a stricter `ADC_VOUT` check is planned
-      alongside the first on-target closed-loop run.
+      `ADC_VOUT`. The firmware also corrects the RP2040-E11 DNL spikes
+      (`adc_cal::dnl_fix`) and scales the on-chip channels by a live
+      ratio against the INA229. `ADC_Input_Curr` still needs the INA281
+      gain/shunt, and `ADC_VOUT` still needs a meter check alongside the
+      first on-target closed-loop run.
 - [ ] Bench validation: reproduce a simulated tracking efficiency on
       real hardware within a documented tolerance. Not yet run - this
       needs a closed-loop MPPT run driven by the Python algorithm on the
