@@ -27,11 +27,32 @@ use safety_checks::breach;
 
 use crate::{MEAS_I_MA, MEAS_V_MV, RELAY_ENGAGED, TRACER_ACTIVE};
 
-/// Number of points spanned linearly across the full PWM range - matches
-/// the ESP32-C3 reference device's default sample count. Unlike the
-/// reference (which has the operator dial in a target current range), the
-/// sweep's top is found automatically per sweep - see `auto_range`.
+/// Points per sweep - matches the ESP32-C3 reference device's default
+/// sample count. Raising it means resizing the SPI bulk-dump frame
+/// (`spi_slave_pio.rs`'s `BULK_FRAME_LEN`) and its Pi-side reader, so the
+/// budget is fixed and the points are placed where they are worth most -
+/// see `sweep_duty_for_step`. Unlike the reference (which has the
+/// operator dial in a target current range), the sweep's top is found
+/// automatically per sweep - see `auto_range`.
 pub const TRACER_SWEEP_POINTS: usize = 20;
+
+/// Points of the budget above spent on the fine leg across the knee. The
+/// rest split between the flat region below it and a short tail above.
+const TRACER_FINE_POINTS: usize = 12;
+
+/// Points spent above the knee band, reaching the auto-ranged top. Enough
+/// to pin Isc and to still catch the collapse if illumination drifted
+/// between auto-range and the sweep, and no more: past the cliff every
+/// extra point reads the same short-circuit current.
+const TRACER_TAIL_POINTS: usize = 2;
+
+/// Where the fine leg starts and ends, as a percent of the knee duty.
+/// Below the start a panel is a current source and the curve is nearly
+/// flat, so coarse steps lose almost nothing; across this band it bends
+/// through the MPP and collapses. Bench measurement: the MPP sat at 0.90x
+/// the knee and the collapse finished by 1.01x.
+const TRACER_FINE_BAND_START_PERCENT: u32 = 85;
+const TRACER_FINE_BAND_END_PERCENT: u32 = 102;
 
 /// Top of `Tracer_pwm`'s PWM range: `top = 12499`, divider 1, at the
 /// default 125 MHz sysclk -> 10 kHz.
@@ -72,11 +93,19 @@ const TRACER_SETTLE_MS: u64 = 250;
 /// `main.rs`) - not value-equality, which stalls if two consecutive INA229
 /// reads happen to match (the exact bug `mode_power_supply.rs`'s
 /// `ClosedLoopState` had to be fixed for - same failure class, different
-/// data source). `sensors_task` free-runs at ~1 kHz, much faster than the
-/// ESP32 reference's I2C-polled INA219, so a short averaging window is a
-/// reasonable starting point versus the reference's ~1 s/point - needs
-/// on-target confirmation, not just porting the assumption.
-const TRACER_AVG_SAMPLES: u32 = 5;
+/// data source). `sensors_task` free-runs at ~1 kHz, so this is also the
+/// averaging window in milliseconds.
+///
+/// Sized to span several periods of mains-driven light ripple, not just
+/// to beat sensor noise. A lamp on 50 Hz mains modulates the panel at
+/// 100 Hz, and at the previous 5 samples each point averaged half a
+/// ripple period at an arbitrary phase: adjacent points in the knee band
+/// came back non-monotonic, V rising as commanded current rose, which no
+/// panel does. The window is deliberately several periods rather than
+/// exactly one - `sensors_task`'s cadence is `Timer::after_millis(1)`
+/// plus an SPI read, so the period is a little over 1 ms and a
+/// single-period window would not land on a whole number of cycles.
+const TRACER_AVG_SAMPLES: u32 = 40;
 
 /// Bounds `wait_fresh_ina_sample` - `sensors_task` normally publishes at
 /// ~1 kHz, so this is generous headroom, not a tight budget. Without this,
@@ -115,20 +144,19 @@ const BUTTON_DEBOUNCE_MS: u64 = 30;
 // for its own top first, which also tracks illumination and shading
 // changes without anyone dialling in a range.
 
-/// Settle time per auto-range probe. Much shorter than
-/// `TRACER_SETTLE_MS`: a probe only decides "has the panel collapsed
-/// yet", which doesn't need the settled accuracy a recorded point does.
-const TRACER_SCAN_SETTLE_MS: u64 = 60;
+/// Settle time per auto-range probe. Matches `TRACER_SETTLE_MS` rather
+/// than undercutting it: a probe's current reading now sets the sweep's
+/// whole range (see `auto_range`), so it has to be as settled as a
+/// recorded point. `Tracer_pwm`'s RC filter is slow enough to matter at
+/// the doubling search's step sizes - at 60 ms a probe reads the filter
+/// mid-charge, under-reporting the current the sink is delivering and
+/// skewing the mA-per-duty scale the range is computed from.
+const TRACER_SCAN_SETTLE_MS: u64 = TRACER_SETTLE_MS;
 
 /// First duty the doubling search tries. Small enough to sit below Isc
 /// for any panel this board is meant for, so the search brackets from
 /// below rather than starting already collapsed.
 const TRACER_SCAN_START_DUTY: u16 = 8;
-
-/// Bisection passes after the doubling search brackets Isc. Each halves
-/// the remaining interval; 4 is enough to land within a few percent of
-/// the knee, and each pass costs one probe.
-const TRACER_SCAN_BISECT_STEPS: u8 = 4;
 
 /// The panel counts as collapsed below this percent of its open-circuit
 /// voltage - past the knee and into the constant-current region, meaning
@@ -143,6 +171,95 @@ const TRACER_SWEEP_HEADROOM_PERCENT: u32 = 115;
 /// disconnected, or the relay didn't transfer) - auto-ranging would just
 /// chase noise, so the sweep aborts instead.
 const TRACER_MIN_VOC_MV: u16 = 500;
+
+/// Curves `run_demo_sweep` replays, as `(V mV, I mA)` - both captured on
+/// this bench off a real panel under a lamp, at two brightnesses, so the
+/// shapes and the Voc/Isc/MPP relationships are real rather than
+/// synthesised. Index 0 is the dimmer setting (Voc 18.62 V, Isc 229 mA,
+/// MPP 3.07 W, FF 0.72), index 1 the brighter one (Voc 19.34 V, Isc
+/// 607 mA, MPP 7.71 W, FF 0.66).
+const DEMO_CURVES: [[(u16, u16); TRACER_SWEEP_POINTS]; 2] = [
+    [
+        (18620, 7),
+        (18290, 34),
+        (17870, 66),
+        (17410, 98),
+        (16890, 130),
+        (16270, 162),
+        (15420, 194),
+        (15280, 197),
+        (15090, 201),
+        (14970, 204),
+        (14770, 208),
+        (14500, 211),
+        (14170, 214),
+        (13450, 218),
+        (8750, 221),
+        (5950, 223),
+        (3830, 227),
+        (440, 229),
+        (50, 229),
+        (40, 229),
+    ],
+    [
+        (19337, 6),
+        (18658, 86),
+        (17929, 171),
+        (17179, 256),
+        (16386, 341),
+        (15544, 425),
+        (14599, 509),
+        (14490, 519),
+        (14362, 528),
+        (14212, 537),
+        (14074, 546),
+        (13887, 555),
+        (13463, 564),
+        (9011, 573),
+        (4822, 581),
+        (2521, 589),
+        (1048, 598),
+        (212, 607),
+        (118, 608),
+        (116, 607),
+    ],
+];
+
+/// Commanded duty for one sweep step, given the auto-ranged `top`.
+///
+/// Three legs, not one linear ramp. Stepping duty uniformly steps the
+/// *commanded current* uniformly, and a panel below its knee is a current
+/// source: most of such a sweep crawls down a nearly flat V, then the
+/// curve turns and collapses within a couple of steps. On the bench a
+/// uniform ramp left the MPP - the one number every algorithm is graded
+/// against - bracketed by a 10 V gap, while five of its points sat past
+/// the cliff all reading the same Isc. So: a coarse leg over the flat
+/// region, most of the budget across the knee band, and a short tail to
+/// reach `top` and pin Isc.
+///
+/// `top` is `TRACER_SWEEP_HEADROOM_PERCENT` of the knee duty, so the knee
+/// is recovered from it by that ratio. Monotonically increasing, step 0
+/// is always duty 0, and the last step is always exactly `top` - the
+/// sweep only ever commands more current than the step before (see
+/// `auto_range` on why descending steps read stale).
+fn sweep_duty_for_step(step: usize, top: u16) -> u16 {
+    let coarse_points = TRACER_SWEEP_POINTS - TRACER_FINE_POINTS - TRACER_TAIL_POINTS;
+    let knee = top as u32 * 100 / TRACER_SWEEP_HEADROOM_PERCENT;
+    let band_start = (knee * TRACER_FINE_BAND_START_PERCENT / 100) as u16;
+    let band_end = ((knee * TRACER_FINE_BAND_END_PERCENT / 100) as u16).min(top);
+
+    if step < coarse_points {
+        (step as u32 * band_start as u32 / coarse_points as u32) as u16
+    } else if step < coarse_points + TRACER_FINE_POINTS {
+        let fine_step = (step - coarse_points) as u32;
+        let span = band_end.saturating_sub(band_start) as u32;
+        band_start + (fine_step * span / (TRACER_FINE_POINTS - 1) as u32) as u16
+    } else {
+        let tail_step = (step - coarse_points - TRACER_FINE_POINTS + 1) as u32;
+        let span = top.saturating_sub(band_end) as u32;
+        band_end + (tail_step * span / TRACER_TAIL_POINTS as u32) as u16
+    }
+}
 
 /// One completed (or aborted) sweep's results - `points[..count]` are
 /// valid, `points[count..]` are the zeroed unfilled tail on an abort.
@@ -240,6 +357,8 @@ pub fn peek_progress() -> Option<SweepProgress> {
 pub enum TracerCommand {
     StartSweep,
     ReleaseRelay,
+    /// Index into `DEMO_CURVES` - see `run_demo_sweep`.
+    DemoSweep(usize),
 }
 
 /// Cross-task command channel from `spi_pio_task` (`spi_slave_pio.rs`,
@@ -346,9 +465,12 @@ impl CurveTracer {
     }
 
     /// Commands `duty`, lets it settle for `settle_ms`, and returns the
-    /// averaged panel voltage. `None` means the sweep must abort (safety
+    /// averaged `(V, I)`. `None` means the sweep must abort (safety
     /// breach or a stalled sensor), same contract as `average_point`.
-    async fn probe(&mut self, duty: u16, settle_ms: u64) -> Option<u16> {
+    ///
+    /// Only ever call this with a duty at or above the one currently
+    /// commanded - see `auto_range`.
+    async fn probe(&mut self, duty: u16, settle_ms: u64) -> Option<(u16, u16)> {
         self.set_pwm(duty);
         if self.settle_and_monitor_for(settle_ms).await {
             defmt::warn!(
@@ -367,7 +489,13 @@ impl CurveTracer {
             );
             return None;
         }
-        Some(v_mv)
+        defmt::info!(
+            "curve_tracer: probe duty={} -> V={} mV I={} mA",
+            duty,
+            v_mv,
+            i_ma
+        );
+        Some((v_mv, i_ma))
     }
 
     /// Finds this sweep's top duty: the commanded current just past the
@@ -375,18 +503,35 @@ impl CurveTracer {
     /// of piling up in the collapsed region (see the auto-range constants).
     ///
     /// Measures Voc at zero load, then doubles the commanded current until
-    /// the panel voltage collapses (bracketing Isc from below), then
-    /// bisects to tighten the bracket. Doubling rather than a linear scan
+    /// the panel voltage collapses. Doubling rather than a linear scan
     /// because Isc can sit anywhere from a fraction of a percent to most of
     /// full scale depending on panel and illumination - a linear scan fine
     /// enough for the former would take far too many probes for the latter.
+    ///
+    /// **Every probe steps the commanded current up, never down.**
+    /// `Tracer_pwm` is RC-filtered into the sink's bias, and that filter is
+    /// slow next to a probe's settle window: on the bench, a probe at duty
+    /// 0 still measured 27 mA, and probes walking *down* from duty 1024
+    /// (768, 640, 576) all read the panel collapsed at ~215 mA, which is
+    /// duty 1024's current still draining out of the filter rather than
+    /// the current each probe asked for. A descending bisection therefore
+    /// reported a knee at duty 576 that the (ascending) sweep ran straight
+    /// past, truncating every captured curve at 78% of Voc, well short of
+    /// Isc.
+    ///
+    /// The top comes out of two measurements instead of a search. A
+    /// collapsed panel delivers its short-circuit current, so the first
+    /// collapsing probe reads Isc directly; the last surviving probe -
+    /// where the sink is still regulating - gives the sink's mA per duty
+    /// unit, which is linear to within a percent over the useful range.
+    /// The duty that commands Isc follows by arithmetic.
     ///
     /// `None` aborts the sweep (no usable panel, or a probe tripped the
     /// safety cutoff).
     async fn auto_range(&mut self) -> Option<u16> {
         let hard_max = (TRACER_PWM_MAX as u32 * TRACER_SWEEP_DUTY_MAX_PERCENT / 100).max(1) as u16;
 
-        let voc = self.probe(0, TRACER_SCAN_SETTLE_MS).await?;
+        let (voc, _) = self.probe(0, TRACER_SCAN_SETTLE_MS).await?;
         if voc < TRACER_MIN_VOC_MV {
             defmt::warn!(
                 "curve_tracer: Voc {} mV below {} mV - no panel to sweep (dark, \
@@ -398,24 +543,45 @@ impl CurveTracer {
         }
         let collapse_mv = (voc as u32 * TRACER_COLLAPSE_PERCENT_OF_VOC / 100) as u16;
 
-        // Doubling search: `lo` stays the largest duty the panel survived,
-        // `hi` becomes the first that collapsed it.
+        // Ascending doubling search. `lo`/`lo_i_ma` keep the largest duty
+        // the panel survived and the current the sink actually delivered
+        // there - the scale factor for the arithmetic below.
         let mut lo: u16 = 0;
-        let mut hi: u16 = 0;
+        let mut lo_i_ma: u16 = 0;
+        let mut knee: u16 = 0;
         let mut duty = TRACER_SCAN_START_DUTY.min(hard_max);
         loop {
-            if self.probe(duty, TRACER_SCAN_SETTLE_MS).await? <= collapse_mv {
-                hi = duty;
+            let (v_mv, i_ma) = self.probe(duty, TRACER_SCAN_SETTLE_MS).await?;
+            if v_mv <= collapse_mv {
+                // Collapsed: the sink is asking for more than the panel
+                // can source, so `i_ma` is the panel's Isc.
+                knee = if lo == 0 || lo_i_ma == 0 {
+                    // Collapsed on the very first loaded probe - no
+                    // regulating point to take a scale from, so fall back
+                    // to the duty that collapsed it.
+                    duty
+                } else {
+                    (i_ma as u32 * lo as u32 / lo_i_ma as u32).min(hard_max as u32) as u16
+                };
+                defmt::info!(
+                    "curve_tracer: collapsed at duty {} - Isc={} mA, sink {} mA per 1000 duty, \
+                     knee at duty {}",
+                    duty,
+                    i_ma,
+                    (lo_i_ma as u32 * 1000).checked_div(lo as u32).unwrap_or(0),
+                    knee
+                );
                 break;
             }
             lo = duty;
+            lo_i_ma = i_ma;
             if duty >= hard_max {
                 break;
             }
             duty = duty.saturating_mul(2).min(hard_max);
         }
 
-        if hi == 0 {
+        if knee == 0 {
             // Never collapsed, even at the hard cap: this panel sources
             // more than the sweep is allowed to draw, so the curve is
             // whatever fits under the cap.
@@ -427,28 +593,16 @@ impl CurveTracer {
             return Some(hard_max);
         }
 
-        for _ in 0..TRACER_SCAN_BISECT_STEPS {
-            if hi - lo <= 1 {
-                break;
-            }
-            let mid = lo + (hi - lo) / 2;
-            if self.probe(mid, TRACER_SCAN_SETTLE_MS).await? <= collapse_mv {
-                hi = mid;
-            } else {
-                lo = mid;
-            }
-        }
-
         // Headroom so the final points sit just past the knee, and never
         // above the dissipation cap.
-        let top = (hi as u32 * TRACER_SWEEP_HEADROOM_PERCENT / 100)
+        let top = (knee as u32 * TRACER_SWEEP_HEADROOM_PERCENT / 100)
             .min(hard_max as u32)
             // Keep the steps distinct even for a very weak panel.
             .max(TRACER_SWEEP_POINTS as u32) as u16;
         defmt::info!(
             "curve_tracer: auto-range Voc={} mV, knee at duty {}, sweeping 0..{}",
             voc,
-            hi,
+            knee,
             top
         );
         Some(top)
@@ -456,8 +610,9 @@ impl CurveTracer {
 
     /// Runs one full sweep: energizes the relay (harmless no-op if already
     /// engaged from a previous sweep - see the module doc comment), steps
-    /// `Tracer_pwm` from 0 to the auto-ranged top (see `auto_range`) in
-    /// `TRACER_SWEEP_POINTS` equal steps, aborts early on a
+    /// `Tracer_pwm` from 0 to the auto-ranged top (see `auto_range`)
+    /// across `TRACER_SWEEP_POINTS` steps (see `sweep_duty_for_step` for
+    /// how they are spaced), aborts early on a
     /// safety-cutoff breach, then always
     /// stops driving the bleed load and clears `TRACER_ACTIVE` - the SEPIC
     /// gate must never stay forced to 0 past the sweep's own lifetime,
@@ -495,7 +650,7 @@ impl CurveTracer {
             if aborted {
                 break;
             }
-            let duty = (step as u32 * sweep_top as u32 / (TRACER_SWEEP_POINTS - 1) as u32) as u16;
+            let duty = sweep_duty_for_step(step, sweep_top);
             self.set_pwm(duty);
 
             if self.settle_and_monitor().await {
@@ -599,6 +754,49 @@ impl CurveTracer {
         });
     }
 
+    /// Replays a stored curve through the same progress and bulk-read
+    /// path a real sweep uses, touching neither the relay nor the current
+    /// sink. Lets the Pi, the server and the web UI be exercised end to
+    /// end over real SPI with no panel, no lamp and nothing dissipating
+    /// in Q3 - unlike the server's own `--demo` mode, which fakes the
+    /// source on the Pi and so never exercises this link at all.
+    ///
+    /// Paced at `TRACER_SETTLE_MS` per point so the live draw behaves the
+    /// way a real sweep does.
+    async fn run_demo_sweep(&mut self, curve: usize) {
+        let points = DEMO_CURVES[curve.min(DEMO_CURVES.len() - 1)];
+        defmt::info!("curve_tracer: demo sweep replaying curve {}", curve);
+        let _ = take_last_sweep();
+        TRACER_ACTIVE.store(true, Ordering::Relaxed);
+
+        for (idx, (v_mv, i_ma)) in points.iter().enumerate() {
+            Timer::after_millis(TRACER_SETTLE_MS).await;
+            publish_progress(SweepProgress {
+                index: idx as u8,
+                v_mv: *v_mv,
+                i_ma: *i_ma,
+                active: true,
+                final_point: false,
+            });
+        }
+
+        TRACER_ACTIVE.store(false, Ordering::Relaxed);
+        let (last_v_mv, last_i_ma) = points[TRACER_SWEEP_POINTS - 1];
+        publish_progress(SweepProgress {
+            index: (TRACER_SWEEP_POINTS - 1) as u8,
+            v_mv: last_v_mv,
+            i_ma: last_i_ma,
+            active: false,
+            final_point: true,
+        });
+        critical_section::with(|cs| {
+            *LAST_SWEEP.borrow(cs).borrow_mut() = Some(SweepResult {
+                points,
+                count: TRACER_SWEEP_POINTS,
+            });
+        });
+    }
+
     /// Explicitly disconnects the panel from the tracer path and hands it
     /// back to the SEPIC. The relay otherwise stays engaged across any
     /// number of sweeps - it is no longer released automatically when a
@@ -646,6 +844,9 @@ pub async fn curve_tracer_task(mut tracer: CurveTracer) {
             }
             Either::Second(TracerCommand::StartSweep) => {
                 tracer.run_sweep().await;
+            }
+            Either::Second(TracerCommand::DemoSweep(curve)) => {
+                tracer.run_demo_sweep(curve).await;
             }
             Either::Second(TracerCommand::ReleaseRelay) => {
                 tracer.release_relay();

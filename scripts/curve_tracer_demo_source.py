@@ -86,6 +86,11 @@ class DemoSweepSource:
         self._started_at = self._clock()
         self._fetched = False
 
+    def start_demo_sweep(self, bright: bool = False) -> None:
+        # Every sweep is already simulated here, so the firmware's stored
+        # curves have no counterpart - just run the normal one.
+        self.start_sweep()
+
     def release_relay(self) -> None:
         pass  # no relay to release in demo mode
 

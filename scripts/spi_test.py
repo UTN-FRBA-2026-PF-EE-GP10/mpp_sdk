@@ -11,6 +11,8 @@ import time
 
 import spidev
 
+from mpp_sdk.io.spi_mcu import crc8
+
 BUS, DEVICE = 0, 0
 # 8 MHz is unreliable on the breadboard HIL wiring (GPIO input synchronizer
 # latency eats too much of the 125 ns bit period, on top of jumper-wire
@@ -32,18 +34,16 @@ TEMP_NOT_AVAILABLE_CC = -32768
 
 def make_frame(duty: float) -> list[int]:
     d = max(0, min(65535, round(duty * 65535)))
-    checksum = (d >> 8) ^ (d & 0xFF)
-    return [d >> 8, d & 0xFF, checksum] + [0] * 9
+    # Command byte (index 3) is 0 here but still covered, same as
+    # SpiMcuSource._xfer_checked and firmware's apply_duty_frame.
+    return [d >> 8, d & 0xFF, crc8([d >> 8, d & 0xFF, 0]), 0] + [0] * 8
 
 
 def parse_response(rx: list[int]) -> tuple[int, int, int, int, bool]:
     """Return (v_raw, i_raw, vout_raw, temp_raw_signed, checksum_ok)."""
     # Covers the 8 telemetry bytes plus the curve-tracer ack byte (rx[9]),
     # matching firmware's build_tx_frame and SpiMcuSource._transact.
-    expected_checksum = rx[9]
-    for byte in rx[0:8]:
-        expected_checksum ^= byte
-    checksum_ok = rx[8] == expected_checksum
+    checksum_ok = rx[8] == crc8(rx[0:8] + [rx[9]])
 
     v_raw = (rx[0] << 8) | rx[1]
     i_raw = (rx[2] << 8) | rx[3]

@@ -12,7 +12,16 @@ import { fetchLiveSweep, releaseRelay, startSweep } from '@/lib/api'
 import type { LiveSweepState } from '@/lib/api'
 
 function mockData(overrides: Partial<LiveSweepState>): LiveSweepState {
-  return { points: [], partial: [], active: false, link: 'ok', seq: 0, commandError: null, ...overrides }
+  return {
+    points: [],
+    partial: [],
+    active: false,
+    link: 'ok',
+    seq: 0,
+    commandError: null,
+    demoSource: false,
+    ...overrides,
+  }
 }
 
 beforeEach(() => {

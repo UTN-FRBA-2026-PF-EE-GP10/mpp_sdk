@@ -120,7 +120,8 @@ export function CurveWorkbench({
   onSaved: () => void
 }) {
   const info = getMeasurementKindInfo(kind)
-  const { partial, points, active, start, releaseRelay } = useLiveSweep()
+  const { partial, points, active, commandError, demoSource, start, startDemo, releaseRelay } =
+    useLiveSweep()
   // Deliberately excludes `active`: POST /api/save-curve persists the
   // cache's last *completed* sweep (see curve_tracer_server.py's
   // post_save_curve), not whatever `partial` is currently drawing.
@@ -136,9 +137,18 @@ export function CurveWorkbench({
             <CardTitle>{info.title}</CardTitle>
             <p className="text-sm text-muted-foreground">{info.description}</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button onClick={start} disabled={!connected || active}>
               {active ? 'Measuring...' : 'Start Measurement'}
+            </Button>
+            {/* Replays a curve stored in the firmware over the real SPI
+                link - lets the whole loop be exercised with no panel and
+                no lamp, without engaging the relay or the bleed path. */}
+            <Button variant="secondary" onClick={() => startDemo(false)} disabled={!connected || active}>
+              Demo curve (dim)
+            </Button>
+            <Button variant="secondary" onClick={() => startDemo(true)} disabled={!connected || active}>
+              Demo curve (bright)
             </Button>
             <Button variant="outline" onClick={releaseRelay} disabled={!connected}>
               Release Relay
@@ -147,13 +157,19 @@ export function CurveWorkbench({
         </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-6">
+        {commandError && (
+          <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            {commandError}
+          </p>
+        )}
+
         <div>
-          <LiveChart partial={partial} points={points} active={active} />
+          <LiveChart partial={partial} points={points} />
           <p className="mt-1 text-center text-xs text-muted-foreground">
             {active
               ? `capturing... ${partial.length} point${partial.length === 1 ? '' : 's'}`
               : points.length
-                ? `last capture: ${points.length} points`
+                ? `last capture: ${points.length} points${demoSource ? ' (replayed from firmware, not measured)' : ''}`
                 : 'no curve yet - press Start Measurement'}
           </p>
         </div>
@@ -178,6 +194,7 @@ export function CurveWorkbench({
                     <TableHead>Label</TableHead>
                     <TableHead>Captured</TableHead>
                     <TableHead>Panels</TableHead>
+                    <TableHead>Source</TableHead>
                     <TableHead className="text-right">Voc</TableHead>
                     <TableHead className="text-right">Isc</TableHead>
                     <TableHead className="text-right">P_mpp</TableHead>
@@ -196,6 +213,15 @@ export function CurveWorkbench({
                             </Badge>
                           ))}
                         </div>
+                      </TableCell>
+                      <TableCell>
+                        {r.source === 'hardware' ? (
+                          <span className="text-muted-foreground">measured</span>
+                        ) : (
+                          <Badge variant="outline" className="border-violet-500/40 text-violet-600">
+                            {r.source}
+                          </Badge>
+                        )}
                       </TableCell>
                       <TableCell className="text-right">{r.voc.toFixed(2)} V</TableCell>
                       <TableCell className="text-right">{(r.isc * 1000).toFixed(1)} mA</TableCell>

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ConnectionIndicator } from '@/components/ConnectionIndicator'
+import { ConnectionIndicator, DemoIndicator } from '@/components/ConnectionIndicator'
 import { CurveWorkbench } from '@/components/CurveWorkbench'
 import { MeasurementKindCard } from '@/components/MeasurementKindCard'
 import { useConnectionStatus } from '@/hooks/useConnectionStatus'
@@ -7,7 +7,7 @@ import { fetchCurves, fetchMeasurementKinds } from '@/lib/api'
 import { isLiveConnection, MEASUREMENT_KINDS, type CurveRecord } from '@/types'
 
 export default function App() {
-  const connectionStatus = useConnectionStatus()
+  const { status: connectionStatus, demoSource } = useConnectionStatus()
   const [selected, setSelected] = useState<string>('baseline')
   // Seeded with the known vocabulary so cards render before the first
   // fetch lands. GET /api/measurement-kinds and any kind already in the
@@ -58,7 +58,10 @@ export default function App() {
             controller will behave on the real array before it goes to firmware.
           </p>
         </div>
-        <ConnectionIndicator status={connectionStatus} />
+        <div className="flex items-center gap-2">
+          <ConnectionIndicator status={connectionStatus} />
+          {demoSource && <DemoIndicator />}
+        </div>
       </header>
 
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">

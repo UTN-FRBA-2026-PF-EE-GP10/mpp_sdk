@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 import pytest
 
 from mpp_sdk.curves import CurveRecord, PanelSetup, group_by_measurement, load, load_all, save
+from mpp_sdk.curves.record import now_utc
 
 _CAPTURED_AT = datetime(2026, 8, 26, 21, 14, 3, tzinfo=UTC)
 
@@ -124,3 +125,45 @@ def test_group_by_measurement_buckets_by_kind_including_unknown(tmp_path):
     groups = group_by_measurement(records)
     assert {r.label for r in groups["baseline"]} == {"a", "b"}
     assert [r.label for r in groups["a-typo-not-in-the-vocabulary"]] == ["c"]
+
+
+def test_source_round_trips_and_defaults_to_unknown(tmp_path):
+    """Provenance must survive save/load, and a record that never stated
+    it must read back as "unknown" rather than silently claiming to be a
+    measurement - see CURVE_SOURCES."""
+    replayed = CurveRecord(
+        captured_at=now_utc(),
+        label="replayed",
+        measurement="baseline",
+        panels=(),
+        points=((19.3, 0.006), (13.9, 0.555)),
+        source="firmware-replay",
+    )
+    assert load(save(replayed, directory=tmp_path)).source == "firmware-replay"
+
+    unstated = CurveRecord(
+        captured_at=now_utc(),
+        label="unstated",
+        measurement="baseline",
+        panels=(),
+        points=((19.3, 0.006),),
+    )
+    assert unstated.source == "unknown"
+    assert load(save(unstated, directory=tmp_path)).source == "unknown"
+
+
+def test_a_file_written_before_source_existed_loads_as_unknown(tmp_path):
+    record = CurveRecord(
+        captured_at=now_utc(),
+        label="old",
+        measurement="baseline",
+        panels=(),
+        points=((19.3, 0.006),),
+        source="hardware",
+    )
+    path = save(record, directory=tmp_path)
+    payload = json.loads(path.read_text())
+    del payload["source"]
+    path.write_text(json.dumps(payload))
+
+    assert load(path).source == "unknown"

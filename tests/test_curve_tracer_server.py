@@ -7,6 +7,7 @@ repo already uses for pvlib-dependent tests. No hardware/`spidev` needed:
 `_poll_loop` (never called here) touches `SpiMcuSource`.
 """
 
+import json
 import queue
 from pathlib import Path
 
@@ -71,6 +72,7 @@ def test_data_defaults_before_anything_is_cached(client):
         "link": "no data yet",
         "seq": 0,
         "command_error": None,
+        "demo_source": False,
     }
 
 
@@ -264,3 +266,43 @@ def test_command_error_clears_on_the_next_successful_command(client):
 
     payload = client.get("/api/data").json()
     assert payload["command_error"] is None
+
+
+def test_demo_source_flag_survives_polling_and_flips_back(client):
+    """A replayed curve must stay marked as one for as long as it is the
+    curve on screen - otherwise the page would show firmware-stored points
+    as if they had just been measured."""
+    client.cache.set_demo_source(True)
+    client.cache.set([(19.3, 0.006)], "ok")
+    assert client.get("/api/data").json()["demo_source"] is True
+    # Repeated polls must not clear it.
+    assert client.get("/api/data").json()["demo_source"] is True
+
+    client.cache.set_demo_source(False)
+    assert client.get("/api/data").json()["demo_source"] is False
+
+
+def test_saved_curve_records_provenance_from_the_server_not_the_request(client):
+    """The page cannot be trusted to admit that the curve on screen was
+    replayed rather than measured, so the source is taken from the cache."""
+    client.cache.set_demo_source(True)
+    client.cache.set([(19.3, 0.006), (13.9, 0.555)], "ok")
+
+    r = client.post("/api/save-curve", json={"label": "replayed", "measurement": "baseline"})
+    assert r.status_code == 200
+    saved = json.loads(Path(r.json()["path"]).read_text())
+    assert saved["source"] == "firmware-replay"
+    assert client.get("/api/curves").json()[0]["source"] == "firmware-replay"
+
+
+def test_a_real_sweep_is_saved_as_hardware(client):
+    client.cache.set([(19.3, 0.006)], "ok")
+    r = client.post("/api/save-curve", json={"label": "measured", "measurement": "baseline"})
+    assert json.loads(Path(r.json()["path"]).read_text())["source"] == "hardware"
+
+
+def test_demo_mode_saves_as_simulated(client):
+    client.cache.set_simulated(True)
+    client.cache.set([(21.3, 0.006)], "demo")
+    r = client.post("/api/save-curve", json={"label": "sim", "measurement": "baseline"})
+    assert json.loads(Path(r.json()["path"]).read_text())["source"] == "simulated"

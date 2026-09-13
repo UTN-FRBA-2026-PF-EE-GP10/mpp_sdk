@@ -35,6 +35,10 @@ export interface CurveRecord {
   measurement: MeasurementKind | (string & {})
   panels: PanelSetup[]
   n_points: number
+  /** Where the points came from - see CURVE_SOURCES in
+   * mpp_sdk/curves/record.py. Anything but "hardware" means the curve was
+   * not measured off a panel and must not be read as data. */
+  source: 'hardware' | 'firmware-replay' | 'simulated' | 'unknown' | (string & {})
   voc: number
   isc: number
   p_mpp: number

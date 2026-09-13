@@ -18,6 +18,7 @@ interface DataResponse {
   link: string
   seq: number
   command_error: string | null
+  demo_source: boolean
 }
 
 export interface LiveSweepState {
@@ -27,9 +28,11 @@ export interface LiveSweepState {
   link: string
   seq: number
   // Set when the last Start Measurement/Release Relay click failed -
-  // null otherwise. Not surfaced in the UI yet; available here for
-  // whoever wires up an error toast/banner next.
+  // null otherwise.
   commandError: string | null
+  // True when the curve on screen was replayed from the firmware's
+  // stored curves rather than measured off a panel.
+  demoSource: boolean
 }
 
 function fromWirePoints(points: WireDataPoint[] | undefined): CurvePoint[] {
@@ -73,6 +76,7 @@ export async function fetchLiveSweep(): Promise<LiveSweepState> {
     link: payload.link ?? '--',
     seq: Number.isFinite(payload.seq) ? payload.seq : 0,
     commandError: payload.command_error ?? null,
+    demoSource: Boolean(payload.demo_source),
   }
 }
 
@@ -112,6 +116,11 @@ export async function saveCurve(input: SaveCurveInput): Promise<{ path: string }
 export async function startSweep(): Promise<void> {
   const r = await fetch('/api/start-sweep', { method: 'POST' })
   await parseJsonOrThrow(r, 'POST /api/start-sweep')
+}
+
+export async function startDemoSweep(bright: boolean): Promise<void> {
+  const r = await fetch(`/api/start-demo-sweep?bright=${bright}`, { method: 'POST' })
+  await parseJsonOrThrow(r, 'POST /api/start-demo-sweep')
 }
 
 export async function releaseRelay(): Promise<void> {

@@ -24,6 +24,19 @@ change. The tuple exists so the UI can populate a dropdown and a typo is
 visible next to the intended value, not so the field is validated against it.
 """
 
+CURVE_SOURCES = (
+    "hardware",  # swept off a real panel through SpiMcuSource
+    "firmware-replay",  # a curve stored in the firmware, replayed over real SPI
+    "simulated",  # curve_tracer_server.py --demo - no board involved at all
+    "unknown",  # provenance not recorded (a file written before this field existed)
+)
+"""Vocabulary for `CurveRecord.source`. Unlike `MEASUREMENT_KINDS`, which
+describes what the operator arranged, this describes where the numbers came
+from - a replayed or simulated curve looks exactly like a measured one on
+disk, and grading an algorithm against one while believing it is real would
+be a silent, uncorrectable error in the results.
+"""
+
 _SCHEMA = 1
 
 
@@ -52,6 +65,10 @@ class CurveRecord:
     panels: tuple[PanelSetup, ...]
     points: tuple[tuple[float, float], ...]  # (volts, amps), as swept
     notes: str = field(default="")
+    # Defaults to "unknown" rather than "hardware": a caller that forgets
+    # to say where its points came from must not thereby claim they were
+    # measured. See CURVE_SOURCES.
+    source: str = field(default="unknown")
 
     @property
     def open_circuit_voltage(self) -> float:
@@ -79,6 +96,7 @@ class CurveRecord:
             "measurement": self.measurement,
             "panels": [p.to_dict() for p in self.panels],
             "notes": self.notes,
+            "source": self.source,
             "points": [{"v": v, "i": i} for v, i in self.points],
         }
 
@@ -98,6 +116,9 @@ class CurveRecord:
                 panels=panels,
                 points=points,
                 notes=d.get("notes", ""),
+                # Absent in files written before this field existed - those
+                # genuinely have no recorded provenance, so say so.
+                source=d.get("source", "unknown"),
             )
         except KeyError as exc:
             raise ValueError(f"curve record missing field {exc.args[0]!r}") from exc

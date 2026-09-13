@@ -16,7 +16,9 @@ class _FakeSpiDev:
     """Stands in for `spidev.SpiDev`. `next_rx`, if set, is returned by the
     next `xfer2()` call (and cleared); otherwise `responses` (if non-empty)
     is popped from the front; otherwise an all-zero 12-byte MISO frame is
-    returned (its XOR checksum is trivially 0, so it validates)."""
+    returned. That frame does *not* validate - CRC-8 over nine zero bytes
+    is 0x0F, not 0x00 - so it stands in for "link says nothing usable",
+    which is what the tests using it expect."""
 
     def __init__(self) -> None:
         self.max_speed_hz: int | None = None
@@ -71,6 +73,11 @@ def spi_mcu_source(monkeypatch):
 def _miso_frame(
     v_raw: int, i_raw: int, vout_raw: int, temp_raw: int, *, ack: int = 0, corrupt: bool = False
 ) -> list[int]:
+    # Imported here, not at module scope: `mpp_sdk.io.spi_mcu` pulls in
+    # `spidev`, which only exists once the `spi_mcu_source` fixture has
+    # installed its fake. Every caller of this helper takes that fixture.
+    from mpp_sdk.io.spi_mcu import crc8
+
     data = [
         (v_raw >> 8) & 0xFF,
         v_raw & 0xFF,
@@ -83,9 +90,7 @@ def _miso_frame(
     ]
     # ack participates in the checksum (see firmware's build_tx_frame) so
     # a flipped ack bit can't spoof "sweep ready" at the Pi.
-    checksum = ack
-    for byte in data:
-        checksum ^= byte
+    checksum = crc8([*data, ack])
     if corrupt:
         checksum ^= 0x01
     return [*data, checksum, ack, 0, 0]
@@ -128,7 +133,9 @@ def test_write_encodes_duty_and_mosi_checksum(spi_mcu_source):
     src = spi_mcu_source()
     src.write(0.5)
     # duty_u16 = round(0.5 * 65535) = 32768 = 0x8000
-    assert src._spi.sent[-1][:3] == [0x80, 0x00, 0x80]  # checksum = 0x80 ^ 0x00
+    from mpp_sdk.io.spi_mcu import crc8
+
+    assert src._spi.sent[-1][:4] == [0x80, 0x00, crc8([0x80, 0x00, 0x00]), 0x00]
 
 
 def test_read_decodes_calibrated_miso_frame(spi_mcu_source):
@@ -243,11 +250,13 @@ def test_exit_closes_even_if_soft_stop_raises(spi_mcu_source, monkeypatch):
 
 
 def test_request_sweep_sends_cmd_byte(spi_mcu_source):
+    from mpp_sdk.io.spi_mcu import crc8
+
     src = spi_mcu_source()
     src.request_sweep(poll_attempts=0)
     # duty defaults to 0.0 -> duty_h=duty_l=0; cmd is byte index 3 and
-    # participates in the checksum (index 2), so checksum = 0 ^ 0 ^ 0xB1.
-    assert src._spi.sent[0][:4] == [0x00, 0x00, 0xB1, 0xB1]
+    # participates in the checksum (index 2), so checksum = crc8(0, 0, 0xB1).
+    assert src._spi.sent[0][:4] == [0x00, 0x00, crc8([0x00, 0x00, 0xB1]), 0xB1]
 
 
 def test_request_sweep_returns_none_when_never_armed(spi_mcu_source):
@@ -374,17 +383,21 @@ def test_request_sweep_raises_on_implausible_point_count(spi_mcu_source):
 
 
 def test_start_sweep_sends_cmd_byte(spi_mcu_source):
+    from mpp_sdk.io.spi_mcu import crc8
+
     src = spi_mcu_source()
     src.start_sweep()
-    # duty defaults to 0.0 -> duty_h=duty_l=0; checksum = 0 ^ 0 ^ 0xB2.
-    assert src._spi.sent[-1][:4] == [0x00, 0x00, 0xB2, 0xB2]
+    # duty defaults to 0.0 -> duty_h=duty_l=0; checksum = crc8(0, 0, 0xB2).
+    assert src._spi.sent[-1][:4] == [0x00, 0x00, crc8([0x00, 0x00, 0xB2]), 0xB2]
 
 
 def test_release_relay_sends_cmd_byte(spi_mcu_source):
+    from mpp_sdk.io.spi_mcu import crc8
+
     src = spi_mcu_source()
     src.release_relay()
-    # duty defaults to 0.0 -> duty_h=duty_l=0; checksum = 0 ^ 0 ^ 0xB3.
-    assert src._spi.sent[-1][:4] == [0x00, 0x00, 0xB3, 0xB3]
+    # duty defaults to 0.0 -> duty_h=duty_l=0; checksum = crc8(0, 0, 0xB3).
+    assert src._spi.sent[-1][:4] == [0x00, 0x00, crc8([0x00, 0x00, 0xB3]), 0xB3]
 
 
 def test_start_sweep_still_updates_telemetry(spi_mcu_source):
@@ -421,9 +434,11 @@ def _progress_frame(
         0,
         0,
     ]
-    checksum = 0
-    for byte in data:
-        checksum ^= byte
+    from mpp_sdk.io.spi_mcu import crc8
+
+    # ack is 0 on a progress frame, but still covered - matches firmware's
+    # build_progress_frame.
+    checksum = crc8([*data, 0])
     if corrupt:
         checksum ^= 0x01
     return [*data, checksum, 0, 0, 0]  # ack=0 (a progress reply never also acks a bulk request)

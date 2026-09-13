@@ -18,21 +18,18 @@ const ACCENT = '#f97316' // orange - current, matches the curve tracer's existin
 const POWER = '#ef4444' // red - power
 
 /**
- * Renders whichever of `partial`/`points` is authoritative right now: while
- * `active`, points stream in one at a time (mocked today - the real source
- * will be per-point firmware frames as a sweep runs); once a sweep
- * completes, `points` takes over.
+ * Renders whichever of `partial`/`points` is authoritative right now.
+ *
+ * The live trace wins whenever there is one. `useLiveSweep` only clears
+ * `partial` when the completed sweep that supersedes it arrives, so this
+ * rule never shows a stale curve: during a sweep it draws the trace, and
+ * the instant the real result lands it draws that instead. Keying off
+ * `active` here instead put the previous sweep's curve back on screen for
+ * the poll or two between the firmware finishing and the server fetching
+ * its result, which read as a flicker.
  */
-export function LiveChart({
-  partial,
-  points,
-  active,
-}: {
-  partial: CurvePoint[]
-  points: CurvePoint[]
-  active: boolean
-}) {
-  const shown = active || points.length === 0 ? partial : points
+export function LiveChart({ partial, points }: { partial: CurvePoint[]; points: CurvePoint[] }) {
+  const shown = partial.length > 0 ? partial : points
 
   const data = useMemo(
     () => ({
@@ -62,35 +59,40 @@ export function LiveChart({
     [shown],
   )
 
-  const options: ChartOptions<'line'> = {
-    responsive: true,
-    maintainAspectRatio: false,
-    animation: false,
-    parsing: false,
-    scales: {
-      x: {
-        type: 'linear',
-        min: 0,
-        title: { display: true, text: 'Voltage [V]' },
+  // Memoised: a fresh options object every render makes chart.js rebuild
+  // its scales on each poll tick.
+  const options = useMemo<ChartOptions<'line'>>(
+    () => ({
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      parsing: false,
+      scales: {
+        x: {
+          type: 'linear',
+          min: 0,
+          title: { display: true, text: 'Voltage [V]' },
+        },
+        y: {
+          type: 'linear',
+          position: 'left',
+          min: 0,
+          title: { display: true, text: 'Current [mA]' },
+        },
+        p: {
+          type: 'linear',
+          position: 'right',
+          min: 0,
+          title: { display: true, text: 'Power [mW]' },
+          grid: { drawOnChartArea: false },
+        },
       },
-      y: {
-        type: 'linear',
-        position: 'left',
-        min: 0,
-        title: { display: true, text: 'Current [mA]' },
+      plugins: {
+        legend: { display: true },
       },
-      p: {
-        type: 'linear',
-        position: 'right',
-        min: 0,
-        title: { display: true, text: 'Power [mW]' },
-        grid: { drawOnChartArea: false },
-      },
-    },
-    plugins: {
-      legend: { display: true },
-    },
-  }
+    }),
+    [],
+  )
 
   return (
     <div className="h-72 w-full">
