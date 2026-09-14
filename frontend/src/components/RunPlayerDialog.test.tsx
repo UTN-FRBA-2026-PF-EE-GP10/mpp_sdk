@@ -4,6 +4,7 @@ import { RunPlayerDialog } from './RunPlayerDialog'
 import { ThemeProvider } from '@/components/ThemeProvider'
 import { UnitsProvider } from '@/components/UnitsProvider'
 import { CaptureModeContext } from '@/lib/captureMode'
+import { DEMO_CURVE_BRIGHT, DEMO_RUN } from '@/lib/demoFixtures'
 import type { RunDetail, RunSummary } from '@/lib/runs'
 import type { CurveRecord } from '@/types'
 
@@ -212,10 +213,30 @@ describe('RunPlayerDialog', () => {
     await waitFor(() => expect(screen.getByText('Delete run')).toBeTruthy())
 
     const button = screen.getByText('Delete run').closest('button')
-    expect(button?.disabled).toBe(true)
+    // aria-disabled, not the native attribute - focusableWhenDisabled
+    // keeps the title reachable by hover/focus (see button.tsx).
+    expect(button?.getAttribute('aria-disabled')).toBe('true')
     expect(screen.getByText(/unavailable in demo mode/i)).toBeTruthy()
 
     fireEvent.click(screen.getByText('Delete run'))
     expect(deleteRun).not.toHaveBeenCalled()
+  })
+
+  it('loads a bundled fixture run in demo mode instead of hitting the network', async () => {
+    renderDialogInSandbox(
+      <RunPlayerDialog run={DEMO_RUN} curves={[DEMO_CURVE_BRIGHT]} onClose={vi.fn()} onDeleted={vi.fn()} />,
+    )
+    await waitFor(() => expect(screen.getByLabelText('Playback position')).toBeTruthy())
+
+    expect(fetchRun).not.toHaveBeenCalled()
+    expect(screen.queryByText(/Failed to load run/)).toBeNull()
+  })
+
+  it('reports an error, not an infinite loading state, for a run id absent from the bundled fixtures', async () => {
+    renderDialogInSandbox(
+      <RunPlayerDialog run={runSummary()} curves={[]} onClose={vi.fn()} onDeleted={vi.fn()} />,
+    )
+    await waitFor(() => expect(screen.getByText(/not one of the bundled demo runs/)).toBeTruthy())
+    expect(fetchRun).not.toHaveBeenCalled()
   })
 })

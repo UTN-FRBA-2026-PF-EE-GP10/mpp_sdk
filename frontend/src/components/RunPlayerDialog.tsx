@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogPopup, DialogTitle } from '@/components/ui/dialog'
 import { useRunPlayback } from '@/hooks/useRunPlayback'
 import { deleteRun, fetchRun } from '@/lib/api'
+import { DEMO_RUNS } from '@/lib/demoFixtures'
 import { formatCapturedAt, formatSeconds } from '@/lib/format'
 import { findCurveForRun, referenceCurveMessage, trailUpTo } from '@/lib/runPlayback'
 import { useSandbox } from '@/lib/sandbox'
@@ -74,21 +75,36 @@ function RunPlayerContent({
   onClose: () => void
   onDeleted: () => void
 }) {
-  const [detail, setDetail] = useState<RunDetail | null>(null)
-  const [loadError, setLoadError] = useState<string | null>(null)
+  const sandbox = useSandbox()
+
+  // In demo mode `run` is already one of DEMO_RUNS (RunDatePane's list
+  // comes straight from the bundled fixtures, see App.tsx), so the detail
+  // is looked up locally instead of a GET /api/runs/{id} that would 404
+  // against a real backend that was never there to begin with. This is
+  // resolved synchronously, during the initial render, rather than in the
+  // effect below - it's derived from props already in hand, not fetched.
+  const [detail, setDetail] = useState<RunDetail | null>(() =>
+    sandbox.enabled ? (DEMO_RUNS.find((r) => r.id === run.id) ?? null) : null,
+  )
+  const [loadError, setLoadError] = useState<string | null>(() =>
+    sandbox.enabled && !DEMO_RUNS.some((r) => r.id === run.id)
+      ? `"${run.id}" is not one of the bundled demo runs.`
+      : null,
+  )
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
-  const sandbox = useSandbox()
 
   // `run.id` only ever changes by remounting this component (the dialog
   // keys RunPlayerContent by it), so `detail`/`loadError` already start
   // fresh from their initial state - no reset needed here, just the
-  // fetch itself.
+  // fetch itself. In demo mode that initial state is already the answer
+  // (see above), so there is nothing left for this effect to do.
   useEffect(() => {
+    if (sandbox.enabled) return
     fetchRun(run.id)
       .then(setDetail)
       .catch((e) => setLoadError(e instanceof Error ? e.message : String(e)))
-  }, [run.id])
+  }, [run.id, sandbox.enabled])
 
   async function handleDelete() {
     if (sandbox.enabled) return // defense in depth - the button is disabled anyway
@@ -148,6 +164,7 @@ function RunPlayerContent({
           size="sm"
           onClick={handleDelete}
           disabled={deleting || sandbox.enabled}
+          focusableWhenDisabled
           title={sandbox.enabled ? 'Deleting is unavailable in demo mode' : undefined}
         >
           <Trash2 />

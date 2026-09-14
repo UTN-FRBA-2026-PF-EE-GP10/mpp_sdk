@@ -6,7 +6,9 @@ import { usePolling } from './usePolling'
 
 const POLL_MS = 2000
 
-function statusFromLink(link: string): ConnectionStatus {
+// Exported for ConnectionIndicator's one-shot link check in demo mode
+// (see its own docstring) - the same mapping, not reimplemented.
+export function statusFromLink(link: string): ConnectionStatus {
   if (link === 'no data yet') return 'connecting'
   if (link.startsWith('error')) return 'disconnected'
   if (link === 'demo') return 'demo' // curve_tracer_server.py --demo - simulated, no board
@@ -21,8 +23,14 @@ export interface LinkState {
 }
 
 /** Polls the link once every `POLL_MS`. Shared by the header indicators;
- * `useLiveSweep` polls the same route faster for the curve itself. */
-export function useConnectionStatus(): LinkState {
+ * `useLiveSweep` polls the same route faster for the curve itself.
+ *
+ * `enabled` (default true) stops polling altogether when false - same
+ * contract as `useLiveSweep`'s own flag. App.tsx passes `!sandboxEnabled`:
+ * demo mode promises no background network activity, and link status
+ * there is instead answered by ConnectionIndicator's one-shot check,
+ * fired only when the capture-mode menu is opened. */
+export function useConnectionStatus(enabled = true): LinkState {
   const [status, setStatus] = useState<ConnectionStatus>('connecting')
 
   const handleData = (data: LiveSweepState) => {
@@ -30,7 +38,7 @@ export function useConnectionStatus(): LinkState {
   }
   const handleError = (_error: unknown) => setStatus('disconnected')
 
-  usePolling(fetchLiveSweep, handleData, handleError, POLL_MS)
+  usePolling(fetchLiveSweep, handleData, handleError, POLL_MS, enabled)
 
   return { status }
 }

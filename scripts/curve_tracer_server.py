@@ -59,6 +59,12 @@ if TYPE_CHECKING:
 
 _WEB_ROOT = Path(__file__).parent / "curve_tracer_web"
 
+# Consecutive failed frames before the link is reported down. At the
+# default poll period this is well under a second, fast enough to notice
+# a cable pulled mid-session, while still riding out the odd corrupt
+# frame that a busy link produces.
+_BAD_FRAMES_LINK_DOWN = 8
+
 
 class _Snapshot(NamedTuple):
     """One consistent read of `_SweepCache`, taken under its lock. Named
@@ -226,7 +232,7 @@ def _poll_loop(
         # is ready this iteration - "ok" vs "waiting for sweep" is a real
         # link's two states, not meaningful for a source that never fails
         # to link in the first place.
-        def link_for(result: object) -> str:
+        def link_for(result: object, src: object) -> str:
             return "demo"
 
         def fetch_sweep(src: SweepSource) -> list[tuple[float, float]] | None:
@@ -236,7 +242,15 @@ def _poll_loop(
 
         source_cm: SweepSource = SpiMcuSource(bus=bus, device=device, speed_hz=speed_hz)
 
-        def link_for(result: object) -> str:
+        def link_for(result: object, src: SpiMcuSource) -> str:
+            # SPI has no presence detection, so a missing board does not
+            # raise - MISO just floats and every frame fails its checksum
+            # while the source keeps serving last-good telemetry. Without
+            # this the page would report a healthy link with nothing
+            # attached. A handful of failures in a row is the signal: one
+            # bad frame is ordinary line noise, a sustained run is not.
+            if src.consecutive_bad_frames >= _BAD_FRAMES_LINK_DOWN:
+                return "error: no valid frames from the board - is it connected and powered?"
             return "ok" if result is not None else "waiting for sweep"
 
         def fetch_sweep(src: SpiMcuSource) -> list[tuple[float, float]] | None:
@@ -294,7 +308,7 @@ def _poll_loop(
                 except RuntimeError as exc:
                     cache.set(None, f"error: {exc}")
                 else:
-                    cache.set(result, link_for(result))
+                    cache.set(result, link_for(result, src))
 
             time.sleep(period_s)
 

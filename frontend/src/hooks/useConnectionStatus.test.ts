@@ -69,4 +69,12 @@ describe('useConnectionStatus', () => {
     const { result } = renderHook(() => useConnectionStatus())
     await waitFor(() => expect(result.current.status).toBe('disconnected'))
   })
+
+  it('never touches the network when disabled - demo mode promises no background polling', async () => {
+    vi.mocked(fetchLiveSweep).mockResolvedValue(mockData({ link: 'ok' }))
+    const { result } = renderHook(() => useConnectionStatus(false))
+    await new Promise((r) => setTimeout(r, 10))
+    expect(fetchLiveSweep).not.toHaveBeenCalled()
+    expect(result.current.status).toBe('connecting') // untouched initial state
+  })
 })

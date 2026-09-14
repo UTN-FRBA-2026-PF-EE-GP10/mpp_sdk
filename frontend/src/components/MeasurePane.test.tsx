@@ -35,29 +35,38 @@ function button(text: string) {
   return el
 }
 
+// Start Measurement/Release Relay carry a `title` explaining a demo-mode
+// disablement, so they use focusableWhenDisabled (aria-disabled, not the
+// native attribute) to keep that title reachable by hover/focus - see
+// button.tsx and CurveDashboardPane's note on the same fix. This checks
+// either form.
+function isDisabled(el: HTMLElement): boolean {
+  return (el as HTMLButtonElement).disabled || el.getAttribute('aria-disabled') === 'true'
+}
+
 describe('MeasurePane', () => {
   it('shows live capture controls in hardware mode', () => {
     renderPane('hardware')
-    expect(button('Start Measurement').disabled).toBe(false)
+    expect(isDisabled(button('Start Measurement'))).toBe(false)
   })
 
   it('leaves everything live in firmware-replay mode too - only simulated is offline', () => {
     renderPane('firmware-replay')
-    expect(button('Start Measurement').disabled).toBe(false)
-    expect(button('Demo curve (bright)').disabled).toBe(false)
-    expect(screen.getByText(/Demo with Pi:/)).toBeTruthy()
+    expect(isDisabled(button('Start Measurement'))).toBe(false)
+    expect(isDisabled(button('Demo curve (bright)'))).toBe(false)
+    expect(screen.getByText(/Demo with PICO:/)).toBeTruthy()
   })
 
   it('disables the hardware-only controls in simulated mode and explains why', () => {
     renderPane('simulated')
-    expect(button('Start Measurement').disabled).toBe(true)
-    expect(button('Release Relay').disabled).toBe(true)
+    expect(isDisabled(button('Start Measurement'))).toBe(true)
+    expect(isDisabled(button('Release Relay'))).toBe(true)
     expect(screen.getByText(/Demo mode:/)).toBeTruthy()
   })
 
   it('still lets the demo-curve buttons work in simulated mode', () => {
     renderPane('simulated')
-    expect(button('Demo curve (bright)').disabled).toBe(false)
-    expect(button('Demo curve (dim)').disabled).toBe(false)
+    expect(isDisabled(button('Demo curve (bright)'))).toBe(false)
+    expect(isDisabled(button('Demo curve (dim)'))).toBe(false)
   })
 })

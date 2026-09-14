@@ -114,6 +114,10 @@ function SaveCurveForm({
           size="sm"
           onClick={handleSave}
           disabled={demo || !hasCapture || saving || !label.trim()}
+          // See CurveDashboardPane's note - keeps the demo-mode `title`
+          // reachable by hover/focus instead of native disabled's
+          // pointer-events: none swallowing both.
+          focusableWhenDisabled
           title={demo ? 'Saving is unavailable in demo mode - a replay must not enter your real curve library' : undefined}
           className="ml-auto"
         >
@@ -154,7 +158,7 @@ export function CurveWorkbench({
    * Start Measurement, Release Relay, and Save curve are hardware/write
    * actions with no local equivalent and stay disabled. */
   demo?: boolean
-  /** CaptureMode 'firmware-replay' ("Demo with Pi"): everything still
+  /** CaptureMode 'firmware-replay' ("Demo with PICO"): everything still
    * works exactly as it does in 'hardware' mode (both need `connected`),
    * this only swaps which button row reads as the primary action - real
    * SPI either way, never set alongside `demo`. */
@@ -167,6 +171,9 @@ export function CurveWorkbench({
   initialPanels?: PanelSetup[]
 }) {
   const info = getMeasurementKindInfo(kind)
+  // The replay buttons belong to the two demo modes only - see the note
+  // where they are rendered.
+  const showDemoCurveButtons = demo || emphasizeReplay
   // Both hooks are always called (rules of hooks) - useLiveSweep is simply
   // told not to poll while `demo` is on, so switching modes can never
   // leave a stray `/api/data` poll running for the capture pane.
@@ -198,33 +205,42 @@ export function CurveWorkbench({
               variant={emphasizeReplay ? 'outline' : 'default'}
               onClick={start}
               disabled={demo || !connected || active}
+              focusableWhenDisabled
               title={demo ? 'Start Measurement needs real hardware - unavailable in demo mode' : undefined}
             >
               {active ? 'Measuring...' : 'Start Measurement'}
             </Button>
-            {/* Off the board, replays a curve stored in the firmware over
-                the real SPI link - lets the whole loop be exercised with
-                no panel and no lamp. In demo mode, replays the matching
-                bundled fixture locally instead (see useDemoCapture) -
-                same buttons, same pacing, no SPI, no relay. */}
-            <Button
-              variant={emphasizeReplay ? 'default' : 'secondary'}
-              onClick={() => startDemo(false)}
-              disabled={demoButtonsDisabled}
-            >
-              Demo curve (dim)
-            </Button>
-            <Button
-              variant={emphasizeReplay ? 'default' : 'secondary'}
-              onClick={() => startDemo(true)}
-              disabled={demoButtonsDisabled}
-            >
-              Demo curve (bright)
-            </Button>
+            {/* Only in the two demo modes. Off the board they replay a
+                curve stored in the firmware over the real SPI link; in
+                demo mode they replay the matching bundled fixture locally
+                (see useDemoCapture) - same buttons, same pacing, no SPI,
+                no relay. In 'hardware' mode they are noise: the point
+                there is measuring a real panel, and a replay button next
+                to Start Measurement only invites a mis-click that
+                overwrites a live capture. */}
+            {showDemoCurveButtons && (
+              <>
+                <Button
+                  variant={emphasizeReplay ? 'default' : 'secondary'}
+                  onClick={() => startDemo(false)}
+                  disabled={demoButtonsDisabled}
+                >
+                  Demo curve (dim)
+                </Button>
+                <Button
+                  variant={emphasizeReplay ? 'default' : 'secondary'}
+                  onClick={() => startDemo(true)}
+                  disabled={demoButtonsDisabled}
+                >
+                  Demo curve (bright)
+                </Button>
+              </>
+            )}
             <Button
               variant="outline"
               onClick={releaseRelay}
               disabled={demo || !connected}
+              focusableWhenDisabled
               title={demo ? 'Release Relay needs real hardware - unavailable in demo mode' : undefined}
             >
               Release Relay
@@ -242,7 +258,7 @@ export function CurveWorkbench({
         )}
         {emphasizeReplay && (
           <p className="rounded-md border border-indigo-500/30 bg-indigo-500/10 px-3 py-2 text-sm text-indigo-700 dark:text-indigo-300">
-            Demo with Pi: the Demo curve buttons are the point here - real SPI, a curve already
+            Demo with PICO: the Demo curve buttons are the point here - real SPI, a curve already
             stored in the firmware, not measured this session. Start Measurement and Save curve
             still work normally.
           </p>
