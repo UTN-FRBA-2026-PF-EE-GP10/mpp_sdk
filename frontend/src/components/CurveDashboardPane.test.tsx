@@ -129,11 +129,21 @@ describe('CurveDashboardPane - delete', () => {
 
     renderPaneInSandbox(<CurveDashboardPane {...props} />)
     const button = screen.getByTitle('Deleting is unavailable in demo mode')
-    expect((button as HTMLButtonElement).disabled).toBe(true)
+    // aria-disabled, not the native attribute - focusableWhenDisabled
+    // keeps the title above reachable by hover/focus (see button.tsx).
+    expect(button.getAttribute('aria-disabled')).toBe('true')
 
     fireEvent.click(button)
     expect(confirmSpy).not.toHaveBeenCalled()
     expect(deleteCurve).not.toHaveBeenCalled()
+  })
+
+  it('stays hoverable/focusable while disabled, so the reason is reachable without a native disabled attribute blocking pointer events', () => {
+    const props = baseProps()
+    renderPaneInSandbox(<CurveDashboardPane {...props} />)
+    const button = screen.getByTitle('Deleting is unavailable in demo mode')
+    expect((button as HTMLButtonElement).disabled).toBe(false)
+    expect(button.tabIndex).toBe(0)
   })
 })
 
@@ -165,7 +175,7 @@ describe('CurveDashboardPane - remeasure', () => {
 
     renderPaneInSandbox(<CurveDashboardPane {...props} />)
     const button = screen.getByTitle('Remeasure needs real hardware - unavailable in demo mode')
-    expect((button as HTMLButtonElement).disabled).toBe(true)
+    expect(button.getAttribute('aria-disabled')).toBe('true')
 
     fireEvent.click(button)
     expect(confirmSpy).not.toHaveBeenCalled()
@@ -178,7 +188,7 @@ describe('CurveDashboardPane - remeasure', () => {
 
     const buttons = screen.getAllByTitle('A replacement capture is already pending for this curve')
     expect(buttons).toHaveLength(2) // both remeasure and delete
-    for (const b of buttons) expect((b as HTMLButtonElement).disabled).toBe(true)
+    for (const b of buttons) expect(b.getAttribute('aria-disabled')).toBe('true')
   })
 })
 

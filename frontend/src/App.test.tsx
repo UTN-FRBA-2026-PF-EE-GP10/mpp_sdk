@@ -63,6 +63,15 @@ function baselineNavRow() {
   return screen.getAllByText('Baseline')[0].closest('button')!
 }
 
+// Some CurveWorkbench buttons (Start Measurement, Release Relay, Save
+// curve) carry a `title` explaining a demo-mode disablement, so they use
+// focusableWhenDisabled (aria-disabled, not the native attribute) to keep
+// that title reachable by hover/focus - see button.tsx and
+// CurveDashboardPane's note on the same fix. This checks either form.
+function isDisabled(el: HTMLElement): boolean {
+  return (el as HTMLButtonElement).disabled || el.getAttribute('aria-disabled') === 'true'
+}
+
 function renderApp() {
   return render(
     <ThemeProvider>
@@ -77,7 +86,7 @@ function renderApp() {
 
 /** Opens the connection indicator's menu and picks the named mode -
  * mirrors how an operator actually switches capture mode. */
-async function pickCaptureMode(name: 'Pi connected' | 'Demo with Pi' | 'Demo') {
+async function pickCaptureMode(name: 'PICO connected' | 'Demo with PICO' | 'Demo') {
   fireEvent.click(screen.getByRole('button', { name: /capture mode/i }))
   const label = await screen.findByText(name)
   fireEvent.click(label)
@@ -104,7 +113,7 @@ describe('App capture mode', () => {
     // No extra fetch while sandboxed - the fixture swap does not touch the API.
     expect(fetchCurves).toHaveBeenCalledTimes(1)
 
-    await pickCaptureMode('Pi connected')
+    await pickCaptureMode('PICO connected')
 
     await waitFor(() => expect(fetchCurves).toHaveBeenCalledTimes(2))
     await waitFor(() => {
@@ -120,12 +129,12 @@ describe('App capture mode', () => {
 
     await pickCaptureMode('Demo')
 
-    await waitFor(() => expect(screen.getByText('Start Measurement').closest('button')?.disabled).toBe(true))
-    expect(screen.getByText('Release Relay').closest('button')?.disabled).toBe(true)
-    expect(screen.getByText('Demo curve (bright)').closest('button')?.disabled).toBe(false)
+    await waitFor(() => expect(isDisabled(screen.getByText('Start Measurement').closest('button')!)).toBe(true))
+    expect(isDisabled(screen.getByText('Release Relay').closest('button')!)).toBe(true)
+    expect(isDisabled(screen.getByText('Demo curve (bright)').closest('button')!)).toBe(false)
   })
 
-  it('cannot select Demo with Pi while disconnected - the option is unavailable, not silently broken', async () => {
+  it('cannot select Demo with PICO while disconnected - the option is unavailable, not silently broken', async () => {
     vi.mocked(fetchCurves).mockResolvedValue([])
     vi.mocked(fetchRuns).mockResolvedValue([])
     renderApp()
@@ -133,9 +142,44 @@ describe('App capture mode', () => {
     // fetchLiveSweep never resolves (mocked above), so the link stays
     // 'connecting' - not 'connected' - for the life of this test.
     fireEvent.click(screen.getByRole('button', { name: /capture mode/i }))
-    const item = (await screen.findByText('Demo with Pi')).closest('[role="menuitemradio"]')
+    const item = (await screen.findByText('Demo with PICO')).closest('[role="menuitemradio"]')
     expect(item?.getAttribute('aria-disabled')).toBe('true')
   })
+
+  it(
+    'stops polling the link in Demo mode and resumes promptly on leaving it',
+    async () => {
+      vi.mocked(fetchCurves).mockResolvedValue([])
+      vi.mocked(fetchRuns).mockResolvedValue([])
+      vi.mocked(fetchLiveSweep).mockResolvedValue({
+        points: [],
+        partial: [],
+        active: false,
+        link: 'ok',
+        seq: 0,
+        commandError: null,
+        demoSource: false,
+      })
+      renderApp()
+      await waitFor(() => expect(fetchLiveSweep).toHaveBeenCalled())
+
+      await pickCaptureMode('Demo')
+      const callsAtSwitch = vi.mocked(fetchLiveSweep).mock.calls.length
+
+      // useConnectionStatus polls every 2s (POLL_MS) - wait comfortably
+      // past one interval and confirm no further call landed.
+      await new Promise((r) => setTimeout(r, 2500))
+      expect(vi.mocked(fetchLiveSweep).mock.calls.length).toBe(callsAtSwitch)
+
+      await pickCaptureMode('PICO connected')
+      // Resumes right away rather than waiting out a full interval.
+      await waitFor(
+        () => expect(vi.mocked(fetchLiveSweep).mock.calls.length).toBeGreaterThan(callsAtSwitch),
+        { timeout: 500 },
+      )
+    },
+    5000,
+  )
 })
 
 const REMEASURE_TITLE = 'Capture a replacement, then remove this curve'
@@ -230,7 +274,7 @@ describe('App remeasure workflow', () => {
     expect(deleteCurve).not.toHaveBeenCalled()
 
     await waitFor(() =>
-      expect(screen.getByText('Save curve').closest('button')?.disabled).toBe(false),
+      expect(isDisabled(screen.getByText('Save curve').closest('button')!)).toBe(false),
     )
     fireEvent.click(screen.getByText('Save curve'))
 

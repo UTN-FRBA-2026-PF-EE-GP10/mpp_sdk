@@ -30,8 +30,11 @@ export type CaptureMode = 'hardware' | 'firmware-replay' | 'simulated'
 export const CAPTURE_MODE_STORAGE_KEY = 'mpp-sdk.capture-mode'
 
 export const CAPTURE_MODE_LABEL: Record<CaptureMode, string> = {
-  hardware: 'Pi connected',
-  'firmware-replay': 'Demo with Pi',
+  // Named for the PICO, not the Pi: the workbench is normally opened on
+  // the Pi itself, where "is the Pi connected" is not a question anyone
+  // needs answered. What matters is whether the external board is there.
+  hardware: 'PICO connected',
+  'firmware-replay': 'Demo with PICO',
   simulated: 'Demo',
 }
 

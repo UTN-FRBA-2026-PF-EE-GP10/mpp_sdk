@@ -60,6 +60,28 @@ function DialogPopup({
   )
 }
 
+// An off-canvas flavor of DialogPopup - edge-anchored (caller supplies
+// `left-0`/`right-0` and a width) rather than centered, for a drawer/panel
+// like Sidebar's mobile nav instead of a modal dialog box. Kept separate
+// from DialogPopup rather than folded in via className: DialogPopup's own
+// classes (fixed centering, translate transforms) would still apply
+// underneath - `cn` only concatenates, it doesn't let a later class
+// reliably override an earlier one of the same CSS property.
+function DialogPanel({ className, children, ...props }: DialogPrimitive.Popup.Props) {
+  return (
+    <DialogPrimitive.Popup
+      data-slot="dialog-panel"
+      className={cn(
+        "fixed inset-y-0 z-50 flex flex-col gap-1 bg-sidebar text-sidebar-foreground shadow-lg outline-none transition-transform data-ending-style:-translate-x-full data-starting-style:-translate-x-full",
+        className
+      )}
+      {...props}
+    >
+      {children}
+    </DialogPrimitive.Popup>
+  )
+}
+
 function DialogTitle({ className, ...props }: DialogPrimitive.Title.Props) {
   return (
     <DialogPrimitive.Title
@@ -86,6 +108,7 @@ export {
   DialogClose,
   DialogBackdrop,
   DialogPopup,
+  DialogPanel,
   DialogTitle,
   DialogDescription,
 }

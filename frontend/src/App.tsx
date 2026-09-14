@@ -31,9 +31,12 @@ interface PendingRemeasure {
 }
 
 export default function App() {
-  const { status: connectionStatus } = useConnectionStatus()
   const { mode: captureMode, setMode: setCaptureMode } = useCaptureMode()
   const sandboxEnabled = captureMode === 'simulated'
+  // The link poll has nothing to do while fully offline - see
+  // useConnectionStatus's docstring and ConnectionIndicator's one-shot
+  // check, which takes over answering "is a link available" in that mode.
+  const { status: connectionStatus } = useConnectionStatus(!sandboxEnabled)
   const [selection, setSelection] = useState<Selection>({ root: 'measure' })
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   // Seeded with the known vocabulary so the sidebar renders before the
@@ -125,7 +128,7 @@ export default function App() {
       .catch((e) => console.error('fetching runs failed', e))
   }, [reloadToken, sandboxEnabled])
 
-  // 'firmware-replay' ("Demo with Pi") needs a real board on the other
+  // 'firmware-replay' ("Demo with PICO") needs a real board on the other
   // end of a real link - ConnectionIndicator already refuses to let
   // someone select it without one, but the link can also drop out from
   // under an already-selected mode. This is the other half of that rule:
@@ -199,7 +202,7 @@ export default function App() {
 
   return (
     <div className="flex min-h-svh flex-col">
-      <header className="sticky top-0 z-20 flex items-center justify-between gap-4 border-b bg-background px-4 py-4">
+      <header className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3 border-b bg-background px-4 py-4">
         <div className="flex items-center gap-3">
           <button
             type="button"
@@ -211,7 +214,12 @@ export default function App() {
           </button>
           <h1 className="text-lg font-semibold tracking-tight">mpp-sdk Workbench</h1>
         </div>
-        <div className="flex items-center gap-2">
+        {/* flex-wrap here and on the header itself: none of these three
+            controls can shrink (buttonVariants is whitespace-nowrap), and
+            the connection pill's label runs as long as "Demo mode -
+            simulated" - wrapping beats clipping the one control here that
+            also doubles as the capture-mode trigger. */}
+        <div className="flex flex-wrap items-center gap-2">
           <UnitToggle />
           <ThemeToggle />
           {/* Connection health is a link problem, not a per-pane one - it

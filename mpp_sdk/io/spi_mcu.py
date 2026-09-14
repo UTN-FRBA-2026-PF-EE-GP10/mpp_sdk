@@ -203,6 +203,13 @@ class SpiMcuSource(SignalSource):
         self._temp_raw: int = _TEMP_NOT_AVAILABLE_RAW
         self._has_read = False
         self._last_good_raw = (0, 0, 0, _TEMP_NOT_AVAILABLE_RAW, 0)
+        # Frames validated since the last good one. A missing board is
+        # otherwise invisible from this side: SPI has no presence
+        # detection, so with nothing attached MISO simply floats, every
+        # frame fails its checksum, and `_transact` quietly serves the
+        # last-good telemetry forever. Counting the failures is what lets
+        # a caller tell "the board is talking" from "nothing is there".
+        self._consecutive_bad_frames = 0
 
     # ── internal ──────────────────────────────────────────────────────────────
 
@@ -230,7 +237,9 @@ class SpiMcuSource(SignalSource):
         # sits after the checksum byte in the frame; that is only byte
         # order, both sides fold it in at the same point.
         if rx[8] != crc8(rx[0:8] + [rx[9]]):
+            self._consecutive_bad_frames += 1
             return None
+        self._consecutive_bad_frames = 0
         return rx[0:8], rx[9]
 
     def _transact(self, duty: float, cmd: int = 0) -> tuple[int, int, int, int, int]:
@@ -505,6 +514,17 @@ class SpiMcuSource(SignalSource):
                 (v_raw * self._v_scale + self._v_offset, i_raw * self._i_scale + self._i_offset)
             )
         return points
+
+    @property
+    def consecutive_bad_frames(self) -> int:
+        """Frames that failed validation since the last good one.
+
+        Zero whenever the link is healthy. A sustained non-zero count
+        means no valid frame is arriving at all, which is what a
+        disconnected or unpowered board looks like - see the note where
+        this is reset.
+        """
+        return self._consecutive_bad_frames
 
     @property
     def duty(self) -> float:

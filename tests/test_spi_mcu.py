@@ -550,3 +550,42 @@ def test_poll_sweep_progress_out_of_range_index_returns_none(spi_mcu_source):
         _progress_frame(42, 12000, 150, active=True, final_point=False),
     ]
     assert src.poll_sweep_progress() is None
+
+
+# ------------------------------------------------------------------
+# Missing-board detection
+# ------------------------------------------------------------------
+
+
+def test_consecutive_bad_frames_counts_invalid_frames_and_resets(spi_mcu_source):
+    """SPI has no presence detection: with no board attached MISO floats,
+    every frame fails its checksum, and `_transact` keeps serving
+    last-good telemetry without raising. The count is the only signal
+    that nothing is on the other end."""
+    src = spi_mcu_source()
+    assert src.consecutive_bad_frames == 0
+
+    # A floating MISO line reads all-ones or all-zeros; neither matches
+    # the CRC of its own payload.
+    src._spi.responses = [[0xFF] * 12, [0x00] * 12, [0xFF] * 12]
+    for _ in range(3):
+        src.write(0.0)
+    assert src.consecutive_bad_frames == 3
+
+    src._spi.next_rx = _miso_frame(v_raw=5000, i_raw=250, vout_raw=3300, temp_raw=0)
+    src.write(0.0)
+    assert src.consecutive_bad_frames == 0
+
+
+def test_a_bad_frame_does_not_raise_so_the_count_is_the_only_signal(spi_mcu_source):
+    """Pins the behaviour the count exists to compensate for - if this
+    ever starts raising, the server's link-down check should be revisited
+    rather than left as dead code."""
+    src = spi_mcu_source()
+    src._spi.next_rx = _miso_frame(v_raw=5000, i_raw=250, vout_raw=3300, temp_raw=0)
+    src.write(0.0)
+
+    src._spi.next_rx = [0xFF] * 12
+    src.write(0.0)  # must not raise
+    assert src.read() == pytest.approx((5.0, 0.25))
+    assert src.consecutive_bad_frames == 1

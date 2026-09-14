@@ -1,16 +1,19 @@
 import { Menu } from '@base-ui/react/menu'
+import { useState } from 'react'
+import { statusFromLink } from '@/hooks/useConnectionStatus'
+import { fetchLiveSweep } from '@/lib/api'
 import { CAPTURE_MODE_LABEL, useCaptureMode, type CaptureMode } from '@/lib/captureMode'
 import { cn } from '@/lib/utils'
 import type { ConnectionStatus } from '@/types'
 
 const STATUS_LABEL: Record<ConnectionStatus, string> = {
-  connecting: 'Connecting...',
-  connected: 'Pi connected',
-  disconnected: 'Disconnected',
+  connecting: 'Checking PICO...',
+  connected: 'PICO connected',
+  disconnected: 'PICO not connected',
   demo: 'Demo mode - simulated', // curve_tracer_server.py --demo, a server-side status - distinct from CaptureMode's client-side 'simulated', see lib/captureMode.ts
 }
 
-// 'firmware-replay' ("Demo with Pi") needs a real board on the other end
+// 'firmware-replay' ("Demo with PICO") needs a real board on the other end
 // of a real link - the server's own --demo status is itself a simulated
 // stand-in with nothing to replay from, so it doesn't count.
 function firmwareReplayAvailable(status: ConnectionStatus): boolean {
@@ -37,8 +40,8 @@ const itemClass =
 
 /**
  * The connection status pill - and, by clicking it, the three-way capture
- * mode menu (lib/captureMode.ts): 'hardware' ("Pi connected"),
- * 'firmware-replay' ("Demo with Pi", needs a live link), 'simulated'
+ * mode menu (lib/captureMode.ts): 'hardware' ("PICO connected"),
+ * 'firmware-replay' ("Demo with PICO", needs a live link), 'simulated'
  * ("Demo", fully offline). Only one of the three is ever shown, and the
  * label always matches whichever `source` a curve captured right now
  * would be stamped with - see captureMode.ts's docstring.
@@ -48,10 +51,32 @@ export function ConnectionIndicator({ status }: { status: ConnectionStatus }) {
   const label = displayLabel(status, mode)
   const dot = dotClass(status, mode)
   const pulsing = mode === 'simulated' || status === 'connected' || status === 'demo'
-  const replayAvailable = firmwareReplayAvailable(status)
+
+  // In 'hardware'/'firmware-replay' the background link poll (see
+  // useConnectionStatus) keeps `status` live, so it already answers
+  // whether 'firmware-replay' can be selected. In 'simulated' mode that
+  // poll is stopped outright - demo mode promises no background network
+  // activity - so `status` is whatever it was the moment demo mode was
+  // entered, not the truth. A one-shot check, fired only when this menu
+  // is actually opened, is demo mode's only source of truth for this;
+  // `null` (never opened, or still in flight) reads as unavailable, same
+  // as a failed check - "Demo with PICO" must never be selectable on stale
+  // or missing information.
+  const [demoLinkStatus, setDemoLinkStatus] = useState<ConnectionStatus | null>(null)
+  const replayAvailable =
+    mode === 'simulated'
+      ? demoLinkStatus !== null && firmwareReplayAvailable(demoLinkStatus)
+      : firmwareReplayAvailable(status)
+
+  function handleOpenChange(open: boolean) {
+    if (!open || mode !== 'simulated') return
+    fetchLiveSweep()
+      .then((data) => setDemoLinkStatus(statusFromLink(data.link)))
+      .catch(() => setDemoLinkStatus('disconnected'))
+  }
 
   return (
-    <Menu.Root>
+    <Menu.Root onOpenChange={handleOpenChange}>
       <Menu.Trigger
         aria-label={`Capture mode: ${label}. Click to change.`}
         title="Click to change capture mode"
@@ -81,14 +106,14 @@ export function ConnectionIndicator({ status }: { status: ConnectionStatus }) {
       </Menu.Trigger>
       <Menu.Portal>
         <Menu.Positioner align="end" sideOffset={6}>
-          <Menu.Popup className="min-w-56 rounded-lg border bg-popover p-1 text-popover-foreground shadow-lg outline-none">
+          <Menu.Popup className="z-50 min-w-56 rounded-lg border bg-popover p-1 text-popover-foreground shadow-lg outline-none">
             <Menu.RadioGroup
               value={mode}
               onValueChange={(value) => setMode(value as CaptureMode)}
             >
               <Menu.RadioItem value="hardware" closeOnClick className={itemClass}>
                 <div className="flex flex-col">
-                  <span>Pi connected</span>
+                  <span>{CAPTURE_MODE_LABEL.hardware}</span>
                   <span className="text-xs text-muted-foreground">
                     Live measurement off a real panel.
                   </span>
@@ -101,7 +126,7 @@ export function ConnectionIndicator({ status }: { status: ConnectionStatus }) {
                 className={itemClass}
               >
                 <div className="flex flex-col">
-                  <span>Demo with Pi</span>
+                  <span>{CAPTURE_MODE_LABEL['firmware-replay']}</span>
                   <span className="text-xs text-muted-foreground">
                     {replayAvailable
                       ? 'Real board, a curve replayed from the firmware.'

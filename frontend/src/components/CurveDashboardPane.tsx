@@ -149,6 +149,13 @@ export function CurveDashboardPane({
           size="icon-sm"
           onClick={handleRemeasure}
           disabled={remeasureDisabled}
+          // Icon-only, and the `title` below is its only explanation - a
+          // plain `disabled` becomes a native attribute with
+          // pointer-events: none, which means the element can never
+          // receive hover and the title tooltip can never appear.
+          // focusableWhenDisabled keeps it hoverable/focusable (base-ui
+          // still blocks the click itself) so the reason stays reachable.
+          focusableWhenDisabled
           title={
             sandbox.enabled
               ? 'Remeasure needs real hardware - unavailable in demo mode'
@@ -165,6 +172,7 @@ export function CurveDashboardPane({
           size="icon-sm"
           onClick={handleDelete}
           disabled={deleteDisabled}
+          focusableWhenDisabled
           title={
             sandbox.enabled
               ? 'Deleting is unavailable in demo mode'
