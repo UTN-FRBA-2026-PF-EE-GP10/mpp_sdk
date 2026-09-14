@@ -452,10 +452,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#the-tilt-sweep-procedure" class="md-nav__link">
+  <a href="#the-tilted-panel-procedure" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The tilt-sweep procedure
+        The tilted-panel procedure
       
     </span>
   </a>
@@ -786,10 +786,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#the-tilt-sweep-procedure" class="md-nav__link">
+  <a href="#the-tilted-panel-procedure" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The tilt-sweep procedure
+        The tilted-panel procedure
       
     </span>
   </a>
@@ -840,8 +840,8 @@
 
 <h1 id="measurement-procedure">Measurement procedure<a class="headerlink" href="#measurement-procedure" title="Permanent link">&para;</a></h1>
 <p>A checklist for running a bench measurement session: capturing one curve,
-running a tilt-sweep series, and (once you have a board) a closed-loop
-run. See <code>README.md</code>'s Quickstart to install the <code>web</code> extra first.</p>
+running a tilted series, and (once you have a board) a closed-loop run.
+See <code>README.md</code>'s Quickstart to install the <code>web</code> extra first.</p>
 <h2 id="before-you-start">Before you start<a class="headerlink" href="#before-you-start" title="Permanent link">&para;</a></h2>
 <ul>
 <li>[ ] Board wired and powered. See <code>firmware/pipico_board/README.md</code>'s
@@ -860,39 +860,46 @@ run. See <code>README.md</code>'s Quickstart to install the <code>web</code> ext
 <li>Open <code>http://&lt;pi-host&gt;:8000/</code> (or <code>http://localhost:8000/</code> for
    <code>--demo</code>).</li>
 <li>In the grid of measurement-kind cards, select <strong>baseline</strong> (or whatever
-   kind matches this capture - see "The tilt-sweep procedure" below for
-   <code>tilt-sweep</code>).</li>
+   kind matches this capture - see "The tilted-panel procedure" below for
+   <code>tilted</code>).</li>
 <li>Click <strong>Start Measurement</strong>. Wait for the curve to finish plotting - a
    few seconds, since the sweep auto-ranges and takes 20 points.</li>
 <li>Fill in the save form: a <strong>label</strong> (a short description - suggest a
    convention like <code>"&lt;date&gt; &lt;condition&gt;"</code>, e.g.
    <code>"2026-09-08 baseline lamp 30cm"</code>) and optional <strong>notes</strong> (lamp
-   distance, ambient light, anything unusual). Leave each panel's tilt
-   field at its physical resting angle (0 degrees if flat).</li>
+   distance, ambient light, anything unusual). Panel A is fixed at 90
+   degrees and is not editable in the form. Leave panel B's tilt at 90
+   degrees for a baseline capture (both panels matching).</li>
 <li>Click <strong>Save curve</strong>. Confirm it appears in the table below.</li>
 </ol>
-<h2 id="the-tilt-sweep-procedure">The tilt-sweep procedure<a class="headerlink" href="#the-tilt-sweep-procedure" title="Permanent link">&para;</a></h2>
-<p><strong>Why</strong>: a tilt-sweep is a series of curves at the same illumination with
-one panel's tilt angle varied. It lets <code>mpp-sdk compare-measured</code> (see
+<h2 id="the-tilted-panel-procedure">The tilted-panel procedure<a class="headerlink" href="#the-tilted-panel-procedure" title="Permanent link">&para;</a></h2>
+<p><strong>Why</strong>: this bench's array is two panels and a lamp. The light travels
+from 180 degrees toward 0 degrees; 90 degrees is vertical and faces the
+light squarely, so 90 is the <em>untilted</em> reference, not zero. Panel A is
+always fixed at 90 degrees - it is the unshaded reference panel and is
+never adjusted. Panel B is the one that moves, on a mount with five fixed
+detents: 90, 70, 60, 45, 30 degrees. Lower numbers tilt panel B further
+right, away from the light, so it receives less illumination. A single
+tilted capture and a full sweep across panel B's angles are the same
+physical setup, just one point or several - hence one measurement kind,
+<code>tilted</code>, for both. It lets <code>mpp-sdk compare-measured</code> (see
 <code>docs/methodology.md</code>'s "Measured curves" section) grade an algorithm's
 partial-shading behavior against a real, physically varying array shape
 instead of an inferred one.</p>
-<p><strong>Convention</strong> (a starting point, not a hard rule): sweep the same panel
-through a fixed set of angles - <code>0, 15, 30, 45, 60</code> degrees is a
-reasonable spread, adjusted to what the mounting hardware can hold
-steady. Keep every other condition (lighting, the other panel's tilt)
-constant across the whole series. Use the same label prefix for the
-whole series with the angle appended, e.g.
-<code>"2026-09-08 tilt-sweep 30deg"</code>, so the saved-curves table stays readable.</p>
-<p><strong>Procedure</strong>: repeat "Capture one curve" once per angle, with two
-changes each time: physically set the panel to the next angle before
-clicking <strong>Start Measurement</strong>, and select the <strong>tilt-sweep</strong> card (not
-<strong>baseline</strong>) so the save request's measurement kind matches, and set
-that panel's tilt field to the actual angle used - the tilt field is what
-grouping and analysis code reads, not just the label text.</p>
+<p><strong>Procedure for a sweep</strong>: repeat "Capture one curve" once per angle,
+with two changes each time: physically set panel B to the next detent
+before clicking <strong>Start Measurement</strong>, and select the <strong>tilted</strong> card
+(not <strong>baseline</strong>) so the save request's measurement kind matches. The
+save form's panel B selector is restricted to the five valid detents, so
+picking the wrong angle by typo is not possible - just make sure the
+selected value matches where the panel physically is. Use the same label
+prefix for the whole series with the angle appended, e.g.
+<code>"2026-09-08 tilted 45deg"</code>, so the saved-curves table stays readable.
+Keep every other condition (lighting, panel A) constant across the whole
+series.</p>
 <p><strong>After the series</strong>: run <code>mpp-sdk compare-measured</code> (see
 <code>docs/methodology.md</code>) - it groups saved curves by measurement kind, so a
-consistently labeled tilt-sweep series shows up together automatically.</p>
+consistently labeled tilted series shows up together automatically.</p>
 <h2 id="where-the-files-land">Where the files land<a class="headerlink" href="#where-the-files-land" title="Permanent link">&para;</a></h2>
 <p>Captured curves live under <code>data/curves/</code>, one JSON file per sweep
 (git-ignored - see <code>data/README.md</code>). Closed-loop runs (below) live under
