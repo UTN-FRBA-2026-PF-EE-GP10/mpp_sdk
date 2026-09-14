@@ -1,40 +1,59 @@
 import { useCallback, useRef, useState } from 'react'
-import { fetchLiveSweep, releaseRelay as releaseRelayRequest, startSweep as startSweepRequest } from '@/lib/api'
+import {
+  fetchLiveSweep,
+  releaseRelay as releaseRelayRequest,
+  startDemoSweep as startDemoSweepRequest,
+  startSweep as startSweepRequest,
+} from '@/lib/api'
 import type { LiveSweepState } from '@/lib/api'
 import type { CurvePoint } from '@/types'
 import { usePolling } from './usePolling'
 
 const POLL_MS = 700
 
+// Shared so `setPartial(EMPTY)` on a poll that changed nothing is a
+// no-op: React bails out on Object.is, and a fresh `[]` every tick would
+// re-render the page (and re-feed chart.js) 1.4 times a second forever.
+const EMPTY: CurvePoint[] = []
+
 /**
  * Polls GET /api/data on a timer. While `active`, `partial` is drawn
  * live, redrawn every tick - it has no seq of its own, and waiting for
- * one would show nothing move. Once `active` goes false, `points` (the
- * last completed sweep) takes over, gated on the server's `seq` counter
- * so a sweep is not re-applied on every poll.
+ * one would show nothing move. A completed sweep arrives in `points`,
+ * gated on the server's `seq` counter so it is not re-applied on every
+ * poll.
+ *
+ * `partial` is deliberately *not* cleared the moment `active` goes
+ * false. The firmware reports the sweep finished before the server has
+ * fetched the bulk result, and in that gap `points` still holds the
+ * previous sweep - clearing here made the chart snap back to the old
+ * curve for a poll or two before the new one landed, which read as a
+ * flicker. Instead the live trace stays on screen until the completed
+ * curve that supersedes it arrives.
+ *
+ * `enabled` (default true) stops polling `/api/data` altogether - passed
+ * `false` in client demo mode, where CurveWorkbench uses useDemoCapture
+ * instead and this hook must not reach the network at all.
  */
-export function useLiveSweep() {
-  const [partial, setPartial] = useState<CurvePoint[]>([])
-  const [points, setPoints] = useState<CurvePoint[]>([])
+export function useLiveSweep(enabled = true) {
+  const [partial, setPartial] = useState<CurvePoint[]>(EMPTY)
+  const [points, setPoints] = useState<CurvePoint[]>(EMPTY)
   const [active, setActive] = useState(false)
+  const [commandError, setCommandError] = useState<string | null>(null)
+  const [demoSource, setDemoSource] = useState(false)
   const lastSeq = useRef(-1)
 
   const handleData = (data: LiveSweepState) => {
     setActive(data.active)
-    if (data.active) {
+    setCommandError(data.commandError)
+    setDemoSource(data.demoSource)
+    if (data.seq !== lastSeq.current) {
+      // A completed sweep landed: it replaces the live trace outright.
+      setPoints(data.points)
+      lastSeq.current = data.seq
+      setPartial(EMPTY)
+    } else if (data.active) {
       setPartial(data.partial)
-    } else {
-      // Once a sweep is no longer active, `points` (gated on `seq`) is
-      // authoritative - see this hook's docstring. Clearing `partial`
-      // here too matters when a sweep never completes (link drop,
-      // relay released mid-capture): otherwise a stale `partial` from
-      // the aborted attempt keeps rendering in LiveChart, which falls
-      // back to `partial` whenever `points` is still empty.
-      setPartial([])
-      if (data.seq !== lastSeq.current) {
-        setPoints(data.points)
-        lastSeq.current = data.seq
-      }
     }
   }
 
@@ -42,7 +61,7 @@ export function useLiveSweep() {
     console.error('polling /api/data failed', e)
   }
 
-  usePolling(fetchLiveSweep, handleData, handleError, POLL_MS)
+  usePolling(fetchLiveSweep, handleData, handleError, POLL_MS, enabled)
 
   const start = useCallback(() => {
     startSweepRequest().catch((e) => console.error('start-sweep failed', e))
@@ -52,5 +71,9 @@ export function useLiveSweep() {
     releaseRelayRequest().catch((e) => console.error('release-relay failed', e))
   }, [])
 
-  return { partial, points, active, start, releaseRelay }
+  const startDemo = useCallback((bright: boolean) => {
+    startDemoSweepRequest(bright).catch((e) => console.error('start-demo-sweep failed', e))
+  }, [])
+
+  return { partial, points, active, commandError, demoSource, start, startDemo, releaseRelay }
 }

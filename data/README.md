@@ -9,7 +9,7 @@
   written by `mpp_sdk.curves.library.save`. Git-ignored: this is operator
   measurement data, not repo content. Each file holds `schema`,
   `captured_at`, `label`, `measurement` (grouping key: `baseline`,
-  `partial-shade`, `tilt-sweep`, `dimmer`, `other` - see
+  `tilted`, `dimmed`, `other` - see
   `mpp_sdk/curves/record.py`'s `MEASUREMENT_KINDS`), `panels` (id + tilt
   per panel in the array), `notes`, and `points` (`v`/`i` pairs in
   volts/amps, ordered as swept). See `mpp_sdk/curves/record.py` for the

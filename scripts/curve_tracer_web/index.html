@@ -2,14 +2,33 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <script>
+      // Applies the stored/system theme before first paint, so the page
+      // never flashes light-then-dark (or vice versa) on load. Mirrors
+      // ThemeProvider's own resolution in src/lib/theme.ts - keep the two
+      // in sync if that logic changes.
+      ;(function () {
+        try {
+          var stored = localStorage.getItem('mpp-sdk.theme')
+          var mode = stored === 'light' || stored === 'dark' ? stored : 'system'
+          var dark =
+            mode === 'dark' ||
+            (mode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+          document.documentElement.classList.toggle('dark', dark)
+        } catch (e) {
+          // No localStorage/matchMedia (very old or locked-down browser) -
+          // fall back to light, same as ThemeProvider's own catch.
+        }
+      })()
+    </script>
     <link
       rel="icon"
       href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>%F0%9F%8C%9E</text></svg>"
     />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Curve Workbench</title>
-    <script type="module" crossorigin src="./assets/index-DWeVidtU.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-BxntU7bq.css">
+    <title>mpp-sdk Workbench</title>
+    <script type="module" crossorigin src="./assets/index-XdgsTGus.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-BpNTccus.css">
   </head>
   <body>
     <div id="root"></div>

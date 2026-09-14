@@ -1,9 +1,10 @@
 // Typed client for scripts/curve_tracer_server.py's FastAPI routes. This
 // is the one place the mA/A boundary is crossed: GET /api/data's points
 // are milliamps (the UI's unit). Everything else (the curve library,
-// /api/curves) stores amps - see CurvePoint's volts/amps convention in
-// types.ts.
+// /api/curves, and the run library, /api/runs) stores volts and amps -
+// see CurvePoint's convention in types.ts and RunSample's in runs.ts.
 
+import type { RunDetail, RunSummary } from '@/lib/runs'
 import type { CurvePoint, CurveRecord, PanelSetup } from '@/types'
 
 interface WireDataPoint {
@@ -18,6 +19,7 @@ interface DataResponse {
   link: string
   seq: number
   command_error: string | null
+  demo_source: boolean
 }
 
 export interface LiveSweepState {
@@ -27,9 +29,11 @@ export interface LiveSweepState {
   link: string
   seq: number
   // Set when the last Start Measurement/Release Relay click failed -
-  // null otherwise. Not surfaced in the UI yet; available here for
-  // whoever wires up an error toast/banner next.
+  // null otherwise.
   commandError: string | null
+  // True when the curve on screen was replayed from the firmware's
+  // stored curves rather than measured off a panel.
+  demoSource: boolean
 }
 
 function fromWirePoints(points: WireDataPoint[] | undefined): CurvePoint[] {
@@ -73,6 +77,7 @@ export async function fetchLiveSweep(): Promise<LiveSweepState> {
     link: payload.link ?? '--',
     seq: Number.isFinite(payload.seq) ? payload.seq : 0,
     commandError: payload.command_error ?? null,
+    demoSource: Boolean(payload.demo_source),
   }
 }
 
@@ -80,12 +85,17 @@ export async function fetchCurves(): Promise<CurveRecord[]> {
   const r = await fetch('/api/curves')
   const payload = (await parseJsonOrThrow(r, 'GET /api/curves')) as (
     | CurveRecord
-    | { path: string; error: string }
+    | { id: string; path: string; error: string }
   )[]
-  // A malformed on-disk file reports {path, error} instead of a full
+  // A malformed on-disk file reports {id, path, error} instead of a full
   // record (see curve_tracer_server.py's get_curves) - not renderable as
   // a curve, so it's dropped here rather than pushed further into the UI.
   return payload.filter((entry): entry is CurveRecord => !('error' in entry))
+}
+
+export async function deleteCurve(id: string): Promise<void> {
+  const r = await fetch(`/api/curves/${encodeURIComponent(id)}`, { method: 'DELETE' })
+  await parseJsonOrThrow(r, 'DELETE /api/curves/{id}')
 }
 
 export async function fetchMeasurementKinds(): Promise<string[]> {
@@ -114,7 +124,42 @@ export async function startSweep(): Promise<void> {
   await parseJsonOrThrow(r, 'POST /api/start-sweep')
 }
 
+export async function startDemoSweep(bright: boolean): Promise<void> {
+  const r = await fetch(`/api/start-demo-sweep?bright=${bright}`, { method: 'POST' })
+  await parseJsonOrThrow(r, 'POST /api/start-demo-sweep')
+}
+
 export async function releaseRelay(): Promise<void> {
   const r = await fetch('/api/release-relay', { method: 'POST' })
   await parseJsonOrThrow(r, 'POST /api/release-relay')
+}
+
+export async function fetchRuns(): Promise<RunSummary[]> {
+  const r = await fetch('/api/runs')
+  const payload = (await parseJsonOrThrow(r, 'GET /api/runs')) as (
+    | RunSummary
+    | { id: string; path: string; error: string }
+  )[]
+  // A malformed on-disk file reports {id, path, error} instead of a full
+  // summary (see curve_tracer_server.py's get_runs - same pattern as
+  // fetchCurves above), so it's dropped here rather than pushed further
+  // into the UI.
+  return payload.filter((entry): entry is RunSummary => !('error' in entry))
+}
+
+// `maxSamples` caps how many samples come back - omit it to take the
+// server's default (a player-sized cap), pass 0 for the full series
+// (export/analysis). Either way the samples themselves are volts and
+// amps, matching the run library's on-disk convention and CurveRecord's
+// - GET /api/data's milliamps convention is that route's own and does not
+// apply here.
+export async function fetchRun(id: string, maxSamples?: number): Promise<RunDetail> {
+  const query = maxSamples === undefined ? '' : `?max_samples=${maxSamples}`
+  const r = await fetch(`/api/runs/${encodeURIComponent(id)}${query}`)
+  return (await parseJsonOrThrow(r, 'GET /api/runs/{id}')) as RunDetail
+}
+
+export async function deleteRun(id: string): Promise<void> {
+  const r = await fetch(`/api/runs/${encodeURIComponent(id)}`, { method: 'DELETE' })
+  await parseJsonOrThrow(r, 'DELETE /api/runs/{id}')
 }

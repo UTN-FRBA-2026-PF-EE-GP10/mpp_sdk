@@ -70,6 +70,11 @@ const CMD_RELEASE_RELAY: u8 = 0xB3;
 /// only reads a value that task already publishes as a side effect of
 /// `run_sweep`.
 const CMD_STREAM_POLL: u8 = 0xB4;
+/// Replays a curve stored in the firmware instead of sweeping a real
+/// panel - see `mode_curve_tracer::run_demo_sweep`. One byte per stored
+/// curve, so the Pi picks which without a second field.
+const CMD_DEMO_SWEEP_DIM: u8 = 0xB5;
+const CMD_DEMO_SWEEP_BRIGHT: u8 = 0xB6;
 /// Sentinel `SweepProgress.index` meaning "no sweep has ever run yet" -
 /// distinct from every real index (`0..TRACER_SWEEP_POINTS`, well under
 /// `u8::MAX`).
@@ -85,6 +90,8 @@ fn tracer_command_for(cmd: u8) -> Option<TracerCommand> {
     match cmd {
         CMD_START_SWEEP => Some(TracerCommand::StartSweep),
         CMD_RELEASE_RELAY => Some(TracerCommand::ReleaseRelay),
+        CMD_DEMO_SWEEP_DIM => Some(TracerCommand::DemoSweep(0)),
+        CMD_DEMO_SWEEP_BRIGHT => Some(TracerCommand::DemoSweep(1)),
         _ => None,
     }
 }
@@ -186,17 +193,60 @@ const TEMP_NOT_AVAILABLE_CC: i16 = i16::MIN;
 
 /// XOR checksum over the given data bytes - catches single/few-bit
 /// corruption cheaply on both a `no_std` target and in plain Python.
-/// Shared by both frame directions so the formula only lives in one
-/// place.
+/// Used only by the bulk-read frame, which opens with `BULK_MAGIC` and
+/// carries its own point count: misalignment is already caught there, so
+/// the checksum only has to catch bit errors. The 12-byte frames have no
+/// such marker and use `crc8` instead - see its doc comment.
 fn xor_checksum(bytes: &[u8]) -> u8 {
     bytes.iter().fold(0, |acc, b| acc ^ b)
+}
+
+/// CRC-8 (polynomial 0x07, init 0xFF) over the 12-byte frames, in both
+/// directions - must match `spi_mcu.py`/`spi_test.py` exactly.
+///
+/// An XOR is position-blind, and that is not an academic weakness here: a
+/// MOSI frame at duty 0 is all zeros but the command byte, so a
+/// byte-shifted copy of it XORs to the same value and is *accepted*. On
+/// the bench a 2-byte-shifted `CMD_START_SWEEP` frame passed validation
+/// and applied 69% duty to the SEPIC gate when the Pi had commanded 0.
+/// Seeding the XOR does not help (the seed appears on both sides of the
+/// comparison and cancels); a CRC's feedback makes it order-dependent, so
+/// every shift of every frame this protocol sends is rejected.
+///
+/// What had been masking this: the Pi polls slower than `FRAME_TIMEOUT`,
+/// so the timeout fires between frames and `resync()` realigns the state
+/// machine. That is a side effect, not a guarantee - it disappears the
+/// moment anything polls faster.
+fn crc8(bytes: &[u8]) -> u8 {
+    let mut crc: u8 = 0xFF;
+    for byte in bytes {
+        crc ^= byte;
+        for _ in 0..8 {
+            crc = if crc & 0x80 != 0 {
+                (crc << 1) ^ 0x07
+            } else {
+                crc << 1
+            };
+        }
+    }
+    crc
+}
+
+/// MISO checksum: `crc8` over the 8 payload bytes followed by `ack`.
+/// `ack` is folded in as a covered byte rather than XORed onto the
+/// result, so its position counts too.
+fn miso_checksum(bytes: &[u8; 8], ack: u8) -> u8 {
+    let mut covered = [0u8; 9];
+    covered[..8].copy_from_slice(bytes);
+    covered[8] = ack;
+    crc8(&covered)
 }
 
 /// Build a TX frame (u32 words, byte in top 8 bits for shift_out = Left).
 ///
 /// MISO layout: [ V_H | V_L | I_H | I_L | VOUT_H | VOUT_L | TEMP_H
 ///   | TEMP_L | CHECKSUM | ACK | 0 x 2 ]  (12 bytes total). `CHECKSUM` is
-/// the XOR of the 8 telemetry bytes **and** `ack` - must match
+/// `crc8` over the 8 telemetry bytes **and** `ack` - must match
 /// `spi_mcu.py`/`spi_test.py` exactly. `ack` is the curve-tracer bulk-read
 /// handshake byte: `0x00` in normal operation, `0x80 | point_count` on the
 /// one frame that acks a bulk-dump request - see `spi_pio_task`'s doc
@@ -209,7 +259,7 @@ fn xor_checksum(bytes: &[u8]) -> u8 {
 /// bulk reads with garbage magic bytes, concentrated at sweep start when
 /// the linear current sink switches on and the link is noisiest. It sits
 /// after `CHECKSUM` in the frame but that is only byte order; both sides
-/// XOR it in the same way.
+/// fold it in at the same point.
 fn build_tx_frame(v: u16, i: u16, vout: u16, temp_cc: i16, ack: u8) -> [u32; FRAME_LEN] {
     let data = [
         v.to_be_bytes(),
@@ -218,7 +268,7 @@ fn build_tx_frame(v: u16, i: u16, vout: u16, temp_cc: i16, ack: u8) -> [u32; FRA
         (temp_cc as u16).to_be_bytes(),
     ];
     let bytes: [u8; 8] = core::array::from_fn(|idx| data[idx / 2][idx % 2]);
-    let checksum = xor_checksum(&bytes) ^ ack;
+    let checksum = miso_checksum(&bytes, ack);
 
     let mut words = [0u32; FRAME_LEN];
     let all = bytes
@@ -275,7 +325,7 @@ fn build_progress_tx_frame(progress: &SweepProgress) -> [u32; FRAME_LEN] {
     let i = progress.i_ma.to_be_bytes();
     let bytes = [progress.index, v[0], v[1], i[0], i[1], flags, 0, 0];
     let ack = 0u8;
-    let checksum = xor_checksum(&bytes) ^ ack;
+    let checksum = miso_checksum(&bytes, ack);
 
     let mut words = [0u32; FRAME_LEN];
     let all = bytes
@@ -381,13 +431,10 @@ enum BulkState {
 /// is dummy/unparsed). See `spi_pio_task`'s doc comment for the checksum
 /// contract. Returns the validated `cmd` byte (`rx[3]`) if the checksum
 /// passed, `None` otherwise - `cmd` participates in `CHECKSUM`
-/// (`duty_h ^ duty_l ^ cmd`) precisely so a corrupted frame can't spoof
-/// `CMD_REQUEST_BULK_DUMP` by chance: a bit flip landing on `cmd` alone
-/// now also mismatches the checksum, same as a flip on `duty_h`/`duty_l`
-/// already did. `cmd` is `0` on every normal poll frame, and XOR with `0`
-/// is a no-op, so this doesn't change the checksum's value for the
-/// steady-state case - only `spi_mcu.py`'s `request_sweep()`, which sends
-/// a nonzero `cmd` deliberately, needed a matching update.
+/// (`crc8(&[duty_h, duty_l, cmd])`) precisely so a corrupted frame can't
+/// spoof `CMD_REQUEST_BULK_DUMP` by chance: a bit flip landing on `cmd`
+/// alone now also mismatches the checksum, same as a flip on `duty_h`/`duty_l`
+/// already did.
 fn apply_duty_frame(
     rx: &[u32],
     last_logged_duty: &mut Option<u16>,
@@ -399,7 +446,7 @@ fn apply_duty_frame(
     let received_checksum = rx[2] as u8;
     let cmd = rx[3] as u8;
 
-    if xor_checksum(&[duty_h, duty_l, cmd]) == received_checksum {
+    if crc8(&[duty_h, duty_l, cmd]) == received_checksum {
         let duty = ((duty_h as u16) << 8) | duty_l as u16;
         DUTY.store(duty, Ordering::Relaxed);
         PACKET_COUNT.fetch_add(1, Ordering::Relaxed);
@@ -496,9 +543,8 @@ fn build_tx_buf_for_state(state: &BulkState) -> [u32; MAX_FRAME_LEN] {
 /// MISO (Pico→RPi): [ V_H | V_L | I_H | I_L | VOUT_H | VOUT_L | TEMP_H
 ///   | TEMP_L | CHECKSUM | ACK | 0 x 2 ]
 ///
-/// `CHECKSUM` is an XOR over the preceding data bytes in each
-/// direction (`xor_checksum`) - it does not grow the frame, both
-/// directions still 12 bytes. A MOSI checksum mismatch is treated like a
+/// `CHECKSUM` is `crc8` over the data bytes in each direction - it does
+/// not grow the frame, both directions still 12 bytes. A MOSI checksum mismatch is treated like a
 /// torn frame: `DUTY` is left at its last-good value (never zeroed by a
 /// single mismatch) and does NOT count toward `consecutive_timeouts` -
 /// the master is clearly still talking, just corrupted, a different
@@ -507,10 +553,10 @@ fn build_tx_buf_for_state(state: &BulkState) -> [u32; MAX_FRAME_LEN] {
 /// `CMD`/`ACK` are the curve-tracer bulk-read handshake bytes - see
 /// `BulkState`'s doc comment for the full three-step protocol. They
 /// ride in the steady frame's spare bytes. Both participate in their
-/// direction's `CHECKSUM` - `duty_h ^ duty_l ^ cmd` for MOSI (see
-/// `apply_duty_frame`), the telemetry bytes ^ `ack` for MISO (see
-/// `build_tx_frame`) - since each is a command to the other side rather
-/// than a reading. The handshake's own third step is a **separate**, larger
+/// direction's `CHECKSUM` - `crc8(&[duty_h, duty_l, cmd])` for MOSI (see
+/// `apply_duty_frame`), `crc8` over the telemetry bytes plus `ack` for
+/// MISO (see `build_tx_frame`) - since each is a command to the other
+/// side rather than a reading. The handshake's own third step is a **separate**, larger
 /// (`BULK_FRAME_LEN`-byte) transaction, not part of this steady frame at
 /// all - `this_frame_len` below switches to it only for that one exchange.
 #[embassy_executor::task]

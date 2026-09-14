@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 from .base import SignalSource
@@ -38,6 +39,12 @@ _CMD_RELEASE_RELAY = 0xB3
 # CMD_STREAM_POLL and mode_curve_tracer.rs's SweepProgress/PROGRESS_FLAG_*
 # exactly.
 _CMD_STREAM_POLL = 0xB4
+
+# Replay a curve stored in the firmware instead of sweeping a real panel -
+# one byte per stored curve. Must match spi_slave_pio.rs's
+# CMD_DEMO_SWEEP_DIM/CMD_DEMO_SWEEP_BRIGHT.
+_CMD_DEMO_SWEEP = {False: 0xB5, True: 0xB6}
+
 _PROGRESS_NO_SWEEP_INDEX = 0xFF
 _PROGRESS_FLAG_ACTIVE = 0b01
 _PROGRESS_FLAG_FINAL = 0b10
@@ -54,6 +61,26 @@ _BULK_READ_ARM_DELAY_S = 0.002
 # timing out between our frames instead of exchanging with us. Kept a
 # little under 100 ms for margin.
 _MAX_POLL_INTERVAL_S = 0.08
+
+
+def crc8(data: Sequence[int]) -> int:
+    """CRC-8 (polynomial 0x07, init 0xFF) over *data* - the checksum on
+    both 12-byte SPI frame directions. Must match `spi_slave_pio.rs`'s
+    `crc8` exactly.
+
+    Not an XOR, because an XOR is position-blind and a MOSI frame at duty
+    0 is all zeros but the command byte: a byte-shifted copy of it XORs to
+    the same value and is accepted. Measured on the bench - a
+    2-byte-shifted start-sweep frame validated cleanly and applied 69%
+    duty to the SEPIC gate against a commanded 0. A CRC's feedback makes
+    it order-dependent, so a shifted frame fails.
+    """
+    crc = 0xFF
+    for byte in data:
+        crc ^= byte
+        for _ in range(8):
+            crc = ((crc << 1) ^ 0x07) & 0xFF if crc & 0x80 else (crc << 1) & 0xFF
+    return crc
 
 
 def _to_signed_i16(raw: int) -> int:
@@ -94,9 +121,10 @@ class SpiMcuSource(SignalSource):
     calibrated millivolts/milliamperes as saturating u16 (not raw ADC
     counts - the firmware does the calibration). Temp is a big-endian
     ``i16`` in centi-Celsius, or the sentinel -32768 if no probe is
-    connected (see ``temperature_c``). ``CHECKSUM`` is an XOR over the
-    frame's data bytes in each direction - ``DUTY_H^DUTY_L^CMD`` for MOSI,
-    the eight telemetry bytes ``^ACK`` for MISO. Both handshake bytes are
+    connected (see ``temperature_c``). ``CHECKSUM`` is a CRC-8 (polynomial
+    0x07, init 0xFF; see ``crc8()`` above) over the frame's data bytes in
+    each direction - ``DUTY_H``, ``DUTY_L``, ``CMD`` for MOSI, the eight
+    telemetry bytes plus ``ACK`` for MISO. Both handshake bytes are
     covered because each is a command to the other side rather than a
     reading. A mismatched frame is corrupted-but-complete (passed the
     firmware's own frame-timeout check) and is rejected - the last-good
@@ -191,10 +219,8 @@ class SpiMcuSource(SignalSource):
         duty_h, duty_l = duty_u16 >> 8, duty_u16 & 0xFF
         # `cmd` participates in the checksum (matches
         # spi_slave_pio.rs's apply_duty_frame) so a corrupted frame can't
-        # spoof a bulk-dump request by chance; `cmd` is 0 on every call
-        # except request_sweep()'s/poll_sweep_progress()'s first, so XOR
-        # with 0 leaves the normal write()/read() checksum unchanged.
-        tx = [duty_h, duty_l, duty_h ^ duty_l ^ cmd, cmd] + [0] * 8
+        # spoof a bulk-dump request by chance.
+        tx = [duty_h, duty_l, crc8([duty_h, duty_l, cmd]), cmd] + [0] * 8
         rx = self._spi.xfer2(list(tx))
 
         # The MISO checksum covers the 8 payload bytes and the ack byte
@@ -202,11 +228,8 @@ class SpiMcuSource(SignalSource):
         # flip setting its top bit would otherwise send us off to clock an
         # 83-byte bulk read against firmware still sending telemetry. It
         # sits after the checksum byte in the frame; that is only byte
-        # order, both sides XOR it in the same way.
-        expected_checksum = rx[9]
-        for byte in rx[0:8]:
-            expected_checksum ^= byte
-        if rx[8] != expected_checksum:
+        # order, both sides fold it in at the same point.
+        if rx[8] != crc8(rx[0:8] + [rx[9]]):
             return None
         return rx[0:8], rx[9]
 
@@ -384,6 +407,19 @@ class SpiMcuSource(SignalSource):
         the result once the sweep completes.
         """
         self._send_cmd(cmd=_CMD_START_SWEEP)
+
+    def start_demo_sweep(self, bright: bool = False) -> None:
+        """Ask the firmware to replay one of its two stored curves instead
+        of sweeping a real panel.
+
+        Same progress and bulk-read path as ``start_sweep()``, so the Pi,
+        the server and the web UI are exercised over real SPI - but with
+        no panel, no lamp and nothing dissipating in the bleed path. Use
+        it to work on the loop away from a lit bench. Unlike the server's
+        ``--demo`` flag, which fakes the source Pi-side, this still needs
+        a board and does test the link.
+        """
+        self._send_cmd(cmd=_CMD_DEMO_SWEEP[bright])
 
     def release_relay(self) -> None:
         """Ask the firmware to disconnect the panel from the tracer's

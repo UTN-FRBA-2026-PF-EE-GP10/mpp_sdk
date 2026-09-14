@@ -12,7 +12,16 @@ import { fetchLiveSweep, releaseRelay, startSweep } from '@/lib/api'
 import type { LiveSweepState } from '@/lib/api'
 
 function mockData(overrides: Partial<LiveSweepState>): LiveSweepState {
-  return { points: [], partial: [], active: false, link: 'ok', seq: 0, commandError: null, ...overrides }
+  return {
+    points: [],
+    partial: [],
+    active: false,
+    link: 'ok',
+    seq: 0,
+    commandError: null,
+    demoSource: false,
+    ...overrides,
+  }
 }
 
 beforeEach(() => {
@@ -90,6 +99,11 @@ describe('useLiveSweep', () => {
     const { result } = renderHook(() => useLiveSweep())
     result.current.releaseRelay()
     expect(vi.mocked(releaseRelay)).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not poll /api/data at all when disabled - client demo mode relies on this', () => {
+    renderHook(() => useLiveSweep(false))
+    expect(fetchLiveSweep).not.toHaveBeenCalled()
   })
 
   it('swallows a poll failure without throwing', async () => {

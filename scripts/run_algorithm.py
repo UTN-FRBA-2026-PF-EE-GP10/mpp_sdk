@@ -82,6 +82,9 @@ def _sweep_and_save_curve(src, *, timeout_s: float, poll_interval_s: float, labe
         measurement="baseline",
         panels=(),
         points=tuple(points),
+        # This script only ever runs against a real board (it needs
+        # spidev), so the sweep it saves is always a measurement.
+        source="hardware",
     )
     path = curves_save(record)
     src.release_relay()

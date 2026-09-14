@@ -1,8 +1,8 @@
 # Measurement procedure
 
 A checklist for running a bench measurement session: capturing one curve,
-running a tilt-sweep series, and (once you have a board) a closed-loop
-run. See `README.md`'s Quickstart to install the `web` extra first.
+running a tilted series, and (once you have a board) a closed-loop run.
+See `README.md`'s Quickstart to install the `web` extra first.
 
 ## Before you start
 
@@ -22,43 +22,49 @@ run. See `README.md`'s Quickstart to install the `web` extra first.
 1. Open `http://<pi-host>:8000/` (or `http://localhost:8000/` for
    `--demo`).
 2. In the grid of measurement-kind cards, select **baseline** (or whatever
-   kind matches this capture - see "The tilt-sweep procedure" below for
-   `tilt-sweep`).
+   kind matches this capture - see "The tilted-panel procedure" below for
+   `tilted`).
 3. Click **Start Measurement**. Wait for the curve to finish plotting - a
    few seconds, since the sweep auto-ranges and takes 20 points.
 4. Fill in the save form: a **label** (a short description - suggest a
    convention like `"<date> <condition>"`, e.g.
    `"2026-09-08 baseline lamp 30cm"`) and optional **notes** (lamp
-   distance, ambient light, anything unusual). Leave each panel's tilt
-   field at its physical resting angle (0 degrees if flat).
+   distance, ambient light, anything unusual). Panel A is fixed at 90
+   degrees and is not editable in the form. Leave panel B's tilt at 90
+   degrees for a baseline capture (both panels matching).
 5. Click **Save curve**. Confirm it appears in the table below.
 
-## The tilt-sweep procedure
+## The tilted-panel procedure
 
-**Why**: a tilt-sweep is a series of curves at the same illumination with
-one panel's tilt angle varied. It lets `mpp-sdk compare-measured` (see
+**Why**: this bench's array is two panels and a lamp. The light travels
+from 180 degrees toward 0 degrees; 90 degrees is vertical and faces the
+light squarely, so 90 is the *untilted* reference, not zero. Panel A is
+always fixed at 90 degrees - it is the unshaded reference panel and is
+never adjusted. Panel B is the one that moves, on a mount with five fixed
+detents: 90, 70, 60, 45, 30 degrees. Lower numbers tilt panel B further
+right, away from the light, so it receives less illumination. A single
+tilted capture and a full sweep across panel B's angles are the same
+physical setup, just one point or several - hence one measurement kind,
+`tilted`, for both. It lets `mpp-sdk compare-measured` (see
 `docs/methodology.md`'s "Measured curves" section) grade an algorithm's
 partial-shading behavior against a real, physically varying array shape
 instead of an inferred one.
 
-**Convention** (a starting point, not a hard rule): sweep the same panel
-through a fixed set of angles - `0, 15, 30, 45, 60` degrees is a
-reasonable spread, adjusted to what the mounting hardware can hold
-steady. Keep every other condition (lighting, the other panel's tilt)
-constant across the whole series. Use the same label prefix for the
-whole series with the angle appended, e.g.
-`"2026-09-08 tilt-sweep 30deg"`, so the saved-curves table stays readable.
-
-**Procedure**: repeat "Capture one curve" once per angle, with two
-changes each time: physically set the panel to the next angle before
-clicking **Start Measurement**, and select the **tilt-sweep** card (not
-**baseline**) so the save request's measurement kind matches, and set
-that panel's tilt field to the actual angle used - the tilt field is what
-grouping and analysis code reads, not just the label text.
+**Procedure for a sweep**: repeat "Capture one curve" once per angle,
+with two changes each time: physically set panel B to the next detent
+before clicking **Start Measurement**, and select the **tilted** card
+(not **baseline**) so the save request's measurement kind matches. The
+save form's panel B selector is restricted to the five valid detents, so
+picking the wrong angle by typo is not possible - just make sure the
+selected value matches where the panel physically is. Use the same label
+prefix for the whole series with the angle appended, e.g.
+`"2026-09-08 tilted 45deg"`, so the saved-curves table stays readable.
+Keep every other condition (lighting, panel A) constant across the whole
+series.
 
 **After the series**: run `mpp-sdk compare-measured` (see
 `docs/methodology.md`) - it groups saved curves by measurement kind, so a
-consistently labeled tilt-sweep series shows up together automatically.
+consistently labeled tilted series shows up together automatically.
 
 ## Where the files land
 

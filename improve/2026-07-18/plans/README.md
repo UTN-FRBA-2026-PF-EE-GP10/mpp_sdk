@@ -68,6 +68,7 @@ re-enabling; no plan file, tracked via the PR that disabled it.
 | 036 | SEPIC control-theory learning spike (PID -> optimal control+observer -> Kalman) | P3 | L | - | TODO |
 | 037 | Surface asynchronous command failures in the workbench UI | P1 | S remaining | 032 (soft) | IN PROGRESS (server + typed client done; visible UI in `CurveWorkbench.tsx` left for hands-on design) |
 | 038 | Save the displayed capture, not an unversioned latest sweep (save/display race) | P1 | M | 037 (soft), 032 (soft) | TODO |
+| 039 | Firmware: PIO SPI slave cannot recover from an idle frame timeout | P1 | M-L (bench) | - | TODO (workaround shipped: Pi polls below FRAME_TIMEOUT) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) |
 REJECTED (with one-line rationale).
@@ -266,6 +267,27 @@ what it covers and what is still open); 038 is a distinct, unimplemented
 finding (a save/display race between the operator's displayed capture and
 whatever the cache holds by the time Save's request lands) worth keeping
 as its own plan.
+
+### Plan 039: the SPI link, found while fixing a flickering UI (2026-09-13)
+
+Not from an audit. A bench session on the curve tracer ended up finding
+that the PIO SPI slave cannot recover from an idle frame timeout: at a
+0.5-2 s polling cadence roughly half of all frames came back with the
+slave driving a byte and then going quiet, while at 0.05 s the link was
+clean over 37 consecutive frames and a 60-second soak.
+
+It had been invisible because the 12-byte frames carried an XOR checksum,
+and the two degenerate frames this failure produces - all `0x00` and all
+`0xFF` - both pass an XOR. The same session replaced that with a CRC-8
+(also motivated independently: an XOR accepted a byte-shifted frame, and
+on the bench a shifted `CMD_START_SWEEP` applied 69% duty to the SEPIC
+gate against a commanded 0). The CRC is what made the framing defect
+countable.
+
+The shipped workaround is `--poll-period-s` defaulting to 0.05, below
+`FRAME_TIMEOUT`, so the broken recovery path never runs. Three candidate
+firmware fixes were flashed and measured the same day and all were
+rejected - plan 039 records them so they are not re-tried from scratch.
 
 ## Audit trail (2026-07-18 audit)
 

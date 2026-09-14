@@ -84,20 +84,21 @@ DUTY is a u16 (0 = 0 %, 65535 = 100 %). V/I/VOUT are u16, saturating: V/VOUT
 in millivolts, I in milliamperes (negative current clamps to 0). TEMP is a
 big-endian `i16` in centi-Celsius, or the sentinel `-32768` (`0x8000`) while
 the MAX31865 probe stays disabled (see "Panel temperature" below). See
-"Sensing" below for the sensor details. `CHECKSUM` is an XOR of
-the frame's data bytes in each direction - `DUTY_H^DUTY_L^CMD` for MOSI,
-`V_H^V_L^I_H^I_L^VOUT_H^VOUT_L^TEMP_H^TEMP_L^ACK` for MISO. `CMD` and
+"Sensing" below for the sensor details. `CHECKSUM` is a CRC-8 (polynomial
+`0x07`, init `0xFF`) over the frame's data bytes in each direction -
+`DUTY_H`, `DUTY_L`, `CMD` for MOSI; `V_H`, `V_L`, `I_H`, `I_L`, `VOUT_H`,
+`VOUT_L`, `TEMP_H`, `TEMP_L`, `ACK` for MISO, in that order. `CMD` and
 `ACK` are both covered because each is a *command to the other side*
 rather than a reading: a bit flip on `CMD` would spoof a bulk-dump
 request, and one setting `ACK`'s top bit would send the Pi off to clock
 an 83-byte bulk-read transaction against firmware that is still sending
 12-byte telemetry, desyncing the wire (observed on-target, concentrated
 at sweep start when the tracer's linear current sink switches on and the
-link is at its noisiest). Both are `0x00` on every normal frame and XOR
-with `0x00` is a no-op, so this leaves the checksum value unchanged for
-plain `write()`/`read()` traffic. `ACK` sits *after* the `CHECKSUM` byte
-in the frame, which is only byte order - both sides XOR it in the same
-way.
+link is at its noisiest). Both sides run the same CRC-8 over the same
+bytes every time, so plain `write()`/`read()` traffic - where `CMD` and
+`ACK` are always `0x00` - checksums correctly with no special case.
+`ACK` sits *after* the `CHECKSUM` byte in the frame, which is only byte
+order - both sides compute the checksum over the same bytes regardless.
 A checksum mismatch is treated as a corrupted-but-complete frame: the
 firmware keeps the last commanded `DUTY` (does not zero it or count it as
 a timeout) and ignores `CMD` for that frame; `SpiMcuSource`/`spi_test.py`
@@ -453,7 +454,7 @@ real "sweep is over" update and must not be read as "nothing new").
 `FLAGS` bit 0 is `active`, bit 1 is `final_point` - `final_point` is what
 tells the two `0xFF` cases apart, so a consumer must check it before
 treating `IDX == 0xFF` as "no update". `CHECKSUM`/`ACK` follow the same
-XOR-over-payload convention as the telemetry frame (`ACK` is always `0x00`
+CRC-8 convention as the telemetry frame (`ACK` is always `0x00`
 here - a progress reply never also acks a bulk-dump request). Frame length
 is unchanged at 12 bytes - unlike the bulk read, this fits entirely inside
 the steady frame's existing shape.

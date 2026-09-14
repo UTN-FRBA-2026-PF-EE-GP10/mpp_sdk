@@ -1,47 +1,34 @@
-import {
-  CategoryScale,
-  Chart as ChartJS,
-  Legend,
-  LinearScale,
-  LineElement,
-  PointElement,
-  Tooltip,
-  type ChartOptions,
-} from 'chart.js'
 import { useMemo } from 'react'
 import { Line } from 'react-chartjs-2'
+import { CURRENT_COLOR, ivChartOptions, POWER_COLOR } from '@/lib/chartConfig'
+import { useTheme } from '@/lib/theme'
+import { useUnits } from '@/lib/units'
 import type { CurvePoint } from '@/types'
 
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend)
-
-const ACCENT = '#f97316' // orange - current, matches the curve tracer's existing theme
-const POWER = '#ef4444' // red - power
-
 /**
- * Renders whichever of `partial`/`points` is authoritative right now: while
- * `active`, points stream in one at a time (mocked today - the real source
- * will be per-point firmware frames as a sweep runs); once a sweep
- * completes, `points` takes over.
+ * Renders whichever of `partial`/`points` is authoritative right now.
+ *
+ * The live trace wins whenever there is one. `useLiveSweep` only clears
+ * `partial` when the completed sweep that supersedes it arrives, so this
+ * rule never shows a stale curve: during a sweep it draws the trace, and
+ * the instant the real result lands it draws that instead. Keying off
+ * `active` here instead put the previous sweep's curve back on screen for
+ * the poll or two between the firmware finishing and the server fetching
+ * its result, which read as a flicker.
  */
-export function LiveChart({
-  partial,
-  points,
-  active,
-}: {
-  partial: CurvePoint[]
-  points: CurvePoint[]
-  active: boolean
-}) {
-  const shown = active || points.length === 0 ? partial : points
+export function LiveChart({ partial, points }: { partial: CurvePoint[]; points: CurvePoint[] }) {
+  const { factor, currentLabel, powerLabel } = useUnits()
+  const { resolvedDark } = useTheme()
+  const shown = partial.length > 0 ? partial : points
 
   const data = useMemo(
     () => ({
       datasets: [
         {
           label: 'I(V)',
-          data: shown.map((p) => ({ x: p.v, y: p.i * 1000 })),
-          borderColor: ACCENT,
-          backgroundColor: ACCENT,
+          data: shown.map((p) => ({ x: p.v, y: p.i * factor })),
+          borderColor: CURRENT_COLOR,
+          backgroundColor: CURRENT_COLOR,
           pointRadius: 4,
           borderWidth: 2,
           tension: 0.15,
@@ -49,48 +36,25 @@ export function LiveChart({
         },
         {
           label: 'P(V)',
-          data: shown.map((p) => ({ x: p.v, y: p.v * p.i * 1000 })),
-          borderColor: POWER,
-          backgroundColor: POWER,
-          pointRadius: 2,
+          data: shown.map((p) => ({ x: p.v, y: p.v * p.i * factor })),
+          borderColor: POWER_COLOR,
+          backgroundColor: POWER_COLOR,
+          pointRadius: 4,
           borderWidth: 2,
           tension: 0.15,
           yAxisID: 'p',
         },
       ],
     }),
-    [shown],
+    [shown, factor],
   )
 
-  const options: ChartOptions<'line'> = {
-    responsive: true,
-    maintainAspectRatio: false,
-    animation: false,
-    parsing: false,
-    scales: {
-      x: {
-        type: 'linear',
-        min: 0,
-        title: { display: true, text: 'Voltage [V]' },
-      },
-      y: {
-        type: 'linear',
-        position: 'left',
-        min: 0,
-        title: { display: true, text: 'Current [mA]' },
-      },
-      p: {
-        type: 'linear',
-        position: 'right',
-        min: 0,
-        title: { display: true, text: 'Power [mW]' },
-        grid: { drawOnChartArea: false },
-      },
-    },
-    plugins: {
-      legend: { display: true },
-    },
-  }
+  // Memoised: a fresh options object every render makes chart.js rebuild
+  // its scales on each poll tick.
+  const options = useMemo(
+    () => ivChartOptions(currentLabel, powerLabel, resolvedDark),
+    [currentLabel, powerLabel, resolvedDark],
+  )
 
   return (
     <div className="h-72 w-full">
