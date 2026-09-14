@@ -1,5 +1,7 @@
 import { useState } from 'react'
+import { CurveDetailDialog } from '@/components/CurveDetailDialog'
 import { LiveChart } from '@/components/LiveChart'
+import { ProvenanceBadge } from '@/components/ProvenanceBadge'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -12,44 +14,55 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { useDemoCapture } from '@/hooks/useDemoCapture'
 import { useLiveSweep } from '@/hooks/useLiveSweep'
 import { saveCurve } from '@/lib/api'
-import { getMeasurementKindInfo, type CurveRecord, type PanelSetup } from '@/types'
+import { formatCapturedAt } from '@/lib/format'
+import {
+  getMeasurementKindInfo,
+  PANEL_A_TILT_DEG,
+  PANEL_B_TILT_OPTIONS_DEG,
+  type CurveRecord,
+  type PanelSetup,
+} from '@/types'
 
 const DEFAULT_PANELS: PanelSetup[] = [
-  { id: 'A', tilt_deg: 0 },
-  { id: 'B', tilt_deg: 0 },
+  { id: 'A', tilt_deg: PANEL_A_TILT_DEG },
+  { id: 'B', tilt_deg: 90 },
 ]
-
-function formatTime(iso: string): string {
-  return new Date(iso).toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
 
 function SaveCurveForm({
   kind,
   hasCapture,
+  demo,
   onSaved,
+  initialLabel,
+  initialNotes,
+  initialPanels,
 }: {
   kind: string
   hasCapture: boolean
+  demo: boolean
   onSaved: () => void
+  /** Remeasure's prefill (see App.tsx's `startRemeasure`) - read once as
+   * this form's starting state, same as any other initial-state prop:
+   * later changes to these don't reset what the operator has typed. */
+  initialLabel?: string
+  initialNotes?: string
+  initialPanels?: PanelSetup[]
 }) {
-  const [label, setLabel] = useState('')
-  const [notes, setNotes] = useState('')
-  const [panels, setPanels] = useState<PanelSetup[]>(DEFAULT_PANELS)
+  const [label, setLabel] = useState(initialLabel ?? '')
+  const [notes, setNotes] = useState(initialNotes ?? '')
+  const [panels, setPanels] = useState<PanelSetup[]>(initialPanels ?? DEFAULT_PANELS)
   const [status, setStatus] = useState<string>('')
   const [saving, setSaving] = useState(false)
 
-  function updateTilt(index: number, tilt_deg: number) {
-    setPanels((prev) => prev.map((p, i) => (i === index ? { ...p, tilt_deg } : p)))
+  function updatePanelBTilt(tilt_deg: number) {
+    setPanels((prev) => prev.map((p) => (p.id === 'B' ? { ...p, tilt_deg } : p)))
   }
 
   async function handleSave() {
+    if (demo) return // defense in depth - the button is disabled anyway
     setSaving(true)
     setStatus('')
     try {
@@ -82,27 +95,40 @@ function SaveCurveForm({
         />
       </div>
       <div className="flex flex-wrap items-center gap-3">
-        {panels.map((p, i) => (
-          <label key={p.id} className="flex items-center gap-1.5 text-sm text-muted-foreground">
-            Panel {p.id} tilt
-            <input
-              type="number"
-              value={p.tilt_deg}
-              onChange={(e) => updateTilt(i, Number(e.target.value))}
-              className="w-16 rounded-md border bg-transparent px-2 py-1 text-sm"
-            />
-            °
-          </label>
-        ))}
+        <span className="text-sm text-muted-foreground">Panel A: fixed at 90° (reference)</span>
+        <label className="flex items-center gap-1.5 text-sm text-muted-foreground">
+          Panel B tilt
+          <select
+            value={panels.find((p) => p.id === 'B')?.tilt_deg ?? 90}
+            onChange={(e) => updatePanelBTilt(Number(e.target.value))}
+            className="rounded-md border bg-transparent px-2 py-1 text-sm"
+          >
+            {PANEL_B_TILT_OPTIONS_DEG.map((deg) => (
+              <option key={deg} value={deg}>
+                {deg}°
+              </option>
+            ))}
+          </select>
+        </label>
         <Button
           size="sm"
           onClick={handleSave}
-          disabled={!hasCapture || saving || !label.trim()}
+          disabled={demo || !hasCapture || saving || !label.trim()}
+          title={demo ? 'Saving is unavailable in demo mode - a replay must not enter your real curve library' : undefined}
           className="ml-auto"
         >
           {saving ? 'Saving...' : 'Save curve'}
         </Button>
       </div>
+      <p className="text-xs text-muted-foreground">
+        90° faces the lamp squarely (both panels matching = baseline); lower angles tilt panel B
+        right, away from the light.
+      </p>
+      {demo && (
+        <p className="text-xs text-muted-foreground">
+          Saving is unavailable in demo mode - a replay must not enter your real curve library.
+        </p>
+      )}
       {status && <p className="text-xs text-muted-foreground">{status}</p>}
     </div>
   )
@@ -113,21 +139,51 @@ export function CurveWorkbench({
   records,
   connected,
   onSaved,
+  demo = false,
+  emphasizeReplay = false,
+  initialLabel,
+  initialNotes,
+  initialPanels,
 }: {
   kind: string
   records: CurveRecord[]
   connected: boolean
   onSaved: () => void
+  /** CaptureMode 'simulated' (see lib/captureMode.ts): the two "Demo
+   * curve" buttons replay a bundled fixture locally instead of over SPI;
+   * Start Measurement, Release Relay, and Save curve are hardware/write
+   * actions with no local equivalent and stay disabled. */
+  demo?: boolean
+  /** CaptureMode 'firmware-replay' ("Demo with Pi"): everything still
+   * works exactly as it does in 'hardware' mode (both need `connected`),
+   * this only swaps which button row reads as the primary action - real
+   * SPI either way, never set alongside `demo`. */
+  emphasizeReplay?: boolean
+  /** Remeasure's prefill for the Save form - forwarded straight through
+   * to SaveCurveForm. See MeasurePane, which only supplies these when
+   * this workbench's `kind` matches the prefill's. */
+  initialLabel?: string
+  initialNotes?: string
+  initialPanels?: PanelSetup[]
 }) {
   const info = getMeasurementKindInfo(kind)
+  // Both hooks are always called (rules of hooks) - useLiveSweep is simply
+  // told not to poll while `demo` is on, so switching modes can never
+  // leave a stray `/api/data` poll running for the capture pane.
+  const live = useLiveSweep(!demo)
+  const demoCapture = useDemoCapture()
   const { partial, points, active, commandError, demoSource, start, startDemo, releaseRelay } =
-    useLiveSweep()
+    demo ? demoCapture : live
   // Deliberately excludes `active`: POST /api/save-curve persists the
   // cache's last *completed* sweep (see curve_tracer_server.py's
   // post_save_curve), not whatever `partial` is currently drawing.
   // Allowing Save mid-sweep would silently save the previous sweep's
   // points under the label meant for the one still in progress.
   const hasCapture = !active && points.length > 0
+  const [selected, setSelected] = useState<CurveRecord | null>(null)
+  // Demo-curve replays run regardless of `connected` (they're local), but
+  // Start Measurement/Release Relay never fire in demo mode either way.
+  const demoButtonsDisabled = active || (!demo && !connected)
 
   return (
     <Card>
@@ -138,25 +194,59 @@ export function CurveWorkbench({
             <p className="text-sm text-muted-foreground">{info.description}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button onClick={start} disabled={!connected || active}>
+            <Button
+              variant={emphasizeReplay ? 'outline' : 'default'}
+              onClick={start}
+              disabled={demo || !connected || active}
+              title={demo ? 'Start Measurement needs real hardware - unavailable in demo mode' : undefined}
+            >
               {active ? 'Measuring...' : 'Start Measurement'}
             </Button>
-            {/* Replays a curve stored in the firmware over the real SPI
-                link - lets the whole loop be exercised with no panel and
-                no lamp, without engaging the relay or the bleed path. */}
-            <Button variant="secondary" onClick={() => startDemo(false)} disabled={!connected || active}>
+            {/* Off the board, replays a curve stored in the firmware over
+                the real SPI link - lets the whole loop be exercised with
+                no panel and no lamp. In demo mode, replays the matching
+                bundled fixture locally instead (see useDemoCapture) -
+                same buttons, same pacing, no SPI, no relay. */}
+            <Button
+              variant={emphasizeReplay ? 'default' : 'secondary'}
+              onClick={() => startDemo(false)}
+              disabled={demoButtonsDisabled}
+            >
               Demo curve (dim)
             </Button>
-            <Button variant="secondary" onClick={() => startDemo(true)} disabled={!connected || active}>
+            <Button
+              variant={emphasizeReplay ? 'default' : 'secondary'}
+              onClick={() => startDemo(true)}
+              disabled={demoButtonsDisabled}
+            >
               Demo curve (bright)
             </Button>
-            <Button variant="outline" onClick={releaseRelay} disabled={!connected}>
+            <Button
+              variant="outline"
+              onClick={releaseRelay}
+              disabled={demo || !connected}
+              title={demo ? 'Release Relay needs real hardware - unavailable in demo mode' : undefined}
+            >
               Release Relay
             </Button>
           </div>
         </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-6">
+        {demo && (
+          <p className="rounded-md border border-violet-500/30 bg-violet-500/10 px-3 py-2 text-sm text-violet-700 dark:text-violet-300">
+            Demo mode: the Demo curve buttons replay a bundled sample locally. Start Measurement,
+            Release Relay, and Save curve talk to real hardware or write to your library, so they
+            stay off.
+          </p>
+        )}
+        {emphasizeReplay && (
+          <p className="rounded-md border border-indigo-500/30 bg-indigo-500/10 px-3 py-2 text-sm text-indigo-700 dark:text-indigo-300">
+            Demo with Pi: the Demo curve buttons are the point here - real SPI, a curve already
+            stored in the firmware, not measured this session. Start Measurement and Save curve
+            still work normally.
+          </p>
+        )}
         {commandError && (
           <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
             {commandError}
@@ -174,7 +264,15 @@ export function CurveWorkbench({
           </p>
         </div>
 
-        <SaveCurveForm kind={kind} hasCapture={hasCapture} onSaved={onSaved} />
+        <SaveCurveForm
+          kind={kind}
+          hasCapture={hasCapture}
+          demo={demo}
+          onSaved={onSaved}
+          initialLabel={initialLabel}
+          initialNotes={initialNotes}
+          initialPanels={initialPanels}
+        />
 
         <Separator />
 
@@ -202,9 +300,21 @@ export function CurveWorkbench({
                 </TableHeader>
                 <TableBody>
                   {records.map((r) => (
-                    <TableRow key={r.path}>
+                    <TableRow
+                      key={r.path}
+                      onClick={() => setSelected(r)}
+                      tabIndex={0}
+                      role="button"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          setSelected(r)
+                        }
+                      }}
+                      className="cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                    >
                       <TableCell className="font-medium">{r.label}</TableCell>
-                      <TableCell>{formatTime(r.captured_at)}</TableCell>
+                      <TableCell>{formatCapturedAt(r.captured_at)}</TableCell>
                       <TableCell>
                         <div className="flex flex-wrap gap-1">
                           {r.panels.map((p) => (
@@ -215,13 +325,7 @@ export function CurveWorkbench({
                         </div>
                       </TableCell>
                       <TableCell>
-                        {r.source === 'hardware' ? (
-                          <span className="text-muted-foreground">measured</span>
-                        ) : (
-                          <Badge variant="outline" className="border-violet-500/40 text-violet-600">
-                            {r.source}
-                          </Badge>
-                        )}
+                        <ProvenanceBadge source={r.source} />
                       </TableCell>
                       <TableCell className="text-right">{r.voc.toFixed(2)} V</TableCell>
                       <TableCell className="text-right">{(r.isc * 1000).toFixed(1)} mA</TableCell>
@@ -236,6 +340,8 @@ export function CurveWorkbench({
           )}
         </div>
       </CardContent>
+
+      <CurveDetailDialog record={selected} onClose={() => setSelected(null)} />
     </Card>
   )
 }

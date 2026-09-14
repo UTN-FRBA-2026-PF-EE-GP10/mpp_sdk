@@ -73,6 +73,28 @@ def load(path: Path) -> CurveRecord:
         raise ValueError(f"{path}: {exc}") from exc
 
 
+def delete(path: Path, directory: Path | None = None) -> bool:
+    """Delete one curve record file. Returns `True` if a file was removed,
+    `False` if it was already gone - a delete is idempotent, since a UI
+    button firing twice (or acting on a listing that's gone stale) must not
+    surface as a hard error.
+
+    Refuses to delete anything outside `directory` (default `default_dir()`)
+    and raises `ValueError` if `path` resolves outside it. The API layer
+    maps an untrusted URL id to a path through this same directory, and a
+    bug there must not turn into an arbitrary-file delete."""
+    directory = directory if directory is not None else default_dir()
+    resolved_dir = directory.resolve()
+    resolved_path = path.resolve()
+    if resolved_dir not in resolved_path.parents:
+        raise ValueError(f"{path}: refusing to delete outside {directory}")
+    try:
+        resolved_path.unlink()
+    except FileNotFoundError:
+        return False
+    return True
+
+
 def load_all(directory: Path | None = None) -> list[CurveRecord]:
     """Load every `*.json` record in `directory` (default `default_dir()`).
     A file that fails to parse raises rather than being skipped - a

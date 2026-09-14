@@ -64,6 +64,24 @@ def load(path: Path) -> RunRecord:
         raise ValueError(f"{path}: {exc}") from exc
 
 
+def delete(path: Path, directory: Path | None = None) -> bool:
+    """Delete one run record file. Same idempotent, directory-scoped
+    behaviour as `mpp_sdk.curves.library.delete` - see its docstring for
+    the reasoning. Returns `True` if a file was removed, `False` if it was
+    already gone; raises `ValueError` if `path` resolves outside
+    `directory` (default `default_dir()`)."""
+    directory = directory if directory is not None else default_dir()
+    resolved_dir = directory.resolve()
+    resolved_path = path.resolve()
+    if resolved_dir not in resolved_path.parents:
+        raise ValueError(f"{path}: refusing to delete outside {directory}")
+    try:
+        resolved_path.unlink()
+    except FileNotFoundError:
+        return False
+    return True
+
+
 def load_all(directory: Path | None = None) -> list[RunRecord]:
     directory = directory if directory is not None else default_dir()
     if not directory.exists():

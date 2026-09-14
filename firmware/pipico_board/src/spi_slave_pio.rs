@@ -431,9 +431,9 @@ enum BulkState {
 /// is dummy/unparsed). See `spi_pio_task`'s doc comment for the checksum
 /// contract. Returns the validated `cmd` byte (`rx[3]`) if the checksum
 /// passed, `None` otherwise - `cmd` participates in `CHECKSUM`
-/// (`duty_h ^ duty_l ^ cmd`) precisely so a corrupted frame can't spoof
-/// `CMD_REQUEST_BULK_DUMP` by chance: a bit flip landing on `cmd` alone
-/// now also mismatches the checksum, same as a flip on `duty_h`/`duty_l`
+/// (`crc8(&[duty_h, duty_l, cmd])`) precisely so a corrupted frame can't
+/// spoof `CMD_REQUEST_BULK_DUMP` by chance: a bit flip landing on `cmd`
+/// alone now also mismatches the checksum, same as a flip on `duty_h`/`duty_l`
 /// already did.
 fn apply_duty_frame(
     rx: &[u32],
@@ -553,10 +553,10 @@ fn build_tx_buf_for_state(state: &BulkState) -> [u32; MAX_FRAME_LEN] {
 /// `CMD`/`ACK` are the curve-tracer bulk-read handshake bytes - see
 /// `BulkState`'s doc comment for the full three-step protocol. They
 /// ride in the steady frame's spare bytes. Both participate in their
-/// direction's `CHECKSUM` - `duty_h ^ duty_l ^ cmd` for MOSI (see
-/// `apply_duty_frame`), the telemetry bytes ^ `ack` for MISO (see
-/// `build_tx_frame`) - since each is a command to the other side rather
-/// than a reading. The handshake's own third step is a **separate**, larger
+/// direction's `CHECKSUM` - `crc8(&[duty_h, duty_l, cmd])` for MOSI (see
+/// `apply_duty_frame`), `crc8` over the telemetry bytes plus `ack` for
+/// MISO (see `build_tx_frame`) - since each is a command to the other
+/// side rather than a reading. The handshake's own third step is a **separate**, larger
 /// (`BULK_FRAME_LEN`-byte) transaction, not part of this steady frame at
 /// all - `this_frame_len` below switches to it only for that one exchange.
 #[embassy_executor::task]

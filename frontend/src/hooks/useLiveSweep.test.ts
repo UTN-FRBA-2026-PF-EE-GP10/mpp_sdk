@@ -101,6 +101,11 @@ describe('useLiveSweep', () => {
     expect(vi.mocked(releaseRelay)).toHaveBeenCalledTimes(1)
   })
 
+  it('does not poll /api/data at all when disabled - client demo mode relies on this', () => {
+    renderHook(() => useLiveSweep(false))
+    expect(fetchLiveSweep).not.toHaveBeenCalled()
+  })
+
   it('swallows a poll failure without throwing', async () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     vi.mocked(fetchLiveSweep).mockRejectedValue(new Error('network down'))

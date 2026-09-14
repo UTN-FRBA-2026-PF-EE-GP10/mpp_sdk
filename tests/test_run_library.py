@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from mpp_sdk.runs import RunRecord, RunSample, load, load_all, save
+from mpp_sdk.runs import RunRecord, RunSample, delete, load, load_all, save
 
 _CAPTURED_AT = datetime(2026, 9, 8, 21, 14, 3, tzinfo=UTC)
 
@@ -98,3 +98,34 @@ def test_load_all_returns_every_record_in_directory(tmp_path):
 
 def test_load_all_on_missing_directory_returns_empty_list(tmp_path):
     assert load_all(tmp_path / "does-not-exist") == []
+
+
+# ------------------------------------------------------------------
+# delete
+# ------------------------------------------------------------------
+
+
+def test_delete_removes_the_file_and_returns_true(tmp_path):
+    path = save(_record(), tmp_path)
+    assert delete(path, tmp_path) is True
+    assert not path.exists()
+
+
+def test_delete_of_an_already_gone_file_is_a_no_op_returning_false(tmp_path):
+    """Deleting is idempotent: a UI's delete button firing twice, or a
+    stale listing, must not surface as an error - see library.delete's
+    docstring for the reasoning."""
+    path = save(_record(), tmp_path)
+    path.unlink()
+    assert delete(path, tmp_path) is False
+
+
+def test_delete_refuses_a_path_outside_the_library_directory(tmp_path):
+    outside = tmp_path.parent / "not-a-run.json"
+    outside.write_text("{}")
+    try:
+        with pytest.raises(ValueError, match="outside"):
+            delete(outside, tmp_path)
+        assert outside.exists()
+    finally:
+        outside.unlink()

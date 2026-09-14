@@ -12,16 +12,25 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 MEASUREMENT_KINDS = (
-    "baseline",  # all panels same tilt, uniform illumination
-    "partial-shade",  # one panel tilted/shaded relative to the other
-    "tilt-sweep",  # a series varying one panel's tilt
-    "dimmer",  # varying illumination via a controllable lamp dimmer
+    "baseline",  # both panels at 90 degrees, facing the light squarely
+    "tilted",  # panel B off 90 degrees - one capture or a full sweep across
+    # its angles is the same physical setup on this bench, so it is one kind
+    "dimmed",  # varying illumination via a controllable lamp dimmer - no
+    # such dimmer exists yet, so this kind has no captures for now
     "other",
 )
 """Seed vocabulary for `CurveRecord.measurement`. Not an enum: an operator
 must be able to record a kind this list did not anticipate without a code
 change. The tuple exists so the UI can populate a dropdown and a typo is
 visible next to the intended value, not so the field is validated against it.
+
+Tilt convention (bench-specific, not a general SDK concept): light travels
+from 180 degrees toward 0 degrees. 90 degrees is vertical, facing the light
+squarely - the untilted reference, not zero. Panel A is fixed at 90 degrees
+and is never adjusted. Panel B takes one of five detented angles - 90, 70,
+60, 45, 30 - where lower means tilted further right, away from the light,
+so less illumination reaches it. Panel B at 90 (both panels matching) is
+what makes a capture a "baseline".
 """
 
 CURVE_SOURCES = (

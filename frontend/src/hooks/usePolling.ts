@@ -19,12 +19,19 @@ import { useEffect, useRef } from 'react'
  * `onSuccess`/`onError` are only called while the component is still
  * mounted - a response or rejection that lands after unmount is silently
  * dropped, never applied to state.
+ *
+ * `enabled` (default true) stops polling altogether when false - no
+ * fetch, no timer - rather than fetching and discarding the result. Client
+ * demo mode uses this to guarantee the capture pane never reaches
+ * `/api/data` while it's showing bundled fixtures instead (see
+ * useLiveSweep and hooks/useDemoCapture.ts).
  */
 export function usePolling<T>(
   fetcher: () => Promise<T>,
   onSuccess: (data: T) => void,
   onError: (error: unknown) => void,
   intervalMs: number,
+  enabled = true,
 ): void {
   const fetcherRef = useRef(fetcher)
   const onSuccessRef = useRef(onSuccess)
@@ -34,6 +41,7 @@ export function usePolling<T>(
   onErrorRef.current = onError
 
   useEffect(() => {
+    if (!enabled) return
     let cancelled = false
     let timer: ReturnType<typeof setTimeout>
 
@@ -56,5 +64,5 @@ export function usePolling<T>(
     // fetcher/onSuccess/onError are intentionally read via refs, not
     // listed here - see this function's docstring.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [intervalMs])
+  }, [intervalMs, enabled])
 }

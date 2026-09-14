@@ -44,6 +44,12 @@ describe('usePolling', () => {
     expect(onSuccess).not.toHaveBeenCalled()
   })
 
+  it('does not call the fetcher at all when disabled', () => {
+    const fetcher = vi.fn().mockReturnValue(new Promise(() => {}))
+    renderHook(() => usePolling(fetcher, vi.fn(), vi.fn(), 1000, false))
+    expect(fetcher).not.toHaveBeenCalled()
+  })
+
   it(
     'polls again after intervalMs',
     async () => {

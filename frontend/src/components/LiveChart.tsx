@@ -1,21 +1,9 @@
-import {
-  CategoryScale,
-  Chart as ChartJS,
-  Legend,
-  LinearScale,
-  LineElement,
-  PointElement,
-  Tooltip,
-  type ChartOptions,
-} from 'chart.js'
 import { useMemo } from 'react'
 import { Line } from 'react-chartjs-2'
+import { CURRENT_COLOR, ivChartOptions, POWER_COLOR } from '@/lib/chartConfig'
+import { useTheme } from '@/lib/theme'
+import { useUnits } from '@/lib/units'
 import type { CurvePoint } from '@/types'
-
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend)
-
-const ACCENT = '#f97316' // orange - current, matches the curve tracer's existing theme
-const POWER = '#ef4444' // red - power
 
 /**
  * Renders whichever of `partial`/`points` is authoritative right now.
@@ -29,6 +17,8 @@ const POWER = '#ef4444' // red - power
  * its result, which read as a flicker.
  */
 export function LiveChart({ partial, points }: { partial: CurvePoint[]; points: CurvePoint[] }) {
+  const { factor, currentLabel, powerLabel } = useUnits()
+  const { resolvedDark } = useTheme()
   const shown = partial.length > 0 ? partial : points
 
   const data = useMemo(
@@ -36,9 +26,9 @@ export function LiveChart({ partial, points }: { partial: CurvePoint[]; points: 
       datasets: [
         {
           label: 'I(V)',
-          data: shown.map((p) => ({ x: p.v, y: p.i * 1000 })),
-          borderColor: ACCENT,
-          backgroundColor: ACCENT,
+          data: shown.map((p) => ({ x: p.v, y: p.i * factor })),
+          borderColor: CURRENT_COLOR,
+          backgroundColor: CURRENT_COLOR,
           pointRadius: 4,
           borderWidth: 2,
           tension: 0.15,
@@ -46,52 +36,24 @@ export function LiveChart({ partial, points }: { partial: CurvePoint[]; points: 
         },
         {
           label: 'P(V)',
-          data: shown.map((p) => ({ x: p.v, y: p.v * p.i * 1000 })),
-          borderColor: POWER,
-          backgroundColor: POWER,
-          pointRadius: 2,
+          data: shown.map((p) => ({ x: p.v, y: p.v * p.i * factor })),
+          borderColor: POWER_COLOR,
+          backgroundColor: POWER_COLOR,
+          pointRadius: 4,
           borderWidth: 2,
           tension: 0.15,
           yAxisID: 'p',
         },
       ],
     }),
-    [shown],
+    [shown, factor],
   )
 
   // Memoised: a fresh options object every render makes chart.js rebuild
   // its scales on each poll tick.
-  const options = useMemo<ChartOptions<'line'>>(
-    () => ({
-      responsive: true,
-      maintainAspectRatio: false,
-      animation: false,
-      parsing: false,
-      scales: {
-        x: {
-          type: 'linear',
-          min: 0,
-          title: { display: true, text: 'Voltage [V]' },
-        },
-        y: {
-          type: 'linear',
-          position: 'left',
-          min: 0,
-          title: { display: true, text: 'Current [mA]' },
-        },
-        p: {
-          type: 'linear',
-          position: 'right',
-          min: 0,
-          title: { display: true, text: 'Power [mW]' },
-          grid: { drawOnChartArea: false },
-        },
-      },
-      plugins: {
-        legend: { display: true },
-      },
-    }),
-    [],
+  const options = useMemo(
+    () => ivChartOptions(currentLabel, powerLabel, resolvedDark),
+    [currentLabel, powerLabel, resolvedDark],
   )
 
   return (

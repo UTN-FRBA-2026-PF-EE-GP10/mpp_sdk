@@ -121,9 +121,10 @@ class SpiMcuSource(SignalSource):
     calibrated millivolts/milliamperes as saturating u16 (not raw ADC
     counts - the firmware does the calibration). Temp is a big-endian
     ``i16`` in centi-Celsius, or the sentinel -32768 if no probe is
-    connected (see ``temperature_c``). ``CHECKSUM`` is an XOR over the
-    frame's data bytes in each direction - ``DUTY_H^DUTY_L^CMD`` for MOSI,
-    the eight telemetry bytes ``^ACK`` for MISO. Both handshake bytes are
+    connected (see ``temperature_c``). ``CHECKSUM`` is a CRC-8 (polynomial
+    0x07, init 0xFF; see ``crc8()`` above) over the frame's data bytes in
+    each direction - ``DUTY_H``, ``DUTY_L``, ``CMD`` for MOSI, the eight
+    telemetry bytes plus ``ACK`` for MISO. Both handshake bytes are
     covered because each is a command to the other side rather than a
     reading. A mismatched frame is corrupted-but-complete (passed the
     firmware's own frame-timeout check) and is rejected - the last-good

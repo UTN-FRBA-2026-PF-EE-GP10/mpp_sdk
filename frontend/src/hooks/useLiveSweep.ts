@@ -30,8 +30,12 @@ const EMPTY: CurvePoint[] = []
  * curve for a poll or two before the new one landed, which read as a
  * flicker. Instead the live trace stays on screen until the completed
  * curve that supersedes it arrives.
+ *
+ * `enabled` (default true) stops polling `/api/data` altogether - passed
+ * `false` in client demo mode, where CurveWorkbench uses useDemoCapture
+ * instead and this hook must not reach the network at all.
  */
-export function useLiveSweep() {
+export function useLiveSweep(enabled = true) {
   const [partial, setPartial] = useState<CurvePoint[]>(EMPTY)
   const [points, setPoints] = useState<CurvePoint[]>(EMPTY)
   const [active, setActive] = useState(false)
@@ -57,7 +61,7 @@ export function useLiveSweep() {
     console.error('polling /api/data failed', e)
   }
 
-  usePolling(fetchLiveSweep, handleData, handleError, POLL_MS)
+  usePolling(fetchLiveSweep, handleData, handleError, POLL_MS, enabled)
 
   const start = useCallback(() => {
     startSweepRequest().catch((e) => console.error('start-sweep failed', e))

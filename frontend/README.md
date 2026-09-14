@@ -36,6 +36,27 @@ needs `uv sync --extra web`, runs on any machine, and behaves like the
 real thing from the frontend's perspective (`link` reports `"demo"`,
 shown as a distinct status in the connection indicator).
 
+The connection indicator is also a three-way capture-mode menu
+(`src/lib/captureMode.ts`), named to match `mpp_sdk/curves/record.py`'s
+`CURVE_SOURCES` exactly:
+
+- **Pi connected** (`hardware`) - the default. Start Measurement live,
+  saving allowed.
+- **Demo with Pi** (`firmware-replay`) - real board, but the "Demo curve"
+  buttons are the point: real SPI, a curve already stored in the
+  firmware, not measured this session. Saving is still allowed - the
+  result is real data off the wire. Only selectable with a live link;
+  the app falls back to `hardware` on its own if the link drops.
+- **Demo** (`simulated`) - no board at all. No backend needed: swaps the
+  curve/run libraries for bundled fixtures (`src/lib/demoFixtures.ts`),
+  disables every write (save/delete) and every genuinely hardware-only
+  action (Start Measurement, Release Relay), while still letting the two
+  "Demo curve" buttons replay a bundled sweep locally into the capture
+  pane. Called "sandbox" in code (`src/lib/sandbox.ts`) to avoid a third
+  overload of the word "demo" alongside `ConnectionStatus`'s own `'demo'`
+  value above - `useSandbox()` is the one place to read "are we fully
+  offline" - reuse it rather than adding another check.
+
 ## Build
 
 ```bash

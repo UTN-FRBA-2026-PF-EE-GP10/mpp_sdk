@@ -8,10 +8,26 @@ from datetime import UTC, datetime
 
 import pytest
 
-from mpp_sdk.curves import CurveRecord, PanelSetup, group_by_measurement, load, load_all, save
+from mpp_sdk.curves import (
+    MEASUREMENT_KINDS,
+    CurveRecord,
+    PanelSetup,
+    delete,
+    group_by_measurement,
+    load,
+    load_all,
+    save,
+)
 from mpp_sdk.curves.record import now_utc
 
 _CAPTURED_AT = datetime(2026, 8, 26, 21, 14, 3, tzinfo=UTC)
+
+
+def test_measurement_kinds_is_pinned():
+    # A rename here is a breaking change for saved data and the frontend's
+    # vocabulary - pin the tuple so a future rename is a deliberate edit to
+    # this test, not a silent side effect of touching record.py.
+    assert MEASUREMENT_KINDS == ("baseline", "tilted", "dimmed", "other")
 
 
 def _record(**overrides) -> CurveRecord:
@@ -107,7 +123,7 @@ def test_load_rejects_missing_points_field(tmp_path):
 
 def test_load_all_returns_every_record_in_directory(tmp_path):
     save(_record(label="one", measurement="baseline"), tmp_path)
-    save(_record(label="two", measurement="partial-shade"), tmp_path)
+    save(_record(label="two", measurement="tilted"), tmp_path)
     records = load_all(tmp_path)
     assert {r.label for r in records} == {"one", "two"}
 
@@ -150,6 +166,37 @@ def test_source_round_trips_and_defaults_to_unknown(tmp_path):
     )
     assert unstated.source == "unknown"
     assert load(save(unstated, directory=tmp_path)).source == "unknown"
+
+
+# ------------------------------------------------------------------
+# delete
+# ------------------------------------------------------------------
+
+
+def test_delete_removes_the_file_and_returns_true(tmp_path):
+    path = save(_record(), tmp_path)
+    assert delete(path, tmp_path) is True
+    assert not path.exists()
+
+
+def test_delete_of_an_already_gone_file_is_a_no_op_returning_false(tmp_path):
+    """Deleting is idempotent: a UI's delete button firing twice, or a
+    stale listing, must not surface as an error - see library.delete's
+    docstring for the reasoning."""
+    path = save(_record(), tmp_path)
+    path.unlink()
+    assert delete(path, tmp_path) is False
+
+
+def test_delete_refuses_a_path_outside_the_library_directory(tmp_path):
+    outside = tmp_path.parent / "not-a-curve.json"
+    outside.write_text("{}")
+    try:
+        with pytest.raises(ValueError, match="outside"):
+            delete(outside, tmp_path)
+        assert outside.exists()
+    finally:
+        outside.unlink()
 
 
 def test_a_file_written_before_source_existed_loads_as_unknown(tmp_path):
