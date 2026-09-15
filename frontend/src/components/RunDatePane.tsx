@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { ProvenanceBadge } from '@/components/ProvenanceBadge'
 import { RunPlayerDialog } from '@/components/RunPlayerDialog'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -54,6 +55,7 @@ export function RunDatePane({
                   <TableHead className="text-right">Duration</TableHead>
                   <TableHead className="text-right">Samples</TableHead>
                   <TableHead>Reference</TableHead>
+                  <TableHead>Source</TableHead>
                   <TableHead />
                 </TableRow>
               </TableHeader>
@@ -83,6 +85,9 @@ export function RunDatePane({
                       ) : (
                         <span className="text-xs text-muted-foreground">none</span>
                       )}
+                    </TableCell>
+                    <TableCell>
+                      <ProvenanceBadge source={r.source} />
                     </TableCell>
                     <TableCell>{r.aborted && <Badge variant="destructive">Aborted</Badge>}</TableCell>
                   </TableRow>

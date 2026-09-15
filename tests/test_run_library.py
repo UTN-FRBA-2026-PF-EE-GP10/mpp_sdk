@@ -129,3 +129,29 @@ def test_delete_refuses_a_path_outside_the_library_directory(tmp_path):
         assert outside.exists()
     finally:
         outside.unlink()
+
+
+# ------------------------------------------------------------------
+# source (provenance) - mirrors test_curve_library.py's own tests
+# ------------------------------------------------------------------
+
+
+def test_source_round_trips_and_defaults_to_unknown(tmp_path):
+    """Provenance must survive save/load, and a record that never stated
+    it must read back as "unknown" rather than silently claiming to have
+    driven real hardware - see RUN_SOURCES."""
+    simulated = _record(label="simulated", source="simulated")
+    assert load(save(simulated, tmp_path)).source == "simulated"
+
+    unstated = _record(label="unstated")
+    assert unstated.source == "unknown"
+    assert load(save(unstated, tmp_path)).source == "unknown"
+
+
+def test_a_file_written_before_source_existed_loads_as_unknown(tmp_path):
+    path = save(_record(source="hardware"), tmp_path)
+    payload = json.loads(path.read_text())
+    del payload["source"]
+    path.write_text(json.dumps(payload))
+
+    assert load(path).source == "unknown"

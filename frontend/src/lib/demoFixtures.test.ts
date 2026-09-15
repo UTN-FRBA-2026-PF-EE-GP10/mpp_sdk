@@ -100,9 +100,10 @@ describe('DEMO_RUN', () => {
     expect(DEMO_RUN.curve_ref).toBe(DEMO_CURVE_BRIGHT.path.split('/').pop())
   })
 
-  it('is labeled and annotated as synthetic, since RunRecord carries no provenance field', () => {
+  it('is labeled, annotated, and flagged as simulated - not a captured run', () => {
     expect(DEMO_RUN.label.toLowerCase()).toContain('demo')
     expect(DEMO_RUN.notes.toLowerCase()).toContain('synthetic')
+    expect(DEMO_RUN.source).toBe('simulated')
   })
 
   it('is not marked aborted', () => {

@@ -1,10 +1,10 @@
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MeasurePane } from './MeasurePane'
 import { ThemeProvider } from '@/components/ThemeProvider'
 import { UnitsProvider } from '@/components/UnitsProvider'
 import { CaptureModeContext, type CaptureMode } from '@/lib/captureMode'
-import type { CurveRecord } from '@/types'
+import type { ConnectionStatus, CurveRecord } from '@/types'
 
 vi.mock('@/lib/api', () => ({
   fetchLiveSweep: vi.fn(() => new Promise(() => {})),
@@ -12,17 +12,32 @@ vi.mock('@/lib/api', () => ({
   startDemoSweep: vi.fn(),
   releaseRelay: vi.fn(),
   saveCurve: vi.fn(),
+  fetchRunConfig: vi.fn(() => new Promise(() => {})),
+  fetchRuns: vi.fn(() => new Promise(() => {})),
+  fetchRun: vi.fn(),
+  deleteRun: vi.fn(),
+  startRun: vi.fn(),
+  stopRun: vi.fn(),
+  fetchLiveRun: vi.fn(() => new Promise(() => {})),
 }))
 
 afterEach(cleanup)
 
-function renderPane(mode: CaptureMode) {
+function renderPane(mode: CaptureMode, connectionStatus: ConnectionStatus = 'connected') {
   const byKind = new Map<string, CurveRecord[]>([['baseline', []]])
   return render(
     <ThemeProvider>
       <UnitsProvider>
         <CaptureModeContext.Provider value={{ mode, setMode: vi.fn() }}>
-          <MeasurePane kinds={['baseline']} byKind={byKind} connected onSaved={vi.fn()} />
+          <MeasurePane
+            kinds={['baseline']}
+            byKind={byKind}
+            curves={[]}
+            connected
+            connectionStatus={connectionStatus}
+            onSaved={vi.fn()}
+            onRunSaved={vi.fn()}
+          />
         </CaptureModeContext.Provider>
       </UnitsProvider>
     </ThemeProvider>,
@@ -68,5 +83,41 @@ describe('MeasurePane', () => {
     renderPane('simulated')
     expect(isDisabled(button('Demo curve (bright)'))).toBe(false)
     expect(isDisabled(button('Demo curve (dim)'))).toBe(false)
+  })
+
+  it('defaults to the curve tab, with Run an algorithm reachable alongside it', () => {
+    renderPane('hardware')
+    expect(screen.getByText('Capturing under:')).toBeTruthy()
+    expect(screen.getByText('Run an algorithm')).toBeTruthy()
+  })
+
+  it('switches to the run pane without disturbing the curve flow', () => {
+    renderPane('hardware')
+    fireEvent.click(screen.getByText('Run an algorithm'))
+    expect(screen.getByText('Live MPPT run')).toBeTruthy()
+    expect(screen.queryByText('Capturing under:')).toBeNull()
+
+    fireEvent.click(screen.getByText('Capture a curve'))
+    expect(screen.getByText('Capturing under:')).toBeTruthy()
+    expect(isDisabled(button('Start Measurement'))).toBe(false)
+  })
+
+  it('offers a simulated run in simulated (demo) mode instead of blocking it', () => {
+    renderPane('simulated')
+    fireEvent.click(screen.getByText('Run an algorithm'))
+    // A simulated run needs no board, so demo mode does not disable
+    // starting one the way it disables Start Measurement above - it
+    // labels the run as simulated instead (RunPane's own tests cover the
+    // labelling in detail; this only checks the two panes stay
+    // consistent about what demo mode blocks and what it doesn't).
+    expect(screen.queryByText(/unavailable in demo mode/i)).toBeNull()
+    expect(screen.getByText(/drives a simulated converter/i)).toBeTruthy()
+  })
+
+  it('blocks starting a run with no live link to the board', () => {
+    renderPane('hardware', 'disconnected')
+    fireEvent.click(screen.getByText('Run an algorithm'))
+    expect(isDisabled(button('Start run'))).toBe(true)
+    expect(screen.getByText(/No live link to the board/)).toBeTruthy()
   })
 })

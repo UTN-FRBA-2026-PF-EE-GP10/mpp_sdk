@@ -5,6 +5,15 @@ from mpp_sdk.runs import save, load, load_all, delete
 """
 
 from .library import default_dir, delete, load, load_all, save
-from .record import RunRecord, RunSample
+from .record import RUN_SOURCES, RunRecord, RunSample
 
-__all__ = ["RunRecord", "RunSample", "default_dir", "save", "load", "load_all", "delete"]
+__all__ = [
+    "RunRecord",
+    "RunSample",
+    "RUN_SOURCES",
+    "default_dir",
+    "save",
+    "load",
+    "load_all",
+    "delete",
+]

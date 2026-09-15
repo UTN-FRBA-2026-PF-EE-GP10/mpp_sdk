@@ -79,7 +79,16 @@ const SURFACE_DARK = '#11141f'
 /** The run player's faded reference curve - a muted neutral, deliberately
  * not one of the three categorical series colours (it isn't a series,
  * it's background context). */
-export function referenceColor(dark: boolean, alpha = 0.35): string {
+/** Opacity of the reference curve drawn behind a run's trajectory.
+ *
+ * Grey rather than a series colour, because it is context and not one of
+ * the three validated data series. But it has to stay readable as a
+ * curve: the whole question a run answers is whether the operating point
+ * sits on it, which cannot be judged against a line too faint to trace.
+ * Muted enough to sit behind the trajectory, solid enough to follow. */
+export const REFERENCE_ALPHA = 0.55
+
+export function referenceColor(dark: boolean, alpha = REFERENCE_ALPHA): string {
   return fadeColor(dark ? NEUTRAL_TEXT_DARK : NEUTRAL_TEXT_LIGHT, alpha)
 }
 

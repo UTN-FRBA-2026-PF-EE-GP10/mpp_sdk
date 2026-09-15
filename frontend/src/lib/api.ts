@@ -4,7 +4,7 @@
 // /api/curves, and the run library, /api/runs) stores volts and amps -
 // see CurvePoint's convention in types.ts and RunSample's in runs.ts.
 
-import type { RunDetail, RunSummary } from '@/lib/runs'
+import type { LiveRunState, RunDetail, RunSummary } from '@/lib/runs'
 import type { CurvePoint, CurveRecord, PanelSetup } from '@/types'
 
 interface WireDataPoint {
@@ -162,4 +162,101 @@ export async function fetchRun(id: string, maxSamples?: number): Promise<RunDeta
 export async function deleteRun(id: string): Promise<void> {
   const r = await fetch(`/api/runs/${encodeURIComponent(id)}`, { method: 'DELETE' })
   await parseJsonOrThrow(r, 'DELETE /api/runs/{id}')
+}
+
+// The registered algorithm labels POST /api/runs/start accepts - see
+// curve_tracer_server.py's get_algorithms for why this route exists
+// (drawn from harness.common.algorithm_specs(), not a hardcoded list that
+// could drift from it).
+export interface RunConfig {
+  algorithms: string[]
+  /** Seconds. A run with no duration, or a longer one, is clamped to this. */
+  maxDurationS: number
+  /** Seconds. What a run lasts unless the operator changes it. */
+  defaultDurationS: number
+  /** The duty the algorithm is seeded with. Decides which maximum a local
+   * tracker hill-climbs to, so it is offered rather than fixed. */
+  defaultInitialDuty: number
+  /** Volts and amps. The bounds a run is held to unless narrowed. */
+  defaultVMax: number
+  defaultIMax: number
+}
+
+/** The algorithm roster and the bounds the server enforces. Served rather
+ * than hardcoded because these are the numbers a run is actually held to -
+ * a page showing different ones would be worse than showing none. */
+export async function fetchRunConfig(): Promise<RunConfig> {
+  const r = await fetch('/api/run-config')
+  const payload = (await parseJsonOrThrow(r, 'GET /api/run-config')) as {
+    algorithms: string[]
+    max_duration_s: number
+    default_duration_s: number
+    default_initial_duty: number
+    default_v_max: number
+    default_i_max: number
+  }
+  return {
+    algorithms: payload.algorithms ?? [],
+    maxDurationS: payload.max_duration_s,
+    defaultDurationS: payload.default_duration_s,
+    defaultInitialDuty: payload.default_initial_duty,
+    defaultVMax: payload.default_v_max,
+    defaultIMax: payload.default_i_max,
+  }
+}
+
+// Volts and amps, like GET/POST .../runs above - unlike GET /api/data's
+// milliamps (see this file's header note).
+export interface StartRunInput {
+  algorithm: string
+  /** Omitted (or over the server's backstop) is clamped there, not
+   * rejected - see curve_tracer_server.py's _MAX_RUN_DURATION_S. */
+  duration_s?: number
+  /** Seeds the algorithm. Rejected outside (0, 1) rather than clamped,
+   * because moving it silently would change which maximum a local
+   * tracker converges on. */
+  initial_duty?: number
+  v_max?: number
+  i_max?: number
+  curve_ref?: string | null
+  label?: string
+  /** Drive a SimulatedSource instead of the real board - see
+   * curve_tracer_server.py's post_start_run. Omitted (or false) keeps the
+   * existing hardware behavior; RunPane sets this rather than leaving it
+   * to the caller, so a forgotten flag can never silently drive the
+   * converter when a simulated run was intended, or vice versa. */
+  simulated?: boolean
+}
+
+export interface StartRunResult {
+  status: string
+  algorithm: string
+  label: string
+  /** The duration the server actually committed to, after clamping -
+   * always the number to show once a run is live, not whatever the
+   * operator typed. */
+  duration_s: number
+}
+
+export async function startRun(input: StartRunInput): Promise<StartRunResult> {
+  const r = await fetch('/api/runs/start', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  })
+  return (await parseJsonOrThrow(r, 'POST /api/runs/start')) as StartRunResult
+}
+
+export async function stopRun(): Promise<void> {
+  const r = await fetch('/api/runs/stop', { method: 'POST' })
+  await parseJsonOrThrow(r, 'POST /api/runs/stop')
+}
+
+// `maxSamples` caps the live window the same way fetchRun's does - see
+// its own doc comment. Uncached like fetchLiveSweep: this is polled for a
+// run's whole duration and must never serve a stale operating point.
+export async function fetchLiveRun(maxSamples?: number): Promise<LiveRunState> {
+  const query = maxSamples === undefined ? '' : `?max_samples=${maxSamples}`
+  const r = await fetch(`/api/runs/live${query}`, { cache: 'no-store' })
+  return (await parseJsonOrThrow(r, 'GET /api/runs/live')) as LiveRunState
 }

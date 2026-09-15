@@ -1,7 +1,10 @@
 import { useUnits } from '@/lib/units'
 import type { RunSample } from '@/lib/runs'
 
-function Field({ label, value }: { label: string; value: string }) {
+/** Exported for RunPane's live readouts row, which needs the same
+ * label/value layout plus a field (`vout`) that has no place on a
+ * `RunSample` - see runs.ts's LiveRunState for why. */
+export function Field({ label, value }: { label: string; value: string }) {
   return (
     <div>
       <dt className="text-muted-foreground">{label}</dt>

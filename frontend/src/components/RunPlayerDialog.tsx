@@ -1,5 +1,6 @@
 import { Pause, Play, RotateCcw, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
+import { ProvenanceBadge } from '@/components/ProvenanceBadge'
 import { RunChart } from '@/components/RunChart'
 import { RunReadouts } from '@/components/RunReadouts'
 import { Badge } from '@/components/ui/badge'
@@ -77,34 +78,37 @@ function RunPlayerContent({
 }) {
   const sandbox = useSandbox()
 
-  // In demo mode `run` is already one of DEMO_RUNS (RunDatePane's list
+  // Most runs opened in demo mode are one of DEMO_RUNS (RunDatePane's list
   // comes straight from the bundled fixtures, see App.tsx), so the detail
   // is looked up locally instead of a GET /api/runs/{id} that would 404
   // against a real backend that was never there to begin with. This is
   // resolved synchronously, during the initial render, rather than in the
   // effect below - it's derived from props already in hand, not fetched.
+  //
+  // Gated on fixture membership, not `sandbox.enabled` alone: a simulated
+  // run started from RunPane while in demo mode genuinely lives on the
+  // real server (see frontend/README.md's demo-mode note - starting a run
+  // is the one write demo mode still makes), so its id is never one of
+  // the bundled fixtures and must still be fetched normally, even here.
+  const isBundledFixture = DEMO_RUNS.some((r) => r.id === run.id)
   const [detail, setDetail] = useState<RunDetail | null>(() =>
-    sandbox.enabled ? (DEMO_RUNS.find((r) => r.id === run.id) ?? null) : null,
+    isBundledFixture ? (DEMO_RUNS.find((r) => r.id === run.id) ?? null) : null,
   )
-  const [loadError, setLoadError] = useState<string | null>(() =>
-    sandbox.enabled && !DEMO_RUNS.some((r) => r.id === run.id)
-      ? `"${run.id}" is not one of the bundled demo runs.`
-      : null,
-  )
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
 
   // `run.id` only ever changes by remounting this component (the dialog
   // keys RunPlayerContent by it), so `detail`/`loadError` already start
   // fresh from their initial state - no reset needed here, just the
-  // fetch itself. In demo mode that initial state is already the answer
-  // (see above), so there is nothing left for this effect to do.
+  // fetch itself. A bundled fixture's initial state is already the answer
+  // (see above), so there is nothing left for this effect to do there.
   useEffect(() => {
-    if (sandbox.enabled) return
+    if (isBundledFixture) return
     fetchRun(run.id)
       .then(setDetail)
       .catch((e) => setLoadError(e instanceof Error ? e.message : String(e)))
-  }, [run.id, sandbox.enabled])
+  }, [run.id, isBundledFixture])
 
   async function handleDelete() {
     if (sandbox.enabled) return // defense in depth - the button is disabled anyway
@@ -130,7 +134,10 @@ function RunPlayerContent({
             {run.algorithm} - {formatCapturedAt(run.captured_at)}
           </p>
         </div>
-        {run.aborted && <Badge variant="destructive">Aborted</Badge>}
+        <div className="flex flex-wrap items-center gap-2">
+          <ProvenanceBadge source={run.source} />
+          {run.aborted && <Badge variant="destructive">Aborted</Badge>}
+        </div>
       </div>
 
       {run.aborted && (

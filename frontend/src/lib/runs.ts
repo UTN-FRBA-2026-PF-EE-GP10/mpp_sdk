@@ -4,6 +4,13 @@
 // the wire; groupRunsByDate here turns a summary list into what the
 // sidebar renders, the same way GET /api/curves feeds byKind in App.tsx.
 
+/** Where a run's samples actually came from - see RUN_SOURCES in
+ * mpp_sdk/runs/record.py. Kept as an open union, same pattern as
+ * CurveRecord['source'] in types.ts, so an unrecognised value still
+ * type-checks instead of being narrowed away. Anything but "hardware"
+ * means the converter was never driven - see ProvenanceBadge. */
+export type RunSource = 'hardware' | 'simulated' | 'unknown' | (string & {})
+
 export interface RunSummary {
   id: string
   path: string
@@ -15,6 +22,7 @@ export interface RunSummary {
   aborted: boolean
   curve_ref: string | null
   notes: string
+  source: RunSource
 }
 
 // One control-loop sample, volts/amps/duty - see api.ts's note on why this
@@ -24,6 +32,48 @@ export interface RunSample {
   v: number
   i: number
   d: number
+}
+
+/** One of the abort paths `run_control_loop` (scripts/run_algorithm.py)
+ * can trip - or an open string for the rarer cases the server reports as
+ * free text (an unexpected exception, or a save that failed after an
+ * otherwise clean run). Kept as an open union, same pattern as
+ * CurveRecord['source'] in types.ts, so an unrecognised value still
+ * type-checks instead of being narrowed away. */
+export type AbortReason =
+  | 'overvoltage'
+  | 'overcurrent'
+  | 'link-down'
+  | 'stopped'
+  | (string & {})
+
+/** GET /api/runs/live's shape - the one closed-loop run in progress, or
+ * the most recently finished one until the next starts. Volts/amps/duty
+ * like RunSample above; `vout` is the converter's output voltage, read
+ * live off the board but never persisted on RunSample/RunRecord (see
+ * curve_tracer_server.py's module docstring on why) - this is the only
+ * place it appears. `voltage`/`current`/`duty` mirror the latest sample
+ * in `samples` for a caller that wants a live readout without indexing
+ * into it. */
+export interface LiveRunState {
+  status: 'idle' | 'running' | 'done'
+  algorithm: string | null
+  label: string
+  curve_ref: string | null
+  n_samples: number
+  downsampled: boolean
+  samples: RunSample[]
+  voltage: number | null
+  current: number | null
+  duty: number | null
+  vout: number | null
+  aborted: boolean
+  abort_reason: AbortReason | null
+  saved_run_id: string | null
+  /** Which kind of run is in flight (or just finished) - "hardware" or
+   * "simulated", never "unknown": a live run always knows which source it
+   * started against. See RunSource. */
+  source: RunSource
 }
 
 // GET /api/runs/{id}'s shape: everything in RunSummary plus the samples

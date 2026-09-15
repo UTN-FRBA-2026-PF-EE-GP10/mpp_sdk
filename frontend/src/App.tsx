@@ -172,8 +172,11 @@ export default function App() {
       <MeasurePane
         kinds={kinds}
         byKind={byKind}
+        curves={records}
         connected={isLiveConnection(connectionStatus)}
+        connectionStatus={connectionStatus}
         onSaved={handleCurveSaved}
+        onRunSaved={() => setReloadToken((t) => t + 1)}
         prefill={measurePrefill}
         onPrefillApplied={() => setMeasurePrefill(null)}
       />

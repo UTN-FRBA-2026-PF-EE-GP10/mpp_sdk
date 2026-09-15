@@ -9,8 +9,28 @@ lean (AGENTS.md). A background thread calls `request_sweep()` and
 handlers just read the cache, so a slow SPI round trip never blocks a
 page load. `spidev` is not documented thread-safe, so that same thread is
 the only thing that ever touches `SpiMcuSource` - the start-sweep/
-release-relay routes hand their request off through a queue instead of
-calling into it directly from a request-handling thread.
+release-relay/runs-start routes hand their request off through a queue
+instead of calling into it directly from a request-handling thread.
+
+A live closed-loop MPPT run (`POST /api/runs/start`) executes on that same
+thread, via `_run_live`/`run_control_loop` (`scripts/run_algorithm.py`) -
+for the run's whole duration, normal curve-tracer polling is displaced,
+not merely delayed, since a run and a sweep cannot share the one SPI link
+at once. `GET /api/data` reports this (see `_run_live`) rather than
+looking silently frozen. `SpiMcuSource.vout` is exposed live via
+`GET /api/runs/live`, but deliberately not added to `RunSample`/the saved
+`RunRecord` - that's a schema decision left for a separate change.
+
+A *simulated* run (`POST /api/runs/start` with `"simulated": true`) never
+touches `SpiMcuSource`/spidev, so it does not need the poll thread and runs
+on its own dedicated thread instead (`_run_simulated`) - it drives a
+`SimulatedSource` built over the operator's chosen reference curve
+(`MeasuredPanel`) or, with none chosen, `IdealSingleDiode`. `_LiveRunCache`
+still only ever holds one run's state at a time regardless of thread, so a
+simulated and a hardware run can never overlap. The saved `RunRecord`
+carries which kind actually ran (`RunRecord.source`, see
+`mpp_sdk/runs/record.py`'s `RUN_SOURCES`) - stamped here, never accepted
+from the request.
 
 API routes are under `/api/` so they never collide with the frontend's
 static assets, which are mounted at `/`.
@@ -34,14 +54,28 @@ import queue
 import re
 import threading
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, NamedTuple
 
+from harness.common import AlgorithmSpec, algorithm_specs
+from mpp_sdk import IdealSingleDiode, MeasuredPanel, SEPICConverter, SimulatedSource, TabulatedPanel
 from mpp_sdk.curves import MEASUREMENT_KINDS, CurveRecord, PanelSetup
 from mpp_sdk.curves import library as curve_library
 from mpp_sdk.curves.record import now_utc
+from mpp_sdk.runs import RunRecord
 from mpp_sdk.runs import library as run_library
 from mpp_sdk.runs.record import RunSample
+from mpp_sdk.runs.record import now_utc as runs_now_utc
+
+# run_control_loop is the one control loop and abort path shared by the
+# CLI (scripts/run_algorithm.py) and this server - a live run started from
+# the web UI must not reimplement it. _BAD_FRAMES_LINK_DOWN is aliased
+# because that module's own constant is tuned for this server's ~50 ms
+# poll period, not a live run's much tighter control loop - see
+# _RUN_BAD_FRAMES_LINK_DOWN below.
+from scripts.run_algorithm import _BAD_FRAMES_LINK_DOWN as _RUN_BAD_FRAMES_LINK_DOWN
+from scripts.run_algorithm import run_control_loop
 
 try:
     from fastapi import FastAPI, HTTPException
@@ -209,6 +243,339 @@ class _SweepCache:
             )
 
 
+# Hard ceiling on how long a live run can drive the converter, regardless
+# of what the operator asks for - the backstop against a run nobody
+# remembered to stop (a closed browser tab, a dropped connection). Also
+# the duration used when the operator doesn't specify one at all.
+_MAX_RUN_DURATION_S = 600.0
+
+# What a run lasts unless the operator says otherwise. Short on purpose:
+# this drives a real converter, and a run is something you watch, so the
+# default is the length of a look rather than the length of the backstop.
+_DEFAULT_RUN_DURATION_S = 10.0
+
+# Duty the algorithm is seeded with. It is not a cosmetic starting point -
+# the local trackers hill-climb from here, so on a multi-peak curve it
+# decides which maximum they settle on. Exposed so that can be explored
+# rather than fixed at whatever the first run happened to use.
+_DEFAULT_INITIAL_DUTY = 0.5
+
+# Safety bounds a run is held to unless the operator narrows them. These
+# are the board's documented limits - see run_algorithm.py. Served by
+# GET /api/run-config so the page shows the values actually enforced.
+_DEFAULT_V_MAX = 40.0
+_DEFAULT_I_MAX = 1.0
+
+# Live /api/runs/live polling only ever needs enough points to draw a
+# chart, not the full record (that's what the saved RunRecord is for) -
+# smaller than _DEFAULT_MAX_SAMPLES because this endpoint is polled
+# repeatedly for the run's whole duration, not fetched once.
+_DEFAULT_LIVE_MAX_SAMPLES = 500
+
+# A simulated control-loop step is essentially free, so an unpaced loop
+# would blow through thousands of samples before a poll of
+# GET /api/runs/live could ever observe them - nothing to watch. This
+# paces it to a cadence a person can actually follow; it is not tied to
+# any real hardware timing.
+_SIMULATED_RUN_PERIOD_S = 0.05
+
+# A fixed operating point for a simulated run to track - not calibrated to
+# any particular board, matching harness/panel_config.py's
+# make_static_source default.
+_SIMULATED_LOAD_RESISTANCE = 10.0
+
+
+@dataclass(frozen=True)
+class _RunRequest:
+    """One accepted `POST /api/runs/start` request, handed from a
+    request-handling thread to the poll thread via `run_requests` - see
+    `_LiveRunCache.try_start` for why the acceptance check itself can run
+    on the request thread while the run itself cannot."""
+
+    spec: AlgorithmSpec
+    duration_s: float
+    v_max: float
+    i_max: float
+    curve_ref: str | None
+    label: str
+    # Defaulted so a caller that does not care about the seed does not
+    # have to state one; the route always passes it explicitly.
+    initial_duty: float = _DEFAULT_INITIAL_DUTY
+
+
+class _LiveRunCache:
+    """Live state of the one closed-loop run that can be in progress at a
+    time - shared between the poll thread (which executes the run via
+    `_run_live` and appends one sample per control step through
+    `add_sample`) and request-handling threads (which start/stop it and
+    poll `snapshot`). Samples accumulate here in full; `snapshot`
+    downsamples on read (`_downsample_samples`, same helper the saved-run
+    endpoint uses) so a run's per-step rate never has to be throttled to
+    match how often a page can usefully redraw - the full series still
+    reaches the saved `RunRecord` untouched.
+    """
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._status = "idle"  # idle | running | done
+        self._algorithm: str | None = None
+        self._label = ""
+        self._curve_ref: str | None = None
+        self._samples: list[RunSample] = []
+        self._vout: float | None = None
+        self._aborted = False
+        self._abort_reason: str | None = None
+        self._saved_run_id: str | None = None
+        self._simulated = False
+
+    def stop_if_running(self, stop_event: threading.Event) -> bool:
+        """Atomically check-and-set: `stop_event.set()` happens under the
+        same lock as the running check, so a run that finishes and a new
+        one that claims the slot (`try_start`) in the gap between the two
+        can never make a stop land on the wrong run. Returns whether a run
+        was found running."""
+        with self._lock:
+            if self._status != "running":
+                return False
+            stop_event.set()
+            return True
+
+    def try_start(
+        self, *, algorithm: str, label: str, curve_ref: str | None, simulated: bool = False
+    ) -> bool:
+        """Claim the single run slot, resetting all live state - returns
+        False, leaving everything untouched, if a run is already in
+        progress. This only ever touches this cache, never a source
+        (that happens later, in `_run_live`/`_run_simulated`), so it is
+        safe to call directly from a request-handling thread - it is what
+        lets `POST /api/runs/start` reject a second concurrent request
+        immediately rather than racing two runs onto the queue, and is
+        also what keeps a simulated and a hardware run from ever
+        overlapping even though they execute on different threads (see
+        the module docstring).
+        """
+        with self._lock:
+            if self._status == "running":
+                return False
+            self._status = "running"
+            self._algorithm = algorithm
+            self._label = label
+            self._curve_ref = curve_ref
+            self._samples = []
+            self._vout = None
+            self._aborted = False
+            self._abort_reason = None
+            self._saved_run_id = None
+            self._simulated = simulated
+            return True
+
+    def add_sample(self, sample: RunSample, vout: float | None) -> None:
+        with self._lock:
+            self._samples.append(sample)
+            self._vout = vout
+
+    def finish(self, *, aborted: bool, reason: str | None, saved_run_id: str | None) -> None:
+        with self._lock:
+            self._status = "done"
+            self._aborted = aborted
+            self._abort_reason = reason
+            self._saved_run_id = saved_run_id
+
+    def snapshot(self, max_samples: int) -> dict:
+        with self._lock:
+            status = self._status
+            algorithm = self._algorithm
+            label = self._label
+            curve_ref = self._curve_ref
+            samples = list(self._samples)
+            vout = self._vout
+            aborted = self._aborted
+            abort_reason = self._abort_reason
+            saved_run_id = self._saved_run_id
+            simulated = self._simulated
+
+        # Downsampling (and the resulting stride math) doesn't need the
+        # lock - it only reads the local copy taken above.
+        picked, downsampled = _downsample_samples(tuple(samples), max_samples)
+        last = samples[-1] if samples else None
+        return {
+            "status": status,
+            "algorithm": algorithm,
+            "label": label,
+            "curve_ref": curve_ref,
+            "n_samples": len(samples),
+            "downsampled": downsampled,
+            "samples": [s.to_dict() for s in picked],
+            "voltage": last.voltage if last else None,
+            "current": last.current if last else None,
+            "duty": last.duty if last else None,
+            "vout": vout,
+            "aborted": aborted,
+            "abort_reason": abort_reason,
+            "saved_run_id": saved_run_id,
+            # Which kind of run is in flight (or just finished) - see
+            # RUN_SOURCES in mpp_sdk/runs/record.py. Never "unknown" here:
+            # a live run always knows which source it started against.
+            "source": "simulated" if simulated else "hardware",
+        }
+
+
+def _execute_run(
+    src,
+    run_cache: _LiveRunCache,
+    request: _RunRequest,
+    stop_event: threading.Event,
+    *,
+    source: str,
+    period_s: float = 0.0,
+    max_consecutive_bad_frames: int = _RUN_BAD_FRAMES_LINK_DOWN,
+) -> None:
+    """Run `request` against `src` to completion and save the result -
+    shared by `_run_live` (hardware, on the poll thread) and
+    `_run_simulated` (its own thread). `source` is stamped onto the saved
+    `RunRecord` (see `RUN_SOURCES` in `mpp_sdk/runs/record.py`) - the
+    caller decides it, never the request body, so a run can't misreport
+    what actually drove it.
+
+    Reuses `run_control_loop` (`scripts/run_algorithm.py`) unchanged - one
+    control loop and one abort path for the CLI and every caller here.
+    """
+    algorithm = request.spec.make(request.initial_duty)
+
+    def on_sample(sample: RunSample) -> None:
+        # Runs synchronously on the calling thread, right after the
+        # write() that produced this telemetry - reading src.vout here
+        # needs no extra synchronization. Absent on SimulatedSource, so
+        # getattr's default keeps a simulated run's `vout` as None rather
+        # than raising.
+        run_cache.add_sample(sample, vout=getattr(src, "vout", None))
+
+    try:
+        samples, aborted, reason = run_control_loop(
+            src,
+            algorithm,
+            duration_s=request.duration_s,
+            initial_duty=request.initial_duty,
+            v_max=request.v_max,
+            i_max=request.i_max,
+            should_stop=stop_event.is_set,
+            max_consecutive_bad_frames=max_consecutive_bad_frames,
+            on_sample=on_sample,
+            period_s=period_s,
+        )
+    except Exception as exc:
+        # run_control_loop's own `finally` has already driven duty to zero
+        # even here (see its docstring) - this only keeps an unexpected
+        # failure (a broken algorithm.step(), a hard SPI fault) from
+        # killing the thread that owns the source, which for a hardware
+        # run would silently end every future sweep and run for the
+        # process's life.
+        run_cache.finish(aborted=True, reason=f"error: {exc}", saved_run_id=None)
+        return
+
+    record = RunRecord(
+        captured_at=runs_now_utc(),
+        label=request.label,
+        algorithm=request.spec.label,
+        samples=tuple(samples),
+        curve_ref=request.curve_ref,
+        aborted=aborted,
+        notes=reason or "",
+        source=source,
+    )
+    try:
+        path = run_library.save(record)
+    except OSError as exc:
+        run_cache.finish(
+            aborted=aborted,
+            reason=f"{reason or 'completed'}; failed to save: {exc}",
+            saved_run_id=None,
+        )
+        return
+    run_cache.finish(aborted=aborted, reason=reason, saved_run_id=path.stem)
+
+
+def _run_live(
+    src,
+    cache: _SweepCache,
+    run_cache: _LiveRunCache,
+    request: _RunRequest,
+    stop_event: threading.Event,
+) -> None:
+    """Execute one live closed-loop run to completion, on the poll thread -
+    the only thread that may ever touch `src` (see the module docstring).
+    This blocks `_poll_loop`'s normal sweep polling for the run's whole
+    duration: a live run and curve-tracer polling are mutually exclusive
+    on one SPI link, so that displacement is deliberate, not an accidental
+    stall - `cache.set` below makes it visible to anyone still polling
+    `/api/data` rather than leaving it looking silently frozen.
+    """
+    cache.set(None, "paused: a live MPPT run is in progress")
+    _execute_run(
+        src,
+        run_cache,
+        request,
+        stop_event,
+        source="hardware",
+        max_consecutive_bad_frames=_RUN_BAD_FRAMES_LINK_DOWN,
+    )
+
+
+def _make_simulated_source(curve_ref: str | None) -> SimulatedSource:
+    """Build the panel a simulated run drives against: `MeasuredPanel` over
+    the operator's chosen reference curve when one is given - the run then
+    hunts the MPP of a curve actually measured on this bench, and the live
+    view plots it against that same curve - or `IdealSingleDiode` when
+    none is, so a simulated run always works, including against an empty
+    curve library. Either way the panel is wrapped in `TabulatedPanel`:
+    cheap for `IdealSingleDiode`'s already-closed-form `current()`, and
+    `MeasuredPanel`'s own docstring recommends it for a long-running
+    simulation.
+    """
+    if curve_ref is not None:
+        record = curve_library.load(_curve_path(curve_ref))
+        panel = MeasuredPanel(record)
+    else:
+        # IdealSingleDiode's own defaults (photocurrent=8.0, 60 cells) model
+        # a much bigger module than this bench - Isc/Voc land well outside
+        # _DEFAULT_I_MAX/_DEFAULT_V_MAX, so a no-curve run would trip the
+        # overcurrent abort on its very first sample. These two params are
+        # sized to roughly match a single Hissuma PSF10MONO (Isc=0.79A,
+        # Voc=17V - see harness/panel_config.py) so the fallback stays a
+        # sane default instead of an immediate, confusing abort.
+        panel = IdealSingleDiode(photocurrent=0.79, cells_in_series=36)
+    return SimulatedSource(
+        panel=TabulatedPanel(panel),
+        converter=SEPICConverter(),
+        load_resistance=_SIMULATED_LOAD_RESISTANCE,
+    )
+
+
+def _run_simulated(
+    run_cache: _LiveRunCache, request: _RunRequest, stop_event: threading.Event
+) -> None:
+    """Execute one live closed-loop run against a `SimulatedSource`, on its
+    own dedicated thread. A simulated run never touches `SpiMcuSource`/
+    spidev, so unlike `_run_live` it has no reason to wait for (or
+    displace) the poll thread that owns the real board - `_LiveRunCache.
+    try_start` already claimed the one run slot before this thread was
+    even started, so this can never run alongside a hardware run.
+    """
+    try:
+        src = _make_simulated_source(request.curve_ref)
+    except Exception as exc:
+        run_cache.finish(aborted=True, reason=f"error: {exc}", saved_run_id=None)
+        return
+    _execute_run(
+        src,
+        run_cache,
+        request,
+        stop_event,
+        source="simulated",
+        period_s=_SIMULATED_RUN_PERIOD_S,
+    )
+
+
 def _poll_loop(
     cache: _SweepCache,
     commands: queue.Queue[str],
@@ -218,6 +585,9 @@ def _poll_loop(
     period_s: float,
     *,
     demo: bool = False,
+    run_requests: queue.Queue[_RunRequest] | None = None,
+    run_cache: _LiveRunCache | None = None,
+    stop_event: threading.Event | None = None,
 ) -> None:
     if demo:
         # Implements mpp_sdk.io.sweep_source.SweepSource. Imported only
@@ -258,6 +628,20 @@ def _poll_loop(
 
     with source_cm as src:
         while True:
+            # A live run displaces normal polling entirely for its whole
+            # duration (see _run_live's docstring) - checked first and,
+            # unlike `commands` below, not capped to one per iteration:
+            # there is only ever one run in flight (POST /api/runs/start
+            # refuses a second one via _LiveRunCache.try_start), so there
+            # is nothing to desync by draining it eagerly. In --demo mode
+            # this queue never receives anything: that route rejects a
+            # start request before it ever reaches here (no board to run
+            # against), so this is simply never true there.
+            if run_requests is not None and not run_requests.empty():
+                request = run_requests.get_nowait()
+                _run_live(src, cache, run_cache, request, stop_event)
+                continue
+
             # At most one queued command per iteration, not a drain loop:
             # the firmware's TRACER_COMMAND signal is single-slot ("latest
             # wins"), so two commands sent back-to-back with no SPI round
@@ -323,6 +707,28 @@ class _SaveCurveRequest(BaseModel):
     measurement: str = "other"
     panels: list[_PanelSetupIn] = []
     notes: str = ""
+
+
+class _StartRunRequest(BaseModel):
+    """Body of `POST /api/runs/start`. Volts and amps throughout, like
+    `GET /api/runs/{id}` and unlike `GET /api/data`'s milliamps - `v_max`/
+    `i_max` default to the board's documented limits, the same defaults
+    `scripts/run_algorithm.py --v-max/--i-max` use.
+
+    `simulated` defaults to False - an omitted field must keep meaning
+    what it always has (drive the real board), not silently switch to a
+    simulated source. Set it True to run against `SimulatedSource`
+    instead; that request is honoured even in `--demo` mode, where it is
+    the only kind of run available at all (see `post_start_run`)."""
+
+    algorithm: str
+    duration_s: float | None = None
+    initial_duty: float = _DEFAULT_INITIAL_DUTY
+    v_max: float = _DEFAULT_V_MAX
+    i_max: float = _DEFAULT_I_MAX
+    curve_ref: str | None = None
+    label: str = ""
+    simulated: bool = False
 
 
 # A run's URL id is its filename stem (library.save's naming scheme), never
@@ -404,10 +810,34 @@ def _downsample_samples(
     return picked, True
 
 
-def create_app(cache: _SweepCache, commands: queue.Queue[str]) -> FastAPI:
-    """Build the FastAPI app against a given cache/command queue - a
-    parameter rather than a module global so tests can construct one
-    against a fake cache with no hardware and no running poll thread."""
+def create_app(
+    cache: _SweepCache,
+    commands: queue.Queue[str],
+    *,
+    demo: bool = False,
+    run_cache: _LiveRunCache | None = None,
+    run_requests: queue.Queue[_RunRequest] | None = None,
+    stop_event: threading.Event | None = None,
+) -> FastAPI:
+    """Build the FastAPI app against given cache/command objects - taken
+    as parameters rather than module globals so tests can construct one
+    against a fake cache with no hardware and no running poll thread.
+
+    `demo` must reflect whether the poll thread this app's routes talk to
+    was started with `--demo` (`DemoSweepSource`, which has no
+    `read`/`write`) - `POST /api/runs/start` refuses to queue a run at all
+    when it's True, rather than letting one fail partway on a source that
+    cannot drive anything. `run_cache`/`run_requests`/`stop_event` default
+    to fresh instances so existing callers (including every test that
+    predates live runs) keep working unchanged; a real server passes the
+    same instances given to `_poll_loop` so a request thread's start/stop
+    actually reaches the run executing there.
+    """
+    run_cache = run_cache if run_cache is not None else _LiveRunCache()
+    run_requests = run_requests if run_requests is not None else queue.Queue()
+    stop_event = stop_event if stop_event is not None else threading.Event()
+    specs = {s.label.lower(): s for s in algorithm_specs()}
+
     app = FastAPI(title="curve-tracer")
 
     @app.get("/api/data")
@@ -426,6 +856,27 @@ def create_app(cache: _SweepCache, commands: queue.Queue[str]) -> FastAPI:
     @app.get("/api/measurement-kinds")
     def get_measurement_kinds() -> list[str]:
         return list(MEASUREMENT_KINDS)
+
+    @app.get("/api/run-config")
+    def get_run_config() -> dict:
+        """Everything the run setup form needs before it can offer a run:
+        the algorithm labels `POST /api/runs/start` accepts (matched
+        case-insensitively there), and the bounds it will enforce.
+
+        Served rather than left for the page to hardcode because all of it
+        is enforced here. A duration silently clamped to a backstop the
+        operator was never shown, or limits displayed as 40 V / 1 A while
+        the server holds a run to something else, would be worse than not
+        showing them at all - the numbers on screen have to be the numbers
+        that bind."""
+        return {
+            "algorithms": [s.label for s in algorithm_specs()],
+            "max_duration_s": _MAX_RUN_DURATION_S,
+            "default_duration_s": _DEFAULT_RUN_DURATION_S,
+            "default_initial_duty": _DEFAULT_INITIAL_DUTY,
+            "default_v_max": _DEFAULT_V_MAX,
+            "default_i_max": _DEFAULT_I_MAX,
+        }
 
     @app.get("/api/curves")
     def get_curves() -> list[dict]:
@@ -516,11 +967,134 @@ def create_app(cache: _SweepCache, commands: queue.Queue[str]) -> FastAPI:
                         "aborted": r.aborted,
                         "curve_ref": r.curve_ref,
                         "notes": r.notes,
+                        "source": r.source,
                     }
                 )
             except ValueError as exc:
                 entries.append({"id": path.stem, "path": str(path), "error": str(exc)})
         return entries
+
+    @app.post("/api/runs/start")
+    def post_start_run(body: _StartRunRequest) -> dict:
+        """Start a live closed-loop run - on the real board by default, or
+        against a `SimulatedSource` with `"simulated": true`. Refuses
+        rather than queuing a doomed request: no board at all (`--demo`,
+        and `simulated` was not set), an unknown algorithm, a `curve_ref`
+        that doesn't exist, or a run already in progress (only one at a
+        time, of either kind - see `_LiveRunCache`).
+
+        `duration_s` omitted, or over `_MAX_RUN_DURATION_S`, is clamped to
+        that backstop rather than rejected - a forgotten run must not be
+        able to drive the converter indefinitely just because the caller
+        asked for "no limit" or a very large number. Applies to a
+        simulated run too, even though nothing physical is at risk there -
+        one runaway loop should not be able to occupy the single run slot
+        forever either.
+
+        `v_max`/`i_max` above the board's documented limits
+        (`_DEFAULT_V_MAX`/`_DEFAULT_I_MAX`) are clamped down to them, the
+        same way an over-long duration is clamped: an operator may narrow
+        these safety bounds, never widen them past the board's limits. A
+        non-positive value is rejected outright rather than clamped - it
+        isn't a limit at all.
+        """
+        if demo and not body.simulated:
+            raise HTTPException(
+                status_code=409,
+                detail="no board attached in --demo mode: a live run needs real hardware "
+                "(pass simulated=true to run against a simulated source instead)",
+            )
+        spec = specs.get(body.algorithm.lower())
+        if spec is None:
+            raise HTTPException(status_code=400, detail=f"unknown algorithm {body.algorithm!r}")
+        curve_ref = body.curve_ref or None
+        if curve_ref is not None:
+            _curve_path(curve_ref)  # raises 400/404 if it doesn't check out
+        # A seed outside (0, 1) is not a duty cycle. Rejected rather than
+        # clamped: silently moving an operator's chosen starting point
+        # would change which maximum a hill-climber converges on without
+        # saying so.
+        if not 0.0 < body.initial_duty < 1.0:
+            raise HTTPException(
+                status_code=400, detail="initial_duty must be between 0 and 1 (exclusive)"
+            )
+
+        if body.duration_s is None:
+            duration_s = _DEFAULT_RUN_DURATION_S
+        else:
+            if body.duration_s <= 0:
+                raise HTTPException(status_code=400, detail="duration_s must be positive")
+            duration_s = min(body.duration_s, _MAX_RUN_DURATION_S)
+        # An operator may only narrow v_max/i_max, never widen them past the
+        # board's documented limits - those are the only thing that aborts a
+        # continuous drive on overvoltage/overcurrent (run_algorithm.py's own
+        # module docstring); the firmware has no on-target cutoff for this
+        # case. Non-positive is rejected outright rather than clamped: a
+        # v_max of 0 isn't a limit, it's an immediate abort mislabeled as one.
+        if body.v_max <= 0:
+            raise HTTPException(status_code=400, detail="v_max must be positive")
+        if body.i_max <= 0:
+            raise HTTPException(status_code=400, detail="i_max must be positive")
+        v_max = min(body.v_max, _DEFAULT_V_MAX)
+        i_max = min(body.i_max, _DEFAULT_I_MAX)
+        label = body.label.strip() or spec.label
+
+        if not run_cache.try_start(
+            algorithm=spec.label, label=label, curve_ref=curve_ref, simulated=body.simulated
+        ):
+            raise HTTPException(status_code=409, detail="a run is already in progress")
+        stop_event.clear()
+        request = _RunRequest(
+            spec=spec,
+            duration_s=duration_s,
+            initial_duty=body.initial_duty,
+            v_max=v_max,
+            i_max=i_max,
+            curve_ref=curve_ref,
+            label=label,
+        )
+        if body.simulated:
+            # Never touches spidev, so it does not need to wait for the
+            # poll thread that owns the real board - see the module
+            # docstring. try_start above already claimed the one run slot,
+            # so this can never end up running alongside a hardware run.
+            threading.Thread(
+                target=_run_simulated, args=(run_cache, request, stop_event), daemon=True
+            ).start()
+        else:
+            run_requests.put_nowait(request)
+        return {
+            "status": "running",
+            "algorithm": spec.label,
+            "label": label,
+            "duration_s": duration_s,
+        }
+
+    @app.post("/api/runs/stop", status_code=204)
+    def post_stop_run() -> None:
+        # Checked and set atomically under run_cache's own lock
+        # (stop_if_running), not as two separate steps - otherwise a run
+        # that finishes and a new one that claims the slot in the gap
+        # between the check and the set would take a stop meant for the
+        # old run instead.
+        if not run_cache.stop_if_running(stop_event):
+            raise HTTPException(status_code=409, detail="no run in progress")
+
+    @app.get("/api/runs/live")
+    def get_live_run(max_samples: int = _DEFAULT_LIVE_MAX_SAMPLES) -> dict:
+        """Poll the run in progress (or the most recently finished one,
+        until the next one starts) - `status` is `"idle"` (nothing has run
+        yet), `"running"`, or `"done"`. `vout` is the converter output
+        voltage from the most recent sample only (`RunSample` itself never
+        carries it - see the module docstring on why); `voltage`/
+        `current`/`duty` are that same latest sample's input-side reading,
+        for a page that wants a live readout without decoding `samples`.
+
+        Registered ahead of `GET /api/runs/{run_id}` below: routes match
+        in registration order, and "live" would otherwise be swallowed as
+        a (nonexistent) run id by that path-parameter route.
+        """
+        return run_cache.snapshot(max_samples)
 
     @app.get("/api/runs/{run_id}")
     def get_run(run_id: str, max_samples: int = _DEFAULT_MAX_SAMPLES) -> dict:
@@ -548,6 +1122,7 @@ def create_app(cache: _SweepCache, commands: queue.Queue[str]) -> FastAPI:
             "curve_ref": r.curve_ref,
             "aborted": r.aborted,
             "notes": r.notes,
+            "source": r.source,
             "n_samples": len(r.samples),
             "downsampled": downsampled,
             "samples": [s.to_dict() for s in samples],
@@ -615,6 +1190,9 @@ def main() -> None:
 
     cache = _SweepCache()
     commands: queue.Queue[str] = queue.Queue()
+    run_cache = _LiveRunCache()
+    run_requests: queue.Queue[_RunRequest] = queue.Queue()
+    stop_event = threading.Event()
     poll_thread = threading.Thread(
         target=_poll_loop,
         args=(
@@ -625,12 +1203,24 @@ def main() -> None:
             args.spi_speed_hz,
             args.poll_period_s,
         ),
-        kwargs={"demo": args.demo},
+        kwargs={
+            "demo": args.demo,
+            "run_requests": run_requests,
+            "run_cache": run_cache,
+            "stop_event": stop_event,
+        },
         daemon=True,
     )
     poll_thread.start()
 
-    app = create_app(cache, commands)
+    app = create_app(
+        cache,
+        commands,
+        demo=args.demo,
+        run_cache=run_cache,
+        run_requests=run_requests,
+        stop_event=stop_event,
+    )
     mode = " [DEMO MODE - simulated sweeps, no hardware]" if args.demo else ""
     print(f"Serving curve-tracer UI on http://{args.host}:{args.port}/{mode} (Ctrl+C to stop)")
     uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
