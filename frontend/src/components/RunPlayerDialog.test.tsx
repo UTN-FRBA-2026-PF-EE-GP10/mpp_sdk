@@ -52,6 +52,7 @@ function runSummary(overrides: Partial<RunSummary> = {}): RunSummary {
     aborted: false,
     curve_ref: null,
     notes: '',
+    source: 'hardware',
     ...overrides,
   }
 }
@@ -153,6 +154,28 @@ describe('RunPlayerDialog', () => {
     expect(screen.getByText(/safety cutoff fired/)).toBeTruthy()
   })
 
+  it('marks a simulated run unmistakably, the same way a replayed curve is marked', async () => {
+    vi.mocked(fetchRun).mockResolvedValue(runDetail({ source: 'simulated' }))
+    renderDialog(
+      <RunPlayerDialog
+        run={runSummary({ source: 'simulated' })}
+        curves={[]}
+        onClose={vi.fn()}
+        onDeleted={vi.fn()}
+      />,
+    )
+    await waitFor(() => expect(screen.getByText('Simulated - not measured')).toBeTruthy())
+  })
+
+  it('stays quiet about provenance for an ordinary hardware run', async () => {
+    vi.mocked(fetchRun).mockResolvedValue(runDetail())
+    renderDialog(
+      <RunPlayerDialog run={runSummary()} curves={[]} onClose={vi.fn()} onDeleted={vi.fn()} />,
+    )
+    await waitFor(() => expect(screen.getByText('Measured')).toBeTruthy())
+    expect(screen.queryByText(/not measured/)).toBeNull()
+  })
+
   it('flags a downsampled trace instead of showing it silently', async () => {
     vi.mocked(fetchRun).mockResolvedValue(runDetail({ downsampled: true, n_samples: 50000 }))
     renderDialog(
@@ -232,11 +255,34 @@ describe('RunPlayerDialog', () => {
     expect(screen.queryByText(/Failed to load run/)).toBeNull()
   })
 
-  it('reports an error, not an infinite loading state, for a run id absent from the bundled fixtures', async () => {
+  it('fetches a non-fixture run over the network even in demo mode - a simulated run just started saves for real', async () => {
+    // Unlike a curve, a simulated run genuinely lives on the real server
+    // (see frontend/README.md's demo-mode note) - its id is never one of
+    // the bundled fixtures, so opening it still means a real
+    // GET /api/runs/{id}, the same as outside demo mode.
+    vi.mocked(fetchRun).mockResolvedValue(runDetail({ id: 'not-a-fixture', source: 'simulated' }))
     renderDialogInSandbox(
-      <RunPlayerDialog run={runSummary()} curves={[]} onClose={vi.fn()} onDeleted={vi.fn()} />,
+      <RunPlayerDialog
+        run={runSummary({ id: 'not-a-fixture' })}
+        curves={[]}
+        onClose={vi.fn()}
+        onDeleted={vi.fn()}
+      />,
     )
-    await waitFor(() => expect(screen.getByText(/not one of the bundled demo runs/)).toBeTruthy())
-    expect(fetchRun).not.toHaveBeenCalled()
+    await waitFor(() => expect(fetchRun).toHaveBeenCalledWith('not-a-fixture'))
+    await waitFor(() => expect(screen.getByLabelText('Playback position')).toBeTruthy())
+  })
+
+  it('surfaces a real load failure for a non-fixture run in demo mode, not an infinite loading state', async () => {
+    vi.mocked(fetchRun).mockRejectedValue(new Error('run not found'))
+    renderDialogInSandbox(
+      <RunPlayerDialog
+        run={runSummary({ id: 'not-a-fixture' })}
+        curves={[]}
+        onClose={vi.fn()}
+        onDeleted={vi.fn()}
+      />,
+    )
+    await waitFor(() => expect(screen.getByText(/run not found/)).toBeTruthy())
   })
 })

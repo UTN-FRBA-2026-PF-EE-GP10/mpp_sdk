@@ -13,6 +13,7 @@ function run(captured_at: string, label = 'run'): RunSummary {
     aborted: false,
     curve_ref: null,
     notes: '',
+    source: 'hardware',
   }
 }
 

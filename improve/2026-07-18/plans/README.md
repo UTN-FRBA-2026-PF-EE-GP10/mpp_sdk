@@ -69,6 +69,7 @@ re-enabling; no plan file, tracked via the PR that disabled it.
 | 037 | Surface asynchronous command failures in the workbench UI | P1 | S remaining | 032 (soft) | IN PROGRESS (server + typed client done; visible UI in `CurveWorkbench.tsx` left for hands-on design) |
 | 038 | Save the displayed capture, not an unversioned latest sweep (save/display race) | P1 | M | 037 (soft), 032 (soft) | TODO |
 | 039 | Firmware: PIO SPI slave cannot recover from an idle frame timeout | P1 | M-L (bench) | - | TODO (workaround shipped: Pi polls below FRAME_TIMEOUT) |
+| 040 | Bench: drive the converter from the web UI, on target | P1 | M (bench) | powered board; 039 is the open risk underneath; its Step 0 closes 010's unverified ADC_VOUT | TODO (supersedes 034's Step 7) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) |
 REJECTED (with one-line rationale).

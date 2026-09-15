@@ -9,6 +9,9 @@ repo already uses for pvlib-dependent tests. No hardware/`spidev` needed:
 
 import json
 import queue
+import sys
+import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -17,17 +20,63 @@ fastapi = pytest.importorskip("fastapi")
 
 from fastapi.testclient import TestClient  # noqa: E402
 
+from harness.common import algorithm_specs  # noqa: E402
+from mpp_sdk import IdealSingleDiode  # noqa: E402
 from mpp_sdk.curves import CurveRecord, PanelSetup, save  # noqa: E402
 from mpp_sdk.curves.record import now_utc  # noqa: E402
 from mpp_sdk.runs import RunRecord, RunSample  # noqa: E402
+from mpp_sdk.runs import load as load_run  # noqa: E402
 from mpp_sdk.runs import save as save_run  # noqa: E402
 from scripts.curve_tracer_server import (  # noqa: E402
+    _DEFAULT_I_MAX,
+    _DEFAULT_RUN_DURATION_S,
+    _DEFAULT_V_MAX,
+    _MAX_RUN_DURATION_S,
     _curve_path,
     _downsample_samples,
+    _LiveRunCache,
+    _make_simulated_source,
+    _run_live,
     _run_path,
+    _run_simulated,
+    _RunRequest,
+    _StartRunRequest,
     _SweepCache,
     create_app,
 )
+
+
+def _make_client(monkeypatch, tmp_path, *, demo=False):
+    """Shared by `client` and `demo_client` below - see `client`'s
+    docstring for the directory-isolation reasoning. Always wires up the
+    live-run objects (`run_cache`/`run_requests`/`stop_event`) too, even
+    for tests that never touch `/api/runs/start` - `create_app` defaults
+    them to fresh instances anyway, so exposing the real ones costs
+    nothing and lets a run-focused test reach them directly."""
+    monkeypatch.setenv("MPP_SDK_CURVE_DIR", str(tmp_path))
+    run_dir = tmp_path / "runs"
+    monkeypatch.setenv("MPP_SDK_RUN_DIR", str(run_dir))
+    cache = _SweepCache()
+    commands: queue.Queue[str] = queue.Queue()
+    run_cache = _LiveRunCache()
+    run_requests: queue.Queue[_RunRequest] = queue.Queue()
+    stop_event = threading.Event()
+    app = create_app(
+        cache,
+        commands,
+        demo=demo,
+        run_cache=run_cache,
+        run_requests=run_requests,
+        stop_event=stop_event,
+    )
+    test_client = TestClient(app)
+    test_client.cache = cache  # type: ignore[attr-defined]
+    test_client.commands = commands  # type: ignore[attr-defined]
+    test_client.run_dir = run_dir  # type: ignore[attr-defined]
+    test_client.run_cache = run_cache  # type: ignore[attr-defined]
+    test_client.run_requests = run_requests  # type: ignore[attr-defined]
+    test_client.stop_event = stop_event  # type: ignore[attr-defined]
+    return test_client
 
 
 @pytest.fixture
@@ -41,16 +90,16 @@ def client(monkeypatch, tmp_path):
     `runs/` subdirectory) - both glob `*.json` in their own default_dir(),
     and sharing one directory would make each listing pick up the other's
     files."""
-    monkeypatch.setenv("MPP_SDK_CURVE_DIR", str(tmp_path))
-    run_dir = tmp_path / "runs"
-    monkeypatch.setenv("MPP_SDK_RUN_DIR", str(run_dir))
-    cache = _SweepCache()
-    commands: queue.Queue[str] = queue.Queue()
-    app = create_app(cache, commands)
-    with TestClient(app) as test_client:
-        test_client.cache = cache  # type: ignore[attr-defined]
-        test_client.commands = commands  # type: ignore[attr-defined]
-        test_client.run_dir = run_dir  # type: ignore[attr-defined]
+    with _make_client(monkeypatch, tmp_path) as test_client:
+        yield test_client
+
+
+@pytest.fixture
+def demo_client(monkeypatch, tmp_path):
+    """Same as `client`, but built with `demo=True` - for the one thing
+    that differs in demo mode: `POST /api/runs/start` must refuse (no
+    board), same as running the real server with `--demo`."""
+    with _make_client(monkeypatch, tmp_path, demo=True) as test_client:
         yield test_client
 
 
@@ -191,6 +240,41 @@ def test_measurement_kinds_returns_the_seed_vocabulary(client):
     assert r.status_code == 200
     assert "baseline" in r.json()
     assert "tilted" in r.json()
+
+
+# ------------------------------------------------------------------
+# GET /api/run-config
+# ------------------------------------------------------------------
+
+
+def test_run_config_lists_the_registered_roster(client):
+    r = client.get("/api/run-config")
+    assert r.status_code == 200
+    assert r.json()["algorithms"] == [s.label for s in algorithm_specs()]
+
+
+def test_run_config_matches_what_start_run_will_accept(client):
+    # POST /api/runs/start matches algorithm names case-insensitively
+    # against algorithm_specs() - this pins that the served roster is
+    # drawn from that exact same source, not a hand-copied list that
+    # could drift from it.
+    labels = client.get("/api/run-config").json()["algorithms"]
+    assert len(labels) == len(algorithm_specs())
+    assert all(label.lower() in {s.label.lower() for s in algorithm_specs()} for label in labels)
+
+
+def test_run_config_serves_the_bounds_a_run_is_actually_held_to(client):
+    """The page shows these before starting something that drives a power
+    converter, so they have to be the values the server enforces rather
+    than a copy that can drift."""
+    body = client.get("/api/run-config").json()
+    assert body["max_duration_s"] == _MAX_RUN_DURATION_S
+    assert body["default_v_max"] == _DEFAULT_V_MAX
+    assert body["default_i_max"] == _DEFAULT_I_MAX
+
+    # A start request that omits the limits must be held to exactly these.
+    assert _StartRunRequest(algorithm="P&O").v_max == body["default_v_max"]
+    assert _StartRunRequest(algorithm="P&O").i_max == body["default_i_max"]
 
 
 # ------------------------------------------------------------------
@@ -607,3 +691,496 @@ def test_downsample_samples_below_the_cap_is_unchanged():
     picked, downsampled = _downsample_samples(samples, 10)
     assert downsampled is False
     assert picked == list(samples)
+
+
+# ------------------------------------------------------------------
+# POST /api/runs/start, POST /api/runs/stop, GET /api/runs/live
+# ------------------------------------------------------------------
+
+
+class _FakeRunSource:
+    """Minimal fake board for `_run_live`: `read()`/`write()` like
+    `test_run_algorithm.py`'s `_FakeSource`, plus `vout` and
+    `consecutive_bad_frames` since `_run_live`/`run_control_loop` read
+    both (`SpiMcuSource` has both; a plain SignalSource fake would not,
+    and must still work - see `test_a_fake_source...` in
+    test_run_algorithm.py)."""
+
+    def __init__(self):
+        self._duty = 0.0
+        self.vout = 12.0
+        self.consecutive_bad_frames = 0
+        self.writes: list[float] = []
+
+    def write(self, duty):
+        self._duty = duty
+        self.writes.append(duty)
+
+    def read(self):
+        v = 20.0 * (1.0 - self._duty)
+        i = 0.2 * self._duty
+        return v, i
+
+
+def _po_spec():
+    return next(s for s in algorithm_specs() if s.label == "P&O")
+
+
+def test_start_run_rejected_in_demo_mode(demo_client):
+    """Never start a run without a real board - --demo's source has no
+    read()/write() at all, so this must be refused up front, not after
+    queuing something doomed to fail partway."""
+    r = demo_client.post("/api/runs/start", json={"algorithm": "P&O"})
+    assert r.status_code == 409
+    assert demo_client.run_requests.empty()
+
+
+def test_start_run_rejects_an_unknown_algorithm(client):
+    r = client.post("/api/runs/start", json={"algorithm": "not-a-real-algorithm"})
+    assert r.status_code == 400
+    assert client.run_requests.empty()
+
+
+def test_start_run_rejects_an_unknown_curve_ref(client):
+    r = client.post("/api/runs/start", json={"algorithm": "P&O", "curve_ref": "does-not-exist"})
+    assert r.status_code == 404
+    assert client.run_requests.empty()
+
+
+def test_start_run_rejects_a_non_positive_duration(client):
+    r = client.post("/api/runs/start", json={"algorithm": "P&O", "duration_s": 0})
+    assert r.status_code == 400
+    assert client.run_requests.empty()
+
+
+def test_start_run_accepts_a_valid_request_and_enqueues_it(client):
+    r = client.post(
+        "/api/runs/start",
+        json={
+            "algorithm": "p&o",  # case-insensitive, like the CLI's --algorithm
+            "duration_s": 5.0,
+            "v_max": 30.0,
+            "i_max": 0.5,
+            "label": "bench",
+        },
+    )
+    assert r.status_code == 200
+    assert r.json() == {
+        "status": "running",
+        "algorithm": "P&O",
+        "label": "bench",
+        "duration_s": 5.0,
+    }
+
+    queued = client.run_requests.get_nowait()
+    assert queued.spec.label == "P&O"
+    assert queued.duration_s == 5.0
+    assert queued.v_max == 30.0
+    assert queued.i_max == 0.5
+    assert queued.label == "bench"
+    assert queued.curve_ref is None
+
+    live = client.get("/api/runs/live").json()
+    assert live["status"] == "running"
+    assert live["algorithm"] == "P&O"
+    assert live["label"] == "bench"
+
+
+def test_start_run_defaults_label_to_the_algorithm_label_when_omitted(client):
+    r = client.post("/api/runs/start", json={"algorithm": "P&O"})
+    assert r.json()["label"] == "P&O"
+
+
+def test_start_run_defaults_to_a_short_watchable_duration(client):
+    """Not the backstop. A run drives a real converter and is something an
+    operator watches, so the default is a look, not the ceiling."""
+    r = client.post("/api/runs/start", json={"algorithm": "P&O"})
+    assert r.json()["duration_s"] == pytest.approx(_DEFAULT_RUN_DURATION_S)
+    assert _DEFAULT_RUN_DURATION_S < _MAX_RUN_DURATION_S
+
+
+def test_start_run_clamps_an_excessive_duration_to_the_backstop(client):
+    """The backstop against a forgotten run applies regardless of what the
+    caller asks for, not just when nothing is specified."""
+    r = client.post("/api/runs/start", json={"algorithm": "P&O", "duration_s": 10_000.0})
+    assert r.json()["duration_s"] == pytest.approx(600.0)
+
+
+def test_start_run_rejects_a_non_positive_v_max(client):
+    r = client.post("/api/runs/start", json={"algorithm": "P&O", "v_max": 0})
+    assert r.status_code == 400
+    assert client.run_requests.empty()
+
+
+def test_start_run_rejects_a_non_positive_i_max(client):
+    r = client.post("/api/runs/start", json={"algorithm": "P&O", "i_max": -1.0})
+    assert r.status_code == 400
+    assert client.run_requests.empty()
+
+
+def test_start_run_clamps_an_excessive_v_max_and_i_max_to_the_board_limit(client):
+    """An operator may narrow the safety limits, never widen them past the
+    board's documented 40 V / 1 A - those are the only overvoltage/
+    overcurrent protection a continuous drive has (run_algorithm.py's own
+    module docstring)."""
+    r = client.post("/api/runs/start", json={"algorithm": "P&O", "v_max": 999999, "i_max": 999999})
+    assert r.status_code == 200
+    queued = client.run_requests.get_nowait()
+    assert queued.v_max == _DEFAULT_V_MAX
+    assert queued.i_max == _DEFAULT_I_MAX
+
+
+def test_start_run_respects_a_v_max_and_i_max_below_the_ceiling(client):
+    r = client.post("/api/runs/start", json={"algorithm": "P&O", "v_max": 12.0, "i_max": 0.3})
+    assert r.status_code == 200
+    queued = client.run_requests.get_nowait()
+    assert queued.v_max == 12.0
+    assert queued.i_max == 0.3
+
+
+def test_start_run_with_a_valid_curve_ref_is_recorded(client, tmp_path):
+    curve_path = _save(tmp_path, label="ref curve")
+    r = client.post("/api/runs/start", json={"algorithm": "P&O", "curve_ref": curve_path.stem})
+    assert r.status_code == 200
+    queued = client.run_requests.get_nowait()
+    assert queued.curve_ref == curve_path.stem
+    assert client.get("/api/runs/live").json()["curve_ref"] == curve_path.stem
+
+
+def test_start_run_conflicts_when_a_run_is_already_in_progress(client):
+    r1 = client.post("/api/runs/start", json={"algorithm": "P&O"})
+    assert r1.status_code == 200
+    r2 = client.post("/api/runs/start", json={"algorithm": "InCond"})
+    assert r2.status_code == 409
+    # The second, rejected request must never reach the queue - only the
+    # first request's spec should be sitting there.
+    assert client.run_requests.get_nowait().spec.label == "P&O"
+    assert client.run_requests.empty()
+
+
+def test_stop_run_sets_the_stop_event(client):
+    client.post("/api/runs/start", json={"algorithm": "P&O"})
+    assert client.stop_event.is_set() is False
+    r = client.post("/api/runs/stop")
+    assert r.status_code == 204
+    assert client.stop_event.is_set() is True
+
+
+def test_stop_run_without_an_active_run_is_409(client):
+    r = client.post("/api/runs/stop")
+    assert r.status_code == 409
+
+
+def test_live_run_defaults_to_idle_with_no_samples(client):
+    live = client.get("/api/runs/live").json()
+    assert live["status"] == "idle"
+    assert live["samples"] == []
+    assert live["vout"] is None
+    assert live["aborted"] is False
+
+
+# ------------------------------------------------------------------
+# _run_live: the poll-thread side of a run, exercised directly with a
+# fake source (no threads, no hardware) - _poll_loop itself is never
+# called in this test module, same as the rest of this file.
+# ------------------------------------------------------------------
+
+
+def test_run_live_saves_the_full_series_while_the_live_window_stays_bounded(client):
+    source = _FakeRunSource()
+    request = _RunRequest(
+        spec=_po_spec(), duration_s=0.1, v_max=100.0, i_max=100.0, curve_ref=None, label="bench"
+    )
+    assert client.run_cache.try_start(algorithm="P&O", label="bench", curve_ref=None)
+
+    _run_live(source, client.cache, client.run_cache, request, client.stop_event)
+
+    live = client.get("/api/runs/live", params={"max_samples": 50}).json()
+    assert live["status"] == "done"
+    assert live["aborted"] is False
+    assert live["n_samples"] > 50  # a fast fake loop over 0.1s records plenty of steps
+    assert live["downsampled"] is True
+    assert len(live["samples"]) <= 52  # _downsample_samples always keeps both endpoints
+
+    saved_id = live["saved_run_id"]
+    assert saved_id is not None
+    record = load_run(client.run_dir / f"{saved_id}.json")
+    assert len(record.samples) == live["n_samples"]  # the saved record keeps everything
+    assert record.algorithm == "P&O"
+    assert record.label == "bench"
+    assert record.aborted is False
+
+
+def test_run_live_records_the_chosen_curve_ref_on_the_saved_run(client, tmp_path):
+    curve_path = _save(tmp_path, label="ref curve")
+    curve_id = curve_path.stem
+    source = _FakeRunSource()
+    request = _RunRequest(
+        spec=_po_spec(),
+        duration_s=0.02,
+        v_max=100.0,
+        i_max=100.0,
+        curve_ref=curve_id,
+        label="bench",
+    )
+    assert client.run_cache.try_start(algorithm="P&O", label="bench", curve_ref=curve_id)
+
+    _run_live(source, client.cache, client.run_cache, request, client.stop_event)
+
+    live = client.get("/api/runs/live").json()
+    assert live["curve_ref"] == curve_id
+    record = load_run(client.run_dir / f"{live['saved_run_id']}.json")
+    assert record.curve_ref == curve_id
+
+
+def test_run_live_exposes_vout_live(client):
+    source = _FakeRunSource()
+    source.vout = 27.5
+    request = _RunRequest(
+        spec=_po_spec(), duration_s=0.02, v_max=100.0, i_max=100.0, curve_ref=None, label="bench"
+    )
+    assert client.run_cache.try_start(algorithm="P&O", label="bench", curve_ref=None)
+
+    _run_live(source, client.cache, client.run_cache, request, client.stop_event)
+
+    assert client.get("/api/runs/live").json()["vout"] == 27.5
+
+
+def test_run_live_overvoltage_aborts_zeroes_duty_and_records_the_reason(client):
+    source = _FakeRunSource()
+    request = _RunRequest(
+        spec=_po_spec(), duration_s=100.0, v_max=1.0, i_max=100.0, curve_ref=None, label="bench"
+    )
+    # P&O's initial_duty of 0.5 gives V=10.0 on the very first read - over v_max=1.0.
+    assert client.run_cache.try_start(algorithm="P&O", label="bench", curve_ref=None)
+
+    _run_live(source, client.cache, client.run_cache, request, client.stop_event)
+
+    live = client.get("/api/runs/live").json()
+    assert live["aborted"] is True
+    assert live["abort_reason"] == "overvoltage"
+    assert source._duty == 0.0
+    record = load_run(client.run_dir / f"{live['saved_run_id']}.json")
+    assert record.aborted is True
+    assert record.notes == "overvoltage"
+
+
+def test_run_live_link_down_aborts(client):
+    source = _FakeRunSource()
+    source.consecutive_bad_frames = 999
+    request = _RunRequest(
+        spec=_po_spec(), duration_s=100.0, v_max=100.0, i_max=100.0, curve_ref=None, label="bench"
+    )
+    assert client.run_cache.try_start(algorithm="P&O", label="bench", curve_ref=None)
+
+    _run_live(source, client.cache, client.run_cache, request, client.stop_event)
+
+    live = client.get("/api/runs/live").json()
+    assert live["aborted"] is True
+    assert live["abort_reason"] == "link-down"
+    assert source._duty == 0.0
+
+
+def test_a_stop_request_actually_stops_an_in_progress_run(client):
+    """Simulates an operator clicking Stop partway through: the fake
+    source sets the real stop_event (the same one POST /api/runs/stop
+    would set) as a side effect of its third read() call, standing in for
+    a concurrent request thread without needing real threads here."""
+    source = _FakeRunSource()
+    calls = []
+    real_read = source.read
+
+    def read():
+        calls.append(1)
+        if len(calls) == 3:
+            client.stop_event.set()
+        return real_read()
+
+    source.read = read
+
+    request = _RunRequest(
+        spec=_po_spec(), duration_s=100.0, v_max=100.0, i_max=100.0, curve_ref=None, label="bench"
+    )
+    assert client.run_cache.try_start(algorithm="P&O", label="bench", curve_ref=None)
+
+    _run_live(source, client.cache, client.run_cache, request, client.stop_event)
+
+    live = client.get("/api/runs/live").json()
+    assert live["status"] == "done"
+    assert live["aborted"] is True
+    assert live["abort_reason"] == "stopped"
+    assert source._duty == 0.0
+    # Confirms this really did stop early rather than happening to finish
+    # on its own: duration_s=100 real seconds never elapsed in this test.
+    assert live["n_samples"] < 100
+
+
+def test_run_live_pauses_the_curve_tracer_cache_while_running(client):
+    """_run_live must make the displacement visible on /api/data rather
+    than leaving a client polling it looking at a silently frozen sweep -
+    see the module docstring."""
+    source = _FakeRunSource()
+    request = _RunRequest(
+        spec=_po_spec(), duration_s=0.01, v_max=100.0, i_max=100.0, curve_ref=None, label="bench"
+    )
+    assert client.run_cache.try_start(algorithm="P&O", label="bench", curve_ref=None)
+
+    _run_live(source, client.cache, client.run_cache, request, client.stop_event)
+
+    # The run has already finished by the time _run_live returns, but the
+    # "paused" message it set at the start must still be the cache's
+    # link state - nothing in this (short) run's path resets it, matching
+    # how a real _poll_loop would only refresh /api/data on its next
+    # ordinary sweep-polling iteration after the run ends.
+    assert client.get("/api/data").json()["link"] == "paused: a live MPPT run is in progress"
+
+
+# ------------------------------------------------------------------
+# Simulated runs: _make_simulated_source, _run_simulated, and
+# POST /api/runs/start with "simulated": true - Part 2 of live runs.
+# ------------------------------------------------------------------
+
+
+def _wait_for_run_done(test_client, timeout=5.0):
+    """Poll GET /api/runs/live until the run started on a background
+    thread (a simulated run - see post_start_run) reports "done", instead
+    of leaving that thread still writing into a torn-down tmp_path once
+    the test that started it has already finished."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if test_client.get("/api/runs/live").json()["status"] == "done":
+            return
+        time.sleep(0.01)
+    raise TimeoutError("simulated run did not finish in time")
+
+
+def test_make_simulated_source_uses_the_reference_curve_when_given(client, tmp_path):
+    curve_path = _save(tmp_path, label="ref", points=((19.3, 0.006), (14.0, 0.5), (0.1, 0.6)))
+    src = _make_simulated_source(curve_path.stem)
+    # Distinctly the curve's own ballpark, not the no-curve fallback's (see
+    # the next test) - proof MeasuredPanel, not IdealSingleDiode, backs it.
+    assert 15.0 < src._panel.open_circuit_voltage < 22.0
+
+
+def test_make_simulated_source_falls_back_to_ideal_single_diode_with_no_curve(client):
+    src = _make_simulated_source(None)
+    fallback = IdealSingleDiode(photocurrent=0.79, cells_in_series=36)
+    assert src._panel.open_circuit_voltage == pytest.approx(fallback.open_circuit_voltage)
+
+
+def test_run_simulated_never_touches_the_spi_mcu_module(monkeypatch, client):
+    """A simulated run must never construct a SpiMcuSource - poison the
+    module it lives in so importing it for any reason raises loudly, then
+    confirm a simulated run still runs to completion regardless."""
+    monkeypatch.setitem(sys.modules, "mpp_sdk.io.spi_mcu", None)
+    request = _RunRequest(
+        spec=_po_spec(), duration_s=0.05, v_max=100.0, i_max=100.0, curve_ref=None, label="bench"
+    )
+    assert client.run_cache.try_start(
+        algorithm="P&O", label="bench", curve_ref=None, simulated=True
+    )
+
+    _run_simulated(client.run_cache, request, client.stop_event)
+
+    live = client.get("/api/runs/live").json()
+    assert live["status"] == "done"
+    assert live["source"] == "simulated"
+
+
+def test_run_simulated_stamps_simulated_provenance_hardware_stamps_hardware(client):
+    """The saved RunRecord's source must say which of the two actually
+    ran - never left to the caller, see RUN_SOURCES."""
+    sim_request = _RunRequest(
+        spec=_po_spec(), duration_s=0.05, v_max=100.0, i_max=100.0, curve_ref=None, label="sim"
+    )
+    assert client.run_cache.try_start(algorithm="P&O", label="sim", curve_ref=None, simulated=True)
+    _run_simulated(client.run_cache, sim_request, client.stop_event)
+    sim_saved = client.get("/api/runs/live").json()["saved_run_id"]
+    assert load_run(client.run_dir / f"{sim_saved}.json").source == "simulated"
+
+    hw_source = _FakeRunSource()
+    hw_request = _RunRequest(
+        spec=_po_spec(), duration_s=0.02, v_max=100.0, i_max=100.0, curve_ref=None, label="hw"
+    )
+    assert client.run_cache.try_start(algorithm="P&O", label="hw", curve_ref=None)
+    _run_live(hw_source, client.cache, client.run_cache, hw_request, client.stop_event)
+    hw_saved = client.get("/api/runs/live").json()["saved_run_id"]
+    assert load_run(client.run_dir / f"{hw_saved}.json").source == "hardware"
+
+
+def test_start_run_simulated_is_allowed_in_demo_mode(demo_client):
+    """The one kind of run --demo mode (no board at all) can still offer -
+    see post_start_run's refusal for a non-simulated request."""
+    r = demo_client.post(
+        "/api/runs/start", json={"algorithm": "P&O", "simulated": True, "duration_s": 0.05}
+    )
+    assert r.status_code == 200
+    # Never touches the hardware queue - _run_simulated runs on its own
+    # thread instead (see post_start_run).
+    assert demo_client.run_requests.empty()
+    _wait_for_run_done(demo_client)
+    live = demo_client.get("/api/runs/live").json()
+    assert live["source"] == "simulated"
+    assert live["aborted"] is False
+
+
+def test_start_run_live_reports_source_while_hardware_run_is_queued(client):
+    r = client.post("/api/runs/start", json={"algorithm": "P&O"})
+    assert r.status_code == 200
+    assert client.get("/api/runs/live").json()["source"] == "hardware"
+    client.run_requests.get_nowait()  # drain - nothing executes it in this test
+
+
+def test_start_run_simulated_and_hardware_can_never_overlap(demo_client):
+    """try_start's single run slot must refuse a second start of either
+    kind while a simulated run (started on its own thread) is still in
+    progress - the one concurrency guarantee Part 2 asks for."""
+    r1 = demo_client.post(
+        "/api/runs/start", json={"algorithm": "P&O", "simulated": True, "duration_s": 5.0}
+    )
+    assert r1.status_code == 200
+    try:
+        r2 = demo_client.post("/api/runs/start", json={"algorithm": "InCond", "simulated": True})
+        assert r2.status_code == 409
+    finally:
+        demo_client.post("/api/runs/stop")
+        _wait_for_run_done(demo_client)
+
+
+def test_start_run_simulated_uses_the_chosen_curve_and_saves_it_as_curve_ref(client, tmp_path):
+    curve_path = _save(tmp_path, label="ref curve")
+    r = client.post(
+        "/api/runs/start",
+        json={
+            "algorithm": "P&O",
+            "simulated": True,
+            "duration_s": 0.05,
+            "curve_ref": curve_path.stem,
+        },
+    )
+    assert r.status_code == 200
+    _wait_for_run_done(client)
+    live = client.get("/api/runs/live").json()
+    assert live["curve_ref"] == curve_path.stem
+    record = load_run(client.run_dir / f"{live['saved_run_id']}.json")
+    assert record.curve_ref == curve_path.stem
+    assert record.source == "simulated"
+
+
+def test_start_run_seeds_the_algorithm_with_the_requested_initial_duty(client):
+    """The seed is not cosmetic: a local tracker hill-climbs from it, so on
+    a multi-peak curve it decides which maximum the run settles on."""
+    r = client.post(
+        "/api/runs/start",
+        json={"algorithm": "P&O", "simulated": True, "duration_s": 0.2, "initial_duty": 0.7},
+    )
+    assert r.status_code == 200
+
+
+@pytest.mark.parametrize("duty", [0.0, 1.0, -0.1, 1.5])
+def test_start_run_rejects_an_initial_duty_outside_the_open_unit_interval(client, duty):
+    """Rejected, not clamped - silently moving the seed would change which
+    maximum a hill-climber converges on without telling anyone."""
+    r = client.post("/api/runs/start", json={"algorithm": "P&O", "initial_duty": duty})
+    assert r.status_code == 400
+    assert "initial_duty" in r.json()["detail"]

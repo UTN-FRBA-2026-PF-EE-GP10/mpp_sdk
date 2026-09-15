@@ -47,7 +47,7 @@ The connection indicator is also a three-way capture-mode menu
   firmware, not measured this session. Saving is still allowed - the
   result is real data off the wire. Only selectable with a live link;
   the app falls back to `hardware` on its own if the link drops.
-- **Demo** (`simulated`) - no board at all. No backend needed: swaps the
+- **Demo** (`simulated`) - no board and no hardware commands. Swaps the
   curve/run libraries for bundled fixtures (`src/lib/demoFixtures.ts`),
   disables every write (save/delete) and every genuinely hardware-only
   action (Start Measurement, Release Relay), while still letting the two
@@ -56,6 +56,22 @@ The connection indicator is also a three-way capture-mode menu
   overload of the word "demo" alongside `ConnectionStatus`'s own `'demo'`
   value above - `useSandbox()` is the one place to read "are we fully
   offline" - reuse it rather than adding another check.
+
+  One exception: starting a run (`RunPane`) still reaches the backend even
+  here, against a `SimulatedSource` (`POST /api/runs/start` with
+  `"simulated": true`) - the registered MPPT algorithms are Python, and
+  porting them to TypeScript would fork the one implementation the whole
+  project is built around, so there is no offline equivalent to fall back
+  to the way there is for a curve. This does write a `RunRecord` to the
+  server's real run library, which is why this is acceptable at all: the
+  record is stamped `source: "simulated"` server-side
+  (`mpp_sdk/runs/record.py`'s `RUN_SOURCES`, never taken from the
+  request), `ProvenanceBadge` marks it unmissably everywhere a run is
+  listed or played back, and the setup form and live view both say
+  "simulated" throughout, so nothing written here can be mistaken for a
+  measurement or shown as one. No board is touched and no hardware
+  command is ever sent - the one write demo mode makes is this clearly
+  labelled, non-physical one.
 
 ## Build
 
