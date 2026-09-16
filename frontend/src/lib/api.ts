@@ -219,6 +219,9 @@ export interface StartRunInput {
   v_max?: number
   i_max?: number
   curve_ref?: string | null
+  /** (volts, amps) pairs for a simulated run, instead of `curve_ref` -
+   * demo mode's bundled curves are not in the server's library. */
+  curve_points?: [number, number][] | null
   label?: string
   /** Drive a SimulatedSource instead of the real board - see
    * curve_tracer_server.py's post_start_run. Omitted (or false) keeps the

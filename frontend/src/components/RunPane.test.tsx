@@ -4,6 +4,7 @@ import { RunPane } from './RunPane'
 import { ThemeProvider } from '@/components/ThemeProvider'
 import { UnitsProvider } from '@/components/UnitsProvider'
 import { CaptureModeContext } from '@/lib/captureMode'
+import { DEMO_CURVES } from '@/lib/demoFixtures'
 import type { LiveRunState, RunSummary } from '@/lib/runs'
 import type { CurveRecord } from '@/types'
 
@@ -382,6 +383,45 @@ describe('RunPane in demo (sandbox) mode', () => {
     )
     // Nothing physical happens, so there is nothing to confirm.
     expect(confirmSpy).not.toHaveBeenCalled()
+  })
+
+  it('sends a picked demo curve inline, and draws the reference the server echoes back', async () => {
+    vi.mocked(fetchRunConfig).mockResolvedValue({
+      algorithms: ['P&O'],
+      maxDurationS: 600,
+      defaultDurationS: 10,
+      defaultInitialDuty: 0.5,
+      defaultVMax: 40,
+      defaultIMax: 1,
+    })
+    vi.mocked(startRun).mockResolvedValue({
+      status: 'running',
+      algorithm: 'P&O',
+      label: 'P&O',
+      duration_s: 10,
+    })
+    const curve = DEMO_CURVES[0]
+    vi.mocked(fetchLiveRun)
+      .mockResolvedValueOnce(liveState({ status: 'idle' }))
+      .mockResolvedValue(liveState({ source: 'simulated', reference_points: curve.points }))
+    renderPaneInSandbox(DEMO_CURVES)
+
+    await selectAlgorithm('P&O')
+    fireEvent.change(screen.getByLabelText('Reference curve'), { target: { value: curve.id } })
+    fireEvent.click(screen.getByText('Start simulated run'))
+
+    await waitFor(() =>
+      expect(startRun).toHaveBeenCalledWith(
+        expect.objectContaining({
+          curve_ref: null,
+          curve_points: curve.points.map((p) => [p.v, p.i]),
+          simulated: true,
+        }),
+      ),
+    )
+    await waitFor(() => expect(screen.getByText('Simulated - not measured')).toBeTruthy())
+    // A reference arrived, so the "no reference curve" note must not show.
+    expect(screen.queryByText(/No reference curve/)).toBeNull()
   })
 
   it('marks a simulated run unmistakably while it is live', async () => {

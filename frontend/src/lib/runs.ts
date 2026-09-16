@@ -4,6 +4,8 @@
 // the wire; groupRunsByDate here turns a summary list into what the
 // sidebar renders, the same way GET /api/curves feeds byKind in App.tsx.
 
+import type { CurvePoint } from '@/types'
+
 /** Where a run's samples actually came from - see RUN_SOURCES in
  * mpp_sdk/runs/record.py. Kept as an open union, same pattern as
  * CurveRecord['source'] in types.ts, so an unrecognised value still
@@ -74,6 +76,10 @@ export interface LiveRunState {
    * "simulated", never "unknown": a live run always knows which source it
    * started against. See RunSource. */
   source: RunSource
+  /** The static curve the run tracks, drawn grey behind the trail - the
+   * chosen curve, a demo curve sent inline, or the built-in panel. Empty
+   * for a hardware run with no reference curve. */
+  reference_points?: CurvePoint[]
 }
 
 // GET /api/runs/{id}'s shape: everything in RunSummary plus the samples
