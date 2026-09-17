@@ -906,8 +906,13 @@ At the maximum power point the two are equal, which gives an explicit
 steady), multiply through by <span class="arithmatex">\(V\,\Delta V\)</span> and compare signs:</p>
 <div class="arithmatex">\[\operatorname{sign}\!\big(\Delta I\, V + I\, \Delta V\big)
 \quad\text{against}\quad \operatorname{sign}(\Delta V).\]</div>
-<p>When they agree, the operating point is left of the MPP. The special case
-<span class="arithmatex">\(\Delta V \approx 0\)</span> falls back to the sign of <span class="arithmatex">\(\Delta I\)</span>.</p>
+<p>When they agree, the operating point is left of the MPP.</p>
+<p>The special case <span class="arithmatex">\(\Delta V \approx 0\)</span> (division would blow up) falls back to
+the sign of <span class="arithmatex">\(\Delta I\)</span>: rising current (<span class="arithmatex">\(\Delta I &gt; 0\)</span>) is read as left of the
+MPP (raise <span class="arithmatex">\(V\)</span>), falling current (<span class="arithmatex">\(\Delta I &lt; 0\)</span>) as right of it (lower <span class="arithmatex">\(V\)</span>),
+and <span class="arithmatex">\(\Delta I \approx 0\)</span> as at the MPP (hold).</p>
+<p>On the first call there is no previous sample, so the controller records
+<span class="arithmatex">\((V, I)\)</span> as the reference and perturbs by one step, same as P&amp;O.</p>
 <h2 id="sepic-sign-convention">SEPIC sign convention<a class="headerlink" href="#sepic-sign-convention" title="Permanent link">&para;</a></h2>
 <p>Same as P&amp;O: <span class="arithmatex">\(R_\text{eff}(D)=R_\text{load}\left(\tfrac{1-D}{D}\right)^2\)</span> is
 decreasing in <span class="arithmatex">\(D\)</span>, so "raise <span class="arithmatex">\(V\)</span>" maps to "decrease <span class="arithmatex">\(D\)</span>". InCond is a drop-in
@@ -917,7 +922,7 @@ replacement for P&amp;O.</p>
 <li><strong>vs. P&amp;O:</strong> the explicit MPP condition lets it hold still at the peak,
   reducing steady-state oscillation, and it responds more cleanly to fast
   irradiance changes.</li>
-<li><strong>Partial shading:</strong> still a local, gradient-following method — it is
+<li><strong>Partial shading:</strong> still a local, gradient-following method. It is
   <strong>trapped on local maxima</strong> just like P&amp;O.</li>
 </ul>
 <h2 id="implementation">Implementation<a class="headerlink" href="#implementation" title="Permanent link">&para;</a></h2>

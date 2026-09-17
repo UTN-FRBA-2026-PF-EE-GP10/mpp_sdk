@@ -891,7 +891,7 @@ P|/P\)</span> restart condition used by PSO-MPPT schemes [Liu et al. 2012].</p>
 <li>State is four scalars (<code>_ref</code>, <code>_count</code>, <code>_armed</code>, plus the fixed
   <code>threshold</code>/<code>samples</code>/<code>smoothing</code>) and the update is branch-light -
   MCU-portable by design. See the docstring at
-  <code>mpp_sdk/algorithms/restart.py:7-53</code> for the authoritative behavior; this
+  <code>mpp_sdk/algorithms/restart.py:9-55</code> for the authoritative behavior; this
   page is explanatory.</li>
 </ul>
 <h2 id="periodic-backstop">Periodic backstop<a class="headerlink" href="#periodic-backstop" title="Permanent link">&para;</a></h2>
@@ -924,7 +924,7 @@ loss, as a fraction of available energy, is modelled as</p>
   D\)</span>.</li>
 </ul>
 <p>Minimising <span class="arithmatex">\(L(P)\)</span> gives the derived optimum</p>
-<div class="arithmatex">\[P^\star = \sqrt{A / B} \approx 1034 \text{ control steps},\]</div>
+<div class="arithmatex">\[P^\star = \sqrt{A / B} \approx 1035 \text{ control steps},\]</div>
 <p>which lands on the empirical best: Scan&amp;Track's eta energy peaks at
 <strong>95.0 %</strong> at period <strong>1000</strong> (the nearest swept value to <span class="arithmatex">\(P^\star\)</span>).
 Over-frequent re-scanning (period 250) actually traps <em>more</em> often, not
@@ -935,7 +935,7 @@ regenerates this table and the accompanying figure
 (<code>harness/output/compare_rescan.png</code>).</p>
 <h2 id="measured-behavior">Measured behavior<a class="headerlink" href="#measured-behavior" title="Permanent link">&para;</a></h2>
 <p>Local trackers (no restart policy) trap in roughly half the shaded plateaus
-of the cyclic schedule, settling at 44-67 % of available power on those
+of the cyclic schedule, settling at 44-66 % of available power on those
 traps (<code>docs/methodology.md</code>). The configured global trackers
 (<code>rescan_period=1000</code>, detector on) cut traps to a handful at the price of
 up to ~1 s re-acquisition when only the backstop can free them.</p>
