@@ -58,6 +58,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, NamedTuple
 
+import numpy as np
+
 from harness.common import AlgorithmSpec, algorithm_specs
 from mpp_sdk import IdealSingleDiode, MeasuredPanel, SEPICConverter, SimulatedSource, TabulatedPanel
 from mpp_sdk.curves import MEASUREMENT_KINDS, CurveRecord, PanelSetup
@@ -284,6 +286,15 @@ _SIMULATED_RUN_PERIOD_S = 0.05
 # make_static_source default.
 _SIMULATED_LOAD_RESISTANCE = 10.0
 
+# Bounds on inline `curve_points` for a simulated run. A captured sweep is
+# a few dozen points; the cap only stops an oversized body from building
+# a huge table on the server.
+_MAX_INLINE_CURVE_POINTS = 2000
+
+# Points drawn for the built-in panel's reference curve when a simulated
+# run has no chosen curve - enough for a smooth line on the live chart.
+_BUILTIN_REFERENCE_POINTS = 60
+
 
 @dataclass(frozen=True)
 class _RunRequest:
@@ -301,6 +312,10 @@ class _RunRequest:
     # Defaulted so a caller that does not care about the seed does not
     # have to state one; the route always passes it explicitly.
     initial_duty: float = _DEFAULT_INITIAL_DUTY
+    # (volts, amps) sent in the request body for a simulated run - demo
+    # mode's bundled curves are not in the server's library, so they come
+    # inline instead of by `curve_ref`.
+    curve_points: tuple[tuple[float, float], ...] | None = None
 
 
 class _LiveRunCache:
@@ -327,6 +342,7 @@ class _LiveRunCache:
         self._abort_reason: str | None = None
         self._saved_run_id: str | None = None
         self._simulated = False
+        self._reference_points: tuple[tuple[float, float], ...] = ()
 
     def stop_if_running(self, stop_event: threading.Event) -> bool:
         """Atomically check-and-set: `stop_event.set()` happens under the
@@ -341,7 +357,13 @@ class _LiveRunCache:
             return True
 
     def try_start(
-        self, *, algorithm: str, label: str, curve_ref: str | None, simulated: bool = False
+        self,
+        *,
+        algorithm: str,
+        label: str,
+        curve_ref: str | None,
+        simulated: bool = False,
+        reference_points: tuple[tuple[float, float], ...] = (),
     ) -> bool:
         """Claim the single run slot, resetting all live state - returns
         False, leaving everything untouched, if a run is already in
@@ -367,6 +389,7 @@ class _LiveRunCache:
             self._abort_reason = None
             self._saved_run_id = None
             self._simulated = simulated
+            self._reference_points = reference_points
             return True
 
     def add_sample(self, sample: RunSample, vout: float | None) -> None:
@@ -393,6 +416,7 @@ class _LiveRunCache:
             abort_reason = self._abort_reason
             saved_run_id = self._saved_run_id
             simulated = self._simulated
+            reference_points = self._reference_points
 
         # Downsampling (and the resulting stride math) doesn't need the
         # lock - it only reads the local copy taken above.
@@ -417,6 +441,10 @@ class _LiveRunCache:
             # RUN_SOURCES in mpp_sdk/runs/record.py. Never "unknown" here:
             # a live run always knows which source it started against.
             "source": "simulated" if simulated else "hardware",
+            # The static curve the run tracks, for the grey reference line.
+            # Sent by the server rather than looked up by the page, so demo
+            # mode's inline curves and the built-in panel draw too.
+            "reference_points": [{"v": v, "i": i} for v, i in reference_points],
         }
 
 
@@ -521,7 +549,28 @@ def _run_live(
     )
 
 
-def _make_simulated_source(curve_ref: str | None) -> SimulatedSource:
+def _builtin_panel() -> IdealSingleDiode:
+    # IdealSingleDiode's own defaults (photocurrent=8.0, 60 cells) model
+    # a much bigger module than this bench - Isc/Voc land well outside
+    # _DEFAULT_I_MAX/_DEFAULT_V_MAX, so a no-curve run would trip the
+    # overcurrent abort on its very first sample. These two params are
+    # sized to roughly match a single Hissuma PSF10MONO (Isc=0.79A,
+    # Voc=17V - see harness/panel_config.py) so the fallback stays a
+    # sane default instead of an immediate, confusing abort.
+    return IdealSingleDiode(photocurrent=0.79, cells_in_series=36)
+
+
+def _builtin_reference_points() -> tuple[tuple[float, float], ...]:
+    """The built-in panel's I-V curve, sampled from 0 V to just past Voc."""
+    panel = _builtin_panel()
+    voltages = np.linspace(0.0, 30.0, _BUILTIN_REFERENCE_POINTS)
+    currents = np.asarray(panel.current(voltages), dtype=float)
+    return tuple((float(v), float(i)) for v, i in zip(voltages, currents, strict=True) if i > 0)
+
+
+def _make_simulated_source(
+    curve_ref: str | None, curve_points: tuple[tuple[float, float], ...] | None = None
+) -> SimulatedSource:
     """Build the panel a simulated run drives against: `MeasuredPanel` over
     the operator's chosen reference curve when one is given - the run then
     hunts the MPP of a curve actually measured on this bench, and the live
@@ -532,18 +581,21 @@ def _make_simulated_source(curve_ref: str | None) -> SimulatedSource:
     `MeasuredPanel`'s own docstring recommends it for a long-running
     simulation.
     """
-    if curve_ref is not None:
+    if curve_points is not None:
+        panel = MeasuredPanel(
+            CurveRecord(
+                captured_at=now_utc(),
+                label="inline",
+                measurement="other",
+                panels=(),
+                points=curve_points,
+            )
+        )
+    elif curve_ref is not None:
         record = curve_library.load(_curve_path(curve_ref))
         panel = MeasuredPanel(record)
     else:
-        # IdealSingleDiode's own defaults (photocurrent=8.0, 60 cells) model
-        # a much bigger module than this bench - Isc/Voc land well outside
-        # _DEFAULT_I_MAX/_DEFAULT_V_MAX, so a no-curve run would trip the
-        # overcurrent abort on its very first sample. These two params are
-        # sized to roughly match a single Hissuma PSF10MONO (Isc=0.79A,
-        # Voc=17V - see harness/panel_config.py) so the fallback stays a
-        # sane default instead of an immediate, confusing abort.
-        panel = IdealSingleDiode(photocurrent=0.79, cells_in_series=36)
+        panel = _builtin_panel()
     return SimulatedSource(
         panel=TabulatedPanel(panel),
         converter=SEPICConverter(),
@@ -562,7 +614,7 @@ def _run_simulated(
     even started, so this can never run alongside a hardware run.
     """
     try:
-        src = _make_simulated_source(request.curve_ref)
+        src = _make_simulated_source(request.curve_ref, request.curve_points)
     except Exception as exc:
         run_cache.finish(aborted=True, reason=f"error: {exc}", saved_run_id=None)
         return
@@ -727,6 +779,8 @@ class _StartRunRequest(BaseModel):
     v_max: float = _DEFAULT_V_MAX
     i_max: float = _DEFAULT_I_MAX
     curve_ref: str | None = None
+    # (volts, amps) pairs; simulated runs only, instead of `curve_ref`.
+    curve_points: list[tuple[float, float]] | None = None
     label: str = ""
     simulated: bool = False
 
@@ -1008,8 +1062,46 @@ def create_app(
         if spec is None:
             raise HTTPException(status_code=400, detail=f"unknown algorithm {body.algorithm!r}")
         curve_ref = body.curve_ref or None
-        if curve_ref is not None:
-            _curve_path(curve_ref)  # raises 400/404 if it doesn't check out
+        curve_points: tuple[tuple[float, float], ...] | None = None
+        if body.curve_points is not None:
+            # A hardware run tracks the real panel, so an inline curve could
+            # only ever be a misleading picture next to it.
+            if not body.simulated:
+                raise HTTPException(
+                    status_code=400, detail="curve_points is only accepted for a simulated run"
+                )
+            if curve_ref is not None:
+                raise HTTPException(
+                    status_code=400, detail="pass curve_ref or curve_points, not both"
+                )
+            curve_points = tuple((float(v), float(i)) for v, i in body.curve_points)
+            if not 2 <= len(curve_points) <= _MAX_INLINE_CURVE_POINTS:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"curve_points needs 2 to {_MAX_INLINE_CURVE_POINTS} points",
+                )
+            if not all(math.isfinite(v) and math.isfinite(i) for v, i in curve_points):
+                raise HTTPException(status_code=400, detail="curve_points must be finite")
+            try:
+                MeasuredPanel(
+                    CurveRecord(
+                        captured_at=now_utc(),
+                        label="inline",
+                        measurement="other",
+                        panels=(),
+                        points=curve_points,
+                    )
+                )
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+            reference_points = curve_points
+        elif curve_ref is not None:
+            # raises 400/404 if it doesn't check out
+            reference_points = curve_library.load(_curve_path(curve_ref)).points
+        elif body.simulated:
+            reference_points = _builtin_reference_points()
+        else:
+            reference_points = ()
         # A seed outside (0, 1) is not a duty cycle. Rejected rather than
         # clamped: silently moving an operator's chosen starting point
         # would change which maximum a hill-climber converges on without
@@ -1040,7 +1132,11 @@ def create_app(
         label = body.label.strip() or spec.label
 
         if not run_cache.try_start(
-            algorithm=spec.label, label=label, curve_ref=curve_ref, simulated=body.simulated
+            algorithm=spec.label,
+            label=label,
+            curve_ref=curve_ref,
+            simulated=body.simulated,
+            reference_points=reference_points,
         ):
             raise HTTPException(status_code=409, detail="a run is already in progress")
         stop_event.clear()
@@ -1052,6 +1148,7 @@ def create_app(
             i_max=i_max,
             curve_ref=curve_ref,
             label=label,
+            curve_points=curve_points,
         )
         if body.simulated:
             # Never touches spidev, so it does not need to wait for the

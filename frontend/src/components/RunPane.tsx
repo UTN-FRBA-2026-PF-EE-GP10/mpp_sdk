@@ -112,8 +112,8 @@ export function RunPane({
         {sandbox.enabled && (
           <p className="rounded-md border border-violet-500/30 bg-violet-500/10 px-3 py-2 text-sm text-violet-700 dark:text-violet-300">
             Demo mode: starting a run here drives a simulated converter, not the real one - the
-            algorithm hunts the maximum power point of a built-in reference panel. Nothing
-            physical happens.
+            algorithm hunts the maximum power point of the chosen demo curve, or a built-in
+            reference panel. Nothing physical happens.
           </p>
         )}
         {!sandbox.enabled && connectionStatus !== 'connected' && (
@@ -185,12 +185,10 @@ function RunSetupForm({
   canStart: boolean
   disabledReason: string | null
   /** Demo mode: the run this form starts drives a `SimulatedSource`, not
-   * the real converter - see RunPane. Skips the hardware-run confirmation
-   * and the reference-curve picker (`curves` in demo mode is the bundled
-   * fixture list, App.tsx's DEMO_CURVES - none of those ids exist in the
-   * server's real curve library, so offering them as a `curve_ref` here
-   * would only ever 404; the simulated run falls back to its built-in
-   * panel instead, same as picking no curve elsewhere). */
+   * the real converter - see RunPane. Skips the hardware-run confirmation.
+   * `curves` in demo mode is the bundled fixture list (App.tsx's
+   * DEMO_CURVES), which the server's curve library does not have, so the
+   * chosen curve is sent as `curve_points` instead of `curve_ref`. */
   simulated: boolean
   starting: boolean
   startError: string | null
@@ -208,6 +206,12 @@ function RunSetupForm({
   const [iMax, setIMax] = useState<number | null>(null)
 
   const algorithms = config?.algorithms ?? []
+
+  // Toggling demo mode swaps `curves` for a different list; a pick from
+  // the old one must not linger as a value no option matches.
+  useEffect(() => {
+    if (curveRef !== '' && !curves.some((c) => c.id === curveRef)) setCurveRef('')
+  }, [curves, curveRef])
 
   // The config arrives asynchronously (GET /api/run-config); once it does,
   // default the picker to the first algorithm and seed the safety bounds
@@ -246,6 +250,7 @@ function RunSetupForm({
         return
       }
     }
+    const chosen = curves.find((c) => c.id === curveRef)
     onStart({
       algorithm,
       duration_s: duration,
@@ -253,6 +258,7 @@ function RunSetupForm({
       v_max: vMax ?? config?.defaultVMax ?? 0,
       i_max: iMax ?? config?.defaultIMax ?? 0,
       curve_ref: simulated ? null : curveRef || null,
+      curve_points: simulated && chosen ? chosen.points.map((p) => [p.v, p.i]) : null,
       simulated,
     })
   }
@@ -280,25 +286,18 @@ function RunSetupForm({
         <label className="flex flex-col gap-1 text-sm text-muted-foreground">
           Reference curve
           <select
-            value={simulated ? '' : curveRef}
+            value={curveRef}
             onChange={(e) => setCurveRef(e.target.value)}
-            disabled={simulated}
-            title={
-              simulated
-                ? "Demo mode's sample curves aren't in the server's real curve library - this run uses its built-in reference panel instead."
-                : undefined
-            }
             className="rounded-md border bg-transparent px-2 py-1.5 text-sm text-foreground"
           >
             <option value="">
-              {simulated ? 'Built-in reference panel (demo mode)' : 'None - run ungraded'}
+              {simulated ? 'Built-in reference panel' : 'None - run ungraded'}
             </option>
-            {!simulated &&
-              curves.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.label || c.id} ({formatCapturedAt(c.captured_at)})
-                </option>
-              ))}
+            {curves.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.label || c.id} ({formatCapturedAt(c.captured_at)})
+              </option>
+            ))}
           </select>
         </label>
 
@@ -432,8 +431,15 @@ function RunMonitor({
   onOpenPlayer: () => void
   openRunError: string | null
 }) {
-  const referenceCurve = findCurveForRun(curves, live.curve_ref)
-  const referenceMessage = referenceCurveMessage(live.curve_ref, referenceCurve)
+  // The server sends the curve the run tracks; the library lookup is only
+  // a fallback for a server that predates `reference_points`.
+  const serverReference = live.reference_points ?? NO_POINTS
+  const referenceCurve =
+    serverReference.length > 0 ? null : findCurveForRun(curves, live.curve_ref)
+  const referencePoints =
+    serverReference.length > 0 ? serverReference : (referenceCurve?.points ?? NO_POINTS)
+  const referenceMessage =
+    serverReference.length > 0 ? null : referenceCurveMessage(live.curve_ref, referenceCurve)
   const current = live.samples.length > 0 ? live.samples[live.samples.length - 1] : null
   const saveFailed = phase === 'done' && !live.aborted && live.saved_run_id === null
 
@@ -490,7 +496,7 @@ function RunMonitor({
       {referenceMessage && <p className="text-xs text-muted-foreground">{referenceMessage}</p>}
 
       <RunChart
-        referencePoints={referenceCurve?.points ?? NO_POINTS}
+        referencePoints={referencePoints}
         trail={live.samples}
         current={current}
       />

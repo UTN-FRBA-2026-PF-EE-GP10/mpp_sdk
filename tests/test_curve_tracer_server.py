@@ -1167,6 +1167,82 @@ def test_start_run_simulated_uses_the_chosen_curve_and_saves_it_as_curve_ref(cli
     assert record.source == "simulated"
 
 
+_INLINE_POINTS = [[19.3, 0.006], [16.0, 0.34], [14.0, 0.54], [9.0, 0.57], [0.1, 0.6]]
+
+
+def test_start_run_simulated_tracks_inline_curve_points_and_reports_them(demo_client):
+    """Demo mode's bundled curves are not in the server's library, so they
+    arrive inline - the run must track them and echo them back for the
+    grey reference line."""
+    r = demo_client.post(
+        "/api/runs/start",
+        json={
+            "algorithm": "P&O",
+            "simulated": True,
+            "duration_s": 0.3,
+            "curve_points": _INLINE_POINTS,
+        },
+    )
+    assert r.status_code == 200
+    live = demo_client.get("/api/runs/live").json()
+    assert live["reference_points"] == [{"v": v, "i": i} for v, i in _INLINE_POINTS]
+    _wait_for_run_done(demo_client)
+    live = demo_client.get("/api/runs/live").json()
+    assert live["aborted"] is False
+    assert live["curve_ref"] is None
+    # MeasuredPanel extrapolates Voc a little past the last swept point.
+    assert 0.0 < live["voltage"] <= 21.0
+
+
+def test_start_run_rejects_curve_points_for_a_hardware_run(client):
+    r = client.post("/api/runs/start", json={"algorithm": "P&O", "curve_points": _INLINE_POINTS})
+    assert r.status_code == 400
+    assert client.run_requests.empty()
+
+
+def test_start_run_rejects_curve_points_together_with_curve_ref(client, tmp_path):
+    curve_path = _save(tmp_path, label="ref")
+    r = client.post(
+        "/api/runs/start",
+        json={
+            "algorithm": "P&O",
+            "simulated": True,
+            "curve_ref": curve_path.stem,
+            "curve_points": _INLINE_POINTS,
+        },
+    )
+    assert r.status_code == 400
+
+
+@pytest.mark.parametrize("points", [[[1.0, 0.1]], [[1.0, 0.1], [1.0, 0.2]]])
+def test_start_run_rejects_unusable_inline_curve_points(client, points):
+    r = client.post(
+        "/api/runs/start",
+        json={"algorithm": "P&O", "simulated": True, "curve_points": points},
+    )
+    assert r.status_code == 400
+    assert client.get("/api/runs/live").json()["status"] == "idle"
+
+
+def test_start_run_reports_reference_points_for_curve_ref_and_builtin_panel(client, tmp_path):
+    curve_path = _save(tmp_path, label="ref")
+    r = client.post("/api/runs/start", json={"algorithm": "P&O", "curve_ref": curve_path.stem})
+    assert r.status_code == 200
+    reference = client.get("/api/runs/live").json()["reference_points"]
+    assert len(reference) == 2  # _save's default sweep
+    client.run_requests.get_nowait()  # drain - nothing executes it in this test
+    client.run_cache.finish(aborted=True, reason="stopped", saved_run_id=None)
+
+    r = client.post(
+        "/api/runs/start", json={"algorithm": "P&O", "simulated": True, "duration_s": 0.05}
+    )
+    assert r.status_code == 200
+    reference = client.get("/api/runs/live").json()["reference_points"]
+    assert len(reference) > 10
+    assert reference[0]["v"] == 0.0
+    _wait_for_run_done(client)
+
+
 def test_start_run_seeds_the_algorithm_with_the_requested_initial_duty(client):
     """The seed is not cosmetic: a local tracker hill-climbs from it, so on
     a multi-peak curve it decides which maximum the run settles on."""
