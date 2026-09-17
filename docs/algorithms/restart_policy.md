@@ -42,7 +42,7 @@ P|/P$ restart condition used by PSO-MPPT schemes [Liu et al. 2012].
 - State is four scalars (`_ref`, `_count`, `_armed`, plus the fixed
   `threshold`/`samples`/`smoothing`) and the update is branch-light -
   MCU-portable by design. See the docstring at
-  `mpp_sdk/algorithms/restart.py:7-53` for the authoritative behavior; this
+  `mpp_sdk/algorithms/restart.py:9-55` for the authoritative behavior; this
   page is explanatory.
 
 ## Periodic backstop
@@ -83,7 +83,7 @@ where the first term is the search tax and the second is trap exposure:
 
 Minimising $L(P)$ gives the derived optimum
 
-$$P^\star = \sqrt{A / B} \approx 1034 \text{ control steps},$$
+$$P^\star = \sqrt{A / B} \approx 1035 \text{ control steps},$$
 
 which lands on the empirical best: Scan&Track's eta energy peaks at
 **95.0 %** at period **1000** (the nearest swept value to $P^\star$).
@@ -97,7 +97,7 @@ regenerates this table and the accompanying figure
 ## Measured behavior
 
 Local trackers (no restart policy) trap in roughly half the shaded plateaus
-of the cyclic schedule, settling at 44-67 % of available power on those
+of the cyclic schedule, settling at 44-66 % of available power on those
 traps (`docs/methodology.md`). The configured global trackers
 (`rescan_period=1000`, detector on) cut traps to a handful at the price of
 up to ~1 s re-acquisition when only the backstop can free them.

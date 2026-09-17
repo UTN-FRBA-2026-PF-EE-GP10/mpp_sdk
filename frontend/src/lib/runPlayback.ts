@@ -43,15 +43,17 @@ export function trailUpTo(samples: RunSample[], index: number): RunSample[] {
   return samples.slice(0, index + 1)
 }
 
-/** `curve_ref` is a filename under mpp_sdk.curves.library.default_dir()
- * (see RunRecord's docstring), while a fetched CurveRecord's `path` is
- * that file's full server-side path - so matching means comparing
- * basenames, not the raw strings. `null` if there is no reference or it
- * was not found among the curves the caller has (deleted, or the id
- * simply doesn't resolve). */
+/** `curve_ref` can be either form: a run started from the CLI stores a
+ * filename (see RunRecord's docstring), while one started from the web UI
+ * stores the bare curve id (no extension - see post_start_run/RunPane,
+ * which send `c.id`). Match both: the curve's own id, or the basename of
+ * its `path` (a fetched CurveRecord's full server-side path, extension
+ * included). `null` if there is no reference or it was not
+ * found among the curves the caller has (deleted, or the id simply
+ * doesn't resolve). */
 export function findCurveForRun(curves: CurveRecord[], curveRef: string | null): CurveRecord | null {
   if (curveRef === null) return null
-  return curves.find((c) => c.path.split('/').pop() === curveRef) ?? null
+  return curves.find((c) => c.id === curveRef || c.path.split('/').pop() === curveRef) ?? null
 }
 
 /** The message to show in place of the faded reference curve when there

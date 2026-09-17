@@ -33,8 +33,9 @@ class ScanAndTrack(MPPTAlgorithm):
     2. **TRACK** — seed a :class:`PerturbAndObserve` at the best duty found and
        delegate to it.
 
-    The scan costs ``ceil((max−min)/scan_step)`` control steps of swept power
-    before locking on — the price of guaranteeing the global peak.
+    The scan costs ``ceil((max−min)/scan_step) + 1`` control steps of swept
+    power before locking on (the grid includes both endpoints) — the price
+    of guaranteeing the global peak.
 
     Parameters
     ----------

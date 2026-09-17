@@ -10,7 +10,7 @@ for photovoltaic systems. The same controller code runs in simulation today.
 It will run on a real **SEPIC** converter later, driven by a **Raspberry Pi
 5 and an RP2040 (Pi Pico)** over SPI. The RP2040 (firmware in **Rust**)
 drives the power stage. It is the final deployment target for the chosen
-algorithm — the thesis's headline deliverable.
+algorithm - the thesis's headline deliverable.
 
 See `docs/rationale.md` for the design reasoning, `docs/general_information.md`
 for the system overview and PV theory, and `PLAN.md` for the roadmap.
@@ -26,6 +26,7 @@ mpp_sdk/
 ├── algorithms/     # MPPT controllers         (MPPTAlgorithm ABC)
 ├── io/             # Hardware-abstraction     (SignalSource ABC)
 ├── curves/         # Captured I-V curve library (CurveRecord, feeds MeasuredPanel)
+├── runs/           # Captured closed-loop MPPT runs (RunRecord)
 ├── metrics.py      # Comparison metrics
 └── visualization.py
 ```
@@ -62,25 +63,25 @@ Hard rules:
 
 In-tree, no optional deps:
 
-- `IdealSingleDiode` — shipped. Explicit closed-form `I(V)`, no losses or
+- `IdealSingleDiode` - shipped. Explicit closed-form `I(V)`, no losses or
   temperature effects.
-- `SingleDiodeWithLosses` — *planned*. Adds `R_s`/`R_sh`; solves the implicit
+- `SingleDiodeWithLosses` - *planned*. Adds `R_s`/`R_sh`; solves the implicit
   `I(V)` with a hand-rolled Newton/bisection method, to show the solver.
 
 Via the pvlib adapter (optional `mpp-sdk[pvlib]`):
 
-- `PvlibPanelModel` — shipped. Wraps pvlib's De Soto single-diode model
+- `PvlibPanelModel` - shipped. Wraps pvlib's De Soto single-diode model
   behind `PanelModel`; aware of temperature and irradiance.
   `from_datasheet(...)` fits parameters; `hissuma_psf10mono(...)` is this
   project's panel.
 
 Composition and helpers:
 
-- `PvString` — shipped. N panels in series with bypass diodes. Per-panel
-  irradiance gives a multi-modal P-V curve — the reason global MPPT exists.
-- `TabulatedPanel` — shipped. Caches any model's I-V curve on a grid for fast
+- `PvString` - shipped. N panels in series with bypass diodes. Per-panel
+  irradiance gives a multi-modal P-V curve - the reason global MPPT exists.
+- `TabulatedPanel` - shipped. Caches any model's I-V curve on a grid for fast
   repeated lookups. Makes the dynamic/animated harness fast enough to use.
-- `MeasuredPanel` — shipped. Wraps a captured I-V sweep
+- `MeasuredPanel` - shipped. Wraps a captured I-V sweep
   (`mpp_sdk.curves.CurveRecord`) as a `PanelModel`, so a real curve runs
   through the same comparison harness as any synthetic model.
 
@@ -91,18 +92,18 @@ count and location of local maxima) at known conditions.
 
 All implement `MPPTAlgorithm.step(V, I) -> D` and own their state.
 
-- `PerturbAndObserve`, `IncrementalConductance`, `FuzzyLogic` — local
+- `PerturbAndObserve`, `IncrementalConductance`, `FuzzyLogic` - local
   trackers.
-- `ScanAndTrack`, `ParticleSwarm` — global MPPT. They escape local maxima
+- `ScanAndTrack`, `ParticleSwarm` - global MPPT. They escape local maxima
   under partial shading.
 - *Planned*: adaptive-step P&O; a model-informed candidate scan; later, a
   data-driven baseline.
 
 **Algorithms must stay portable to a Pico-class MCU.** Keep `step`
-dependency-free (no numpy/scipy/pandas inside it). Keep state small — a
+dependency-free (no numpy/scipy/pandas inside it). Keep state small - a
 handful of scalars. Prefer fixed-step, branch-light variants. Models,
 sources, the harness, and visualisation live on the Pi and are not bound by
-this rule — only the algorithm leaves the Pi.
+this rule - only the algorithm leaves the Pi.
 
 ## Coding conventions
 
@@ -118,7 +119,7 @@ this rule — only the algorithm leaves the Pi.
   `mpp-sdk[web]`). The base install must not need any of them.
 - Comments explain *why*, only when the why is not obvious. Public classes
   get a docstring.
-- Tests use `pytest`, under `tests/` — one file per module, exercising the
+- Tests use `pytest`, under `tests/` - one file per module, exercising the
   public API in isolation. pvlib-dependent tests call `importorskip` first.
 
 ## Hardware target (future)
@@ -132,9 +133,11 @@ isolates the fast-switching side and is also the deployment target. See
 
 Two phases (see `PLAN.md`, Phase 5):
 
-1. **HIL bringup.** A Pi-side `SpiMcuSource(SignalSource)` (under
-   `mpp_sdk/io/`, gated by `mpp-sdk[hardware]`) wraps the SPI protocol. The
-   firmware is a dumb I/O proxy. The algorithm still runs on the Pi.
+1. **HIL bringup (in progress).** `SpiMcuSource(SignalSource)` (shipped,
+   under `mpp_sdk/io/`, gated by `mpp-sdk[hardware]`) wraps the SPI
+   protocol. The firmware runs the curve-tracer sweep and the SEPIC drive;
+   the MPPT algorithm still runs on the Pi. A closed-loop MPPT run on the
+   real converter has not happened yet.
 2. **Deployed mode.** The validated algorithm is ported to RP2040 firmware
    and cross-checked against the Python reference, on recorded `(V, I, D)`
    traces.
@@ -148,19 +151,19 @@ class first.
 
 This repo is public. Keep these out of the tree, commit messages, and docs:
 
-- **Credentials of any kind** — keys, tokens, passwords, Wi-Fi credentials in
+- **Credentials of any kind** - keys, tokens, passwords, Wi-Fi credentials in
   firmware.
-- **Personal or institutional metadata** — lab network paths, internal
+- **Personal or institutional metadata** - lab network paths, internal
   hostnames, GPS of test sites, serial numbers tied to a location. Use a
   no-reply commit email.
-- **Embedded binary metadata** — strip EXIF/GPS from photos
+- **Embedded binary metadata** - strip EXIF/GPS from photos
   (`exiftool -all=`) and serials/IPs from scope captures.
 - **Datasheets, third-party schematics, or proprietary panel models** not
   licensed for redistribution. Cite them by reference instead.
 - **Raw measurement files** with unscrubbed location or serial metadata.
   Measured data lives under `data/`, with a `data/README.md` that documents
   the scrub.
-- **Internal session identifiers** — e.g. an AI-tool session URL. It has no
+- **Internal session identifiers** - e.g. an AI-tool session URL. It has no
   reason to be public and reveals nothing useful to a reader.
 
 `.gitignore` covers the obvious patterns. Before committing, grep the staged
@@ -180,6 +183,6 @@ force-push.
 
 ### Definition of done for a new module
 
-1. Unit tests under `tests/` — public API in isolation.
+1. Unit tests under `tests/` - public API in isolation.
 2. Demo script under `examples/` (or a harness entry) that produces one plot.
 3. Integration in the comparison harness.

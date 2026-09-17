@@ -144,10 +144,11 @@ def _restart_due(
     """True if the periodic backstop is due, or the change detector fires on
     this sample. Preserves the original short-circuit order deliberately:
     when the backstop already fired, ``detector.update(power)`` is **not**
-    called - see this plan's "The short-circuit trap" for why that matters
-    (the detector is stateful; skipping or double-feeding a sample changes
-    its behavior on every later call). Do not split this into two separate
-    statements."""
+    called. The detector is stateful (a moving reference and a debounce
+    counter) - feeding it a sample on a step that restarts for an unrelated
+    reason would shift that state and change when it fires on later calls,
+    even though this sample was never actually used to decide anything.
+    Do not split this into two separate statements."""
     rescan_due = rescan_period is not None and steps_since_restart >= rescan_period
     return rescan_due or (detector is not None and detector.update(power))
 

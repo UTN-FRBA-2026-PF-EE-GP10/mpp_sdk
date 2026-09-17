@@ -1,25 +1,28 @@
 # Data
 
-- `data/plecs/` — generated simulation reference curves (panel I-V lookup
+- `data/plecs/` - generated simulation reference curves (panel I-V lookup
   tables for the PLECS plant-vs-plant comparison). Not measured data; see
   `data/plecs/README.md`.
-- `data/bench/` — where measured bench data (e.g. plan 003's duty-sweep
-  CSVs) will land, one CSV per run.
-- `data/curves/` — captured curve-tracer sweeps, one JSON file per sweep,
+- `data/bench/` - where measured bench data (e.g. a duty-sweep test into a
+  fixed load) will land, one CSV per run.
+- `data/curves/` - captured curve-tracer sweeps, one JSON file per sweep,
   written by `mpp_sdk.curves.library.save`. Git-ignored: this is operator
   measurement data, not repo content. Each file holds `schema`,
   `captured_at`, `label`, `measurement` (grouping key: `baseline`,
   `tilted`, `dimmed`, `other` - see
   `mpp_sdk/curves/record.py`'s `MEASUREMENT_KINDS`), `panels` (id + tilt
-  per panel in the array), `notes`, and `points` (`v`/`i` pairs in
-  volts/amps, ordered as swept). See `mpp_sdk/curves/record.py` for the
-  full schema and `mpp_sdk/curves/library.py` for the file layout.
-- `data/runs/` — captured closed-loop MPPT runs, one JSON file per run,
+  per panel in the array), `notes`, `source` (provenance: `hardware`,
+  `firmware-replay`, `simulated`, or `unknown` - see `CURVE_SOURCES` in
+  the same file), and `points` (`v`/`i` pairs in volts/amps, ordered as
+  swept). See `mpp_sdk/curves/record.py` for the full schema and
+  `mpp_sdk/curves/library.py` for the file layout.
+- `data/runs/` - captured closed-loop MPPT runs, one JSON file per run,
   written by `mpp_sdk.runs.library.save` (via `mpp-sdk run-algorithm`).
   Git-ignored, same reasoning as `data/curves/`. Each file holds `schema`,
   `captured_at`, `label`, `algorithm`, `curve_ref` (paired curve's
-  filename under `data/curves/`, or `null`), `aborted`, `notes`, and
-  `samples` (`t`/`v`/`i`/`d` per control step). See
+  filename under `data/curves/`, or `null`), `aborted`, `notes`, `source`
+  (provenance: `hardware`, `simulated`, or `unknown` - see `RUN_SOURCES`
+  in the same file), and `samples` (`t`/`v`/`i`/`d` per control step). See
   `mpp_sdk/runs/record.py` for the full schema.
 
 ## Before committing any measured file

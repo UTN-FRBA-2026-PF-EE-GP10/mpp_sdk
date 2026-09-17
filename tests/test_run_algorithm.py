@@ -40,6 +40,17 @@ class _FakeSourceWithBadFrames(_FakeSource):
         self.consecutive_bad_frames = 0
 
 
+class _RaisingFirstWriteSource(_FakeSource):
+    """`write()` raises on its first call (the seed) and works normally
+    after that - checks the zero-duty guarantee survives a seed write
+    that fails, not just a mid-loop one."""
+
+    def write(self, duty):
+        super().write(duty)
+        if len(self.writes) == 1:
+            raise RuntimeError("seed write failed")
+
+
 class _FixedDutyAlgorithm:
     def __init__(self, duty):
         self._duty = duty
@@ -138,6 +149,51 @@ def test_normal_completion_still_zeroes_duty():
     )
     assert source._duty == 0.0
     assert source.writes[-1] == 0.0
+
+
+def test_a_raising_seed_write_still_gets_a_zero_duty_write_attempted():
+    """The seed write happens inside the try now, not before it - so a
+    seed that raises must still reach the `finally`'s zero-duty write,
+    not skip it entirely."""
+    source = _RaisingFirstWriteSource()
+    clock = _FakeClock()
+    with pytest.raises(RuntimeError, match="seed write failed"):
+        run_control_loop(
+            source,
+            _FixedDutyAlgorithm(0.3),
+            duration_s=10.0,
+            v_max=100.0,
+            i_max=100.0,
+            clock=clock,
+            sleep=lambda _: None,
+        )
+    assert len(source.writes) == 2
+    assert source.writes == [0.5, 0.0]  # default initial_duty seed, then the zero-duty guarantee
+
+
+def test_samples_argument_is_populated_in_place_even_when_the_loop_raises():
+    """A caller-owned `samples` list must keep whatever was recorded
+    before an exception propagates, so a mid-run crash doesn't lose data
+    the caller already has a handle on."""
+    source = _FakeSource()
+    clock = _FakeClock()
+    collected: list = []
+    with pytest.raises(RuntimeError, match="boom"):
+        run_control_loop(
+            source,
+            _RaisingAlgorithm(),
+            duration_s=10.0,
+            v_max=100.0,
+            i_max=100.0,
+            clock=clock,
+            sleep=lambda dt: clock.advance(dt),
+            period_s=0.01,
+            samples=collected,
+        )
+    # _RaisingAlgorithm raises on its second step() call, so exactly one
+    # sample was recorded before the failure.
+    assert len(collected) == 1
+    assert source._duty == 0.0
 
 
 def test_safety_abort_on_overvoltage_stops_and_zeroes_duty():

@@ -11,6 +11,13 @@ import { usePolling } from './usePolling'
 
 const POLL_MS = 700
 
+// Inactive polls with no new sweep before a leftover live trace is taken
+// as abandoned. The server's own bulk fetch blocks for up to a second
+// while a finished sweep is collected, so a normal sweep can spend two
+// polls here with its result still on the way - this has to stay clear
+// of that, or clearing the trace becomes the flicker it replaced.
+const STALE_PARTIAL_POLLS = 4
+
 // Shared so `setPartial(EMPTY)` on a poll that changed nothing is a
 // no-op: React bails out on Object.is, and a fresh `[]` every tick would
 // re-render the page (and re-feed chart.js) 1.4 times a second forever.
@@ -29,7 +36,11 @@ const EMPTY: CurvePoint[] = []
  * previous sweep - clearing here made the chart snap back to the old
  * curve for a poll or two before the new one landed, which read as a
  * flicker. Instead the live trace stays on screen until the completed
- * curve that supersedes it arrives.
+ * curve that supersedes it arrives - except when the sweep never
+ * produces one at all (an abort, a dropped link): after
+ * STALE_PARTIAL_POLLS inactive polls with no new seq, nothing is
+ * coming, so the stale partial is cleared rather than lingering
+ * forever.
  *
  * `enabled` (default true) stops polling `/api/data` altogether - passed
  * `false` in client demo mode, where CurveWorkbench uses useDemoCapture
@@ -45,6 +56,12 @@ export function useLiveSweep(enabled = true) {
   const [actionError, setActionError] = useState<string | null>(null)
   const [demoSource, setDemoSource] = useState(false)
   const lastSeq = useRef(-1)
+  // Counts inactive polls that carried no new sweep - reset the moment a
+  // sweep is active again or a new seq lands. Counting them (rather than
+  // clearing on the first one) is what lets a finished sweep's own gap
+  // before its bulk result arrives pass through without flickering - see
+  // the docstring above.
+  const inactiveWithNoResult = useRef(0)
 
   const handleData = (data: LiveSweepState) => {
     setActive(data.active)
@@ -55,8 +72,13 @@ export function useLiveSweep(enabled = true) {
       setPoints(data.points)
       lastSeq.current = data.seq
       setPartial(EMPTY)
+      inactiveWithNoResult.current = 0
     } else if (data.active) {
       setPartial(data.partial)
+      inactiveWithNoResult.current = 0
+    } else {
+      inactiveWithNoResult.current += 1
+      if (inactiveWithNoResult.current >= STALE_PARTIAL_POLLS) setPartial(EMPTY)
     }
   }
 

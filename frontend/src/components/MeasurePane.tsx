@@ -42,7 +42,10 @@ export function MeasurePane({
    * (true for 'connected' or the server's own 'demo' status), a live run
    * needs a real board either way - see RunPane's own note on why. */
   connectionStatus: ConnectionStatus
-  onSaved: () => void
+  /** Forwarded to CurveWorkbench/SaveCurveForm - called with the kind
+   * just saved under, so App.tsx's remeasure logic can tell an unrelated
+   * save (a different kind) from the one it's waiting for. */
+  onSaved: (kind: string) => void
   /** Refetch the run list - called once a live run has actually saved. */
   onRunSaved: () => void
   /** Set by Remeasure (App.tsx's `startRemeasure`) to preselect a kind

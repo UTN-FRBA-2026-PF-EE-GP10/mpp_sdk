@@ -42,9 +42,9 @@ $$x_i \leftarrow \operatorname{clip}\big(x_i + v_i,\; D_\text{min},\, D_\text{ma
 
 where $r_1, r_2 \sim U(0,1)$ and:
 
-- $w$ — **inertia**: how much previous velocity is retained (exploration).
-- $c_1$ — **cognitive** weight: pull toward the particle's own best.
-- $c_2$ — **social** weight: pull toward the swarm's global best.
+- $w$ (**inertia**): how much previous velocity is retained (exploration).
+- $c_1$ (**cognitive**) weight: pull toward the particle's own best.
+- $c_2$ (**social**) weight: pull toward the swarm's global best.
 
 Over successive iterations the particles contract around $g$, which converges to
 the global MPP.
@@ -53,27 +53,22 @@ the global MPP.
 
 After $M$ iterations (cost $\approx M\cdot n_\text{particles}$ steps) the swarm
 has converged. Control is handed to a local `PerturbAndObserve` seeded at $g$,
-which refines the operating point and keeps steady-state oscillation low — PSO
+which refines the operating point and keeps steady-state oscillation low. PSO
 alone would keep jittering as particles never fully stop.
 
 ## Restart on shading change
 
 Once handed off, the controller is a plain P&O and cannot escape a local
-maximum when the shading pattern changes. A `PowerChangeDetector` (on by
-default) watches $P = V\,I$ during tracking. A sustained relative change
-beyond `restart_threshold` re-seeds the particles evenly across the duty
-range - stale personal/global bests are forgotten, not reused - and
-re-runs the whole search. This is the $|\Delta P|/P$ restart condition
-from the PSO-MPPT literature [Liu et al. 2012]. The detector arms only
-once the power is stable after hand-off, so the converter's own settling
-transient cannot trigger a restart loop.
+maximum when the shading pattern changes. The same two triggers as
+`ScanAndTrack` re-run the search: a `PowerChangeDetector` watching
+$P = V\,I$ during tracking (on by default), and an optional periodic
+`rescan_period` backstop. See `restart_policy.md` for how each one works and
+for the derivation behind the deployed period.
 
-The detector is blind to one case: a shading change that relocates the
-global peak while barely moving the tracked power (e.g. the shade swapping
-from one panel to the other). The optional `rescan_period` re-runs the
-search every $N$ tracking steps as a backstop, at the price of the search's
-energy cost each period — the same knob `ScanAndTrack` has. See
-`restart_policy.md` for the derivation behind the deployed period.
+What a PSO restart does is specific to the swarm: it re-seeds every particle
+evenly across the duty range and discards the personal and global bests, so
+the next search starts clean instead of reusing bests from the shading
+condition that no longer holds.
 
 ## Trade-offs
 
@@ -82,15 +77,15 @@ energy cost each period — the same knob `ScanAndTrack` has. See
 - **vs. scan-and-track:** PSO can need fewer evaluations than a fine full scan
   on wide ranges, but it is stochastic (seed-dependent) and can still miss a
   very narrow peak with too few particles. Scan-and-track is deterministic.
-- **MCU cost:** state is $\sim 4\,n_\text{particles}$ floats — small for modest
+- **MCU cost:** state is $\sim 4\,n_\text{particles}$ floats, small for modest
   swarms; the RNG and per-iteration update are cheap.
 
 ## Implementation
 
 `mpp_sdk.ParticleSwarm(initial_duty, n_particles, inertia, cognitive, social,
-max_iterations, track_step, seed, restart_threshold, restart_samples,
-rescan_period, …)`. A fixed `seed` makes runs reproducible, as required by
-the project's reproducibility policy.
+max_iterations, track_step, min_duty, max_duty, seed, restart_threshold,
+restart_samples, rescan_period)`. A fixed `seed` makes runs reproducible, as
+required by the project's reproducibility policy.
 
 Swarm size matters more than it looks on a real (or dynamic-simulated)
 rig. Each particle's fitness is measured one control period after
@@ -99,12 +94,10 @@ commanding it, while the input capacitor is still slewing, so the first
 rig at a 1 kHz loop, 6 particles locate the global basin for only ~60 %
 of seeds after a shading change. 8 particles are reliable.
 
-Because the swarm's convergence depends on the RNG stream, `harness/compare_seeds.py`
-runs PSO (8 particles) over 30 seeds on the cyclic schedule: eta energy
-93.9 % +/- 0.7 and 7.9 +/- 1.7 trapped plateaus, against the deterministic
-Scan&Track at 95.0 % eta and 5 traps with zero variance. Scan&Track beats
-PSO's mean on both metrics with no seed dependence, which makes it the
-stronger MCU deployment candidate.
+Because the swarm's convergence depends on the RNG stream, stochastic
+algorithms are reported as mean +/- std over 30 seeds, never a single seed
+(`harness/compare_seeds.py`). See `restart_policy.md` for the measured eta
+and trap counts and how they compare against `ScanAndTrack`.
 
 ## References
 

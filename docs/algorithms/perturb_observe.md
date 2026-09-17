@@ -16,7 +16,7 @@ moving in the same direction; if power dropped, it reverses.
 
 ## Theory
 
-The panel power–voltage curve $P(V)$ is unimodal (single peak) under uniform
+The panel power-voltage curve $P(V)$ is unimodal (single peak) under uniform
 irradiance, with a single maximum where
 
 $$\frac{dP}{dV} = 0.$$
@@ -33,8 +33,20 @@ The decision rule (in terms of the *voltage* the algorithm should move toward):
 | $> 0$      | $< 0$      | keep lowering $V$ |
 | $< 0$      | $> 0$      | lower $V$         |
 | $< 0$      | $< 0$      | raise $V$         |
+| $= 0$      | any        | hold              |
 
-Compactly, the desired voltage move has the sign of $\Delta P \cdot \Delta V$.
+For the four non-zero rows, the desired voltage move has the sign of
+$\Delta P \cdot \Delta V$. The implementation does not compute that product
+directly: it holds only when $\Delta P = 0$, and otherwise raises $V$ unless
+$\Delta P \cdot \Delta V > 0$. So the edge case $\Delta V \approx 0$ with
+$\Delta P \neq 0$ (duty already saturated at a bound, so the last perturbation
+did not move $V$) falls into the "raise $V$" branch rather than holding. This
+is harmless in practice: it only arises while $D$ is clamped, where the move
+is a no-op anyway.
+
+On the very first call there is no previous sample to compare against, so the
+controller just records $(V, P)$ as the reference and perturbs by one
+$+\Delta D$ step, picking an arbitrary starting direction.
 
 ## SEPIC sign convention
 
@@ -43,9 +55,15 @@ For the SEPIC stage, the reflected input resistance is
 $$R_\text{eff}(D) = R_\text{load}\left(\frac{1-D}{D}\right)^2,$$
 
 which is **monotonically decreasing** in $D$. So raising $D$ lowers the panel
-voltage. The voltage decision is therefore mapped to its inverse in duty:
+voltage. The voltage decision is therefore mapped to its inverse in duty: to
+raise $V$, decrease $D$; to lower $V$, increase $D$. Written against the
+table above,
 
-$$D_{k+1} = D_k - \operatorname{sign}(\Delta P\,\Delta V)\,\Delta D.$$
+$$D_{k+1} = D_k - \operatorname{sign}(\Delta P\,\Delta V)\,\Delta D
+\quad\text{when } \Delta V \neq 0,$$
+
+with the $\Delta V \approx 0$, $\Delta P \neq 0$ edge case handled as
+described above.
 
 ## Trade-offs
 
@@ -59,7 +77,8 @@ $$D_{k+1} = D_k - \operatorname{sign}(\Delta P\,\Delta V)\,\Delta D.$$
 ## Implementation
 
 `mpp_sdk.PerturbAndObserve(initial_duty, step_size, min_duty, max_duty)`.
-Fixed step, minimal state (last $V$, last $P$), one branch — ideal for an MCU.
+Fixed step, minimal state (last $V$, last $P$), a few branches, no loops.
+Ideal for an MCU.
 
 ## References
 
