@@ -212,7 +212,6 @@ shading. Note it rather than concluding from it.
 - [ ] The stop and link-down aborts both observed zeroing the duty.
 - [ ] The run's held power compared against its reference curve's
       measured MPP, with the number written down.
-- [ ] Plan 034's Step 7 marked done, since this supersedes it.
 
 ## STOP conditions
 

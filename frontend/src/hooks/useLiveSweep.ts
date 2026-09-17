@@ -40,6 +40,9 @@ export function useLiveSweep(enabled = true) {
   const [points, setPoints] = useState<CurvePoint[]>(EMPTY)
   const [active, setActive] = useState(false)
   const [commandError, setCommandError] = useState<string | null>(null)
+  // A request the server refused outright (e.g. 409) never reaches the
+  // command queue, so the polled `commandError` cannot report it.
+  const [actionError, setActionError] = useState<string | null>(null)
   const [demoSource, setDemoSource] = useState(false)
   const lastSeq = useRef(-1)
 
@@ -63,17 +66,30 @@ export function useLiveSweep(enabled = true) {
 
   usePolling(fetchLiveSweep, handleData, handleError, POLL_MS, enabled)
 
-  const start = useCallback(() => {
-    startSweepRequest().catch((e) => console.error('start-sweep failed', e))
+  const send = useCallback((label: string, request: () => Promise<unknown>) => {
+    setActionError(null)
+    request().catch((e) =>
+      setActionError(`${label} failed: ${e instanceof Error ? e.message : String(e)}`),
+    )
   }, [])
 
-  const releaseRelay = useCallback(() => {
-    releaseRelayRequest().catch((e) => console.error('release-relay failed', e))
-  }, [])
+  const start = useCallback(() => send('start-sweep', startSweepRequest), [send])
 
-  const startDemo = useCallback((bright: boolean) => {
-    startDemoSweepRequest(bright).catch((e) => console.error('start-demo-sweep failed', e))
-  }, [])
+  const releaseRelay = useCallback(() => send('release-relay', releaseRelayRequest), [send])
 
-  return { partial, points, active, commandError, demoSource, start, startDemo, releaseRelay }
+  const startDemo = useCallback(
+    (bright: boolean) => send('start-demo-sweep', () => startDemoSweepRequest(bright)),
+    [send],
+  )
+
+  return {
+    partial,
+    points,
+    active,
+    commandError: actionError ?? commandError,
+    demoSource,
+    start,
+    startDemo,
+    releaseRelay,
+  }
 }

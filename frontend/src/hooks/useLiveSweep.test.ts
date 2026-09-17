@@ -1,4 +1,4 @@
-import { cleanup, renderHook, waitFor } from '@testing-library/react'
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useLiveSweep } from './useLiveSweep'
 
@@ -92,6 +92,18 @@ describe('useLiveSweep', () => {
     const { result } = renderHook(() => useLiveSweep())
     result.current.start()
     expect(vi.mocked(startSweep)).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows a start request the server refused, and clears it on the next attempt', async () => {
+    vi.mocked(fetchLiveSweep).mockReturnValue(new Promise(() => {}))
+    vi.mocked(startSweep).mockRejectedValueOnce(new Error('409 a run is in progress'))
+    const { result } = renderHook(() => useLiveSweep())
+    act(() => result.current.start())
+    await waitFor(() =>
+      expect(result.current.commandError).toBe('start-sweep failed: 409 a run is in progress'),
+    )
+    act(() => result.current.start())
+    await waitFor(() => expect(result.current.commandError).toBeNull())
   })
 
   it('releaseRelay() calls the release-relay endpoint', () => {
