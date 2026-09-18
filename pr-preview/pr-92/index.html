@@ -775,26 +775,26 @@
 Tracking</strong> (MPPT) algorithms for photovoltaic systems.</p>
 <h2 id="start-here">Start here<a class="headerlink" href="#start-here" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong><a href="general_information/">General Information</a></strong> — what the system is, the
+<li><strong><a href="general_information/">General Information</a></strong> - what the system is, the
   four SDK pillars, minimum PV theory, what pvlib contributes, and why the
   panels are wired in series.</li>
-<li><strong><a href="rationale/">Rationale</a></strong> — the design decisions behind the project.</li>
-<li><strong><a href="methodology/">Methodology</a></strong> — how the harnesses measure MPPT
+<li><strong><a href="rationale/">Rationale</a></strong> - the design decisions behind the project.</li>
+<li><strong><a href="methodology/">Methodology</a></strong> - how the harnesses measure MPPT
   performance, what each metric means, the restart trigger policy, noise
   robustness, and the sim-to-real (PLECS / bench) comparison protocol.</li>
 <li><strong><a href="measurement_procedure/">Measurement Procedure</a></strong> - the checklist
-  for capturing a curve, running a tilt-sweep series, and running a
+  for capturing a curve, running a tilted series, and running a
   closed-loop run on the bench.</li>
 </ul>
 <h2 id="algorithm-references">Algorithm references<a class="headerlink" href="#algorithm-references" title="Permanent link">&para;</a></h2>
 <p>One page each, with the equations and references:</p>
 <ul>
-<li><a href="algorithms/perturb_observe/">Perturb &amp; Observe</a> — classical hill-climbing baseline</li>
-<li><a href="algorithms/incremental_conductance/">Incremental Conductance</a> — explicit at-the-MPP test</li>
-<li><a href="algorithms/fuzzy_logic/">Fuzzy Logic</a> — graduated-step local tracker</li>
-<li><a href="algorithms/scan_and_track/">Scan-and-Track</a> — global MPPT (scan + local refine)</li>
-<li><a href="algorithms/particle_swarm/">Particle Swarm</a> — global MPPT (population search)</li>
-<li><a href="algorithms/restart_policy/">Restart Policy</a> — when a global tracker re-searches</li>
+<li><a href="algorithms/perturb_observe/">Perturb &amp; Observe</a> - classical hill-climbing baseline</li>
+<li><a href="algorithms/incremental_conductance/">Incremental Conductance</a> - explicit at-the-MPP test</li>
+<li><a href="algorithms/fuzzy_logic/">Fuzzy Logic</a> - graduated-step local tracker</li>
+<li><a href="algorithms/scan_and_track/">Scan-and-Track</a> - global MPPT (scan + local refine)</li>
+<li><a href="algorithms/particle_swarm/">Particle Swarm</a> - global MPPT (population search)</li>
+<li><a href="algorithms/restart_policy/">Restart Policy</a> - when a global tracker re-searches</li>
 </ul>
 <p>The first three are <strong>local</strong> trackers (they get trapped on local maxima under
 partial shading); the last two are <strong>global</strong> methods that escape the trap.</p>
