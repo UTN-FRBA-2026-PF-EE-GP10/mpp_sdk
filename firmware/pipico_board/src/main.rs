@@ -100,15 +100,20 @@ async fn sensors_task(
     defmt::info!("INA229 ready");
 
     let mut max = Max31865::new();
-    let mut max_ok = match max.init(&mut spi, &mut cs_tp100) {
-        Ok(()) => {
-            defmt::info!("MAX31865 ready");
-            true
+    let mut max_ok = if MAX31865_ENABLED {
+        match max.init(&mut spi, &mut cs_tp100) {
+            Ok(()) => {
+                defmt::info!("MAX31865 ready");
+                true
+            }
+            Err(e) => {
+                defmt::error!("MAX31865 init failed: {}, will retry in background", e);
+                false
+            }
         }
-        Err(e) => {
-            defmt::error!("MAX31865 init failed: {}, will retry in background", e);
-            false
-        }
+    } else {
+        defmt::info!("MAX31865 disabled (MAX31865_ENABLED = false)");
+        false
     };
 
     let mut tick: u32 = 0;
@@ -127,7 +132,7 @@ async fn sensors_task(
 
         tick = tick.wrapping_add(1);
 
-        if tick.is_multiple_of(100) {
+        if MAX31865_ENABLED && tick.is_multiple_of(100) {
             if max_ok {
                 match max.read_temp_centi_c(&mut spi, &mut cs_tp100) {
                     Ok(t) => MEAS_T_CC.store(t, Ordering::Relaxed),
@@ -148,14 +153,20 @@ async fn sensors_task(
         if tick.is_multiple_of(1000) {
             // ~1 Hz at the 1 ms poll period - RTT flooding at 1 kHz stalls
             // the target.
+            let v = MEAS_V_MV.load(Ordering::Relaxed);
+            let i = MEAS_I_MA.load(Ordering::Relaxed);
             let t = MEAS_T_CC.load(Ordering::Relaxed);
-            defmt::info!(
-                "V={} mV I={} mA T={}.{:02} C",
-                MEAS_V_MV.load(Ordering::Relaxed),
-                MEAS_I_MA.load(Ordering::Relaxed),
-                t / 100,
-                (t % 100).abs()
-            );
+            if t == spi_slave_pio::TEMP_NOT_AVAILABLE_CC {
+                defmt::info!("V={} mV I={} mA T=n/a", v, i);
+            } else {
+                defmt::info!(
+                    "V={} mV I={} mA T={}.{:02} C",
+                    v,
+                    i,
+                    t / 100,
+                    (t % 100).abs()
+                );
+            }
         }
         Timer::after_millis(1).await;
     }
@@ -177,6 +188,12 @@ enum AdcDividerRange {
 
 /// Set this to match the jumpers actually shorted on the board.
 const ADC_DIVIDER_RANGE: AdcDividerRange = AdcDividerRange::Low;
+
+/// Set to `true` once a PT100 probe is fitted. With no probe the MAX31865
+/// reports a fault on every read, which floods the log with errors, so it
+/// stays off by default: no init, no reads, and the SPI frame reports
+/// "no temperature" (`TEMP_NOT_AVAILABLE_CC`). Its chip select stays high.
+const MAX31865_ENABLED: bool = false;
 
 /// Polls the RP2040's on-chip ADC and logs it next to MEAS_I_MA so
 /// ADC_Input_Curr can be eyeballed against the INA229.

@@ -283,12 +283,17 @@ never floats onto the shared bus).
   from the RPi-facing PIO link described above (which is a fixed-protocol
   bit-banged mode 0 frame, unrelated to this device's timing).
 
-### Panel temperature (MAX31865, disabled)
+### Panel temperature (MAX31865, off by default)
 
-`firmware/pipico_board/src/max31865.rs` has a working PT100 driver, but it's commented
-out of `main.rs` for now - the bench probe is a PT1000, incompatible with
-the board's fixed reference resistor. See the PR that disabled it for
-details.
+`firmware/pipico_board/src/max31865.rs` has a working PT100 driver. It is
+switched off with `MAX31865_ENABLED = false` in `main.rs`, because no PT100
+probe is fitted: the bench probe is a PT1000, incompatible with the board's
+fixed reference resistor, and with no probe every read logs a fault.
+
+When off, the firmware never initializes or reads the chip, and the SPI
+frame reports "no temperature" (`TEMP_NOT_AVAILABLE_CC`, read as `None` on
+the Pi). Set it to `true` once a PT100 is fitted. Check `THREE_WIRE` in
+`max31865.rs` against the probe and the board's 2/3-wire jumper first.
 
 ### On-chip ADC
 
