@@ -31,6 +31,9 @@ export function CurveDashboardPane({
   onDeleted,
   onRemeasure,
   remeasurePending = false,
+  selectable = false,
+  selected = false,
+  onToggleSelected,
 }: {
   record: CurveRecord
   onOpen: () => void
@@ -46,6 +49,13 @@ export function CurveDashboardPane({
    * remeasure elsewhere - blocks starting a second one, or deleting the
    * curve a pending replacement still refers to. */
   remeasurePending?: boolean
+  /** Batch-delete selection mode, driven by CurveCategoryPane - shows the
+   * checkbox below and leaves the single-pane delete/remeasure controls
+   * untouched, since selecting a curve for a batch is independent of
+   * either. */
+  selectable?: boolean
+  selected?: boolean
+  onToggleSelected?: () => void
 }) {
   const sandbox = useSandbox()
   const [deleting, setDeleting] = useState(false)
@@ -98,10 +108,35 @@ export function CurveDashboardPane({
           onOpen()
         }
       }}
-      className="group/card relative cursor-pointer transition-shadow hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+      className={
+        'group/card relative cursor-pointer transition-shadow hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none' +
+        (selected ? ' ring-2 ring-primary' : '')
+      }
     >
+      {selectable && (
+        // Its own corner, away from the save/remeasure/delete overlay -
+        // both can be visible at once (selection mode doesn't disable
+        // per-pane actions), so they must not overlap.
+        <label
+          className="absolute top-2 left-2 z-10 flex items-center rounded-md bg-card/80 p-1 backdrop-blur-sm"
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+        >
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={() => onToggleSelected?.()}
+            aria-label={`Select "${label}" for batch delete`}
+            className="size-4 accent-primary"
+          />
+        </label>
+      )}
       <CardHeader>
-        <div className="flex flex-wrap items-start justify-between gap-2">
+        <div
+          className={
+            'flex flex-wrap items-start justify-between gap-2' + (selectable ? ' pl-6' : '')
+          }
+        >
           <CardTitle className="truncate">{label}</CardTitle>
           <ProvenanceBadge source={record.source} />
         </div>
