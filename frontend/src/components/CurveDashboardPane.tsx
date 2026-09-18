@@ -126,6 +126,12 @@ export function CurveDashboardPane({
             type="checkbox"
             checked={selected}
             onChange={() => onToggleSelected?.()}
+            disabled={remeasurePending}
+            title={
+              remeasurePending
+                ? 'A remeasure is pending - this curve stays until its replacement is saved'
+                : undefined
+            }
             aria-label={`Select "${label}" for batch delete`}
             className="size-4 accent-primary"
           />

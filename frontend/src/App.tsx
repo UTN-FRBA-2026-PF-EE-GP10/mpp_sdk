@@ -194,6 +194,8 @@ export default function App() {
   } else if (selection.root === 'curves') {
     content = (
       <CurveCategoryPane
+        // A fresh pane per kind, so select mode never carries over.
+        key={selection.kind}
         kind={selection.kind}
         records={byKind.get(selection.kind) ?? []}
         onDeleted={() => setReloadToken((t) => t + 1)}
@@ -205,6 +207,7 @@ export default function App() {
     const group = runGroups.find((g) => g.date === selection.date)
     content = (
       <RunDatePane
+        key={selection.date}
         date={selection.date}
         runs={group?.runs ?? []}
         curves={records}

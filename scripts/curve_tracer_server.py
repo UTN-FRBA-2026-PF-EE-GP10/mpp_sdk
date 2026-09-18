@@ -899,12 +899,18 @@ def _delete_batch(
     never a filesystem path taken directly from the request body."""
     deleted: list[str] = []
     failed: list[dict] = []
-    for item_id in ids:
+    # dict.fromkeys drops repeats in order: a repeated id would otherwise
+    # report "not found" for a file this same request just removed.
+    for item_id in dict.fromkeys(ids):
         try:
             path = path_for(item_id)
             delete(path)
         except HTTPException as exc:
             failed.append({"id": item_id, "error": str(exc.detail)})
+        except OSError as exc:
+            # A permission or disk error on one file must not end the batch
+            # with a 500 that also skips every id after it.
+            failed.append({"id": item_id, "error": f"could not delete: {exc.strerror or exc}"})
         else:
             deleted.append(item_id)
     return {"deleted": deleted, "failed": failed}

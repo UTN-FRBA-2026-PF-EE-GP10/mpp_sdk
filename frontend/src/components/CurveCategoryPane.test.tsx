@@ -148,6 +148,23 @@ describe('CurveCategoryPane - batch delete', () => {
     expect(deleteCurvesBatch).not.toHaveBeenCalled()
   })
 
+  it('never batch-selects a curve with a remeasure pending, even via Select all', async () => {
+    vi.mocked(deleteCurvesBatch).mockResolvedValue({ deleted: ['curve-b'], failed: [] })
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    renderPane(
+      <CurveCategoryPane kind="baseline" records={twoRecords()} remeasurePendingId="curve-a" />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Select' }))
+
+    const pending = screen.getByLabelText('Select "curve a" for batch delete') as HTMLInputElement
+    expect(pending.disabled).toBe(true)
+
+    fireEvent.click(screen.getByLabelText('Select all'))
+    fireEvent.click(screen.getByRole('button', { name: /Delete 1 selected/ }))
+
+    await waitFor(() => expect(deleteCurvesBatch).toHaveBeenCalledWith(['curve-b']))
+  })
+
   it('selects every visible curve at once via Select all', () => {
     vi.spyOn(window, 'confirm').mockReturnValue(false)
     renderPane(<CurveCategoryPane kind="baseline" records={twoRecords()} />)

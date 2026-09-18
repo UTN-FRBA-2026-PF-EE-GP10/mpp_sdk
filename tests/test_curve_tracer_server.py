@@ -23,6 +23,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 from harness.common import AlgorithmSpec, algorithm_specs  # noqa: E402
 from mpp_sdk import IdealSingleDiode  # noqa: E402
 from mpp_sdk.curves import CurveRecord, PanelSetup, save  # noqa: E402
+from mpp_sdk.curves import library as curve_library  # noqa: E402
 from mpp_sdk.curves.record import now_utc  # noqa: E402
 from mpp_sdk.runs import RunRecord, RunSample  # noqa: E402
 from mpp_sdk.runs import load as load_run  # noqa: E402
@@ -398,6 +399,35 @@ def test_delete_curves_batch_mixed_result_deletes_the_good_ones_and_reports_the_
     failed_ids = {entry["id"] for entry in r.json()["failed"]}
     assert failed_ids == {"does-not-exist", "weird id"}
     assert not ok.exists()
+
+
+def test_delete_curves_batch_reports_a_filesystem_error_and_keeps_going(
+    client, tmp_path, monkeypatch
+):
+    """One file that cannot be removed (permissions, disk) must be reported
+    as failed, not turn the whole request into a 500 that skips the rest."""
+    stuck = _save(tmp_path, label="stuck")
+    ok = _save(tmp_path, label="ok")
+    real_delete = curve_library.delete
+
+    def flaky_delete(path):
+        if path.stem == stuck.stem:
+            raise PermissionError(13, "Permission denied")
+        real_delete(path)
+
+    monkeypatch.setattr(curve_library, "delete", flaky_delete)
+    r = client.post("/api/curves/delete-batch", json={"ids": [stuck.stem, ok.stem]})
+    assert r.status_code == 200
+    assert r.json()["deleted"] == [ok.stem]
+    assert [f["id"] for f in r.json()["failed"]] == [stuck.stem]
+    assert stuck.exists()
+    assert not ok.exists()
+
+
+def test_delete_curves_batch_ignores_a_repeated_id(client, tmp_path):
+    a = _save(tmp_path, label="a")
+    r = client.post("/api/curves/delete-batch", json={"ids": [a.stem, a.stem]})
+    assert r.json() == {"deleted": [a.stem], "failed": []}
 
 
 def test_delete_curves_batch_empty_list_is_a_no_op(client):

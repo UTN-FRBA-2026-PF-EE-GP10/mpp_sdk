@@ -54,10 +54,16 @@ export function CurveCategoryPane({
   // filtering here rather than syncing state in an effect means "Delete N
   // selected" can never count an id that no longer exists, with no extra
   // render pass.
+  // A curve with a remeasure pending is promised to stay until its
+  // replacement saves (see App.tsx), so it can never be batch-selected.
+  const selectableIds = useMemo(
+    () => records.map((r) => r.id).filter((id) => id !== remeasurePendingId),
+    [records, remeasurePendingId],
+  )
   const selectedIds = useMemo(() => {
-    const known = new Set(records.map((r) => r.id))
+    const known = new Set(selectableIds)
     return new Set([...rawSelectedIds].filter((id) => known.has(id)))
-  }, [rawSelectedIds, records])
+  }, [rawSelectedIds, selectableIds])
 
   function exitSelectMode() {
     setSelectMode(false)
@@ -75,8 +81,8 @@ export function CurveCategoryPane({
   }
 
   function toggleSelectAll() {
-    setSelectedIds((prev) =>
-      prev.size === records.length ? new Set() : new Set(records.map((r) => r.id)),
+    setSelectedIds(
+      selectedIds.size === selectableIds.length ? new Set() : new Set(selectableIds),
     )
   }
 
@@ -113,7 +119,7 @@ export function CurveCategoryPane({
     }
   }
 
-  const allSelected = records.length > 0 && selectedIds.size === records.length
+  const allSelected = selectableIds.length > 0 && selectedIds.size === selectableIds.length
 
   return (
     <div className="flex flex-col gap-4">
