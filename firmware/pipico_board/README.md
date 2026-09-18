@@ -17,7 +17,7 @@ rustup target add thumbv6m-none-eabi
 cargo install elf2uf2-rs probe-rs-tools
 ```
 
-## Flashing — two options
+## Flashing - two options
 
 ### Option A: debug probe via a second Pico (recommended)
 
@@ -57,7 +57,7 @@ from the top with the USB connector facing up):
 | GPIO2 (SWDCLK)| SWCLK (left pad)    |
 | GND           | GND   (middle pad)  |
 
-Both boards can be powered from their own USB cables — no shared power wire needed.
+Both boards can be powered from their own USB cables - no shared power wire needed.
 
 ##### RPi ↔ Pico SPI connection (HIL mode)
 
@@ -70,9 +70,9 @@ RPi4/RPi400/RPi5) SPI0 master to the Pico SPI1 pins:
 | MISO (GPIO9)      | 21      | ← | SPI1_TX (MISO out)| GPIO11    | 15       |
 | SCLK (GPIO11)     | 23      | → | SPI1_SCK          | GPIO10    | 14       |
 | CE0  (GPIO8)      | 24      | → | SPI1_CS           | GPIO13    | 17       |
-| GND               | 25      | — | GND               | —         | 18       |
+| GND               | 25      | - | GND               | -         | 18       |
 
-Pico pins 14–18 are adjacent on the left side of the board (USB connector facing up).
+Pico pins 14-18 are adjacent on the left side of the board (USB connector facing up).
 
 **Frame protocol** (12 bytes, Mode 0, MSB-first, CS held low for entire frame):
 
@@ -111,7 +111,16 @@ calibrated units and this checksum).
 control/bulk-read commands (see "Curve tracer" below) are the only thing
 that sets them: `0xB1` requests a bulk sweep-result dump, `0xB2` starts a
 sweep, `0xB3` releases the tracer relay, `0xB4` polls the streamed
-in-progress-sweep state (see "Curve tracer" - streaming below).
+in-progress-sweep state (see "Curve tracer" - streaming below), `0xB5`/
+`0xB6` replay one of two stored demo curves instead of sweeping a real
+panel (see "Curve tracer" - demo sweep below).
+
+**Poll faster than 100 ms**: the PIO SPI slave has a known, still-open
+defect where it cannot cleanly recover from an idle gap longer than its
+own `FRAME_TIMEOUT` (100 ms, `spi_slave_pio.rs`) - at a 0.5-2 s polling
+cadence roughly half of all frames came back torn on the bench. Keep the
+Pi's poll interval below 100 ms until the firmware-side recovery is
+fixed; `SpiMcuSource`/`spi_test.py` default to 0.05 s for this reason.
 
 **Master clock speed**: 8 MHz is unreliable (occasional torn/garbled
 frames) - the GPIO input synchronizer latency eats too much of the 125 ns
@@ -255,7 +264,7 @@ the on-board INA229 power monitor over SPI0 (see "Sensing" below). Default
 
 ## Sensing
 
-The board carries a TI INA229 (`firmware/src/ina229.rs`) measuring the
+The board carries a TI INA229 (`firmware/pipico_board/src/ina229.rs`) measuring the
 panel-side bus voltage and shunt current over SPI0 (GPIO16/17/18/19, see the
 GPIO table below; GPIO20 is the MAX31865's chip select, held idle high so it
 never floats onto the shared bus).
@@ -276,7 +285,7 @@ never floats onto the shared bus).
 
 ### Panel temperature (MAX31865, disabled)
 
-`firmware/src/max31865.rs` has a working PT100 driver, but it's commented
+`firmware/pipico_board/src/max31865.rs` has a working PT100 driver, but it's commented
 out of `main.rs` for now - the bench probe is a PT1000, incompatible with
 the board's fixed reference resistor. See the PR that disabled it for
 details.
@@ -366,27 +375,46 @@ still-held button only re-arms once released. Runs as its own task
 `TRACER_ACTIVE` flag forces the SEPIC gate duty to 0 for the sweep's whole
 duration, regardless of whether `MppTracker` or `PowerSupply` is active.
 
+**Demo sweep**: `CMD = 0xB5` (dim) / `0xB6` (bright)
+(`SpiMcuSource.start_demo_sweep()`) replay one of two curves captured on
+this bench instead of sweeping a real panel - same progress and bulk-read
+path as a real sweep, but the relay and bleed load are never driven.
+Useful for exercising the Pi, the server, and the web UI over real SPI
+without a lit panel on the bench. It still sets `TRACER_ACTIVE` like a
+real sweep, though, so the SEPIC gate duty is forced to 0 for the
+replay's whole ~5 s duration even though nothing is actually being swept.
+
 **Auto-range**: each sweep first finds its own top, so the 20 recorded
 points span the real curve rather than piling up past the knee. It reads
-Voc at zero load, then doubles the commanded current until the panel
-voltage collapses below `TRACER_COLLAPSE_PERCENT_OF_VOC` (15 %) of Voc -
-bracketing Isc from below - then bisects `TRACER_SCAN_BISECT_STEPS` (4)
-times to tighten it, and sweeps up to that knee plus
-`TRACER_SWEEP_HEADROOM_PERCENT` (115 %). Probes use a shorter settle
-(`TRACER_SCAN_SETTLE_MS`, 60 ms) since they only decide "collapsed yet?".
-Doubling rather than a linear scan because Isc can land anywhere from a
-fraction of a percent to most of full scale depending on panel and light.
-If Voc is under `TRACER_MIN_VOC_MV` (500 mV) there is no panel worth
-sweeping (dark, disconnected, or the relay didn't transfer) and the sweep
-aborts; if the panel never collapses even at the duty cap, the sweep runs
-to the cap and the curve stops short of Isc. This replaces the reference
-device's manual "set current range" dial.
+Voc at zero load, then doubles the commanded current - probing upward
+only, never down: the bleed path's RC filter still reads the previous,
+higher current for a while after a downward step, which threw off an
+earlier version of this search - until the panel voltage collapses below
+`TRACER_COLLAPSE_PERCENT_OF_VOC` (15 %) of Voc. A collapsed panel is
+delivering its short-circuit current, so that reading is Isc directly;
+the last probe before it (still regulating) gives the sink's mA-per-duty
+rate. The knee duty follows from those two readings by arithmetic, not a
+search. The sweep then runs up to that knee plus
+`TRACER_SWEEP_HEADROOM_PERCENT` (115 %) headroom. Each probe settles for
+the same `TRACER_SETTLE_MS` (250 ms) as a recorded sweep point, because a
+probe's current reading now sets the sweep's whole range and needs to be
+just as settled. Doubling rather than a linear scan because Isc can land
+anywhere from a fraction of a percent to most of full scale depending on
+panel and light. If Voc is under `TRACER_MIN_VOC_MV` (500 mV) there is no
+panel worth sweeping (dark, disconnected, or the relay didn't transfer)
+and the sweep aborts; if the panel never collapses even at the duty cap,
+the sweep runs to the cap and the curve stops short of Isc. This replaces
+the reference device's manual "set current range" dial.
 
-**Sweep**: `Tracer_pwm` steps linearly from 0 to that auto-ranged top in 20
-points (`TRACER_SWEEP_POINTS`), 250 ms settle per step (`TRACER_SETTLE_MS`),
-averaging 5 consecutive fresh INA229 readings per point
-(`TRACER_AVG_SAMPLES`, gated on a sample-freshness counter - not a fixed
-delay, same pattern as `power_supply` mode's `ClosedLoopState`). A safety
+**Sweep**: `Tracer_pwm` steps from 0 to that auto-ranged top in 20 points
+(`TRACER_SWEEP_POINTS`), unevenly spaced: a coarse leg covers the flat
+region below the knee, most of the budget is spent in a fine band across
+the knee, and a short tail reaches the top to pin Isc
+(`sweep_duty_for_step` in `mode_curve_tracer.rs`). Each step settles
+250 ms (`TRACER_SETTLE_MS`), then averages 40 consecutive fresh INA229
+readings (`TRACER_AVG_SAMPLES`, gated on a sample-freshness counter - not
+a fixed delay, same pattern as `power_supply` mode's `ClosedLoopState`).
+A safety
 cutoff (`TRACER_I_MAX_MA` 700 mA, below the INA229's 1 A full scale so a
 breach still reads accurately; `TRACER_P_MAX_MW` 16.1 W) aborts the sweep
 when breached rather than only logging: it zeroes the PWM and returns to
@@ -502,9 +530,9 @@ Two independent LEDs answer two different questions:
 | 26  | GPIO20  | SPI0_CS2        | SPI0 CS 2 - MAX31865 (CS_TP100) |
 | 27  | GPIO21  | INA_OOR_Alert   | INA out-of-range alert input  |
 | 29  | GPIO22  | DRDY_TMP        | Temp sensor data-ready input  |
-| 31  | GPIO26  | ADC_PWR         | ADC0 — power measurement      |
-| 32  | GPIO27  | ADC_VOUT        | ADC1 — Vout measurement       |
-| 34  | GPIO28  | ADC_Input_Curr  | ADC2 — input current          |
+| 31  | GPIO26  | ADC_PWR         | ADC0 - power measurement      |
+| 32  | GPIO27  | ADC_VOUT        | ADC1 - Vout measurement       |
+| 34  | GPIO28  | ADC_Input_Curr  | ADC2 - input current          |
 
 ## Script Test
 

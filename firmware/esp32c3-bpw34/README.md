@@ -24,7 +24,7 @@ cargo install ldproxy espflash
 ```
 
 `rust-toolchain.toml` already pins `nightly` with the `rust-src` component,
-so `rustup` will fetch it automatically on first build — no manual
+so `rustup` will fetch it automatically on first build - no manual
 `rustup toolchain add` needed.
 
 Unlike the Xtensa ESP32 targets, the ESP32-C3 is RISC-V, so it builds with
@@ -39,7 +39,7 @@ cargo build --release
 
 The first build downloads and compiles ESP-IDF `v5.5.3` (pinned in
 `.cargo/config.toml` via `ESP_IDF_VERSION`) into `ESP_IDF_TOOLS_INSTALL_DIR
-= "workspace"`. This takes a while and several GB of disk — expect it once
+= "workspace"`. This takes a while and several GB of disk - expect it once
 per machine, cached afterward.
 
 ## Flash and run
@@ -51,7 +51,7 @@ cargo run --release
 The `.cargo/config.toml` runner is `espflash flash --monitor`, so this
 builds, flashes over USB, and streams serial log output in one command.
 Log lines come from plain `println!` in `src/main.rs` (this project uses
-`log`/`println!`, not `defmt` — unlike the RP2040 firmware).
+`log`/`println!`, not `defmt` - unlike the RP2040 firmware).
 
 ## The circuit
 

@@ -14,7 +14,7 @@ against that ideal. The reference comes from the same panel model the
 simulation runs on (`TabulatedPanel.mpp()`). So the simulated world and
 the grading curve are identical, by construction.
 
-## Three harnesses, three questions
+## Five harnesses, five questions
 
 | Harness | Question | Replicable on hardware? |
 | --- | --- | --- |
@@ -57,7 +57,7 @@ methodology and remain as smoke tests and demos.
 A global search (full duty sweep, or a PSO pass) physically drives the
 converter across its range. Exploration costs energy, so it cannot run
 continuously. After the search, a local P&O holds the found peak. The
-open question is *when to search again* — it moves the results more than
+open question is *when to search again* - it moves the results more than
 the choice of search itself does. Two mechanisms, both on the controller
 side and both fed only by $(V, I)$:
 
@@ -75,11 +75,11 @@ side and both fed only by $(V, I)$:
    bounding the worst-case trapped time to the period.
 
 Measured on the cyclic schedule: local trackers trap in roughly half the
-shaded plateaus, at 44-67 % of available power. The configured global
+shaded plateaus, at 44-66 % of available power. The configured global
 trackers cut traps to a handful, at the price of up to ~1 s
 re-acquisition when only the backstop can free them. The deployed period
 (1000 steps) is not a guess: an expected-loss model derives an optimum
-$P^\star \approx 1034$, which lands on the empirically measured best (eta
+$P^\star \approx 1035$, which lands on the empirically measured best (eta
 peaks at 95.0 % at period 1000). See `algorithms/restart_policy.md` for
 the full derivation.
 
@@ -122,7 +122,7 @@ layer:
 transmission (cover on, cover off, steady shade), plus the controller's
 configured start duty for the Voc-side trap case. The ground truth
 $P_\text{mpp}$ comes from a calibration duty sweep with the condition
-held — the rig is its own instrument.
+held - the rig is its own instrument.
 
 ## Measured curves: replaying real panel data
 
@@ -139,7 +139,9 @@ panel model with what the panel actually did, not a model of it.
 This lets partial-shading scenarios (one panel physically tilted or
 shaded relative to the other) be graded against the array's real P-V
 shape, instead of an inferred multi-modal curve, before any algorithm is
-committed to firmware.
+committed to firmware. See `docs/measurement_procedure.md` for the bench
+capture checklist, including the tilt convention and closed-loop hardware
+runs (`RunRecord`, `mpp-sdk run-algorithm`).
 
 ## The numbers the simulation assumes
 

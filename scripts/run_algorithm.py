@@ -62,10 +62,18 @@ def run_control_loop(
     should_stop: Callable[[], bool] | None = None,
     max_consecutive_bad_frames: int = _BAD_FRAMES_LINK_DOWN,
     on_sample: Callable[[RunSample], None] | None = None,
+    samples: list[RunSample] | None = None,
 ) -> tuple[list[RunSample], bool, str | None]:
     """Run `algorithm` against `source` for `duration_s` seconds,
     recording one `RunSample` per control step. Returns
     `(samples, aborted, reason)`.
+
+    `samples`, if given, is the list appended to and returned - the
+    caller's own reference, not a copy. Pass one in when the samples
+    collected before an exception propagates still matter (e.g. a web
+    server wants to save a partial run rather than lose it): the caller
+    keeps a live view of what was recorded even though this function
+    never gets to return normally. Defaults to a fresh list.
 
     `aborted` is True, and `reason` names why, if any of these fire
     (source is driven to 0 duty before returning either way):
@@ -93,12 +101,15 @@ def run_control_loop(
     web server) that wants to observe the run live without waiting for it
     to finish.
     """
-    source.write(initial_duty)  # seed - SpiMcuSource.read() raises before the first write()
-    samples: list[RunSample] = []
+    samples = [] if samples is None else samples
     start = clock()
     aborted = False
     reason: str | None = None
     try:
+        # Seed write moved inside the try: a raising seed write used to
+        # skip the `finally` below entirely, breaking the zero-duty
+        # guarantee this docstring promises for every exit path.
+        source.write(initial_duty)  # SpiMcuSource.read() raises before the first write()
         while clock() - start < duration_s:
             voltage, current = source.read()
             t = clock() - start

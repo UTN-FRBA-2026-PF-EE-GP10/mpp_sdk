@@ -469,6 +469,11 @@ def _execute_run(
     control loop and one abort path for the CLI and every caller here.
     """
     algorithm = request.spec.make(request.initial_duty)
+    # Passed into run_control_loop as its own `samples` list (rather than
+    # letting it build one internally) so this survives an exception
+    # raised mid-run: `samples` below still holds it, even though the
+    # call that raised never gets to return it normally.
+    collected: list[RunSample] = []
 
     def on_sample(sample: RunSample) -> None:
         # Runs synchronously on the calling thread, right after the
@@ -477,6 +482,28 @@ def _execute_run(
         # getattr's default keeps a simulated run's `vout` as None rather
         # than raising.
         run_cache.add_sample(sample, vout=getattr(src, "vout", None))
+
+    def save_and_finish(samples: tuple[RunSample, ...], aborted: bool, reason: str | None) -> None:
+        record = RunRecord(
+            captured_at=runs_now_utc(),
+            label=request.label,
+            algorithm=request.spec.label,
+            samples=samples,
+            curve_ref=request.curve_ref,
+            aborted=aborted,
+            notes=reason or "",
+            source=source,
+        )
+        try:
+            path = run_library.save(record)
+        except OSError as exc:
+            run_cache.finish(
+                aborted=aborted,
+                reason=f"{reason or 'completed'}; failed to save: {exc}",
+                saved_run_id=None,
+            )
+            return
+        run_cache.finish(aborted=aborted, reason=reason, saved_run_id=path.stem)
 
     try:
         samples, aborted, reason = run_control_loop(
@@ -490,6 +517,7 @@ def _execute_run(
             max_consecutive_bad_frames=max_consecutive_bad_frames,
             on_sample=on_sample,
             period_s=period_s,
+            samples=collected,
         )
     except Exception as exc:
         # run_control_loop's own `finally` has already driven duty to zero
@@ -497,30 +525,17 @@ def _execute_run(
         # failure (a broken algorithm.step(), a hard SPI fault) from
         # killing the thread that owns the source, which for a hardware
         # run would silently end every future sweep and run for the
-        # process's life.
-        run_cache.finish(aborted=True, reason=f"error: {exc}", saved_run_id=None)
+        # process's life. `collected` still holds whatever was recorded
+        # before the failure - worth saving rather than discarding a run
+        # that may have run for most of its duration before crashing.
+        reason = f"error: {exc}"
+        if collected:
+            save_and_finish(tuple(collected), True, reason)
+        else:
+            run_cache.finish(aborted=True, reason=reason, saved_run_id=None)
         return
 
-    record = RunRecord(
-        captured_at=runs_now_utc(),
-        label=request.label,
-        algorithm=request.spec.label,
-        samples=tuple(samples),
-        curve_ref=request.curve_ref,
-        aborted=aborted,
-        notes=reason or "",
-        source=source,
-    )
-    try:
-        path = run_library.save(record)
-    except OSError as exc:
-        run_cache.finish(
-            aborted=aborted,
-            reason=f"{reason or 'completed'}; failed to save: {exc}",
-            saved_run_id=None,
-        )
-        return
-    run_cache.finish(aborted=aborted, reason=reason, saved_run_id=path.stem)
+    save_and_finish(tuple(samples), aborted, reason)
 
 
 def _run_live(
@@ -539,6 +554,17 @@ def _run_live(
     `/api/data` rather than leaving it looking silently frozen.
     """
     cache.set(None, "paused: a live MPPT run is in progress")
+    # The curve-tracer relay may still be engaged from an earlier sweep
+    # (never released automatically - see SpiMcuSource.release_relay) or
+    # from But1 on the bench. Left engaged, the panel stays on the
+    # tracer's bleed path and the firmware holds the SEPIC gate at 0 for
+    # as long as the relay is on, so a run would drive nothing while
+    # looking like it completed normally. Safe to call even when the
+    # relay is already released. getattr guards a fake/simulated source,
+    # which has no relay to release.
+    release_relay = getattr(src, "release_relay", None)
+    if release_relay is not None:
+        release_relay()
     _execute_run(
         src,
         run_cache,
@@ -640,7 +666,12 @@ def _poll_loop(
     run_requests: queue.Queue[_RunRequest] | None = None,
     run_cache: _LiveRunCache | None = None,
     stop_event: threading.Event | None = None,
+    shutdown_event: threading.Event | None = None,
 ) -> None:
+    """Poll the board until `shutdown_event` is set. That event is
+    deliberately separate from `stop_event`, which ends one live run: a
+    run's Stop button must never also end the polling this thread exists
+    to do."""
     if demo:
         # Implements mpp_sdk.io.sweep_source.SweepSource. Imported only
         # here, never mpp_sdk.io.spi_mcu, so demo mode needs neither
@@ -679,7 +710,7 @@ def _poll_loop(
             return src.request_sweep()
 
     with source_cm as src:
-        while True:
+        while shutdown_event is None or not shutdown_event.is_set():
             # A live run displaces normal polling entirely for its whole
             # duration (see _run_live's docstring) - checked first and,
             # unlike `commands` below, not capped to one per iteration:
@@ -1034,8 +1065,10 @@ def create_app(
         against a `SimulatedSource` with `"simulated": true`. Refuses
         rather than queuing a doomed request: no board at all (`--demo`,
         and `simulated` was not set), an unknown algorithm, a `curve_ref`
-        that doesn't exist, or a run already in progress (only one at a
-        time, of either kind - see `_LiveRunCache`).
+        that doesn't exist, a run already in progress (only one at a
+        time, of either kind - see `_LiveRunCache`), or (hardware runs
+        only) a curve-tracer sweep still active on the one SPI link a run
+        would need.
 
         `duration_s` omitted, or over `_MAX_RUN_DURATION_S`, is clamped to
         that backstop rather than rejected - a forgotten run must not be
@@ -1058,6 +1091,32 @@ def create_app(
                 detail="no board attached in --demo mode: a live run needs real hardware "
                 "(pass simulated=true to run against a simulated source instead)",
             )
+        # A hardware run and curve-tracer sweep polling cannot share the
+        # one SPI link (see the module docstring) - refuse up front rather
+        # than let a run queue behind a sweep and appear to "complete"
+        # while the firmware actually held the gate at 0 throughout,
+        # displaced by the sweep the whole time. A simulated run never
+        # touches the link, so it is unaffected.
+        if not body.simulated and cache.snapshot().active:
+            raise HTTPException(
+                status_code=409,
+                detail="a curve-tracer sweep is in progress - wait for it to finish "
+                "before starting a run",
+            )
+        # JSON's NaN/Infinity literals parse straight into these float
+        # fields - reject them up front with math.isfinite, before any of
+        # the checks below, since a non-finite value can silently defeat
+        # them (e.g. `nan <= 0` is False, so a NaN v_max would sail past
+        # the non-positive check and disable the overvoltage abort for
+        # the run's whole duration).
+        for field_name, value in (
+            ("v_max", body.v_max),
+            ("i_max", body.i_max),
+            ("initial_duty", body.initial_duty),
+            *(() if body.duration_s is None else (("duration_s", body.duration_s),)),
+        ):
+            if not math.isfinite(value):
+                raise HTTPException(status_code=400, detail=f"{field_name} must be finite")
         spec = specs.get(body.algorithm.lower())
         if spec is None:
             raise HTTPException(status_code=400, detail=f"unknown algorithm {body.algorithm!r}")
@@ -1290,6 +1349,7 @@ def main() -> None:
     run_cache = _LiveRunCache()
     run_requests: queue.Queue[_RunRequest] = queue.Queue()
     stop_event = threading.Event()
+    shutdown_event = threading.Event()
     poll_thread = threading.Thread(
         target=_poll_loop,
         args=(
@@ -1305,6 +1365,7 @@ def main() -> None:
             "run_requests": run_requests,
             "run_cache": run_cache,
             "stop_event": stop_event,
+            "shutdown_event": shutdown_event,
         },
         daemon=True,
     )
@@ -1320,7 +1381,25 @@ def main() -> None:
     )
     mode = " [DEMO MODE - simulated sweeps, no hardware]" if args.demo else ""
     print(f"Serving curve-tracer UI on http://{args.host}:{args.port}/{mode} (Ctrl+C to stop)")
-    uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
+    try:
+        uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
+    finally:
+        # uvicorn.run returns once SIGINT/SIGTERM stops it, but poll_thread
+        # is a daemon and would otherwise just be abandoned mid-run - its
+        # run_control_loop `finally` (the one thing that zeroes duty) would
+        # never get to run, and the firmware only zeroes it on its own
+        # after ~500 ms of SPI silence. Setting stop_event and giving the
+        # thread a short window to notice lets a live run exit through its
+        # own zero-duty path before the process actually exits.
+        # Order matters: stop_event first, so a run in flight ends
+        # through run_control_loop's own zero-duty path rather than being
+        # abandoned at whatever duty it was driving; shutdown_event then
+        # ends the polling itself. Without this the daemon thread is just
+        # dropped wherever it stands, and the firmware only zeroes duty on
+        # its own after about 500 ms of SPI silence.
+        stop_event.set()
+        shutdown_event.set()
+        poll_thread.join(timeout=3.0)
 
 
 if __name__ == "__main__":

@@ -6,7 +6,7 @@
 - Effort: M
 - Risk: MED; changes the save request contract
 - Confidence: HIGH
-- Depends on: 037 first if it changes the cache snapshot; 032 soft
+- Depends on: 037 and 032 (both DONE)
 - Planned at: `7f3ea44`, 2026-09-08 (server has a concurrent local patch)
 - Category: correctness / measurement provenance
 

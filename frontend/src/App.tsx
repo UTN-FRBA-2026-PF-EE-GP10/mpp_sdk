@@ -28,6 +28,9 @@ import {
 interface PendingRemeasure {
   curveId: string
   label: string
+  /** The measurement kind being replaced - a save under any other kind
+   * must not consume this remeasure or delete the old curve. */
+  kind: string
 }
 
 export default function App() {
@@ -69,7 +72,11 @@ export default function App() {
    * deleted here - see handleCurveSaved for step 4. */
   function startRemeasure(record: CurveRecord) {
     setRemeasureError(null)
-    setPendingRemeasure({ curveId: record.id, label: record.label || 'Untitled curve' })
+    setPendingRemeasure({
+      curveId: record.id,
+      label: record.label || 'Untitled curve',
+      kind: record.measurement,
+    })
     setMeasurePrefill({
       kind: record.measurement,
       label: record.label,
@@ -83,15 +90,18 @@ export default function App() {
     setPendingRemeasure(null)
   }
 
-  /** Fires on every successful Measure save. When a remeasure is pending,
-   * this is step 4: the replacement just landed, so now - and only now -
-   * the old curve is removed. A failure here leaves the old curve in
-   * place (nothing destroyed, matching step 5) and surfaces the error
-   * rather than pretending the cleanup happened. */
-  async function handleCurveSaved() {
+  /** Fires on every successful Measure save. When a remeasure is pending
+   * AND the save just made was under the same kind as the curve being
+   * replaced, this is step 4: the replacement just landed, so now - and
+   * only now - the old curve is removed. An unrelated save (a different
+   * kind, e.g. while a baseline remeasure is still pending) must leave
+   * the pending remeasure and the old curve untouched. A failure here
+   * leaves the old curve in place (nothing destroyed, matching step 5)
+   * and surfaces the error rather than pretending the cleanup happened. */
+  async function handleCurveSaved(savedKind: string) {
     setReloadToken((t) => t + 1)
     const toFinish = pendingRemeasure
-    if (!toFinish) return
+    if (!toFinish || toFinish.kind !== savedKind) return
     setPendingRemeasure(null)
     try {
       await deleteCurve(toFinish.curveId)

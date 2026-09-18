@@ -43,7 +43,10 @@ function SaveCurveForm({
   kind: string
   hasCapture: boolean
   demo: boolean
-  onSaved: () => void
+  /** Called with the kind just saved under - lets a remeasure in progress
+   * (App.tsx's `handleCurveSaved`) tell "this is the save it was waiting
+   * for" from "an unrelated save happened elsewhere in Measure". */
+  onSaved: (kind: string) => void
   /** Remeasure's prefill (see App.tsx's `startRemeasure`) - read once as
    * this form's starting state, same as any other initial-state prop:
    * later changes to these don't reset what the operator has typed. */
@@ -70,7 +73,7 @@ function SaveCurveForm({
       setStatus(`saved: ${result.path}`)
       setLabel('')
       setNotes('')
-      onSaved()
+      onSaved(kind)
     } catch (e) {
       setStatus(`save failed: ${e instanceof Error ? e.message : String(e)}`)
     } finally {
@@ -152,7 +155,8 @@ export function CurveWorkbench({
   kind: string
   records: CurveRecord[]
   connected: boolean
-  onSaved: () => void
+  /** Forwarded to SaveCurveForm - see its own doc comment. */
+  onSaved: (kind: string) => void
   /** CaptureMode 'simulated' (see lib/captureMode.ts): the two "Demo
    * curve" buttons replay a bundled fixture locally instead of over SPI;
    * Start Measurement, Release Relay, and Save curve are hardware/write

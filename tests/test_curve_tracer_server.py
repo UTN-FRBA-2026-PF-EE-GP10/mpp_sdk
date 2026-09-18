@@ -20,7 +20,7 @@ fastapi = pytest.importorskip("fastapi")
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-from harness.common import algorithm_specs  # noqa: E402
+from harness.common import AlgorithmSpec, algorithm_specs  # noqa: E402
 from mpp_sdk import IdealSingleDiode  # noqa: E402
 from mpp_sdk.curves import CurveRecord, PanelSetup, save  # noqa: E402
 from mpp_sdk.curves.record import now_utc  # noqa: E402
@@ -36,6 +36,7 @@ from scripts.curve_tracer_server import (  # noqa: E402
     _downsample_samples,
     _LiveRunCache,
     _make_simulated_source,
+    _poll_loop,
     _run_live,
     _run_path,
     _run_simulated,
@@ -722,6 +723,35 @@ class _FakeRunSource:
         return v, i
 
 
+class _FakeRunSourceWithRelay(_FakeRunSource):
+    """Same fake, plus a `release_relay()` a test can confirm was called -
+    a real `SpiMcuSource` has one, but `_run_live` must still work against
+    a fake/simulated source that doesn't (see `getattr` in `_run_live`)."""
+
+    def __init__(self):
+        super().__init__()
+        self.relay_released = False
+
+    def release_relay(self):
+        self.relay_released = True
+
+
+class _RaisingAfterNAlgorithm:
+    """Steps normally `n` times, then raises - stands in for a broken
+    algorithm or a hard mid-run fault, to check the samples collected
+    before the failure still get saved (see _execute_run)."""
+
+    def __init__(self, n):
+        self._n = n
+        self.calls = 0
+
+    def step(self, voltage, current):
+        self.calls += 1
+        if self.calls > self._n:
+            raise RuntimeError("algorithm boom")
+        return 0.5
+
+
 def _po_spec():
     return next(s for s in algorithm_specs() if s.label == "P&O")
 
@@ -751,6 +781,50 @@ def test_start_run_rejects_a_non_positive_duration(client):
     r = client.post("/api/runs/start", json={"algorithm": "P&O", "duration_s": 0})
     assert r.status_code == 400
     assert client.run_requests.empty()
+
+
+def test_start_run_rejects_a_nan_v_max(client):
+    """JSON's non-standard NaN literal parses straight into a pydantic
+    float field, and `nan <= 0` is False - without an explicit
+    math.isfinite check this would sail past the non-positive check and
+    disable the overvoltage abort for the run's whole duration."""
+    r = client.post(
+        "/api/runs/start",
+        content=b'{"algorithm":"P&O","v_max":NaN}',
+        headers={"content-type": "application/json"},
+    )
+    assert r.status_code == 400
+    assert "v_max" in r.json()["detail"]
+    assert client.run_requests.empty()
+
+
+def test_start_run_rejects_an_infinite_i_max(client):
+    r = client.post(
+        "/api/runs/start",
+        content=b'{"algorithm":"P&O","i_max":Infinity}',
+        headers={"content-type": "application/json"},
+    )
+    assert r.status_code == 400
+    assert "i_max" in r.json()["detail"]
+    assert client.run_requests.empty()
+
+
+def test_start_run_rejects_a_nan_duration_and_initial_duty(client):
+    r = client.post(
+        "/api/runs/start",
+        content=b'{"algorithm":"P&O","duration_s":NaN}',
+        headers={"content-type": "application/json"},
+    )
+    assert r.status_code == 400
+    assert "duration_s" in r.json()["detail"]
+
+    r = client.post(
+        "/api/runs/start",
+        content=b'{"algorithm":"P&O","initial_duty":NaN}',
+        headers={"content-type": "application/json"},
+    )
+    assert r.status_code == 400
+    assert "initial_duty" in r.json()["detail"]
 
 
 def test_start_run_accepts_a_valid_request_and_enqueues_it(client):
@@ -845,6 +919,26 @@ def test_start_run_with_a_valid_curve_ref_is_recorded(client, tmp_path):
     queued = client.run_requests.get_nowait()
     assert queued.curve_ref == curve_path.stem
     assert client.get("/api/runs/live").json()["curve_ref"] == curve_path.stem
+
+
+def test_start_run_refuses_a_hardware_run_while_a_sweep_is_active(client):
+    """A hardware run and curve-tracer polling cannot share the one SPI
+    link - queuing a run behind an active sweep would have it "complete"
+    while the firmware silently held the gate at 0 throughout."""
+    client.cache.set_progress(_FakeProgress(0, 21.3, 0.006, active=True))
+    r = client.post("/api/runs/start", json={"algorithm": "P&O"})
+    assert r.status_code == 409
+    assert client.run_requests.empty()
+
+
+def test_start_run_simulated_is_allowed_while_a_sweep_is_active(client):
+    """A simulated run never touches the SPI link, so it is unaffected by
+    a sweep in progress."""
+    client.cache.set_progress(_FakeProgress(0, 21.3, 0.006, active=True))
+    r = client.post(
+        "/api/runs/start", json={"algorithm": "P&O", "simulated": True, "duration_s": 0.02}
+    )
+    assert r.status_code == 200
 
 
 def test_start_run_conflicts_when_a_run_is_already_in_progress(client):
@@ -979,6 +1073,61 @@ def test_run_live_link_down_aborts(client):
     assert live["aborted"] is True
     assert live["abort_reason"] == "link-down"
     assert source._duty == 0.0
+
+
+def test_run_live_releases_the_relay_before_starting_the_control_loop(client):
+    """A relay left engaged by an earlier sweep (or But1) would have the
+    firmware hold the SEPIC gate at 0 for the run's whole duration - see
+    _run_live's own note."""
+    source = _FakeRunSourceWithRelay()
+    request = _RunRequest(
+        spec=_po_spec(), duration_s=0.02, v_max=100.0, i_max=100.0, curve_ref=None, label="bench"
+    )
+    assert client.run_cache.try_start(algorithm="P&O", label="bench", curve_ref=None)
+
+    _run_live(source, client.cache, client.run_cache, request, client.stop_event)
+
+    assert source.relay_released is True
+
+
+def test_run_live_works_with_a_fake_source_that_has_no_release_relay(client):
+    """Every other _run_live test uses plain _FakeRunSource, which has no
+    release_relay() at all - confirms the getattr guard actually makes
+    that safe rather than raising."""
+    source = _FakeRunSource()
+    request = _RunRequest(
+        spec=_po_spec(), duration_s=0.02, v_max=100.0, i_max=100.0, curve_ref=None, label="bench"
+    )
+    assert client.run_cache.try_start(algorithm="P&O", label="bench", curve_ref=None)
+
+    _run_live(source, client.cache, client.run_cache, request, client.stop_event)
+
+    assert client.get("/api/runs/live").json()["status"] == "done"
+
+
+def test_run_live_saves_partial_samples_and_notes_the_error_when_the_loop_raises(client):
+    """A mid-run crash must not discard whatever the run had already
+    recorded - see _execute_run's `collected` list."""
+    source = _FakeRunSourceWithRelay()
+    spec = AlgorithmSpec(label="Raiser", color="k", make=lambda _duty: _RaisingAfterNAlgorithm(2))
+    request = _RunRequest(
+        spec=spec, duration_s=100.0, v_max=100.0, i_max=100.0, curve_ref=None, label="bench"
+    )
+    assert client.run_cache.try_start(algorithm="Raiser", label="bench", curve_ref=None)
+
+    _run_live(source, client.cache, client.run_cache, request, client.stop_event)
+
+    assert source._duty == 0.0  # the zero-duty guarantee still held
+    live = client.get("/api/runs/live").json()
+    assert live["status"] == "done"
+    assert live["aborted"] is True
+    assert "algorithm boom" in live["abort_reason"]
+    saved_id = live["saved_run_id"]
+    assert saved_id is not None
+    record = load_run(client.run_dir / f"{saved_id}.json")
+    assert record.aborted is True
+    assert "algorithm boom" in record.notes
+    assert len(record.samples) == 2  # recorded before the third step() raised
 
 
 def test_a_stop_request_actually_stops_an_in_progress_run(client):
@@ -1260,3 +1409,29 @@ def test_start_run_rejects_an_initial_duty_outside_the_open_unit_interval(client
     r = client.post("/api/runs/start", json={"algorithm": "P&O", "initial_duty": duty})
     assert r.status_code == 400
     assert "initial_duty" in r.json()["detail"]
+
+
+def test_poll_loop_exits_on_shutdown_event_but_not_on_a_run_stop():
+    """The poll thread must end when the process is shutting down, so a
+    live run gets to exit through run_control_loop's zero-duty path
+    instead of being abandoned at whatever duty it was driving. It must
+    NOT end on `stop_event`, which only ends one run - a Stop button that
+    also killed polling would take every later sweep down with it."""
+    cache = _SweepCache()
+    stop_event = threading.Event()
+    shutdown_event = threading.Event()
+    thread = threading.Thread(
+        target=_poll_loop,
+        args=(cache, queue.Queue(), 0, 0, 200_000, 0.01),
+        kwargs={"demo": True, "stop_event": stop_event, "shutdown_event": shutdown_event},
+        daemon=True,
+    )
+    thread.start()
+    try:
+        stop_event.set()
+        thread.join(timeout=0.5)
+        assert thread.is_alive(), "a run's stop must not end the poll loop"
+    finally:
+        shutdown_event.set()
+        thread.join(timeout=5.0)
+    assert not thread.is_alive()

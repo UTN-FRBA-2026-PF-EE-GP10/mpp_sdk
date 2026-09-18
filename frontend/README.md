@@ -8,9 +8,11 @@ dependency - only the pieces actually used live under
 
 **Current status**: wired to a real backend -
 `scripts/curve_tracer_server.py`'s FastAPI app (`mpp-sdk[web]`). `src/lib/api.ts`
-is the one place that talks to it (`GET /api/data`/`/api/curves`/
+is the one place that talks to it (curve routes: `GET /api/data`/`/api/curves`/
 `/api/measurement-kinds`, `POST /api/save-curve`/`/api/start-sweep`/
-`/api/release-relay`) and the one place the mA/A unit boundary is crossed.
+`/api/release-relay`; run routes: `GET /api/run-config`/`/api/runs`/
+`/api/runs/live`, `POST /api/runs/start`/`/api/runs/stop`) and the one place
+the mA/A unit boundary is crossed.
 This replaced the earlier mock-data prototype and the vanilla-JS page
 under `scripts/curve_tracer_web/` (now the build output directory below,
 not source). See `improve/2026-07-18/plans/README.md`'s notes on plan 023
@@ -40,9 +42,9 @@ The connection indicator is also a three-way capture-mode menu
 (`src/lib/captureMode.ts`), named to match `mpp_sdk/curves/record.py`'s
 `CURVE_SOURCES` exactly:
 
-- **Pi connected** (`hardware`) - the default. Start Measurement live,
+- **PICO connected** (`hardware`) - the default. Start Measurement live,
   saving allowed.
-- **Demo with Pi** (`firmware-replay`) - real board, but the "Demo curve"
+- **Demo with PICO** (`firmware-replay`) - real board, but the "Demo curve"
   buttons are the point: real SPI, a curve already stored in the
   firmware, not measured this session. Saving is still allowed - the
   result is real data off the wire. Only selectable with a live link;
@@ -89,9 +91,13 @@ changes - nothing regenerates it automatically.
 - `react`, `react-dom`, `typescript`, `vite` - the scaffold.
 - `tailwindcss`, `@tailwindcss/vite` - utility CSS, no separate config file
   needed (Tailwind v4's Vite plugin).
+- `@base-ui/react` - the unstyled primitives shadcn/ui's dialog, dropdown
+  menu, and menu components wrap (`Dialog`, `Menu`).
 - shadcn/ui components (`button`, `card`, `tabs`, `badge`, `separator`,
-  `table`) - copy-in source under `src/components/ui/`, not a runtime
-  dependency; add more only as panes need them.
+  `table`, `dialog`, `dropdown-menu`) - copy-in source under
+  `src/components/ui/`, not a runtime dependency; add more only as panes
+  need them.
+- `lucide-react` - icons (nav, close buttons, theme toggle).
 - `chart.js`, `react-chartjs-2` - ports the existing vanilla page's dual-axis
   I(V)/P(V) chart. Do not add a second charting library.
 

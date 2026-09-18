@@ -59,13 +59,13 @@ live in [`PLAN.md`](./PLAN.md).
 Once published to PyPI, install with `uv` (recommended) or `pip`:
 
 ```bash
-# Core library — panel models, SEPIC converter, P&O, SimulatedSource
+# Core library - panel models, SEPIC converter, P&O, SimulatedSource
 uv add mpp-sdk
 
 # With high-fidelity pvlib panel models (PvlibPanelModel adapter)
 uv add "mpp-sdk[pvlib]"
 
-# With SPI hardware dependencies (Phase 5 — SpiMcuSource)
+# With SPI hardware dependencies (Phase 5 - SpiMcuSource)
 uv add "mpp-sdk[hardware]"
 
 # With the curve-tracer FastAPI web backend (mpp-sdk curve-tracer-web)
@@ -95,8 +95,8 @@ for _ in range(500):
 Clone the repo and run the live demo directly:
 
 ```bash
-git clone https://github.com/<org>/mpp-sdk.git
-cd mpp-sdk
+git clone https://github.com/UTN-FRBA-2026-PF-EE-GP10/mpp_sdk.git
+cd mpp_sdk
 uv sync
 uv run main.py
 ```
@@ -117,13 +117,13 @@ uv run mpp-sdk animate --shade     # forwards extra flags to the target script
 ```
 
 Each script also stays directly runnable on its own (e.g.
-`uv run harness/compare_dynamic.py`) — `mpp-sdk` is just a single place to
+`uv run harness/compare_dynamic.py`) - `mpp-sdk` is just a single place to
 discover them all.
 
 ### Curve-tracer web workbench
 
 A React frontend + FastAPI backend for capturing, browsing, and replaying
-real panel I-V curves — see [`frontend/README.md`](frontend/README.md) for
+real panel I-V curves - see [`frontend/README.md`](frontend/README.md) for
 the full picture. Try it with no hardware at all:
 
 ```bash
@@ -162,7 +162,7 @@ docs/               # Algorithm references, rationale, general information
 The control variable is always the SEPIC **duty cycle**. The measured
 quantities are always panel terminal **voltage** and **current**. Richer
 panel models may depend on temperature, irradiance, or a measured curve,
-but those inputs live on the *model* — the controller never sees them.
+but those inputs live on the *model* - the controller never sees them.
 
 ## Where mpp-sdk sits relative to pvlib
 
@@ -191,7 +191,7 @@ replacement:
 | Closed-loop MPPT controllers (P&O, …)    | **no**           | **yes**            |
 | Boost-converter / power-stage model      | no               | yes                |
 | Hardware abstraction (`SignalSource`)    | no               | yes (RPi5 planned) |
-| Algorithm benchmark / comparison harness | no               | yes (planned)      |
+| Algorithm benchmark / comparison harness | no               | yes                |
 
 The `PvlibPanelModel(PanelModel)` adapter (shipped) drops any pvlib-grade
 model behind our controller and converter pipeline, unchanged. We do not
@@ -199,18 +199,18 @@ re-implement panel physics that pvlib already provides.
 
 ## Roadmap
 
-What's shipped and what's next. The full plan — phases, milestones, verification
-expectations, contributor liability, and LLM-usage policy — lives in
+What's shipped and what's next. The full plan - phases, milestones, verification
+expectations, contributor liability, and LLM-usage policy - lives in
 [`PLAN.md`](./PLAN.md).
 
 ### Models
 
-- [x] `IdealSingleDiode` — explicit closed-form I(V) (in-tree, pedagogical)
-- [x] `PvlibPanelModel` — pvlib De Soto adapter, temperature/irradiance aware
+- [x] `IdealSingleDiode` - explicit closed-form I(V) (in-tree, pedagogical)
+- [x] `PvlibPanelModel` - pvlib De Soto adapter, temperature/irradiance aware
       (optional `mpp-sdk[pvlib]`); `from_datasheet` + `hissuma_psf10mono`
-- [x] `PvString` — series panels with bypass diodes → multi-modal P-V curves
-- [x] `TabulatedPanel` — cached I-V curve for fast repeated lookups
-- [ ] `SingleDiodeWithLosses` — in-tree `R_s` / `R_sh` (implicit I-V)
+- [x] `PvString` - series panels with bypass diodes → multi-modal P-V curves
+- [x] `TabulatedPanel` - cached I-V curve for fast repeated lookups
+- [ ] `SingleDiodeWithLosses` - in-tree `R_s` / `R_sh` (implicit I-V)
 
 ### Algorithms
 
@@ -225,7 +225,7 @@ expectations, contributor liability, and LLM-usage policy — lives in
 ### Comparison harness
 
 - [x] Static, dynamic, and live interactive (`harness/`)
-- [x] Preliminary metrics — tracking efficiency, settling time, ripple, overshoot,
+- [x] Preliminary metrics - tracking efficiency, settling time, ripple, overshoot,
       trap depth (`mpp_sdk.metrics`)
 - [x] Cyclic irradiance profile for a valid dynamic efficiency measurement
       (`harness/compare_cyclic.py`, `metrics.energy_efficiency`)
@@ -236,13 +236,13 @@ expectations, contributor liability, and LLM-usage policy — lives in
 ### Curve tracer
 
 Captures real panel I-V curves and replays them through the same
-comparison harness as any synthetic model — the seam [`AGENTS.md`](./AGENTS.md)
+comparison harness as any synthetic model - the seam [`AGENTS.md`](./AGENTS.md)
 exists to protect. See [`frontend/README.md`](frontend/README.md) for the
 UI and [`firmware/pipico_board/README.md`](firmware/pipico_board/README.md)'s
 "Curve tracer" section for the sweep engine.
 
 - [x] On-disk curve library with measurement metadata (`mpp_sdk.curves`)
-- [x] `MeasuredPanel(PanelModel)` — a captured curve replays through the
+- [x] `MeasuredPanel(PanelModel)` - a captured curve replays through the
       algorithm benchmark (`mpp-sdk compare-measured`) with zero algorithm
       changes
 - [x] FastAPI backend + React frontend (`mpp-sdk curve-tracer-web`;
@@ -252,7 +252,7 @@ UI and [`firmware/pipico_board/README.md`](firmware/pipico_board/README.md)'s
       on-target verification pending)
 - [ ] Controllable dimmer for repeatable illumination sweeps (design spike)
 
-### Hardware (future — see [`PLAN.md`](./PLAN.md))
+### Hardware (future - see [`PLAN.md`](./PLAN.md))
 
 The power stage is driven by an **RP2040 (Pi Pico, firmware in Rust)** connected
 to the Raspberry Pi 5 over SPI. The MCU isolates the fast-switching side *and* is
@@ -261,20 +261,21 @@ the deployment target for the final algorithm. See
 build/flash/calibration instructions.
 
 - [x] SPI-slave firmware scaffold (PIO)
-- [x] `SpiMcuSource(SignalSource)` — Pi-side SPI wrapper (`mpp-sdk[hardware]`)
+- [x] `SpiMcuSource(SignalSource)` - Pi-side SPI wrapper (`mpp-sdk[hardware]`)
 - [x] MCU firmware (HIL mode): ADC + PWM + SPI-slave as an I/O proxy
-- [x] Calibration (ADC scale/offset, INA229 calibration / INA281 gain, PWM freq,
-      duty limits) — INA281 gain/shunt still open, see plan 010
+- [x] Calibration (ADC scale/offset, INA229 calibration, PWM freq, duty
+      limits) - the INA281 analog cross-check still needs its gain/shunt
+      resolved
 - [ ] Algorithm port to RP2040 + cross-validation against the Python reference
 - [ ] Bench and outdoor validation against the simulator
 
 ### Infrastructure
 
-- [x] `tests/` — unit tests per pillar (`pytest`)
+- [x] `tests/` - unit tests per pillar (`pytest`)
 - [x] CI workflow (`uv sync`, `pytest`, demo smoke run)
-- [x] `data/` — provenanced benchmark profiles and panel curves
-- [x] `mpp-sdk` CLI — single dispatcher over every harness/example/script
-- [x] Curve-tracer web workbench — `frontend/` (React) + FastAPI backend,
+- [x] `data/` - provenanced benchmark profiles and panel curves
+- [x] `mpp-sdk` CLI - single dispatcher over every harness/example/script
+- [x] Curve-tracer web workbench - `frontend/` (React) + FastAPI backend,
       `mpp-sdk curve-tracer-web [--demo]`
 
 ## Context
@@ -282,7 +283,7 @@ build/flash/calibration instructions.
 This SDK supports an **Electronics Engineering thesis** on MPPT algorithm
 comparison. [`PLAN.md`](./PLAN.md) has the full project plan: the
 contributor-liability statement, the LLM-usage disclosure policy, the
-viability and related-work analysis, and one hard rule — **each part of
+viability and related-work analysis, and one hard rule - **each part of
 the SDK must work and be verified in isolation** before it is integrated.
 
 ## On the use of AI
@@ -294,7 +295,7 @@ something to apologise for.
 The thesis has **no external funding**. The team is three people with
 limited weekly hours. Comparable research groups routinely have either
 dedicated funding or AI-assisted workflows, or both. Refusing to use AI
-would not buy us purity — it would just widen the resource gap between
+would not buy us purity - it would just widen the resource gap between
 this work and the groups it is benchmarked against. We use AI for the
 same reason we use `pvlib` instead of re-implementing single-diode
 physics: the leverage is real, and the alternative is to do less
@@ -327,7 +328,7 @@ as algorithms and models land.
 
 - **[De Soto et al. 2006]** De Soto, W., Klein, S. A., & Beckman, W. A.
   (2006). *Improvement and validation of a model for photovoltaic array
-  performance.* Solar Energy, **80**(1), 78–88. (Single-diode model
+  performance.* Solar Energy, **80**(1), 78-88. (Single-diode model
   parameter extraction.)
 
 ### MPPT algorithm reviews and canonical methods
@@ -340,36 +341,36 @@ as algorithms and models land.
 - **[Subudhi & Pradhan 2013]** Subudhi, B., & Pradhan, R. (2013). *A
   comparative study on maximum power point tracking techniques for
   photovoltaic power systems.* IEEE Transactions on Sustainable Energy,
-  **4**(1), 89–98.
+  **4**(1), 89-98.
 - **[Hussein et al. 1995]** Hussein, K. H., Muta, I., Hoshino, T., &
   Osakada, M. (1995). *Maximum photovoltaic power tracking: an
   algorithm for rapidly changing atmospheric conditions.* IEE
-  Proceedings — Generation, Transmission and Distribution, **142**(1),
-  59–64. (Incremental Conductance reference implementation.)
+  Proceedings - Generation, Transmission and Distribution, **142**(1),
+  59-64. (Incremental Conductance reference implementation.)
 - **[Femia et al. 2005]** Femia, N., Petrone, G., Spagnuolo, G., &
   Vitelli, M. (2005). *Optimization of perturb and observe maximum
   power point tracking method.* IEEE Transactions on Power Electronics,
-  **20**(4), 963–973. (P&O step-size design.)
+  **20**(4), 963-973. (P&O step-size design.)
 - **[Kobayashi et al. 2006]** Kobayashi, K., Takano, I., & Sawada, Y.
   (2006). *A study of a two stage maximum power point tracking control of
   a photovoltaic system under partially shaded insolation conditions.*
-  Solar Energy Materials and Solar Cells, **90**(18), 2975–2988.
+  Solar Energy Materials and Solar Cells, **90**(18), 2975-2988.
 
 ### Partial shading and Global MPPT
 
 - **[Patel & Agarwal 2008]** Patel, H., & Agarwal, V. (2008). *Maximum
   power point tracking scheme for PV systems operating under partially
   shaded conditions.* IEEE Transactions on Industrial Electronics,
-  **55**(4), 1689–1698.
+  **55**(4), 1689-1698.
 - **[Miyatake et al. 2011]** Miyatake, M., Veerachary, M., Toriumi, F.,
   Fujii, N., & Ko, H. (2011). *Maximum power point tracking of multiple
   photovoltaic arrays: a PSO approach.* IEEE Transactions on Aerospace
-  and Electronic Systems, **47**(1), 367–380.
+  and Electronic Systems, **47**(1), 367-380.
 - **[Liu et al. 2012]** Liu, Y.-H., Huang, S.-C., Huang, J.-W., & Liang,
   W.-C. (2012). *A particle swarm optimization-based maximum power
   point tracking algorithm for PV systems operating under partially
   shaded conditions.* IEEE Transactions on Energy Conversion, **27**(4),
-  1027–1035.
+  1027-1035.
 
 ### Standards and benchmarking
 

@@ -1,8 +1,24 @@
 # Measurement procedure
 
 A checklist for running a bench measurement session: capturing one curve,
-running a tilted series, and (once you have a board) a closed-loop run.
-See `README.md`'s Quickstart to install the `web` extra first.
+running a tilted series, and a closed-loop run. See `README.md`'s
+Quickstart to install the `web` extra first.
+
+## Safety
+
+- **Never expose the server to the internet or an untrusted network.** It
+  has no login and no access control. Anyone who can reach it can drive
+  the SEPIC converter. Keep it on the bench network only, or reachable
+  through a VPN.
+- The curve tracer's bleed path dissipates power in Q3 (a linear
+  MOSFET). Give it a heatsink and watch its temperature if you run sweeps
+  back-to-back - see `firmware/pipico_board/README.md`'s "Curve tracer"
+  section.
+- A closed-loop run has no on-target safety cutoff besides the duty
+  ceiling. The Pi side aborts the run if a reading ever exceeds the
+  v_max/i_max limits, or if the SPI link drops mid-run. This protection
+  only exists while the controlling process (the workbench server, or
+  `run-algorithm`) is running.
 
 ## Before you start
 
@@ -20,19 +36,29 @@ See `README.md`'s Quickstart to install the `web` extra first.
 ## Capture one curve
 
 1. Open `http://<pi-host>:8000/` (or `http://localhost:8000/` for
-   `--demo`).
-2. In the grid of measurement-kind cards, select **baseline** (or whatever
-   kind matches this capture - see "The tilted-panel procedure" below for
-   `tilted`).
-3. Click **Start Measurement**. Wait for the curve to finish plotting - a
+   `--demo`). The workbench opens on **Measure**.
+2. Check the connection pill, top right. It also doubles as the capture
+   mode menu:
+   - **PICO connected**: a real board, live sweeps. Use this for an
+     actual measurement.
+   - **Demo with PICO**: a real board, but the "Demo curve" buttons
+     replay a curve already stored in the firmware instead of measuring
+     one. Only selectable while a board is linked.
+   - **Demo**: no board at all, bundled sample data, nothing saved.
+   Leave it on **PICO connected** for a real capture.
+3. Under "Capturing under:", select the tab that matches this capture:
+   **Baseline** here (or **Tilted** - see "The tilted-panel procedure"
+   below).
+4. Click **Start Measurement**. Wait for the curve to finish plotting - a
    few seconds, since the sweep auto-ranges and takes 20 points.
-4. Fill in the save form: a **label** (a short description - suggest a
+5. Fill in the save form: a **label** (a short description - suggest a
    convention like `"<date> <condition>"`, e.g.
    `"2026-09-08 baseline lamp 30cm"`) and optional **notes** (lamp
    distance, ambient light, anything unusual). Panel A is fixed at 90
    degrees and is not editable in the form. Leave panel B's tilt at 90
    degrees for a baseline capture (both panels matching).
-5. Click **Save curve**. Confirm it appears in the table below.
+6. Click **Save curve**. Confirm it appears in the "Saved curves" table
+   below, and under **Curves > Baseline** in the sidebar.
 
 ## The tilted-panel procedure
 
@@ -52,15 +78,16 @@ instead of an inferred one.
 
 **Procedure for a sweep**: repeat "Capture one curve" once per angle,
 with two changes each time: physically set panel B to the next detent
-before clicking **Start Measurement**, and select the **tilted** card
-(not **baseline**) so the save request's measurement kind matches. The
+before clicking **Start Measurement**, and select the **Tilted** tab
+(not **Baseline**) so the save request's measurement kind matches. The
 save form's panel B selector is restricted to the five valid detents, so
 picking the wrong angle by typo is not possible - just make sure the
 selected value matches where the panel physically is. Use the same label
 prefix for the whole series with the angle appended, e.g.
 `"2026-09-08 tilted 45deg"`, so the saved-curves table stays readable.
 Keep every other condition (lighting, panel A) constant across the whole
-series.
+series. Sweeps run back-to-back here - see the Safety section above about
+Q3's heatsink.
 
 **After the series**: run `mpp-sdk compare-measured` (see
 `docs/methodology.md`) - it groups saved curves by measurement kind, so a
@@ -77,9 +104,33 @@ need that.
 ## Closed-loop runs
 
 A run drives the SEPIC continuously with a live algorithm, unlike the
-curve tracer's separate, bounded bleed path. There is no on-target safety
-cutoff for this beyond the duty ceiling, so `run-algorithm` adds its own
-client-side abort if a reading ever exceeds 40 V or 1 A.
+curve tracer's separate, bounded bleed path. See the Safety section above
+for what protects it.
+
+### From the workbench
+
+1. In **Measure**, click the **Run an algorithm** tab.
+2. Pick an **Algorithm**, and optionally a saved curve as **Reference
+   curve** (grades the run against it; leave it as "None" to run
+   ungraded).
+3. Leave **Duration** blank for the default (10 s), or set your own, up
+   to the server's safety backstop (600 s). **Starting duty cycle** picks
+   which maximum a local tracker hill-climbs to on a multi-peak curve.
+   **v_max**/**i_max** default to 40 V / 1 A and set the abort limits.
+4. Click **Start run** and confirm. This drives the real converter.
+5. Watch the live V/I/duty readouts and the operating point move on the
+   reference curve. Click **Stop run** to end it early.
+6. When it finishes, click **Open in player** to review the saved run, or
+   **Start another run**.
+
+In `--demo` mode, or with **Demo** capture mode selected, the form starts
+a *simulated* run instead (against a demo curve or a built-in reference
+panel). No board is touched, and the workbench marks the result
+"simulated" throughout so it is never mistaken for a measurement.
+
+### From the command line
+
+Useful for scripted or headless captures:
 
 1. `uv run mpp-sdk run-algorithm --algorithm "P&O" --duration-s 10 --label bench-check`.
    By default this also sweeps and saves a ground-truth curve first

@@ -2,8 +2,9 @@
 
 The ``SignalSource`` ABC is the seam between simulation and real hardware.
 Concrete sources include ``SimulatedSource`` (panel + converter + load
-running in software) and, eventually, a Raspberry-Pi-backed source that
-reads ADC channels and writes a hardware-PWM duty cycle.
+running in software) and ``SpiMcuSource``, a Raspberry-Pi-backed source that
+talks to the RP2040 firmware over SPI to read ``(V, I)`` and write a duty
+cycle.
 """
 
 from .base import SignalSource

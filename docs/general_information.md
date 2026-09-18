@@ -27,7 +27,7 @@ swapped.
         └──────────────────┴──► RP2040 (firmware, Rust)
                                     │ SPI
                                     ▼
-                            Raspberry Pi 5 (Python SDK)
+                            Raspberry Pi (Python SDK)
 ```
 
 - **Panels:** two Hissuma PSF10MONO (10 W each) in **series**. Series wiring
@@ -41,8 +41,8 @@ swapped.
   amplifier into the on-chip ADC as an analog cross-check), and talks to
   the Pi over SPI. Firmware is in **Rust**. It is also the deployment
   target for the final algorithm.
-- **Raspberry Pi 5:** hosts the Python SDK, and the algorithm during
-  hardware-in-the-loop (HIL) testing.
+- **Raspberry Pi:** hosts the Python SDK, and the algorithm during
+  hardware-in-the-loop (HIL) testing. See `AGENTS.md` for the target model.
 
 ## The four SDK pillars
 
@@ -60,7 +60,7 @@ The seam is `SignalSource`: an algorithm only ever calls `read() → (V, I)` and
 
 ## Minimum PV theory
 
-A solar panel's current–voltage (I-V) relationship follows the **single-diode
+A solar panel's current-voltage (I-V) relationship follows the **single-diode
 model**:
 
 $$I(V) = I_\text{ph} - I_0\left(e^{V/(n V_t)} - 1\right) - \frac{V + I R_s}{R_{sh}},$$
@@ -75,7 +75,7 @@ thermal voltage. The key consequences:
   $P = VI$ peaks. MPPT's whole job is to *find and hold* this point as
   irradiance and temperature change.
 
-**Power curve:** $P(V) = V\cdot I(V)$ is bell-shaped with one peak — *under
+**Power curve:** $P(V) = V\cdot I(V)$ is bell-shaped with one peak - *under
 uniform light*. The MPP moves with conditions, which is why a closed-loop
 tracker is needed rather than a fixed operating point.
 
@@ -108,7 +108,7 @@ what lets us demonstrate it. Two panels in **parallel** would keep a
 single-peak curve and hide the effect.
 
 Hardware limits for the series string: $V_\text{oc} \approx 34$ V,
-$I_\text{sc} \approx 0.79$ A — the SEPIC is designed for $\le 40$ V, $\le 1$ A.
+$I_\text{sc} \approx 0.79$ A - the SEPIC is designed for $\le 40$ V, $\le 1$ A.
 
 ## Getting started
 
@@ -119,10 +119,11 @@ uv run harness/animate.py --shade --duty 0.1   # watch the local-maximum trap
 uv run harness/compare_cyclic.py # the ranking measurement (chaotic shading)
 uv run harness/compare_bank.py   # the sim-to-real test-case bank
 uv run harness/compare_noise.py  # robustness vs measurement noise
+uv run mpp-sdk compare-measured  # grade algorithms against a captured curve
 uv run pytest -q                 # run the test suite
 ```
 
-Every script above is also reachable through one dispatcher —
+Every script above is also reachable through one dispatcher -
 `uv run mpp-sdk --help` lists all of them (`uv run mpp-sdk compare-static`,
 `uv run mpp-sdk animate --shade`, ...); each stays directly runnable on
 its own too, as shown here.
@@ -131,3 +132,7 @@ Every `compare_*` script prints a "how to read the metrics" guide before
 its table. See `docs/methodology.md` for the full measurement methodology,
 `docs/algorithms/` for one-page references on each MPPT method, and
 `docs/rationale.md` for the design decisions behind the project.
+
+The web workbench (`uv run mpp-sdk curve-tracer-web`) captures real panel
+I-V curves and can drive closed-loop runs on the bench. See
+`docs/measurement_procedure.md` for the capture checklist.

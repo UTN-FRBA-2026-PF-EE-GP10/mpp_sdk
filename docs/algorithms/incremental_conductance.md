@@ -40,8 +40,15 @@ steady), multiply through by $V\,\Delta V$ and compare signs:
 $$\operatorname{sign}\!\big(\Delta I\, V + I\, \Delta V\big)
 \quad\text{against}\quad \operatorname{sign}(\Delta V).$$
 
-When they agree, the operating point is left of the MPP. The special case
-$\Delta V \approx 0$ falls back to the sign of $\Delta I$.
+When they agree, the operating point is left of the MPP.
+
+The special case $\Delta V \approx 0$ (division would blow up) falls back to
+the sign of $\Delta I$: rising current ($\Delta I > 0$) is read as left of the
+MPP (raise $V$), falling current ($\Delta I < 0$) as right of it (lower $V$),
+and $\Delta I \approx 0$ as at the MPP (hold).
+
+On the first call there is no previous sample, so the controller records
+$(V, I)$ as the reference and perturbs by one step, same as P&O.
 
 ## SEPIC sign convention
 
@@ -54,7 +61,7 @@ replacement for P&O.
 - **vs. P&O:** the explicit MPP condition lets it hold still at the peak,
   reducing steady-state oscillation, and it responds more cleanly to fast
   irradiance changes.
-- **Partial shading:** still a local, gradient-following method — it is
+- **Partial shading:** still a local, gradient-following method. It is
   **trapped on local maxima** just like P&O.
 
 ## Implementation

@@ -84,8 +84,11 @@ describe('trailUpTo', () => {
 })
 
 function curve(path: string): CurveRecord {
+  // The server derives a curve's id from its filename stem - keep that
+  // relationship here, since findCurveForRun matches against both.
+  const id = path.split('/').pop()!.replace(/\.json$/, '')
   return {
-    id: path,
+    id,
     path,
     captured_at: '2026-09-13T08:00:00Z',
     label: 'ref',
@@ -112,6 +115,11 @@ describe('findCurveForRun', () => {
   it('matches on the basename, since curve_ref is a filename and path is a full path', () => {
     const record = curve('/data/curves/20260908T120000Z-baseline.json')
     expect(findCurveForRun([record], '20260908T120000Z-baseline.json')).toBe(record)
+  })
+
+  it('matches on the bare id, the form a run started from the web UI stores', () => {
+    const record = curve('/data/curves/20260908T120000Z-baseline.json')
+    expect(findCurveForRun([record], '20260908T120000Z-baseline')).toBe(record)
   })
 
   it('is null when no fetched curve matches the ref', () => {

@@ -16,7 +16,7 @@ local maximum. Scan-and-track avoids this in two stages: first **scan** the
 whole operating range to locate the global peak, then **track** it locally for
 low-ripple steady state.
 
-## Stage 1 — Scan
+## Stage 1: Scan
 
 Sweep the duty cycle across its full range in fixed increments and record the
 power at each point:
@@ -27,17 +27,18 @@ $$D_k = D_\text{min} + k\,\Delta D_\text{scan},
 
 Because raising $D$ lowers the panel voltage on a SEPIC
 ($R_\text{eff}(D)=R_\text{load}\left(\tfrac{1-D}{D}\right)^2$), sweeping $D$ sweeps
-the *entire* P-V curve, so every local peak — including the global one — is
+the *entire* P-V curve, so every local peak, including the global one, is
 sampled. The global-best duty is
 
 $$D^\star = D_{\,\arg\max_k P(D_k)}.$$
 
-The scan costs $N{+}1$ control steps of swept (sub-optimal) power before locking
-on — the price paid to *guarantee* the global peak rather than a local one.
+The scan costs $N{+}1$ control steps of swept (sub-optimal) power before
+locking on. This is the price paid to *guarantee* the global peak rather than
+a local one.
 A measurement at step $k$ corresponds to the duty commanded at step $k{-}1$, so
 powers are recorded with one step of latency.
 
-## Stage 2 — Track
+## Stage 2: Track
 
 Jump to $D^\star$ and hand off to a local tracker (here `PerturbAndObserve`)
 with a small step $\Delta D_\text{track}\ll\Delta D_\text{scan}$. This refines
@@ -48,35 +49,11 @@ the operating point onto the exact peak and keeps steady-state oscillation low.
 The shading pattern changes over the day, moving the global peak. Without a
 re-acquisition mechanism the controller is a plain P&O after the first scan
 and stays trapped on whatever peak the change leaves it on. Two mechanisms
-are available:
-
-- **Change-detection restart** (on by default): a `PowerChangeDetector`
-  watches $P = V\,I$ during Stage 2 and restarts Stage 1 when the power
-  moves by more than `restart_threshold` (relative) for `restart_samples`
-  consecutive steps - the $|\Delta P|/P$ condition used by PSO-MPPT
-  restart schemes. The detector arms itself only once the power is
-  stable after hand-off. This matters because the scan ends at $D_\max$
-  with the input capacitor drained, and at low irradiance the recharge is
-  panel-current-limited and spans many control periods - without the
-  arming delay, that recovery transient alone could trigger a spurious
-  restart loop. The reference follows the power while it stays in-band,
-  so the detector fires on *steps*, not on slow drifts the tracker
-  follows anyway.
-- **Periodic re-scan** every $M$ control steps (`rescan_period`, off by
-  default):
-
-$$\text{if } (\text{steps since last scan}) \ge M \;\Rightarrow\; \text{restart Stage 1}.$$
-
-The periodic variant is the safety net for the one case the detector cannot
-see: a new, higher peak appearing elsewhere while the tracked power barely
-moves. Frequent re-scans track moving shade better but spend more time
-off-MPP during each sweep.
-
-A sweep of `rescan_period` on the cyclic schedule (`harness/compare_rescan.py`)
-shows eta energy peaking at 95.0 % at period 1000, matching the derived
-optimum $P^\star \approx 1034$ from an expected-loss model; period 250
-actually traps *more* often, not less, since each extra sweep is itself a
-window for a mid-scan change. See `restart_policy.md` for the full model.
+restart Stage 1: a `PowerChangeDetector` watching $P = V\,I$ during Stage 2
+(on by default), and an unconditional periodic re-scan every `rescan_period`
+steps (off by default). Both are shared with `ParticleSwarm`; see
+`restart_policy.md` for how each one works, and for the derivation behind the
+deployed `rescan_period`.
 
 ## Trade-offs
 
@@ -90,12 +67,12 @@ window for a mid-scan change. See `restart_policy.md` for the full model.
 
 `mpp_sdk.ScanAndTrack(initial_duty, scan_step, track_step, min_duty, max_duty,
 rescan_period, restart_threshold, restart_samples)`. State is one power array
-of length $N{+}1$ plus the embedded P&O and the four-scalar restart detector —
+of length $N{+}1$ plus the embedded P&O and the four-scalar restart detector,
 small and bounded, suitable for the MCU port.
 
 ## References
 
 Patel & Agarwal (2008), *MPPT scheme for PV systems operating under partially
 shaded conditions*, IEEE TIE. Dolara et al. (2016), *A novel MPPT algorithm
-for photovoltaic systems under dynamic partial shading — Recurrent scan and
+for photovoltaic systems under dynamic partial shading: Recurrent scan and
 track method*, IEEE ICRERA.

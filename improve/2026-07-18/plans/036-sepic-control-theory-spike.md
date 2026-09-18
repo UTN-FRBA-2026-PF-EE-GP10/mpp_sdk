@@ -42,7 +42,7 @@
   plan requires the same board-limit safety abort pattern as plan 034 -
   see "Safety" below, non-negotiable.
 - **Depends on**: none structurally, but plan 034
-  (`improve/2026-07-18/plans/034-hardware-mppt-runs.md`) already builds
+  (DONE; see `run_control_loop` in `scripts/run_algorithm.py`) already builds
   the `run_control_loop`-style safety-abort pattern this plan reuses -
   if 034 has landed, Stage 1's on-target step should reuse its abort
   logic rather than reimplementing it; if not, Stage 1 implements its own

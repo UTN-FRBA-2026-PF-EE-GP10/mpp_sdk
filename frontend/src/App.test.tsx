@@ -282,4 +282,59 @@ describe('App remeasure workflow', () => {
     await waitFor(() => expect(deleteCurve).toHaveBeenCalledWith('live-1'))
     await waitFor(() => expect(screen.queryByText(/Remeasure pending/)).toBeNull())
   })
+
+  it('only consumes a pending remeasure when the save lands under its own kind', async () => {
+    vi.mocked(fetchCurves).mockResolvedValue([liveCurve(1)])
+    vi.mocked(fetchRuns).mockResolvedValue([])
+    vi.mocked(fetchLiveSweep).mockResolvedValue({
+      points: [
+        { v: 0, i: 0.2 },
+        { v: 20, i: 0 },
+      ],
+      partial: [],
+      active: false,
+      link: 'ok',
+      seq: 1,
+      commandError: null,
+      demoSource: false,
+    })
+    vi.mocked(saveCurve).mockResolvedValue({ path: '/data/curves/new.json' })
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    renderApp()
+    await waitFor(() => expect(within(baselineNavRow()).getByText('1')).toBeTruthy())
+
+    await startRemeasureFromBaselinePane()
+    const capturingUnder = screen.getByText('Capturing under:').parentElement!
+
+    // Save under a different kind while the baseline remeasure is still
+    // pending - an unrelated save must not consume it or delete anything.
+    fireEvent.click(within(capturingUnder).getByText('Dimmed'))
+    fireEvent.change(screen.getByPlaceholderText(/label, e.g/), {
+      target: { value: 'unrelated dimmed capture' },
+    })
+    await waitFor(() =>
+      expect(isDisabled(screen.getByText('Save curve').closest('button')!)).toBe(false),
+    )
+    fireEvent.click(screen.getByText('Save curve'))
+
+    await waitFor(() => expect(saveCurve).toHaveBeenCalledTimes(1))
+    expect(deleteCurve).not.toHaveBeenCalled()
+    expect(screen.getByText(/Remeasure pending/)).toBeTruthy()
+
+    // Now save under the remeasure's own kind (baseline) - this is the
+    // save it was actually waiting for. A successful save clears the
+    // label box, so this one needs its own label typed again.
+    fireEvent.click(within(capturingUnder).getByText('Baseline'))
+    fireEvent.change(screen.getByPlaceholderText(/label, e.g/), {
+      target: { value: 'baseline replacement' },
+    })
+    await waitFor(() =>
+      expect(isDisabled(screen.getByText('Save curve').closest('button')!)).toBe(false),
+    )
+    fireEvent.click(screen.getByText('Save curve'))
+
+    await waitFor(() => expect(saveCurve).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(deleteCurve).toHaveBeenCalledWith('live-1'))
+    await waitFor(() => expect(screen.queryByText(/Remeasure pending/)).toBeNull())
+  })
 })
