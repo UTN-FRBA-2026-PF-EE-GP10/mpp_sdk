@@ -867,7 +867,7 @@
 resulting change in panel power <span class="arithmatex">\(P = V\cdot I\)</span>. If power increased, it keeps
 moving in the same direction; if power dropped, it reverses.</p>
 <h2 id="theory">Theory<a class="headerlink" href="#theory" title="Permanent link">&para;</a></h2>
-<p>The panel power–voltage curve <span class="arithmatex">\(P(V)\)</span> is unimodal (single peak) under uniform
+<p>The panel power-voltage curve <span class="arithmatex">\(P(V)\)</span> is unimodal (single peak) under uniform
 irradiance, with a single maximum where</p>
 <div class="arithmatex">\[\frac{dP}{dV} = 0.\]</div>
 <p>P&amp;O estimates the sign of <span class="arithmatex">\(dP/dV\)</span> from successive samples:</p>
@@ -902,15 +902,35 @@ irradiance, with a single maximum where</p>
 <td><span class="arithmatex">\(&lt; 0\)</span></td>
 <td>raise <span class="arithmatex">\(V\)</span></td>
 </tr>
+<tr>
+<td><span class="arithmatex">\(= 0\)</span></td>
+<td>any</td>
+<td>hold</td>
+</tr>
 </tbody>
 </table>
-<p>Compactly, the desired voltage move has the sign of <span class="arithmatex">\(\Delta P \cdot \Delta V\)</span>.</p>
+<p>For the four non-zero rows, the desired voltage move has the sign of
+<span class="arithmatex">\(\Delta P \cdot \Delta V\)</span>. The implementation does not compute that product
+directly: it holds only when <span class="arithmatex">\(\Delta P = 0\)</span>, and otherwise raises <span class="arithmatex">\(V\)</span> unless
+<span class="arithmatex">\(\Delta P \cdot \Delta V &gt; 0\)</span>. So the edge case <span class="arithmatex">\(\Delta V \approx 0\)</span> with
+<span class="arithmatex">\(\Delta P \neq 0\)</span> (duty already saturated at a bound, so the last perturbation
+did not move <span class="arithmatex">\(V\)</span>) falls into the "raise <span class="arithmatex">\(V\)</span>" branch rather than holding. This
+is harmless in practice: it only arises while <span class="arithmatex">\(D\)</span> is clamped, where the move
+is a no-op anyway.</p>
+<p>On the very first call there is no previous sample to compare against, so the
+controller just records <span class="arithmatex">\((V, P)\)</span> as the reference and perturbs by one
+<span class="arithmatex">\(+\Delta D\)</span> step, picking an arbitrary starting direction.</p>
 <h2 id="sepic-sign-convention">SEPIC sign convention<a class="headerlink" href="#sepic-sign-convention" title="Permanent link">&para;</a></h2>
 <p>For the SEPIC stage, the reflected input resistance is</p>
 <div class="arithmatex">\[R_\text{eff}(D) = R_\text{load}\left(\frac{1-D}{D}\right)^2,\]</div>
 <p>which is <strong>monotonically decreasing</strong> in <span class="arithmatex">\(D\)</span>. So raising <span class="arithmatex">\(D\)</span> lowers the panel
-voltage. The voltage decision is therefore mapped to its inverse in duty:</p>
-<div class="arithmatex">\[D_{k+1} = D_k - \operatorname{sign}(\Delta P\,\Delta V)\,\Delta D.\]</div>
+voltage. The voltage decision is therefore mapped to its inverse in duty: to
+raise <span class="arithmatex">\(V\)</span>, decrease <span class="arithmatex">\(D\)</span>; to lower <span class="arithmatex">\(V\)</span>, increase <span class="arithmatex">\(D\)</span>. Written against the
+table above,</p>
+<div class="arithmatex">\[D_{k+1} = D_k - \operatorname{sign}(\Delta P\,\Delta V)\,\Delta D
+\quad\text{when } \Delta V \neq 0,\]</div>
+<p>with the <span class="arithmatex">\(\Delta V \approx 0\)</span>, <span class="arithmatex">\(\Delta P \neq 0\)</span> edge case handled as
+described above.</p>
 <h2 id="trade-offs">Trade-offs<a class="headerlink" href="#trade-offs" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>Step size <span class="arithmatex">\(\Delta D\)</span>:</strong> large <span class="arithmatex">\(\Rightarrow\)</span> fast convergence but large
@@ -922,7 +942,8 @@ voltage. The voltage decision is therefore mapped to its inverse in duty:</p>
 </ul>
 <h2 id="implementation">Implementation<a class="headerlink" href="#implementation" title="Permanent link">&para;</a></h2>
 <p><code>mpp_sdk.PerturbAndObserve(initial_duty, step_size, min_duty, max_duty)</code>.
-Fixed step, minimal state (last <span class="arithmatex">\(V\)</span>, last <span class="arithmatex">\(P\)</span>), one branch — ideal for an MCU.</p>
+Fixed step, minimal state (last <span class="arithmatex">\(V\)</span>, last <span class="arithmatex">\(P\)</span>), a few branches, no loops.
+Ideal for an MCU.</p>
 <h2 id="references">References<a class="headerlink" href="#references" title="Permanent link">&para;</a></h2>
 <p>Femia et al. (2005), <em>Optimization of perturb and observe MPPT</em>, IEEE TPEL. Ahmed
 &amp; Salam (2015), <em>An Improved Method to Predict the Position of Maximum Power Point

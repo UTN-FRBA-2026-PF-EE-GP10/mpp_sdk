@@ -430,6 +430,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#safety" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Safety
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#before-you-start" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -481,6 +492,34 @@
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Closed-loop runs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#from-the-workbench" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        From the workbench
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#from-the-command-line" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        From the command line
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -764,6 +803,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#safety" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Safety
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#before-you-start" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -816,6 +866,34 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Closed-loop runs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#from-the-workbench" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        From the workbench
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#from-the-command-line" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        From the command line
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
     </ul>
@@ -840,8 +918,24 @@
 
 <h1 id="measurement-procedure">Measurement procedure<a class="headerlink" href="#measurement-procedure" title="Permanent link">&para;</a></h1>
 <p>A checklist for running a bench measurement session: capturing one curve,
-running a tilted series, and (once you have a board) a closed-loop run.
-See <code>README.md</code>'s Quickstart to install the <code>web</code> extra first.</p>
+running a tilted series, and a closed-loop run. See <code>README.md</code>'s
+Quickstart to install the <code>web</code> extra first.</p>
+<h2 id="safety">Safety<a class="headerlink" href="#safety" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Never expose the server to the internet or an untrusted network.</strong> It
+  has no login and no access control. Anyone who can reach it can drive
+  the SEPIC converter. Keep it on the bench network only, or reachable
+  through a VPN.</li>
+<li>The curve tracer's bleed path dissipates power in Q3 (a linear
+  MOSFET). Give it a heatsink and watch its temperature if you run sweeps
+  back-to-back - see <code>firmware/pipico_board/README.md</code>'s "Curve tracer"
+  section.</li>
+<li>A closed-loop run has no on-target safety cutoff besides the duty
+  ceiling. The Pi side aborts the run if a reading ever exceeds the
+  v_max/i_max limits, or if the SPI link drops mid-run. This protection
+  only exists while the controlling process (the workbench server, or
+  <code>run-algorithm</code>) is running.</li>
+</ul>
 <h2 id="before-you-start">Before you start<a class="headerlink" href="#before-you-start" title="Permanent link">&para;</a></h2>
 <ul>
 <li>[ ] Board wired and powered. See <code>firmware/pipico_board/README.md</code>'s
@@ -858,10 +952,19 @@ See <code>README.md</code>'s Quickstart to install the <code>web</code> extra fi
 <h2 id="capture-one-curve">Capture one curve<a class="headerlink" href="#capture-one-curve" title="Permanent link">&para;</a></h2>
 <ol>
 <li>Open <code>http://&lt;pi-host&gt;:8000/</code> (or <code>http://localhost:8000/</code> for
-   <code>--demo</code>).</li>
-<li>In the grid of measurement-kind cards, select <strong>baseline</strong> (or whatever
-   kind matches this capture - see "The tilted-panel procedure" below for
-   <code>tilted</code>).</li>
+   <code>--demo</code>). The workbench opens on <strong>Measure</strong>.</li>
+<li>Check the connection pill, top right. It also doubles as the capture
+   mode menu:</li>
+<li><strong>PICO connected</strong>: a real board, live sweeps. Use this for an
+     actual measurement.</li>
+<li><strong>Demo with PICO</strong>: a real board, but the "Demo curve" buttons
+     replay a curve already stored in the firmware instead of measuring
+     one. Only selectable while a board is linked.</li>
+<li><strong>Demo</strong>: no board at all, bundled sample data, nothing saved.
+   Leave it on <strong>PICO connected</strong> for a real capture.</li>
+<li>Under "Capturing under:", select the tab that matches this capture:
+   <strong>Baseline</strong> here (or <strong>Tilted</strong> - see "The tilted-panel procedure"
+   below).</li>
 <li>Click <strong>Start Measurement</strong>. Wait for the curve to finish plotting - a
    few seconds, since the sweep auto-ranges and takes 20 points.</li>
 <li>Fill in the save form: a <strong>label</strong> (a short description - suggest a
@@ -870,7 +973,8 @@ See <code>README.md</code>'s Quickstart to install the <code>web</code> extra fi
    distance, ambient light, anything unusual). Panel A is fixed at 90
    degrees and is not editable in the form. Leave panel B's tilt at 90
    degrees for a baseline capture (both panels matching).</li>
-<li>Click <strong>Save curve</strong>. Confirm it appears in the table below.</li>
+<li>Click <strong>Save curve</strong>. Confirm it appears in the "Saved curves" table
+   below, and under <strong>Curves &gt; Baseline</strong> in the sidebar.</li>
 </ol>
 <h2 id="the-tilted-panel-procedure">The tilted-panel procedure<a class="headerlink" href="#the-tilted-panel-procedure" title="Permanent link">&para;</a></h2>
 <p><strong>Why</strong>: this bench's array is two panels and a lamp. The light travels
@@ -888,15 +992,16 @@ partial-shading behavior against a real, physically varying array shape
 instead of an inferred one.</p>
 <p><strong>Procedure for a sweep</strong>: repeat "Capture one curve" once per angle,
 with two changes each time: physically set panel B to the next detent
-before clicking <strong>Start Measurement</strong>, and select the <strong>tilted</strong> card
-(not <strong>baseline</strong>) so the save request's measurement kind matches. The
+before clicking <strong>Start Measurement</strong>, and select the <strong>Tilted</strong> tab
+(not <strong>Baseline</strong>) so the save request's measurement kind matches. The
 save form's panel B selector is restricted to the five valid detents, so
 picking the wrong angle by typo is not possible - just make sure the
 selected value matches where the panel physically is. Use the same label
 prefix for the whole series with the angle appended, e.g.
 <code>"2026-09-08 tilted 45deg"</code>, so the saved-curves table stays readable.
 Keep every other condition (lighting, panel A) constant across the whole
-series.</p>
+series. Sweeps run back-to-back here - see the Safety section above about
+Q3's heatsink.</p>
 <p><strong>After the series</strong>: run <code>mpp-sdk compare-measured</code> (see
 <code>docs/methodology.md</code>) - it groups saved curves by measurement kind, so a
 consistently labeled tilted series shows up together automatically.</p>
@@ -908,9 +1013,30 @@ consistently labeled tilted series shows up together automatically.</p>
 need that.</p>
 <h2 id="closed-loop-runs">Closed-loop runs<a class="headerlink" href="#closed-loop-runs" title="Permanent link">&para;</a></h2>
 <p>A run drives the SEPIC continuously with a live algorithm, unlike the
-curve tracer's separate, bounded bleed path. There is no on-target safety
-cutoff for this beyond the duty ceiling, so <code>run-algorithm</code> adds its own
-client-side abort if a reading ever exceeds 40 V or 1 A.</p>
+curve tracer's separate, bounded bleed path. See the Safety section above
+for what protects it.</p>
+<h3 id="from-the-workbench">From the workbench<a class="headerlink" href="#from-the-workbench" title="Permanent link">&para;</a></h3>
+<ol>
+<li>In <strong>Measure</strong>, click the <strong>Run an algorithm</strong> tab.</li>
+<li>Pick an <strong>Algorithm</strong>, and optionally a saved curve as <strong>Reference
+   curve</strong> (grades the run against it; leave it as "None" to run
+   ungraded).</li>
+<li>Leave <strong>Duration</strong> blank for the default (10 s), or set your own, up
+   to the server's safety backstop (600 s). <strong>Starting duty cycle</strong> picks
+   which maximum a local tracker hill-climbs to on a multi-peak curve.
+   <strong>v_max</strong>/<strong>i_max</strong> default to 40 V / 1 A and set the abort limits.</li>
+<li>Click <strong>Start run</strong> and confirm. This drives the real converter.</li>
+<li>Watch the live V/I/duty readouts and the operating point move on the
+   reference curve. Click <strong>Stop run</strong> to end it early.</li>
+<li>When it finishes, click <strong>Open in player</strong> to review the saved run, or
+   <strong>Start another run</strong>.</li>
+</ol>
+<p>In <code>--demo</code> mode, or with <strong>Demo</strong> capture mode selected, the form starts
+a <em>simulated</em> run instead (against a demo curve or a built-in reference
+panel). No board is touched, and the workbench marks the result
+"simulated" throughout so it is never mistaken for a measurement.</p>
+<h3 id="from-the-command-line">From the command line<a class="headerlink" href="#from-the-command-line" title="Permanent link">&para;</a></h3>
+<p>Useful for scripted or headless captures:</p>
 <ol>
 <li><code>uv run mpp-sdk run-algorithm --algorithm "P&amp;O" --duration-s 10 --label bench-check</code>.
    By default this also sweeps and saves a ground-truth curve first

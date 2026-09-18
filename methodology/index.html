@@ -414,10 +414,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#three-harnesses-three-questions" class="md-nav__link">
+  <a href="#five-harnesses-five-questions" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Three harnesses, three questions
+        Five harnesses, five questions
       
     </span>
   </a>
@@ -819,10 +819,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#three-harnesses-three-questions" class="md-nav__link">
+  <a href="#five-harnesses-five-questions" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Three harnesses, three questions
+        Five harnesses, five questions
       
     </span>
   </a>
@@ -938,7 +938,7 @@ temperature. Every metric compares what the controller actually captured
 against that ideal. The reference comes from the same panel model the
 simulation runs on (<code>TabulatedPanel.mpp()</code>). So the simulated world and
 the grading curve are identical, by construction.</p>
-<h2 id="three-harnesses-three-questions">Three harnesses, three questions<a class="headerlink" href="#three-harnesses-three-questions" title="Permanent link">&para;</a></h2>
+<h2 id="five-harnesses-five-questions">Five harnesses, five questions<a class="headerlink" href="#five-harnesses-five-questions" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
 <tr>
@@ -1005,7 +1005,7 @@ methodology and remain as smoke tests and demos.</p>
 <p>A global search (full duty sweep, or a PSO pass) physically drives the
 converter across its range. Exploration costs energy, so it cannot run
 continuously. After the search, a local P&amp;O holds the found peak. The
-open question is <em>when to search again</em> — it moves the results more than
+open question is <em>when to search again</em> - it moves the results more than
 the choice of search itself does. Two mechanisms, both on the controller
 side and both fed only by <span class="arithmatex">\((V, I)\)</span>:</p>
 <ol>
@@ -1023,11 +1023,11 @@ side and both fed only by <span class="arithmatex">\((V, I)\)</span>:</p>
    bounding the worst-case trapped time to the period.</li>
 </ol>
 <p>Measured on the cyclic schedule: local trackers trap in roughly half the
-shaded plateaus, at 44-67 % of available power. The configured global
+shaded plateaus, at 44-66 % of available power. The configured global
 trackers cut traps to a handful, at the price of up to ~1 s
 re-acquisition when only the backstop can free them. The deployed period
 (1000 steps) is not a guess: an expected-loss model derives an optimum
-<span class="arithmatex">\(P^\star \approx 1034\)</span>, which lands on the empirically measured best (eta
+<span class="arithmatex">\(P^\star \approx 1035\)</span>, which lands on the empirically measured best (eta
 peaks at 95.0 % at period 1000). See <code>algorithms/restart_policy.md</code> for
 the full derivation.</p>
 <h2 id="measurement-noise">Measurement noise<a class="headerlink" href="#measurement-noise" title="Permanent link">&para;</a></h2>
@@ -1065,7 +1065,7 @@ layer:</p>
 transmission (cover on, cover off, steady shade), plus the controller's
 configured start duty for the Voc-side trap case. The ground truth
 <span class="arithmatex">\(P_\text{mpp}\)</span> comes from a calibration duty sweep with the condition
-held — the rig is its own instrument.</p>
+held - the rig is its own instrument.</p>
 <h2 id="measured-curves-replaying-real-panel-data">Measured curves: replaying real panel data<a class="headerlink" href="#measured-curves-replaying-real-panel-data" title="Permanent link">&para;</a></h2>
 <p><code>mpp_sdk.curves</code> captures I-V sweeps from the curve tracer. RP2040
 firmware sweeps the bench panel's whole voltage range and streams the
@@ -1079,7 +1079,9 @@ panel model with what the panel actually did, not a model of it.</p>
 <p>This lets partial-shading scenarios (one panel physically tilted or
 shaded relative to the other) be graded against the array's real P-V
 shape, instead of an inferred multi-modal curve, before any algorithm is
-committed to firmware.</p>
+committed to firmware. See <code>docs/measurement_procedure.md</code> for the bench
+capture checklist, including the tilt convention and closed-loop hardware
+runs (<code>RunRecord</code>, <code>mpp-sdk run-algorithm</code>).</p>
 <h2 id="the-numbers-the-simulation-assumes">The numbers the simulation assumes<a class="headerlink" href="#the-numbers-the-simulation-assumes" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
