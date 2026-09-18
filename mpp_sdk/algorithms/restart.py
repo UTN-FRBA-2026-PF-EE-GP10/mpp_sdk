@@ -33,8 +33,8 @@ class PowerChangeDetector:
     appearing while the tracked power barely moves) is what a periodic
     re-scan is for — see ``ScanAndTrack(rescan_period=...)``.
 
-    State is four scalars and the update is branch-light — MCU-portable by
-    design (see ``AGENTS.md``).
+    State is three scalars (plus three fixed configuration values) and the
+    update is branch-light — MCU-portable by design (see ``AGENTS.md``).
 
     Parameters
     ----------
