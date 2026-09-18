@@ -43,7 +43,7 @@ pub static DUTY: AtomicU16 = AtomicU16::new(0); // 0 % initial - safe boot state
 const DUTY_MAX: u16 = 62258;
 pub static MEAS_V_MV: AtomicU16 = AtomicU16::new(0);
 pub static MEAS_I_MA: AtomicU16 = AtomicU16::new(0);
-pub static MEAS_T_CC: AtomicI16 = AtomicI16::new(0);
+pub static MEAS_T_CC: AtomicI16 = AtomicI16::new(spi_slave_pio::TEMP_NOT_AVAILABLE_CC);
 // On-chip ADC, in millivolts. PWR/VOUT are calibrated (divider scaling
 // applied). Input_Curr (the INA281 cross-check for MEAS_I_MA) is still
 // raw pin mV - its gain/shunt are not resolved yet.
@@ -127,17 +127,17 @@ async fn sensors_task(
 
         tick = tick.wrapping_add(1);
 
-        if tick % 100 == 0 {
+        if tick.is_multiple_of(100) {
             if max_ok {
                 match max.read_temp_centi_c(&mut spi, &mut cs_tp100) {
                     Ok(t) => MEAS_T_CC.store(t, Ordering::Relaxed),
                     Err(e) => {
-                        if tick % 1000 == 0 {
+                        if tick.is_multiple_of(1000) {
                             defmt::error!("MAX31865 read failed: {}", e);
                         }
                     }
                 }
-            } else if tick % 5000 == 0 {
+            } else if tick.is_multiple_of(5000) {
                 max_ok = max.init(&mut spi, &mut cs_tp100).is_ok();
                 if max_ok {
                     defmt::info!("MAX31865 ready");
@@ -216,7 +216,10 @@ async fn onchip_adc_task(
 
     let mut tick: u32 = 0;
     loop {
-        let pwr_uncal = adc.blocking_read(&mut ch_pwr).ok().map(|raw| divider_to_actual_mv(raw_to_mv(raw)));
+        let pwr_uncal = adc
+            .blocking_read(&mut ch_pwr)
+            .ok()
+            .map(|raw| divider_to_actual_mv(raw_to_mv(raw)));
         let v_ina = MEAS_V_MV.load(Ordering::Relaxed);
 
         // Cross-calibrate against INA229 if Vin is high enough to be valid (> 1.0 V).
@@ -228,7 +231,11 @@ async fn onchip_adc_task(
         };
 
         if let Some(pwr) = pwr_uncal {
-            let pwr_corr = if let Some((vina, _)) = cal_ratio { vina as u16 } else { pwr };
+            let pwr_corr = if let Some((vina, _)) = cal_ratio {
+                vina as u16
+            } else {
+                pwr
+            };
             MEAS_ADC_PWR_MV.store(pwr_corr, Ordering::Relaxed);
         }
 

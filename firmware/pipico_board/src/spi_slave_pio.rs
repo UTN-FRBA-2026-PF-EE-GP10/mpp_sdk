@@ -184,14 +184,12 @@ pub fn init(
     (sm0, origin)
 }
 
-/// Sentinel for "no valid temperature reading" - the MAX31865 driver is
-/// implemented but disabled (incompatible probe on the bench, see
-/// `main.rs`/README's "Panel temperature" section). An implausible real
+/// Sentinel for "no valid temperature reading" (no working probe on the
+/// MAX31865, or no reading yet). An implausible real
 /// centi-Celsius reading, so it's unambiguous on the Python side rather
-/// than a real (if extreme) value. Swap for a live `MEAS_T_CC` read once
-/// the sensor is re-enabled.
-#[allow(dead_code)]
-const TEMP_NOT_AVAILABLE_CC: i16 = i16::MIN;
+/// than a real (if extreme) value. `MEAS_T_CC` starts at this value, so
+/// the frame reports "no reading" until the MAX31865 produces one.
+pub(crate) const TEMP_NOT_AVAILABLE_CC: i16 = i16::MIN;
 
 /// XOR checksum over the given data bytes - catches single/few-bit
 /// corruption cheaply on both a `no_std` target and in plain Python.
@@ -497,13 +495,7 @@ fn build_tx_buf_for_state(state: &BulkState) -> [u32; MAX_FRAME_LEN] {
             let vout = MEAS_ADC_VOUT_MV.load(Ordering::Relaxed);
             let temp = MEAS_T_CC.load(Ordering::Relaxed);
             let ack = 0x80 | (sweep.count as u8);
-            buf[..FRAME_LEN].copy_from_slice(&build_tx_frame(
-                v,
-                i,
-                vout,
-                temp,
-                ack,
-            ));
+            buf[..FRAME_LEN].copy_from_slice(&build_tx_frame(v, i, vout, temp, ack));
         }
         BulkState::Idle => {
             let v = MEAS_V_MV.load(Ordering::Relaxed);

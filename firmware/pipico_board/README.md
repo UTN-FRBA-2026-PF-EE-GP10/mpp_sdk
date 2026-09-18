@@ -297,12 +297,14 @@ logged at ~1 Hz in millivolts.
 
 #### DNL correction (`adc_cal.rs`)
 
-The RP2040's 12-bit SAR ADC has a known silicon erratum (RP2040-E11):
-bit-weight mismatch at the bit-9 boundary creates 7 deterministic DNL spikes
-at codes 512, 1024, 1536, 2048, 2560, 3072, and 3584. `adc_cal::dnl_fix()`
-linearizes the raw reading by compensating each spike's excess width and the
-resulting cumulative offset. This runs on every sample before `raw_to_mv()`
-and costs < 10 cycles on Cortex-M0+.
+The RP2040's 12-bit SAR ADC has a known silicon erratum (RP2040-E11): four
+codes are unusually wide (DNL spikes), at 512, 1536, 2560 and 3584. Every
+code above a spike reads low by its excess width. `adc_cal::dnl_fix()` adds
+those widths back on every sample, before `raw_to_mv()`.
+
+The spike codes are fixed by the silicon. The widths in `DNL_SPIKES` are
+nominal estimates, not measured on this die. A slow ramp into the ADC
+would measure them.
 
 #### INA229 cross-calibration
 
@@ -312,17 +314,21 @@ firmware compares the on-chip ADC's `ADC_PWR` reading (after DNL fix +
 divider scaling) against the INA229's `MEAS_V_MV` (±0.1% Vbus accuracy) and
 derives a correction ratio. This ratio is then applied to all three channels:
 
-- **`ADC_PWR`** → replaced directly by `MEAS_V_MV` (the INA229 reference).
-- **`ADC_VOUT`** → `vout_uncal × (v_ina / pwr_uncal)`.
-- **`ADC_Input_Curr`** → `iin_uncal × (v_ina / pwr_uncal)` (pin mV, not
-  yet resolved to current — the INA281's gain/shunt are not applied yet).
+- **`ADC_PWR`**: replaced directly by `MEAS_V_MV` (the INA229 reference).
+  It is then no longer an independent check of the INA229.
+- **`ADC_VOUT`**: `vout_uncal * (v_ina / pwr_uncal)`.
+- **`ADC_Input_Curr`**: `iin_uncal * (v_ina / pwr_uncal)` (pin mV, not yet
+  resolved to current - the INA281's gain/shunt are not applied yet).
 
 The correction factor is logged at 1 Hz as `cal=X.XX` (1.00 = no correction,
 0.00 = bypassed). Calibration is bypassed when either reading is below 1.0 V
 to avoid dividing by zero or amplifying floor noise at low input.
 
-This eliminates the need for an offline calibration step — the ADC
-self-corrects at runtime and tracks temperature drift and Vref wander.
+The ratio corrects what the channels share: ADC gain and the reference
+voltage. It cannot correct what they do not share. It also contains the
+`ADC_PWR` divider's own resistor error, which `ADC_VOUT` (a separate 1%
+divider) and `ADC_Input_Curr` (no divider) do not have. So `ADC_VOUT` still
+needs a meter check before its reading is cited.
 
 - **`ADC_PWR`/`ADC_VOUT`**: Both go through a 3x 75k + 10k
   (1% tolerance) divider, ADC reading across the 10k: `V_actual = V_adc *
