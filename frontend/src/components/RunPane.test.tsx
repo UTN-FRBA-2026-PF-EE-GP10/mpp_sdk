@@ -6,6 +6,7 @@ import { UnitsProvider } from '@/components/UnitsProvider'
 import { CaptureModeContext } from '@/lib/captureMode'
 import { DEMO_CURVES } from '@/lib/demoFixtures'
 import type { LiveRunState, RunSummary } from '@/lib/runs'
+import { SetupModeContext, type SetupMode } from '@/lib/setupMode'
 import type { CurveRecord } from '@/types'
 
 vi.mock('@/lib/api', () => ({
@@ -46,11 +47,13 @@ function chartDatasets(scope: HTMLElement = document.body): { label: string; n: 
     .flatMap((el) => JSON.parse(el.getAttribute('data-datasets') ?? '[]'))
 }
 
-function renderPane(curves: CurveRecord[] = []) {
+function renderPane(curves: CurveRecord[] = [], setup: SetupMode = 'full') {
   return render(
     <ThemeProvider>
       <UnitsProvider>
-        <RunPane curves={curves} connectionStatus="connected" onRunSaved={vi.fn()} />
+        <SetupModeContext.Provider value={{ mode: setup, setMode: vi.fn() }}>
+          <RunPane curves={curves} connectionStatus="connected" onRunSaved={vi.fn()} />
+        </SetupModeContext.Provider>
       </UnitsProvider>
     </ThemeProvider>,
   )
@@ -64,9 +67,11 @@ function renderPaneInSandbox(curves: CurveRecord[] = []) {
   return render(
     <ThemeProvider>
       <UnitsProvider>
-        <CaptureModeContext.Provider value={{ mode: 'simulated', setMode: vi.fn() }}>
-          <RunPane curves={curves} connectionStatus="disconnected" onRunSaved={vi.fn()} />
-        </CaptureModeContext.Provider>
+        <SetupModeContext.Provider value={{ mode: 'full', setMode: vi.fn() }}>
+          <CaptureModeContext.Provider value={{ mode: 'simulated', setMode: vi.fn() }}>
+            <RunPane curves={curves} connectionStatus="disconnected" onRunSaved={vi.fn()} />
+          </CaptureModeContext.Provider>
+        </SetupModeContext.Provider>
       </UnitsProvider>
     </ThemeProvider>,
   )
@@ -112,7 +117,9 @@ describe('RunPane', () => {
     render(
       <ThemeProvider>
         <UnitsProvider>
-          <RunPane curves={[]} connectionStatus="disconnected" onRunSaved={vi.fn()} />
+          <SetupModeContext.Provider value={{ mode: 'full', setMode: vi.fn() }}>
+            <RunPane curves={[]} connectionStatus="disconnected" onRunSaved={vi.fn()} />
+          </SetupModeContext.Provider>
         </UnitsProvider>
       </ThemeProvider>,
     )
@@ -365,6 +372,19 @@ describe('RunPane', () => {
 
     fireEvent.click(screen.getByText('Stop run'))
     await waitFor(() => expect(stopRun).toHaveBeenCalledTimes(1))
+  })
+
+  it('shows the Full-setup load hint by default', async () => {
+    vi.mocked(fetchRunConfig).mockReturnValue(new Promise(() => {}))
+    renderPane([], 'full')
+    expect(screen.getByText(/20 Ohm \(two 10 Ohm, 10 W in series\)/)).toBeTruthy()
+  })
+
+  it('shows the Single-setup load hint instead', async () => {
+    vi.mocked(fetchRunConfig).mockReturnValue(new Promise(() => {}))
+    renderPane([], 'single')
+    expect(screen.getByText(/10 Ohm, 10 W on the output \(MPP near D = 0.37\)/)).toBeTruthy()
+    expect(screen.queryByText(/two 10 Ohm, 10 W in series/)).toBeNull()
   })
 
   it('shows the setup form when the server reports no run in progress on mount', async () => {

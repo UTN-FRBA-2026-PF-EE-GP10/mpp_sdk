@@ -13,6 +13,7 @@ import { formatCapturedAt } from '@/lib/format'
 import { abortReasonMessage } from '@/lib/liveRun'
 import { findCurveForRun, referenceCurveMessage } from '@/lib/runPlayback'
 import { useSandbox } from '@/lib/sandbox'
+import { useSetupMode } from '@/lib/setupMode'
 import { useUnits } from '@/lib/units'
 import type { LiveRunState, RunSummary } from '@/lib/runs'
 import type { ConnectionStatus, CurveRecord } from '@/types'
@@ -212,6 +213,11 @@ function RunSetupForm({
   const [vMax, setVMax] = useState<number | null>(null)
   const [iMax, setIMax] = useState<number | null>(null)
   const [vOutMax, setVOutMax] = useState<number | null>(null)
+  const { mode: setupMode } = useSetupMode()
+  const loadHint =
+    setupMode === 'single'
+      ? '10 Ohm, 10 W on the output (MPP near D = 0.37)'
+      : '20 Ohm (two 10 Ohm, 10 W in series)'
 
   const algorithms = config?.algorithms ?? []
 
@@ -382,8 +388,8 @@ function RunSetupForm({
       </p>
       {!simulated && (
         <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-300">
-          Put a load on the converter output (for example 10 Ohm, 10 W) before a real run. With no
-          load the SEPIC output climbs far above the panel voltage.
+          Put a load on the converter output ({loadHint}) before a real run. With no load the
+          SEPIC output climbs far above the panel voltage.
         </p>
       )}
       {!simulated && curveRef === '' && (

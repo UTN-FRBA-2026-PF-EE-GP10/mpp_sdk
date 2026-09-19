@@ -1,9 +1,10 @@
 import { Menu } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ConnectionIndicator } from '@/components/ConnectionIndicator'
 import { CurveCategoryPane } from '@/components/CurveCategoryPane'
 import { MeasurePane } from '@/components/MeasurePane'
 import { RunDatePane } from '@/components/RunDatePane'
+import { SetupModeToggle } from '@/components/SetupModeToggle'
 import { Sidebar, type Selection } from '@/components/Sidebar'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { UnitToggle } from '@/components/UnitToggle'
@@ -12,6 +13,7 @@ import { deleteCurve, fetchCurves, fetchMeasurementKinds, fetchRuns } from '@/li
 import { useCaptureMode } from '@/lib/captureMode'
 import { DEMO_CURVES, DEMO_RUNS } from '@/lib/demoFixtures'
 import { groupRunsByDate, type RunSummary } from '@/lib/runs'
+import { useSetupMode } from '@/lib/setupMode'
 import {
   isLiveConnection,
   MEASUREMENT_KINDS,
@@ -36,6 +38,20 @@ interface PendingRemeasure {
 export default function App() {
   const { mode: captureMode, setMode: setCaptureMode } = useCaptureMode()
   const sandboxEnabled = captureMode === 'simulated'
+  const { mode: setupMode } = useSetupMode()
+  const [showFullReminder, setShowFullReminder] = useState(false)
+  // Fires only on the actual single -> full transition, not on mount (Full
+  // is the default, and nagging every fresh load would make the reminder
+  // background noise). Two panels reach ~34-44 V, well past what the Low
+  // ADC range reads cleanly, so it's worth a nudge every time someone
+  // flips into that setup, not just the first time ever.
+  const prevSetupModeRef = useRef(setupMode)
+  useEffect(() => {
+    if (prevSetupModeRef.current === 'single' && setupMode === 'full') {
+      setShowFullReminder(true)
+    }
+    prevSetupModeRef.current = setupMode
+  }, [setupMode])
   // The link poll has nothing to do while fully offline - see
   // useConnectionStatus's docstring and ConnectionIndicator's one-shot
   // check, which takes over answering "is a link available" in that mode.
@@ -236,6 +252,7 @@ export default function App() {
             simulated" - wrapping beats clipping the one control here that
             also doubles as the capture-mode trigger. */}
         <div className="flex flex-wrap items-center gap-2">
+          <SetupModeToggle />
           <UnitToggle />
           <ThemeToggle />
           {/* Connection health is a link problem, not a per-pane one - it
@@ -248,6 +265,22 @@ export default function App() {
       {sandboxEnabled && (
         <div className="border-b border-violet-500/30 bg-violet-500/10 px-4 py-1.5 text-center text-xs font-medium text-violet-700 dark:text-violet-300">
           Demo mode - showing bundled sample data, not your library. No live board, no writes.
+        </div>
+      )}
+
+      {showFullReminder && (
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-500/30 bg-amber-500/10 px-4 py-1.5 text-xs font-medium text-amber-800 dark:text-amber-300">
+          <span>
+            Full setup: two panels reach ~34-44 V - switch the ADC range to Mid and recalibrate
+            (docs/hardware_v1/calibration.md).
+          </span>
+          <button
+            type="button"
+            onClick={() => setShowFullReminder(false)}
+            className="shrink-0 rounded-md border border-amber-500/40 px-2 py-0.5 hover:bg-amber-500/20"
+          >
+            Dismiss
+          </button>
         </div>
       )}
 

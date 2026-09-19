@@ -3,13 +3,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { CurveWorkbench } from './CurveWorkbench'
 import { ThemeProvider } from '@/components/ThemeProvider'
 import { UnitsProvider } from '@/components/UnitsProvider'
+import { SetupModeContext, type SetupMode } from '@/lib/setupMode'
+import type { PanelSetup } from '@/types'
 
 vi.mock('@/lib/api', () => ({
   fetchLiveSweep: vi.fn(() => new Promise(() => {})),
   startSweep: vi.fn().mockResolvedValue(undefined),
   startDemoSweep: vi.fn().mockResolvedValue(undefined),
   releaseRelay: vi.fn().mockResolvedValue(undefined),
-  saveCurve: vi.fn().mockResolvedValue(undefined),
+  saveCurve: vi.fn().mockResolvedValue({ path: '/data/curves/new.json' }),
 }))
 
 // This suite drives a real state transition through the demo replay
@@ -23,25 +25,36 @@ vi.mock('@/lib/api', () => ({
 // fighting an unrelated jsdom incompatibility.
 vi.mock('react-chartjs-2', () => ({ Line: () => null }))
 
-import { releaseRelay, saveCurve, startDemoSweep, startSweep } from '@/lib/api'
+import { fetchLiveSweep, releaseRelay, saveCurve, startDemoSweep, startSweep } from '@/lib/api'
 
 afterEach(() => {
   cleanup()
   vi.clearAllMocks()
 })
 
-function renderWorkbench(demo: boolean, opts: { emphasizeReplay?: boolean } = {}) {
+function renderWorkbench(
+  demo: boolean,
+  opts: {
+    emphasizeReplay?: boolean
+    setup?: SetupMode
+    onSaved?: (kind: string) => void
+    initialPanels?: PanelSetup[]
+  } = {},
+) {
   return render(
     <ThemeProvider>
       <UnitsProvider>
-        <CurveWorkbench
-          kind="baseline"
-          records={[]}
-          connected={!demo}
-          onSaved={vi.fn()}
-          demo={demo}
-          emphasizeReplay={opts.emphasizeReplay ?? false}
-        />
+        <SetupModeContext.Provider value={{ mode: opts.setup ?? 'full', setMode: vi.fn() }}>
+          <CurveWorkbench
+            kind="baseline"
+            records={[]}
+            connected={!demo}
+            onSaved={opts.onSaved ?? vi.fn()}
+            demo={demo}
+            emphasizeReplay={opts.emphasizeReplay ?? false}
+            initialPanels={opts.initialPanels}
+          />
+        </SetupModeContext.Provider>
       </UnitsProvider>
     </ThemeProvider>,
   )
@@ -140,6 +153,101 @@ describe('CurveWorkbench in Demo with PICO mode (emphasizeReplay, not demo)', ()
     renderWorkbench(false, { emphasizeReplay: true })
     expect(screen.getByText(/Demo with PICO:/)).toBeTruthy()
     expect(screen.queryByText(/^Demo mode:/)).toBeNull()
+  })
+})
+
+describe('CurveWorkbench setup mode', () => {
+  async function renderWithCapture(opts: Parameters<typeof renderWorkbench>[1] = {}) {
+    vi.mocked(fetchLiveSweep).mockResolvedValue({
+      points: [
+        { v: 0, i: 0.2 },
+        { v: 20, i: 0 },
+      ],
+      partial: [],
+      active: false,
+      link: 'ok',
+      seq: 1,
+      commandError: null,
+      demoSource: false,
+    })
+    renderWorkbench(false, opts)
+    // A default label so Save curve's enablement below depends only on
+    // `hasCapture` - tests that care about a specific label set their own
+    // afterward, overwriting this one.
+    fireEvent.change(screen.getByPlaceholderText(/label, e.g/), { target: { value: 'capture' } })
+    await waitFor(() => expect(isDisabled(button('Save curve'))).toBe(false))
+  }
+
+  it('shows Panel B tilt in Full setup (today\'s behaviour)', () => {
+    renderWorkbench(false, { setup: 'full' })
+    expect(screen.getByText('Panel B tilt')).toBeTruthy()
+  })
+
+  it('hides Panel B tilt in Single setup, and explains the one-panel setup instead', () => {
+    renderWorkbench(false, { setup: 'single' })
+    expect(screen.queryByText('Panel B tilt')).toBeNull()
+    expect(screen.getByText(/Single setup: one panel/)).toBeTruthy()
+  })
+
+  it('sends exactly one panel on a Single-setup save', async () => {
+    await renderWithCapture({ setup: 'single' })
+    fireEvent.change(screen.getByPlaceholderText(/label, e.g/), {
+      target: { value: 'single panel save' },
+    })
+    fireEvent.click(button('Save curve'))
+
+    await waitFor(() => expect(saveCurve).toHaveBeenCalled())
+    const call = vi.mocked(saveCurve).mock.calls[0][0]
+    expect(call.panels).toEqual([{ id: 'A', tilt_deg: 90 }])
+  })
+
+  it('sends both panels on a Full-setup save', async () => {
+    await renderWithCapture({ setup: 'full' })
+    fireEvent.change(screen.getByPlaceholderText(/label, e.g/), {
+      target: { value: 'full setup save' },
+    })
+    fireEvent.click(button('Save curve'))
+
+    await waitFor(() => expect(saveCurve).toHaveBeenCalled())
+    const call = vi.mocked(saveCurve).mock.calls[0][0]
+    expect(call.panels).toHaveLength(2)
+  })
+
+  it('remeasuring a two-panel curve in Single setup keeps panel B, rather than silently dropping it', async () => {
+    await renderWithCapture({
+      setup: 'single',
+      initialPanels: [
+        { id: 'A', tilt_deg: 90 },
+        { id: 'B', tilt_deg: 60 },
+      ],
+    })
+    // The field itself is back, driven by the curve being replaced, even
+    // though the global setup is Single - and a note says why.
+    expect(screen.getByText('Panel B tilt')).toBeTruthy()
+    expect(screen.getByText(/keeps both, even though setup is Single/)).toBeTruthy()
+
+    fireEvent.click(button('Save curve'))
+
+    await waitFor(() => expect(saveCurve).toHaveBeenCalled())
+    const call = vi.mocked(saveCurve).mock.calls[0][0]
+    expect(call.panels).toEqual([
+      { id: 'A', tilt_deg: 90 },
+      { id: 'B', tilt_deg: 60 },
+    ])
+  })
+
+  it('remeasuring a one-panel curve in Full setup does not gain a panel B it never had', async () => {
+    await renderWithCapture({
+      setup: 'full',
+      initialPanels: [{ id: 'A', tilt_deg: 90 }],
+    })
+    expect(screen.queryByText('Panel B tilt')).toBeNull()
+
+    fireEvent.click(button('Save curve'))
+
+    await waitFor(() => expect(saveCurve).toHaveBeenCalled())
+    const call = vi.mocked(saveCurve).mock.calls[0][0]
+    expect(call.panels).toEqual([{ id: 'A', tilt_deg: 90 }])
   })
 })
 

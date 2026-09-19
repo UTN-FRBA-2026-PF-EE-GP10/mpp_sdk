@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { CurveWorkbench } from '@/components/CurveWorkbench'
 import { RunPane } from '@/components/RunPane'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useCaptureMode } from '@/lib/captureMode'
+import { useSetupMode } from '@/lib/setupMode'
 import {
   getMeasurementKindInfo,
   type ConnectionStatus,
@@ -66,6 +67,18 @@ export function MeasurePane({
   const { mode } = useCaptureMode()
   const demo = mode === 'simulated'
   const emphasizeReplay = mode === 'firmware-replay'
+  const { mode: setupMode } = useSetupMode()
+  const single = setupMode === 'single'
+
+  // Tilted needs a panel B, which Single setup doesn't have - offered for
+  // capture only in Full. Filtered here rather than upstream (App.tsx's
+  // seedKinds) so a curve already saved under "tilted" still counts and
+  // groups normally everywhere else; this only hides it as a thing to
+  // capture next.
+  const capturableKinds = useMemo(
+    () => (single ? kinds.filter((k) => k !== 'tilted') : kinds),
+    [kinds, single],
+  )
 
   useEffect(() => {
     if (prefill) onPrefillApplied?.()
@@ -73,6 +86,19 @@ export function MeasurePane({
     // above for why this never needs to re-run.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Switching to Single while Tilted is the selected tab would otherwise
+  // leave `kind` pointing at a tab that just vanished from the row above -
+  // jump to the first still-capturable kind instead. Only reacts to
+  // `single` flipping, not to `kind`/`kinds` themselves, so it never fights
+  // an operator's own pick the rest of the time (same reasoning as the
+  // prefill effect above).
+  useEffect(() => {
+    if (single && kind === 'tilted') {
+      setKind(capturableKinds[0] ?? kind)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [single])
 
   return (
     <div className="flex flex-col gap-4">
@@ -89,13 +115,18 @@ export function MeasurePane({
             <p className="mb-2 text-sm text-muted-foreground">Capturing under:</p>
             <Tabs value={kind} onValueChange={(value) => setKind(value as string)}>
               <TabsList>
-                {kinds.map((k) => (
+                {capturableKinds.map((k) => (
                   <TabsTrigger key={k} value={k}>
                     {getMeasurementKindInfo(k).title}
                   </TabsTrigger>
                 ))}
               </TabsList>
             </Tabs>
+            {single && kinds.includes('tilted') && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                Tilted needs panel B - unavailable in Single setup.
+              </p>
+            )}
           </div>
 
           <CurveWorkbench

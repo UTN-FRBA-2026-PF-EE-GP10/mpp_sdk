@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { CurveDetailDialog } from '@/components/CurveDetailDialog'
 import { LiveChart } from '@/components/LiveChart'
 import { ProvenanceBadge } from '@/components/ProvenanceBadge'
@@ -18,6 +18,7 @@ import { useDemoCapture } from '@/hooks/useDemoCapture'
 import { useLiveSweep } from '@/hooks/useLiveSweep'
 import { saveCurve } from '@/lib/api'
 import { formatCapturedAt } from '@/lib/format'
+import { useSetupMode } from '@/lib/setupMode'
 import {
   getMeasurementKindInfo,
   PANEL_A_TILT_DEG,
@@ -30,6 +31,9 @@ const DEFAULT_PANELS: PanelSetup[] = [
   { id: 'A', tilt_deg: PANEL_A_TILT_DEG },
   { id: 'B', tilt_deg: 90 },
 ]
+
+// Single setup: the Luxen LN-10P session - one panel, no B to tilt.
+const SINGLE_PANELS: PanelSetup[] = [{ id: 'A', tilt_deg: PANEL_A_TILT_DEG }]
 
 function SaveCurveForm({
   kind,
@@ -54,11 +58,37 @@ function SaveCurveForm({
   initialNotes?: string
   initialPanels?: PanelSetup[]
 }) {
+  const { mode: setupMode } = useSetupMode()
+  const single = setupMode === 'single'
+  // `initialPanels` is a "read once" remeasure prefill, same contract as
+  // `initialLabel`/`initialNotes` (see their doc comments): MeasurePane
+  // clears it from its parent shortly after mount (`onPrefillApplied`),
+  // so the *prop* goes back to undefined a moment later even mid-remeasure.
+  // Capturing it once here, instead of reading the live prop on every
+  // render, is what lets a two-panel remeasure keep showing panel B for
+  // its whole lifetime regardless of the current global setup.
+  const [isRemeasure] = useState(() => initialPanels !== undefined)
+  const [remeasureHasPanelB] = useState(() => (initialPanels?.length ?? 0) > 1)
+  const showPanelB = isRemeasure ? remeasureHasPanelB : !single
+
   const [label, setLabel] = useState(initialLabel ?? '')
   const [notes, setNotes] = useState(initialNotes ?? '')
-  const [panels, setPanels] = useState<PanelSetup[]>(initialPanels ?? DEFAULT_PANELS)
+  const [panels, setPanels] = useState<PanelSetup[]>(
+    initialPanels ?? (single ? SINGLE_PANELS : DEFAULT_PANELS),
+  )
   const [status, setStatus] = useState<string>('')
   const [saving, setSaving] = useState(false)
+
+  // Only for a fresh capture (no remeasure prefill): flipping the global
+  // setup while this form is open must not leave a stale panel B in state
+  // once the field hides - otherwise a Single-mode save could still send
+  // two panels. A remeasure's own panel count is fixed at mount and never
+  // touched here.
+  useEffect(() => {
+    if (isRemeasure) return
+    setPanels(single ? SINGLE_PANELS : DEFAULT_PANELS)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [single])
 
   function updatePanelBTilt(tilt_deg: number) {
     setPanels((prev) => prev.map((p) => (p.id === 'B' ? { ...p, tilt_deg } : p)))
@@ -99,20 +129,22 @@ function SaveCurveForm({
       </div>
       <div className="flex flex-wrap items-center gap-3">
         <span className="text-sm text-muted-foreground">Panel A: fixed at 90° (reference)</span>
-        <label className="flex items-center gap-1.5 text-sm text-muted-foreground">
-          Panel B tilt
-          <select
-            value={panels.find((p) => p.id === 'B')?.tilt_deg ?? 90}
-            onChange={(e) => updatePanelBTilt(Number(e.target.value))}
-            className="rounded-md border bg-transparent px-2 py-1 text-sm"
-          >
-            {PANEL_B_TILT_OPTIONS_DEG.map((deg) => (
-              <option key={deg} value={deg}>
-                {deg}°
-              </option>
-            ))}
-          </select>
-        </label>
+        {showPanelB && (
+          <label className="flex items-center gap-1.5 text-sm text-muted-foreground">
+            Panel B tilt
+            <select
+              value={panels.find((p) => p.id === 'B')?.tilt_deg ?? 90}
+              onChange={(e) => updatePanelBTilt(Number(e.target.value))}
+              className="rounded-md border bg-transparent px-2 py-1 text-sm"
+            >
+              {PANEL_B_TILT_OPTIONS_DEG.map((deg) => (
+                <option key={deg} value={deg}>
+                  {deg}°
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <Button
           size="sm"
           onClick={handleSave}
@@ -127,10 +159,21 @@ function SaveCurveForm({
           {saving ? 'Saving...' : 'Save curve'}
         </Button>
       </div>
-      <p className="text-xs text-muted-foreground">
-        90° faces the lamp squarely (both panels matching = baseline); lower angles tilt panel B
-        right, away from the light.
-      </p>
+      {showPanelB ? (
+        <p className="text-xs text-muted-foreground">
+          90° faces the lamp squarely (both panels matching = baseline); lower angles tilt panel B
+          right, away from the light.
+        </p>
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          Single setup: one panel (A), fixed at 90° facing the lamp squarely.
+        </p>
+      )}
+      {isRemeasure && remeasureHasPanelB && single && (
+        <p className="text-xs text-muted-foreground">
+          This curve has two panels - the replacement keeps both, even though setup is Single.
+        </p>
+      )}
       {demo && (
         <p className="text-xs text-muted-foreground">
           Saving is unavailable in demo mode - a replay must not enter your real curve library.
