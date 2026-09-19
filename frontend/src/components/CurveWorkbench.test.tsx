@@ -4,7 +4,7 @@ import { CurveWorkbench } from './CurveWorkbench'
 import { ThemeProvider } from '@/components/ThemeProvider'
 import { UnitsProvider } from '@/components/UnitsProvider'
 import { SetupModeContext, type SetupMode } from '@/lib/setupMode'
-import type { PanelSetup } from '@/types'
+import type { CurveRecord, PanelSetup } from '@/types'
 
 vi.mock('@/lib/api', () => ({
   fetchLiveSweep: vi.fn(() => new Promise(() => {})),
@@ -30,6 +30,7 @@ import { fetchLiveSweep, releaseRelay, saveCurve, startDemoSweep, startSweep } f
 afterEach(() => {
   cleanup()
   vi.clearAllMocks()
+  window.localStorage.clear()
 })
 
 function renderWorkbench(
@@ -39,6 +40,7 @@ function renderWorkbench(
     setup?: SetupMode
     onSaved?: (kind: string) => void
     initialPanels?: PanelSetup[]
+    records?: CurveRecord[]
   } = {},
 ) {
   const tree = (setup: SetupMode) => (
@@ -47,7 +49,7 @@ function renderWorkbench(
         <SetupModeContext.Provider value={{ mode: setup, setMode: vi.fn() }}>
           <CurveWorkbench
             kind="baseline"
-            records={[]}
+            records={opts.records ?? []}
             connected={!demo}
             onSaved={opts.onSaved ?? vi.fn()}
             demo={demo}
@@ -263,6 +265,55 @@ describe('CurveWorkbench setup mode', () => {
     await waitFor(() => expect(saveCurve).toHaveBeenCalled())
     const call = vi.mocked(saveCurve).mock.calls[0][0]
     expect(call.panels).toEqual([{ id: 'A', tilt_deg: 90 }])
+  })
+})
+
+describe('CurveWorkbench save form accessibility', () => {
+  // Both fields used to carry only a placeholder, which disappears the
+  // moment someone types into them and isn't a reliable accessible name
+  // for a screen reader - give them a real one.
+  it('gives the label and notes inputs an accessible name', () => {
+    renderWorkbench(false)
+    expect(screen.getByRole('textbox', { name: 'Curve label' })).toBeTruthy()
+    expect(screen.getByRole('textbox', { name: 'Notes' })).toBeTruthy()
+  })
+})
+
+describe('CurveWorkbench saved-curves table', () => {
+  const record: CurveRecord = {
+    id: 'saved-1',
+    path: '/data/curves/saved-1.json',
+    captured_at: '2026-01-01T00:00:00Z',
+    label: 'Saved curve',
+    measurement: 'baseline',
+    panels: [{ id: 'A', tilt_deg: 90 }],
+    notes: '',
+    n_points: 2,
+    source: 'hardware',
+    voc: 20,
+    isc: 0.25,
+    p_mpp: 3.5,
+    points: [
+      { v: 0, i: 0.25 },
+      { v: 20, i: 0 },
+    ],
+  }
+
+  // Every other reading on the page (CurveMetadata, run readouts) follows
+  // the header's A/mA unit toggle - this table used to hardcode mA/mW
+  // regardless of it, which meant it could disagree with the rest of the
+  // screen about what unit a number was in.
+  it('shows Isc/P_mpp in milliamps/milliwatts by default', () => {
+    renderWorkbench(false, { records: [record] })
+    expect(screen.getByText('250.0 mA')).toBeTruthy()
+    expect(screen.getByText('3500.0 mW')).toBeTruthy()
+  })
+
+  it('follows the unit toggle into amps/watts', () => {
+    window.localStorage.setItem('mpp-sdk.units', 'base')
+    renderWorkbench(false, { records: [record] })
+    expect(screen.getByText('0.250 A')).toBeTruthy()
+    expect(screen.getByText('3.500 W')).toBeTruthy()
   })
 })
 

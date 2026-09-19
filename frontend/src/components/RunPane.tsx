@@ -350,8 +350,11 @@ function RunSetupForm({
           </span>
         </label>
 
-        <div className="flex gap-3">
-          <label className="flex flex-1 flex-col gap-1 text-sm text-muted-foreground">
+        {/* flex-wrap, not a fixed three-across row: at phone width three
+            flex-1 number inputs squeeze to illegibly narrow, so this lets
+            them drop to two rows instead. */}
+        <div className="flex flex-wrap gap-3">
+          <label className="flex min-w-[90px] flex-1 flex-col gap-1 text-sm text-muted-foreground">
             v_max (V)
             <input
               type="number"
@@ -360,7 +363,7 @@ function RunSetupForm({
               className="rounded-md border bg-transparent px-2 py-1.5 text-sm text-foreground"
             />
           </label>
-          <label className="flex flex-1 flex-col gap-1 text-sm text-muted-foreground">
+          <label className="flex min-w-[90px] flex-1 flex-col gap-1 text-sm text-muted-foreground">
             i_max (A)
             <input
               type="number"
@@ -369,7 +372,7 @@ function RunSetupForm({
               className="rounded-md border bg-transparent px-2 py-1.5 text-sm text-foreground"
             />
           </label>
-          <label className="flex flex-1 flex-col gap-1 text-sm text-muted-foreground">
+          <label className="flex min-w-[90px] flex-1 flex-col gap-1 text-sm text-muted-foreground">
             v_out_max (V)
             <input
               type="number"

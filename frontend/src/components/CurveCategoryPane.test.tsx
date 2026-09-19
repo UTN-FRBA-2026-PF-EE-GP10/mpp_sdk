@@ -89,7 +89,10 @@ describe('CurveCategoryPane', () => {
 
   it('opens the same expanded view on click, with download controls', () => {
     renderPane(<CurveCategoryPane kind="baseline" records={[record()]} />)
-    fireEvent.click(screen.getByRole('button', { name: /both flat/ }))
+    // Not getByRole('button', { name: /both flat/ }) - the tile's own
+    // action buttons name the curve too (see CurveDashboardPane's
+    // aria-labels), so that query would match more than the tile itself.
+    fireEvent.click(screen.getByText('both flat').closest('[role="button"]')!)
     expect(screen.getByText('Download JSON')).toBeTruthy()
     expect(screen.getByText('Download CSV')).toBeTruthy()
   })
