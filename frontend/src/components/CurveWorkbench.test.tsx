@@ -41,10 +41,10 @@ function renderWorkbench(
     initialPanels?: PanelSetup[]
   } = {},
 ) {
-  return render(
+  const tree = (setup: SetupMode) => (
     <ThemeProvider>
       <UnitsProvider>
-        <SetupModeContext.Provider value={{ mode: opts.setup ?? 'full', setMode: vi.fn() }}>
+        <SetupModeContext.Provider value={{ mode: setup, setMode: vi.fn() }}>
           <CurveWorkbench
             kind="baseline"
             records={[]}
@@ -56,8 +56,12 @@ function renderWorkbench(
           />
         </SetupModeContext.Provider>
       </UnitsProvider>
-    </ThemeProvider>,
+    </ThemeProvider>
   )
+  const result = render(tree(opts.setup ?? 'full'))
+  // Re-renders the same tree with another setup, so the form stays mounted
+  // and keeps its state, as it does when the header toggle is used.
+  return { ...result, setSetup: (setup: SetupMode) => result.rerender(tree(setup)) }
 }
 
 function button(text: string) {
@@ -170,13 +174,24 @@ describe('CurveWorkbench setup mode', () => {
       commandError: null,
       demoSource: false,
     })
-    renderWorkbench(false, opts)
+    const view = renderWorkbench(false, opts)
     // A default label so Save curve's enablement below depends only on
     // `hasCapture` - tests that care about a specific label set their own
     // afterward, overwriting this one.
     fireEvent.change(screen.getByPlaceholderText(/label, e.g/), { target: { value: 'capture' } })
     await waitFor(() => expect(isDisabled(button('Save curve'))).toBe(false))
+    return view
   }
+
+  it('drops panel B from a save after switching from Full to Single with the form open', async () => {
+    const view = await renderWithCapture({ setup: 'full' })
+    view.setSetup('single')
+    expect(screen.queryByText('Panel B tilt')).toBeNull()
+    fireEvent.click(button('Save curve'))
+
+    await waitFor(() => expect(saveCurve).toHaveBeenCalled())
+    expect(vi.mocked(saveCurve).mock.calls[0][0].panels).toEqual([{ id: 'A', tilt_deg: 90 }])
+  })
 
   it('shows Panel B tilt in Full setup (today\'s behaviour)', () => {
     renderWorkbench(false, { setup: 'full' })

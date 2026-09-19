@@ -31,10 +31,10 @@ function renderPane(
 ) {
   const kinds = opts.kinds ?? ['baseline']
   const byKind = new Map<string, CurveRecord[]>(kinds.map((k) => [k, []]))
-  return render(
+  const tree = (setup: SetupMode) => (
     <ThemeProvider>
       <UnitsProvider>
-        <SetupModeContext.Provider value={{ mode: opts.setup ?? 'full', setMode: vi.fn() }}>
+        <SetupModeContext.Provider value={{ mode: setup, setMode: vi.fn() }}>
           <CaptureModeContext.Provider value={{ mode, setMode: vi.fn() }}>
             <MeasurePane
               kinds={kinds}
@@ -48,8 +48,12 @@ function renderPane(
           </CaptureModeContext.Provider>
         </SetupModeContext.Provider>
       </UnitsProvider>
-    </ThemeProvider>,
+    </ThemeProvider>
   )
+  const result = render(tree(opts.setup ?? 'full'))
+  // Same tree with another setup: the pane stays mounted, as with the
+  // header toggle.
+  return { ...result, setSetup: (setup: SetupMode) => result.rerender(tree(setup)) }
 }
 
 function button(text: string) {
@@ -142,5 +146,17 @@ describe('MeasurePane setup mode', () => {
     const capturingUnder = screen.getByText('Capturing under:').parentElement!
     expect(within(capturingUnder).queryByText('Tilted')).toBeNull()
     expect(screen.getByText(/Tilted needs panel B/)).toBeTruthy()
+  })
+
+  it('moves off Tilted when the setup switches to Single while Tilted is selected', () => {
+    const view = renderPane('hardware', 'connected', { setup: 'full', kinds: ['baseline', 'tilted'] })
+    const capturingUnder = () => screen.getByText('Capturing under:').parentElement!
+    const tab = (name: string) => within(capturingUnder()).getByRole('tab', { name })
+    fireEvent.click(tab('Tilted'))
+    expect(tab('Tilted').getAttribute('aria-selected')).toBe('true')
+
+    view.setSetup('single')
+    expect(within(capturingUnder()).queryByRole('tab', { name: 'Tilted' })).toBeNull()
+    expect(tab('Baseline').getAttribute('aria-selected')).toBe('true')
   })
 })

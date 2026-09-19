@@ -15,13 +15,15 @@ const LABEL: Record<SetupMode, string> = { single: 'Single', full: 'Full' }
 export function SetupModeToggle() {
   const { mode, setMode } = useSetupMode()
   const next = NEXT[mode]
+  const description = `Setup: ${LABEL[mode]} (${mode === 'full' ? 'two panels' : 'one panel'}). Click to switch to ${LABEL[next]}.`
 
   return (
     <Button
       variant="outline"
       size="sm"
       onClick={() => setMode(next)}
-      title={`Setup: ${LABEL[mode]} panel${mode === 'full' ? 's' : ''}. Click to switch to ${LABEL[next]}.`}
+      title={description}
+      aria-label={description}
     >
       {LABEL[mode]}
     </Button>
