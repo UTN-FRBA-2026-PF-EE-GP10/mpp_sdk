@@ -268,6 +268,17 @@ describe('CurveWorkbench setup mode', () => {
   })
 })
 
+describe('CurveWorkbench save form accessibility', () => {
+  // Both fields used to carry only a placeholder, which disappears the
+  // moment someone types into them and isn't a reliable accessible name
+  // for a screen reader - give them a real one.
+  it('gives the label and notes inputs an accessible name', () => {
+    renderWorkbench(false)
+    expect(screen.getByRole('textbox', { name: 'Curve label' })).toBeTruthy()
+    expect(screen.getByRole('textbox', { name: 'Notes' })).toBeTruthy()
+  })
+})
+
 describe('CurveWorkbench saved-curves table', () => {
   const record: CurveRecord = {
     id: 'saved-1',

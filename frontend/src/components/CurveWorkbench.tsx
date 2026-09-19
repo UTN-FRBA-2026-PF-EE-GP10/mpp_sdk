@@ -119,12 +119,14 @@ function SaveCurveForm({
           value={label}
           onChange={(e) => setLabel(e.target.value)}
           placeholder="label, e.g. 'both flat, midday sun'"
+          aria-label="Curve label"
           className="min-w-[220px] flex-1 rounded-md border bg-transparent px-3 py-1.5 text-sm"
         />
         <input
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           placeholder="notes (optional)"
+          aria-label="Notes"
           className="min-w-[160px] flex-1 rounded-md border bg-transparent px-3 py-1.5 text-sm"
         />
       </div>
