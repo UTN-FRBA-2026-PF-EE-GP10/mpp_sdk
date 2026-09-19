@@ -904,7 +904,7 @@ swapped.</p>
         └──────────────────┴──► RP2040 (firmware, Rust)
                                     │ SPI
                                     ▼
-                            Raspberry Pi 5 (Python SDK)
+                            Raspberry Pi (Python SDK)
 </code></pre></div>
 <ul>
 <li><strong>Panels:</strong> two Hissuma PSF10MONO (10 W each) in <strong>series</strong>. Series wiring
@@ -918,8 +918,8 @@ swapped.</p>
   amplifier into the on-chip ADC as an analog cross-check), and talks to
   the Pi over SPI. Firmware is in <strong>Rust</strong>. It is also the deployment
   target for the final algorithm.</li>
-<li><strong>Raspberry Pi 5:</strong> hosts the Python SDK, and the algorithm during
-  hardware-in-the-loop (HIL) testing.</li>
+<li><strong>Raspberry Pi:</strong> hosts the Python SDK, and the algorithm during
+  hardware-in-the-loop (HIL) testing. See <code>AGENTS.md</code> for the target model.</li>
 </ul>
 <h2 id="the-four-sdk-pillars">The four SDK pillars<a class="headerlink" href="#the-four-sdk-pillars" title="Permanent link">&para;</a></h2>
 <p>The library is decoupled into four pillars, each verifiable in isolation:</p>
@@ -957,7 +957,7 @@ swapped.</p>
 <p>The seam is <code>SignalSource</code>: an algorithm only ever calls <code>read() → (V, I)</code> and
 <code>write(D)</code>. Whether that is a simulation or a real board is invisible to it.</p>
 <h2 id="minimum-pv-theory">Minimum PV theory<a class="headerlink" href="#minimum-pv-theory" title="Permanent link">&para;</a></h2>
-<p>A solar panel's current–voltage (I-V) relationship follows the <strong>single-diode
+<p>A solar panel's current-voltage (I-V) relationship follows the <strong>single-diode
 model</strong>:</p>
 <div class="arithmatex">\[I(V) = I_\text{ph} - I_0\left(e^{V/(n V_t)} - 1\right) - \frac{V + I R_s}{R_{sh}},\]</div>
 <p>where <span class="arithmatex">\(I_\text{ph}\)</span> is the light-generated (photo) current, <span class="arithmatex">\(I_0\)</span> the diode
@@ -970,7 +970,7 @@ thermal voltage. The key consequences:</p>
   <span class="arithmatex">\(P = VI\)</span> peaks. MPPT's whole job is to <em>find and hold</em> this point as
   irradiance and temperature change.</li>
 </ul>
-<p><strong>Power curve:</strong> <span class="arithmatex">\(P(V) = V\cdot I(V)\)</span> is bell-shaped with one peak — <em>under
+<p><strong>Power curve:</strong> <span class="arithmatex">\(P(V) = V\cdot I(V)\)</span> is bell-shaped with one peak - <em>under
 uniform light</em>. The MPP moves with conditions, which is why a closed-loop
 tracker is needed rather than a fixed operating point.</p>
 <h2 id="what-pvlib-contributes">What pvlib contributes<a class="headerlink" href="#what-pvlib-contributes" title="Permanent link">&para;</a></h2>
@@ -996,7 +996,7 @@ and can get <strong>stuck on a local maximum</strong>, losing power. This is why
 what lets us demonstrate it. Two panels in <strong>parallel</strong> would keep a
 single-peak curve and hide the effect.</p>
 <p>Hardware limits for the series string: <span class="arithmatex">\(V_\text{oc} \approx 34\)</span> V,
-<span class="arithmatex">\(I_\text{sc} \approx 0.79\)</span> A — the SEPIC is designed for <span class="arithmatex">\(\le 40\)</span> V, <span class="arithmatex">\(\le 1\)</span> A.</p>
+<span class="arithmatex">\(I_\text{sc} \approx 0.79\)</span> A - the SEPIC is designed for <span class="arithmatex">\(\le 40\)</span> V, <span class="arithmatex">\(\le 1\)</span> A.</p>
 <h2 id="getting-started">Getting started<a class="headerlink" href="#getting-started" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code>uv<span class="w"> </span>sync<span class="w"> </span>--extra<span class="w"> </span>pvlib<span class="w">            </span><span class="c1"># install with the pvlib adapter</span>
 uv<span class="w"> </span>run<span class="w"> </span>harness/compare_static.py<span class="w"> </span><span class="c1"># full-sun vs partial-shade comparison</span>
@@ -1004,9 +1004,10 @@ uv<span class="w"> </span>run<span class="w"> </span>harness/animate.py<span cla
 uv<span class="w"> </span>run<span class="w"> </span>harness/compare_cyclic.py<span class="w"> </span><span class="c1"># the ranking measurement (chaotic shading)</span>
 uv<span class="w"> </span>run<span class="w"> </span>harness/compare_bank.py<span class="w">   </span><span class="c1"># the sim-to-real test-case bank</span>
 uv<span class="w"> </span>run<span class="w"> </span>harness/compare_noise.py<span class="w">  </span><span class="c1"># robustness vs measurement noise</span>
+uv<span class="w"> </span>run<span class="w"> </span>mpp-sdk<span class="w"> </span>compare-measured<span class="w">  </span><span class="c1"># grade algorithms against a captured curve</span>
 uv<span class="w"> </span>run<span class="w"> </span>pytest<span class="w"> </span>-q<span class="w">                 </span><span class="c1"># run the test suite</span>
 </code></pre></div>
-<p>Every script above is also reachable through one dispatcher —
+<p>Every script above is also reachable through one dispatcher -
 <code>uv run mpp-sdk --help</code> lists all of them (<code>uv run mpp-sdk compare-static</code>,
 <code>uv run mpp-sdk animate --shade</code>, ...); each stays directly runnable on
 its own too, as shown here.</p>
@@ -1014,6 +1015,9 @@ its own too, as shown here.</p>
 its table. See <code>docs/methodology.md</code> for the full measurement methodology,
 <code>docs/algorithms/</code> for one-page references on each MPPT method, and
 <code>docs/rationale.md</code> for the design decisions behind the project.</p>
+<p>The web workbench (<code>uv run mpp-sdk curve-tracer-web</code>) captures real panel
+I-V curves and can drive closed-loop runs on the bench. See
+<code>docs/measurement_procedure.md</code> for the capture checklist.</p>
 
 
 

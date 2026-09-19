@@ -481,6 +481,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#why-every-curve-and-run-records-where-it-came-from" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why every curve and run records where it came from
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#why-tabulated-panels-in-the-harness" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -941,6 +952,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#why-every-curve-and-run-records-where-it-came-from" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why every curve and run records where it came from
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#why-tabulated-panels-in-the-harness" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1005,7 +1027,7 @@ things:</p>
    "simulation version" and "hardware version" to drift apart.</li>
 <li><strong>Independent verification.</strong> Each pillar (models, converters,
    algorithms, IO) is tested in isolation. A test that needs two pillars
-   at once means the abstraction leaks — fix the seam, not the test.</li>
+   at once means the abstraction leaks - fix the seam, not the test.</li>
 <li><strong>A natural MCU deployment target.</strong> The seam sits exactly where the
    firmware boundary falls: from the Pi's point of view, the RP2040 <em>is</em>
    a <code>SignalSource</code>.</li>
@@ -1026,15 +1048,15 @@ bench, the converter runs in Discontinuous Conduction Mode (DCM) at light
 loads (high load resistance). In DCM, the inductor current falls to zero
 within each switching cycle. That breaks the continuous flux-balance
 assumption and pushes the output voltage above the ideal CCM ratio.</p>
-<p>During bench bring-up (plan 002), at a fixed commanded duty <span class="arithmatex">\(D = 0.5\)</span> and
+<p>During early bench bring-up, at a fixed commanded duty <span class="arithmatex">\(D = 0.5\)</span> and
 <span class="arithmatex">\(V_\text{in} = 3.3\text{ V}\)</span>, the measured output voltage varied a lot
 with load:</p>
 <ul>
-<li><strong>~3.3 V into a 10 <span class="arithmatex">\(\Omega\)</span> load</strong> — matches the ideal CCM ratio
+<li><strong>~3.3 V into a 10 <span class="arithmatex">\(\Omega\)</span> load</strong> - matches the ideal CCM ratio
   <span class="arithmatex">\(3.3 \cdot \frac{0.5}{1-0.5} = 3.3\text{ V}\)</span>.</li>
-<li><strong>~6.0 V into a 10 k<span class="arithmatex">\(\Omega\)</span> load</strong> — DCM boost behavior under light
+<li><strong>~6.0 V into a 10 k<span class="arithmatex">\(\Omega\)</span> load</strong> - DCM boost behavior under light
   load.</li>
-<li><strong>~7.0 V open-circuit</strong> — the unloaded DCM ceiling.</li>
+<li><strong>~7.0 V open-circuit</strong> - the unloaded DCM ceiling.</li>
 </ul>
 <p>Knowing this regime transition matters for hardware validation and
 characterization.</p>
@@ -1049,26 +1071,26 @@ control loop needed, the RP2040 firmware has two operating modes
   communication drops for more than 500 ms.</li>
 <li><strong><code>FirmwareMode::PowerSupply</code></strong>: the RP2040 runs as an autonomous
   closed-loop bench power supply. It regulates output voltage
-  <span class="arithmatex">\(V_\text{out}\)</span> to a fixed setpoint (<code>POWER_SUPPLY_VOUT_MV</code>, e.g. 12 V)
+  <span class="arithmatex">\(V_\text{out}\)</span> to a fixed setpoint (<code>POWER_SUPPLY_VOUT_MV</code>, 5 V)
   using on-chip ADC feedback (<code>MEAS_ADC_VOUT_MV</code>). In this mode the local
   regulator keeps running even if the host SPI connection drops.</li>
 </ul>
 <p>For implementation details, setpoint configuration, and watchdog
-behavior — including the <code>ClosedLoop</code> feed-forward-plus-trim algorithm —
+behavior - including the <code>ClosedLoop</code> feed-forward-plus-trim algorithm -
 see <a href="https://github.com/UTN-FRBA-2026-PF-EE-GP10/mpp_sdk/blob/main/firmware/pipico_board/README.md#operating-modes"><code>firmware/pipico_board/README.md</code>'s "Operating Modes"
 section</a>.
 That file lives outside <code>docs/</code>, so it is linked directly on GitHub.</p>
 <h2 id="why-these-algorithms-in-this-order">Why these algorithms, in this order<a class="headerlink" href="#why-these-algorithms-in-this-order" title="Permanent link">&para;</a></h2>
 <ol>
-<li><strong>P&amp;O</strong> — the baseline every MPPT paper compares against. Fixed-step,
+<li><strong>P&amp;O</strong> - the baseline every MPPT paper compares against. Fixed-step,
    minimal state, trivial to port to an MCU.</li>
-<li><strong>Incremental Conductance</strong> — the other classical method. It has an
+<li><strong>Incremental Conductance</strong> - the other classical method. It has an
    explicit "at-the-MPP" condition that reduces steady-state oscillation.</li>
-<li><strong>Fuzzy logic</strong> — a <em>local</em> tracker with a graduated step. It shows
+<li><strong>Fuzzy logic</strong> - a <em>local</em> tracker with a graduated step. It shows
    that the speed/oscillation trade-off can be eased without a panel
    model. It is <strong>not</strong> global, and saying so plainly is part of the
    contribution.</li>
-<li><strong>Scan-and-track</strong> and <strong>Particle Swarm Optimization</strong> — the genuine
+<li><strong>Scan-and-track</strong> and <strong>Particle Swarm Optimization</strong> - the genuine
    <strong>global</strong> MPPT methods, needed to escape the local maxima that
    partial shading creates. Scan-and-track is deterministic, and the
    easiest to bound in static RAM and defend mathematically. PSO is the
@@ -1087,7 +1109,7 @@ capacitor:</p>
 <div class="arithmatex">\[C\frac{dV}{dt} = I_\text{panel}(V) - \frac{V}{R_\text{eff}(D)}.\]</div>
 <p><code>DynamicSimulatedSource</code> integrates this each control step. This is still
 a <em>quasi-static</em> electrical model, with no switching ripple. Switching-
-level fidelity is PLECS's job — it simulates the converter cycle by
+level fidelity is PLECS's job - it simulates the converter cycle by
 cycle. The two are complementary: the SDK validates the <strong>algorithm</strong>,
 PLECS validates the <strong>hardware</strong>.</p>
 <h2 id="why-a-restart-policy-instead-of-a-smarter-detector">Why a restart policy instead of a smarter detector<a class="headerlink" href="#why-a-restart-policy-instead-of-a-smarter-detector" title="Permanent link">&para;</a></h2>
@@ -1109,8 +1131,19 @@ flags, and makes the noise level an explicit, seeded experiment
 parameter. The same wrapper doubles as a bench sanity check later:
 measure the real sense chain's sigma, run the harness at that level, and
 the simulated degradation should bracket the measured one.</p>
+<h2 id="why-every-curve-and-run-records-where-it-came-from">Why every curve and run records where it came from<a class="headerlink" href="#why-every-curve-and-run-records-where-it-came-from" title="Permanent link">&para;</a></h2>
+<p>A replayed or simulated curve looks exactly like a real measurement once
+it is saved as JSON. The same is true for a closed-loop run: a trace from
+<code>SimulatedSource</code> looks like one from the real SEPIC board. Grading an
+algorithm against data that is not what it claims to be would be a
+silent, uncorrectable error in the results. So <code>CurveRecord.source</code> and
+<code>RunRecord.source</code> tag where the data came from (<code>hardware</code>,
+<code>firmware-replay</code>, <code>simulated</code>, or <code>unknown</code> for curves; <code>hardware</code>,
+<code>simulated</code>, or <code>unknown</code> for runs). The web server stamps this field
+itself; it is never taken from a client request, so a client cannot
+mislabel its own data as real.</p>
 <h2 id="why-tabulated-panels-in-the-harness">Why tabulated panels in the harness<a class="headerlink" href="#why-tabulated-panels-in-the-harness" title="Permanent link">&para;</a></h2>
-<p><code>PvString</code> solves a nested bisection through a pvlib-backed solver — far
+<p><code>PvString</code> solves a nested bisection through a pvlib-backed solver - far
 too slow to call thousands of times in a dynamic run. <code>TabulatedPanel</code>
 samples the I-V curve once and interpolates after that. This makes the
 dynamic and animated harnesses fast enough to use, with no change to the
