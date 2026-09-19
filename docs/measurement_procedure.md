@@ -149,3 +149,27 @@ Other flags: `--v-max`/`--i-max` (override the 40 V/1 A default limits),
 `--bus`/`--device`/`--speed-hz` (SPI settings, same defaults as the other
 hardware scripts). Run `mpp-sdk run-algorithm --help` /
 `mpp-sdk plot-run --help` for the full list.
+
+## Sharing a session file
+
+Send someone your curves and runs in one file, with no board and no saved
+library needed on their end.
+
+**Export**: in **Curves** or **Runs**, click **Select**, tick the items you
+want, then **Export N selected**. Type a title when asked - this becomes
+the file name. The browser downloads `<title>.mppsession.json`.
+
+**Open**: click **Open session** in the header, or drag the file onto the
+page. The workbench switches to a read-only view of that file: a
+**Viewing: `<title>`** banner appears at the top, with a **Close** button
+that returns to the normal view. While viewing a session:
+
+- Capture, starting a run, deleting, and remeasuring are all off - nothing
+  in the file can be changed, and nothing is sent to a server.
+- The curve and run views work the same as usual, including opening a run
+  in the player - the player reads the run's samples straight from the
+  file.
+- It works with no server running at all, the same as `--demo` mode.
+
+A bad file (wrong format, too large, or corrupted) shows an error message
+and leaves the current view untouched.

@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RunDatePane } from './RunDatePane'
+import { SetupModeProvider } from '@/components/SetupModeProvider'
 import { ThemeProvider } from '@/components/ThemeProvider'
 import { CaptureModeContext } from '@/lib/captureMode'
 import type { RunSummary } from '@/lib/runs'
@@ -20,17 +21,25 @@ afterEach(() => {
 
 // RunPlayerDialog (rendered by RunDatePane, closed by default here) reads
 // the theme via useTheme - the provider is enough, no UnitsProvider is
-// needed since none of these tests open a run.
+// needed since none of these tests open a run. SetupModeProvider is
+// needed too - the pane's Export button reads the current setup mode for
+// the session file it builds.
 function renderPane(ui: Parameters<typeof render>[0]) {
-  return render(<ThemeProvider>{ui}</ThemeProvider>)
+  return render(
+    <ThemeProvider>
+      <SetupModeProvider>{ui}</SetupModeProvider>
+    </ThemeProvider>,
+  )
 }
 
 function renderPaneInSandbox(ui: Parameters<typeof render>[0]) {
   return render(
     <ThemeProvider>
-      <CaptureModeContext.Provider value={{ mode: 'simulated', setMode: vi.fn() }}>
-        {ui}
-      </CaptureModeContext.Provider>
+      <SetupModeProvider>
+        <CaptureModeContext.Provider value={{ mode: 'simulated', setMode: vi.fn() }}>
+          {ui}
+        </CaptureModeContext.Provider>
+      </SetupModeProvider>
     </ThemeProvider>,
   )
 }

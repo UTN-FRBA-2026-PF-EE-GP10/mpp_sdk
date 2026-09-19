@@ -1,4 +1,4 @@
-import { Trash2 } from 'lucide-react'
+import { Download, Trash2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { ProvenanceBadge } from '@/components/ProvenanceBadge'
 import { RunPlayerDialog } from '@/components/RunPlayerDialog'
@@ -13,10 +13,17 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { deleteRunsBatch } from '@/lib/api'
+import { deleteRunsBatch, fetchRun } from '@/lib/api'
 import { formatCapturedAt, formatSeconds } from '@/lib/format'
-import type { RunSummary } from '@/lib/runs'
-import { useSandbox } from '@/lib/sandbox'
+import type { RunDetail, RunSummary } from '@/lib/runs'
+import {
+  buildSessionFile,
+  downloadSessionFile,
+  readOnlyReasonText,
+  useReadOnly,
+  useSession,
+} from '@/lib/session'
+import { useSetupMode } from '@/lib/setupMode'
 import type { CurveRecord } from '@/types'
 
 /**
@@ -26,9 +33,10 @@ import type { CurveRecord } from '@/types'
  * only other thing that could reach it, and doesn't need to - a run only
  * ever surfaces grouped under its date).
  *
- * Also owns this date's batch delete - same "Select" / "Select all" /
- * "Delete N selected" shape as CurveCategoryPane's, one
- * POST /api/runs/delete-batch request instead of N separate DELETE calls.
+ * Also owns this date's select mode - same "Select" / "Select all" /
+ * "Export N selected" / "Delete N selected" shape as CurveCategoryPane's,
+ * one POST /api/runs/delete-batch request instead of N separate DELETE
+ * calls.
  */
 export function RunDatePane({
   date,
@@ -42,12 +50,16 @@ export function RunDatePane({
   onRunsChanged: () => void
 }) {
   const [selected, setSelected] = useState<RunSummary | null>(null)
-  const sandbox = useSandbox()
+  const readOnly = useReadOnly()
+  const session = useSession()
+  const { mode: setupMode } = useSetupMode()
 
   const [selectMode, setSelectMode] = useState(false)
   const [rawSelectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [batchDeleting, setBatchDeleting] = useState(false)
   const [batchFailed, setBatchFailed] = useState<{ id: string; error: string }[] | null>(null)
+  const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState<string | null>(null)
 
   // Derived, not stored: a reload can drop runs this pane had selected
   // (deleted elsewhere, or already removed by an earlier batch here), and
@@ -78,8 +90,37 @@ export function RunDatePane({
     setSelectedIds((prev) => (prev.size === runs.length ? new Set() : new Set(runs.map((r) => r.id))))
   }
 
+  /** Downloads the selected runs as a session file - see lib/session.ts.
+   * A run's full samples are needed (max_samples=0), not just the summary
+   * already in `runs`: in view mode those samples are already in hand
+   * (session.runs carries full RunDetail), everywhere else they're fetched
+   * one GET /api/runs/{id} at a time. */
+  async function handleExport() {
+    const ids = Array.from(selectedIds)
+    if (ids.length === 0 || exporting) return
+    const defaultTitle = `Runs from ${date}`
+    const title = window.prompt('Session title', defaultTitle)
+    if (title === null) return // cancelled
+    setExporting(true)
+    setExportError(null)
+    try {
+      const details: RunDetail[] = []
+      for (const id of ids) {
+        const fromSession = session.active ? session.runs.find((r) => r.id === id) : undefined
+        details.push(fromSession ?? (await fetchRun(id, 0)))
+      }
+      downloadSessionFile(
+        buildSessionFile({ title: title.trim() || defaultTitle, setup: setupMode, curves: [], runs: details }),
+      )
+    } catch (e) {
+      setExportError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setExporting(false)
+    }
+  }
+
   async function handleBatchDelete() {
-    if (sandbox.enabled || selectedIds.size === 0 || batchDeleting) return // defense in depth
+    if (readOnly.enabled || selectedIds.size === 0 || batchDeleting) return // defense in depth
     const ids = Array.from(selectedIds)
     if (
       !window.confirm(
@@ -136,14 +177,25 @@ export function RunDatePane({
                   Select all
                 </label>
                 <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleExport}
+                  disabled={selectedIds.size === 0 || exporting}
+                  focusableWhenDisabled
+                  title={selectedIds.size === 0 ? 'Select at least one run first' : undefined}
+                >
+                  <Download />
+                  {exporting ? 'Exporting...' : `Export ${selectedIds.size} selected`}
+                </Button>
+                <Button
                   variant="destructive"
                   size="sm"
                   onClick={handleBatchDelete}
-                  disabled={sandbox.enabled || selectedIds.size === 0 || batchDeleting}
+                  disabled={readOnly.enabled || selectedIds.size === 0 || batchDeleting}
                   focusableWhenDisabled
                   title={
-                    sandbox.enabled
-                      ? 'Deleting is unavailable in demo mode'
+                    readOnly.enabled
+                      ? readOnlyReasonText(readOnly.reason ?? 'demo', 'Deleting')
                       : selectedIds.size === 0
                         ? 'Select at least one run first'
                         : undefined
@@ -169,6 +221,12 @@ export function RunDatePane({
         </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-2">
+        {exportError && (
+          <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            Export failed: {exportError}
+          </p>
+        )}
+
         {batchFailed && batchFailed.length > 0 && (
           <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
             Failed to delete {batchFailed.length} {batchFailed.length === 1 ? 'run' : 'runs'}:{' '}
