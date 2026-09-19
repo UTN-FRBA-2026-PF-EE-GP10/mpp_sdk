@@ -3,6 +3,9 @@ fake board (no spidev)."""
 
 from __future__ import annotations
 
+import threading
+import time
+
 import pytest
 
 from scripts.duty_sweep import MAX_DUTY, Limits, Poller, SweepAborted, run_step
@@ -93,3 +96,42 @@ def test_a_duty_outside_the_cap_is_refused_before_anything_is_driven(duty):
     with pytest.raises(ValueError), Poller(src, LIMITS) as poller:
         run_step(poller, duty, hold_s=0.1, avg_s=0.1)
     assert max(src.writes) == 0.0
+
+
+def test_an_averaging_window_longer_than_the_hold_is_refused():
+    """It would mix in the previous step's duty and report both as one."""
+    src = FakeSepic()
+    with pytest.raises(ValueError, match="avg_s"), Poller(src, LIMITS) as poller:
+        run_step(poller, 0.2, hold_s=0.1, avg_s=1.0)
+    assert max(src.writes) == 0.0
+
+
+class WedgedSepic(FakeSepic):
+    """An SPI transfer that never returns, from the 4th write on."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.in_flight = 0
+        self.max_in_flight = 0
+        self.release = threading.Event()
+
+    def write(self, duty: float) -> None:
+        self.in_flight += 1
+        self.max_in_flight = max(self.max_in_flight, self.in_flight)
+        try:
+            super().write(duty)
+            if len(self.writes) >= 4:
+                self.release.wait(5.0)
+        finally:
+            self.in_flight -= 1
+
+
+def test_exit_never_puts_a_second_transfer_on_a_wedged_link():
+    src = WedgedSepic()
+    try:
+        with Poller(src, LIMITS) as poller:
+            poller.set_duty(0.1)
+            time.sleep(0.3)
+        assert src.max_in_flight == 1
+    finally:
+        src.release.set()

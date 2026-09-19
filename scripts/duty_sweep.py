@@ -33,8 +33,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-# Plan 003's hard cap: at 12 V in and 10 Ohm, D = 0.50 already means about
-# 1.2 A out, past the board's 1 A rating.
+# Hard cap: at 12 V in and 10 Ohm, D = 0.50 already means about 1.2 A out,
+# past the board's 1 A rating.
 MAX_DUTY = 0.45
 
 # Below the firmware's 100 ms frame timeout: the PIO SPI slave cannot
@@ -94,6 +94,11 @@ class Poller:
     def __exit__(self, *exc) -> None:
         self._stop.set()
         self._thread.join(timeout=2.0)
+        # A thread still alive is stuck inside an SPI transfer: writing from
+        # here too would put two transfers on one link at once. Leave it;
+        # the firmware zeroes duty by itself after ~500 ms of silence.
+        if self._thread.is_alive():
+            return
         # Zeroing duty must not mask the error that ended the sweep.
         with contextlib.suppress(Exception):
             self._source.write(0.0)
@@ -158,6 +163,10 @@ def run_step(
     ask `meter` (if given) for the multimeter's V out."""
     if not 0.0 <= duty <= MAX_DUTY:
         raise ValueError(f"duty {duty} outside 0..{MAX_DUTY}")
+    # A window longer than the hold reaches back into the previous step's
+    # duty and reports a mix of two operating points as one.
+    if avg_s > hold_s:
+        raise ValueError(f"avg_s {avg_s} longer than hold_s {hold_s}")
     poller.set_duty(duty)
     wait(hold_s)
     if (reason := poller.abort_reason()) is not None:
@@ -228,6 +237,8 @@ def main() -> None:
     parser.add_argument("--speed-hz", type=int, default=200_000)
     args = parser.parse_args()
 
+    if args.avg_s > args.hold_s:
+        parser.error("--avg-s must not be longer than --hold-s")
     duties = [float(d) for d in args.duties.split(",")]
     for d in duties:
         if not 0.0 <= d <= MAX_DUTY:

@@ -7,9 +7,11 @@
   `scripts/duty_sweep.py` (columns: duty, V in, I in, V out from the ADC,
   V out from the meter, sample count, load in ohms). 2026-09-19, 10 Ohm
   load, supply on the input:
-  - `duty_sweep_10R_20260919T154546Z.csv` - D 0 to 0.45 at 5 V in. V out
-    runs ~0.3-0.4 V below `V_in * D / (1 - D)` (the output diode drop);
-    efficiency rises from 43 % at D = 0.10 to 82 % at D = 0.45 (1.3 W in).
+  - `duty_sweep_10R_20260919T154546Z.csv` - D 0 to 0.45 at 5 V in. From
+    D = 0.30 up, V out runs ~0.3-0.4 V below `V_in * D / (1 - D)` (the
+    output diode drop); below that the gap shrinks, and at D = 0.05 V out
+    is slightly above the ideal ratio. Efficiency rises from 43 % at
+    D = 0.10 to 82 % at D = 0.45 (1.3 W in).
   - `duty_hold_D045_5Vin_10R_20260919.csv`,
     `duty_hold_D040_12Vin_10R_20260919.csv` - long holds with the meter
     reading typed in: ADC 3.221 V against 3.2 V, and 7.006 V against
