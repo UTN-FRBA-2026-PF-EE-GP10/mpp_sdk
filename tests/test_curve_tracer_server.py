@@ -1486,6 +1486,80 @@ def test_start_run_simulated_tracks_inline_curve_points_and_reports_them(demo_cl
     assert 0.0 < live["voltage"] <= 21.0
 
 
+def test_start_run_saves_the_reference_label_as_curve_ref(demo_client):
+    """Demo mode's bundled curves never live in the server's own curve
+    library, so an inline curve_points run has nothing to save as
+    curve_ref on its own (see the previous test) - the run player then has
+    no way back to the curve it tracked. reference_label plugs that gap:
+    the caller's own curve id, saved as curve_ref even though it names no
+    file here, for that same caller to look up again by id (the demo
+    fixtures, in demo mode - see frontend's findCurveForRun)."""
+    r = demo_client.post(
+        "/api/runs/start",
+        json={
+            "algorithm": "P&O",
+            "simulated": True,
+            "duration_s": 0.05,
+            "curve_points": _INLINE_POINTS,
+            "reference_label": "demo-fixture-psf10-bright",
+        },
+    )
+    assert r.status_code == 200
+    live = demo_client.get("/api/runs/live").json()
+    assert live["curve_ref"] == "demo-fixture-psf10-bright"
+    _wait_for_run_done(demo_client)
+    live = demo_client.get("/api/runs/live").json()
+    record = load_run(demo_client.run_dir / f"{live['saved_run_id']}.json")
+    assert record.curve_ref == "demo-fixture-psf10-bright"
+
+
+def test_start_run_rejects_a_reference_label_without_curve_points(demo_client):
+    r = demo_client.post(
+        "/api/runs/start",
+        json={"algorithm": "P&O", "simulated": True, "reference_label": "some-curve"},
+    )
+    assert r.status_code == 400
+    assert demo_client.get("/api/runs/live").json()["status"] == "idle"
+
+
+@pytest.mark.parametrize(
+    "label",
+    ["../etc/passwd", "..", "some-curve", "demo-a.b", "demo-", "demo-" + "x" * 65],
+)
+def test_start_run_rejects_an_invalid_reference_label(demo_client, label):
+    """Only demo-<name> labels: never a path piece, never "..", bounded,
+    and never shaped like a library id."""
+    r = demo_client.post(
+        "/api/runs/start",
+        json={
+            "algorithm": "P&O",
+            "simulated": True,
+            "curve_points": _INLINE_POINTS,
+            "reference_label": label,
+        },
+    )
+    assert r.status_code == 400
+    assert demo_client.get("/api/runs/live").json()["status"] == "idle"
+
+
+def test_start_run_rejects_a_reference_label_that_names_a_real_curve(demo_client, tmp_path):
+    """A run tracked against inline points must never be saved pointing
+    at a different, real curve - the player would draw it as the run's
+    ground truth with no warning."""
+    (tmp_path / "demo-collide.json").write_text("{}")
+    r = demo_client.post(
+        "/api/runs/start",
+        json={
+            "algorithm": "P&O",
+            "simulated": True,
+            "curve_points": _INLINE_POINTS,
+            "reference_label": "demo-collide",
+        },
+    )
+    assert r.status_code == 400
+    assert "real curve" in r.json()["detail"]
+
+
 def test_start_run_rejects_curve_points_for_a_hardware_run(client):
     r = client.post("/api/runs/start", json={"algorithm": "P&O", "curve_points": _INLINE_POINTS})
     assert r.status_code == 400

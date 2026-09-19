@@ -63,6 +63,13 @@ export function findCurveForRun(curves: CurveRecord[], curveRef: string | null):
  * differently instead of collapsing into one silent blank background. */
 export function referenceCurveMessage(curveRef: string | null, found: CurveRecord | null): string | null {
   if (curveRef === null) return 'No reference curve was captured for this run.'
-  if (found === null) return `Reference curve "${curveRef}" was not found - it may have been deleted.`
+  if (found === null) {
+    // A demo- label names a curve bundled with the page, never a library
+    // file, so outside Demo mode it is absent by design, not deleted.
+    if (curveRef.startsWith('demo-')) {
+      return `Reference curve "${curveRef}" is a demo curve - switch to Demo mode to see it.`
+    }
+    return `Reference curve "${curveRef}" was not found - it may have been deleted.`
+  }
   return null
 }

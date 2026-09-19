@@ -138,6 +138,12 @@ describe('referenceCurveMessage', () => {
     expect(message).not.toBe(referenceCurveMessage(null, null))
   })
 
+  it('says a demo curve is only viewable in Demo mode, not that it was deleted', () => {
+    const message = referenceCurveMessage('demo-fixture-psf10-bright', null)
+    expect(message).toContain('Demo mode')
+    expect(message).not.toContain('deleted')
+  })
+
   it('is null once a reference curve is found', () => {
     expect(referenceCurveMessage('a.json', curve('/data/curves/a.json'))).toBeNull()
   })

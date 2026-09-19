@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RunPane } from './RunPane'
 import { ThemeProvider } from '@/components/ThemeProvider'
@@ -18,7 +18,33 @@ vi.mock('@/lib/api', () => ({
   fetchLiveRun: vi.fn(),
 }))
 
+// jsdom has no real 2D canvas context, so the genuine chart.js instance
+// (used elsewhere in this file's tests) silently draws nothing - fine for
+// tests that only check surrounding text, but not enough to prove the
+// grey reference curve actually reaches the chart. Stand in for the real
+// Line component here and surface the dataset shape RunChart built as
+// plain DOM attributes, so a test can assert on it directly instead of
+// trusting that a prop was merely passed somewhere upstream.
+vi.mock('react-chartjs-2', () => ({
+  Line: ({ data }: { data: { datasets: { label: string; data: unknown[] }[] } }) => (
+    <div
+      data-testid="run-chart"
+      data-datasets={JSON.stringify(data.datasets.map((d) => ({ label: d.label, n: d.data.length })))}
+    />
+  ),
+}))
+
 import { fetchLiveRun, fetchRun, fetchRunConfig, fetchRuns, startRun, stopRun } from '@/lib/api'
+
+/** The dataset shapes every currently mounted RunChart was actually
+ * handed - label plus point count, enough to tell "no reference" from
+ * "the chosen curve's reference, in full" without decoding chart.js's own
+ * internal state. */
+function chartDatasets(scope: HTMLElement = document.body): { label: string; n: number }[] {
+  return within(scope)
+    .getAllByTestId('run-chart')
+    .flatMap((el) => JSON.parse(el.getAttribute('data-datasets') ?? '[]'))
+}
 
 function renderPane(curves: CurveRecord[] = []) {
   return render(
@@ -415,6 +441,11 @@ describe('RunPane in demo (sandbox) mode', () => {
         expect.objectContaining({
           curve_ref: null,
           curve_points: curve.points.map((p) => [p.v, p.i]),
+          // The demo curve's own id, so the server can save it as the
+          // saved run's curve_ref - see StartRunInput's reference_label
+          // doc comment. Without this the run player has no way back to
+          // a curve that was never in the server's own library.
+          reference_label: curve.id,
           simulated: true,
         }),
       ),
@@ -422,6 +453,90 @@ describe('RunPane in demo (sandbox) mode', () => {
     await waitFor(() => expect(screen.getByText('Simulated - not measured')).toBeTruthy())
     // A reference arrived, so the "no reference curve" note must not show.
     expect(screen.queryByText(/No reference curve/)).toBeNull()
+    // Not just present in the props somewhere - actually reaches the
+    // chart, as both the I(V) and P(V) reference series, one point per
+    // curve point.
+    await waitFor(() =>
+      expect(chartDatasets()).toEqual(
+        expect.arrayContaining([
+          { label: 'Reference I(V)', n: curve.points.length },
+          { label: 'Reference P(V)', n: curve.points.length },
+        ]),
+      ),
+    )
+  })
+
+  it('opens a finished demo run in the player and still draws its reference, found by the saved curve_ref label', async () => {
+    // The server saves the chosen demo curve's id as curve_ref (via
+    // reference_label - see post_start_run), even though that id never
+    // named a file in its own curve library. findCurveForRun (lib/
+    // runPlayback.ts) then has to resolve it against this pane's own
+    // `curves` list, which in demo mode is DEMO_CURVES - proving the
+    // whole round trip, not just the live view.
+    vi.mocked(fetchRunConfig).mockResolvedValue({
+      algorithms: ['P&O'],
+      maxDurationS: 600,
+      defaultDurationS: 10,
+      defaultInitialDuty: 0.5,
+      defaultVMax: 40,
+      defaultIMax: 1,
+    })
+    vi.mocked(startRun).mockResolvedValue({
+      status: 'running',
+      algorithm: 'P&O',
+      label: 'P&O',
+      duration_s: 10,
+    })
+    const curve = DEMO_CURVES[0]
+    vi.mocked(fetchLiveRun)
+      .mockResolvedValueOnce(liveState({ status: 'idle' }))
+      .mockResolvedValue(
+        liveState({
+          status: 'done',
+          source: 'simulated',
+          curve_ref: curve.id,
+          reference_points: curve.points,
+          saved_run_id: 'sim-run-1',
+        }),
+      )
+    const summary: RunSummary = {
+      id: 'sim-run-1',
+      path: '/data/runs/sim-run-1.json',
+      captured_at: '2026-09-18T08:00:00Z',
+      label: 'P&O',
+      algorithm: 'P&O',
+      n_samples: 1,
+      duration_s: 1,
+      aborted: false,
+      curve_ref: curve.id,
+      notes: '',
+      source: 'simulated',
+    }
+    vi.mocked(fetchRuns).mockResolvedValue([summary])
+    vi.mocked(fetchRun).mockResolvedValue({
+      ...summary,
+      downsampled: false,
+      samples: [{ t: 0, v: 12, i: 0.25, d: 0.4 }],
+    })
+    renderPaneInSandbox(DEMO_CURVES)
+
+    await selectAlgorithm('P&O')
+    fireEvent.change(screen.getByLabelText('Reference curve'), { target: { value: curve.id } })
+    fireEvent.click(screen.getByText('Start simulated run'))
+
+    await waitFor(() => expect(screen.getByText('Open in player')).toBeTruthy())
+    fireEvent.click(screen.getByText('Open in player'))
+    await waitFor(() => expect(screen.getByLabelText('Playback position')).toBeTruthy())
+
+    // Scoped to the player dialog: RunMonitor's live chart stays mounted
+    // behind it and draws the same reference from the server's
+    // reference_points, so an unscoped check would pass even with the
+    // player's own curve_ref lookup broken.
+    await waitFor(() =>
+      expect(chartDatasets(screen.getByRole('dialog'))).toEqual(
+        expect.arrayContaining([{ label: 'Reference I(V)', n: curve.points.length }]),
+      ),
+    )
   })
 
   it('marks a simulated run unmistakably while it is live', async () => {

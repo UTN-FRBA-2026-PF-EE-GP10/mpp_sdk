@@ -32,6 +32,23 @@ def _most_recent_run_path() -> Path:
     return candidates[-1]
 
 
+def _find_curve(curve_ref: str | None) -> Path | None:
+    """The library file a run's `curve_ref` names, or None if there is none.
+
+    The CLI saves a file name (`...json`) and the web server a bare id, so
+    both are tried. A demo label or a deleted curve names no file: that is
+    not an error here, the plot just has no curve to draw.
+    """
+    if curve_ref is None:
+        return None
+    directory = curve_library.default_dir().resolve()
+    for name in (curve_ref, f"{curve_ref}.json"):
+        path = (directory / name).resolve()
+        if path.parent == directory and path.is_file():
+            return path
+    return None
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("run_path", nargs="?", default=None)
@@ -47,13 +64,18 @@ def main() -> None:
 
     panel = None
     p_mpp = None
-    if record.curve_ref is not None:
-        curve_path = curve_library.default_dir() / record.curve_ref
+    curve_path = _find_curve(record.curve_ref)
+    if curve_path is not None:
         curve_record = curve_library.load(curve_path)
         panel = MeasuredPanel(curve_record)
         _, _, p_mpp = panel.mpp()
-    else:
+    elif record.curve_ref is None:
         print("No paired curve (curve_ref is None) - skipping the P-V subplot.")
+    else:
+        print(
+            f"Paired curve {record.curve_ref!r} is not in the curve library "
+            "(a demo curve, or deleted) - skipping the P-V subplot."
+        )
 
     n_cols = 2 if panel is not None else 1
     fig, axes = plt.subplots(1, n_cols, figsize=(6.5 * n_cols, 5), squeeze=False)

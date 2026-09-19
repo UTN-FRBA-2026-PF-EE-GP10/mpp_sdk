@@ -259,6 +259,10 @@ function RunSetupForm({
       i_max: iMax ?? config?.defaultIMax ?? 0,
       curve_ref: simulated ? null : curveRef || null,
       curve_points: simulated && chosen ? chosen.points.map((p) => [p.v, p.i]) : null,
+      // Lets the saved run's curve_ref name the chosen demo curve, even
+      // though it never lived in the server's own library - see
+      // StartRunInput's own doc comment on reference_label.
+      reference_label: simulated && chosen ? chosen.id : null,
       simulated,
     })
   }

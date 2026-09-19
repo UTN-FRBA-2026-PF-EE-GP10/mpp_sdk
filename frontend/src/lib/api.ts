@@ -250,6 +250,11 @@ export interface StartRunInput {
   /** (volts, amps) pairs for a simulated run, instead of `curve_ref` -
    * demo mode's bundled curves are not in the server's library. */
   curve_points?: [number, number][] | null
+  /** The chosen demo curve's id, sent alongside `curve_points` so the
+   * saved run's `curve_ref` names something findCurveForRun (lib/
+   * runPlayback.ts) can look up later - without this the run player has
+   * no way back to a curve that was never in the server's own library. */
+  reference_label?: string | null
   label?: string
   /** Drive a SimulatedSource instead of the real board - see
    * curve_tracer_server.py's post_start_run. Omitted (or false) keeps the

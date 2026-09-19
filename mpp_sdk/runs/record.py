@@ -56,7 +56,13 @@ class RunRecord:
     label: str
     algorithm: str  # free text, e.g. "P&O" - matches harness/common.py's AlgorithmSpec.label
     samples: tuple[RunSample, ...]
-    curve_ref: str | None = None  # filename under mpp_sdk.curves.library.default_dir(), or None
+    # Filename under mpp_sdk.curves.library.default_dir(), or None. A
+    # simulated run started with inline curve_points (the curve tracker's
+    # demo mode - no file in this server's library to name) may carry a
+    # caller-supplied label here instead, for that same caller's own curve
+    # list to look up by id (scripts/curve_tracer_server.py's
+    # reference_label) - never resolved to a path.
+    curve_ref: str | None = None
     aborted: bool = False  # True if the safety abort fired before completion
     notes: str = field(default="")
     # Defaults to "unknown" rather than "hardware": a caller that forgets
