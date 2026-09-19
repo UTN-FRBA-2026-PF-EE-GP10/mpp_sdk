@@ -11,6 +11,7 @@
 // ProvenanceBadge renders both as an unmissable badge; this module
 // doesn't invent a second mechanism for the same fact.
 
+import type { ReportRecord, ReportSummary } from '@/lib/reports'
 import type { RunDetail, RunSample } from '@/lib/runs'
 import type { CurvePoint, CurveRecord } from '@/types'
 
@@ -202,3 +203,158 @@ export const DEMO_RUN: RunDetail = {
 }
 
 export const DEMO_RUNS = [DEMO_RUN]
+
+// --- Bundled read-only measurement report --------------------------------
+//
+// One report, read-only in demo mode - same reasoning as the curves/run
+// fixtures above. Steps and field keys are drawn from the real
+// single-panel-characterization template (see mpp_sdk/reports/templates/)
+// so the fixture reads like a real session, but this is standalone data,
+// not fetched from any template. One step links a curve id that isn't
+// among DEMO_CURVES and one links a run id that isn't DEMO_RUN, on
+// purpose - so demo mode also shows the "missing linked item" case
+// without needing a special test fixture for it.
+
+export const DEMO_REPORT: ReportRecord = {
+  id: 'demo-fixture-panel-a-report',
+  title: 'Demo report - panel A alone (bundled sample)',
+  template_id: 'single-panel-characterization',
+  template_version: 1,
+  setup: 'single',
+  created_at: '2026-06-01T11:30:00Z',
+  updated_at: '2026-06-01T12:15:00Z',
+  fields: {
+    panel: 'Luxen LN-10P, 10 W, 12 V',
+    light_source: 'Bench lamp, full brightness',
+    distance: '30 cm',
+    load_resistor: '10 Ohm, 10 W',
+    adc_range: 'Low',
+    supply_used: '',
+    firmware_commit: 'demo-fixture',
+    operator: 'Demo',
+  },
+  steps: [
+    {
+      id: 'panel-label-voc',
+      section: 'Before energizing',
+      title: 'Panel label Voc',
+      instructions: 'Read Voc (open-circuit voltage) from the panel label. Record it here.',
+      kind: 'number',
+      status: 'done',
+      value: 23.5,
+      unit: 'V',
+      notes: '',
+      curve_ids: [],
+      run_ids: [],
+      repeats: 1,
+    },
+    {
+      id: 'firmware-config',
+      section: 'Before energizing',
+      title: 'Firmware configuration',
+      instructions:
+        'Check the firmware is built as MppTracker, with ADC_DIVIDER_RANGE = Low and MAX31865_ENABLED = false.',
+      kind: 'check',
+      status: 'done',
+      value: null,
+      unit: null,
+      notes: 'Boot log matched.',
+      curve_ids: [],
+      run_ids: [],
+      repeats: 1,
+    },
+    {
+      id: 'baseline-curve',
+      section: 'Light and curve',
+      title: 'Baseline curve',
+      instructions: 'Capture and save one sweep. Record Voc, Isc, P at MPP.',
+      kind: 'curve',
+      status: 'done',
+      value: null,
+      unit: null,
+      notes: 'Clean knee, no noise.',
+      curve_ids: [DEMO_CURVE_BRIGHT.id, 'demo-fixture-missing-curve'],
+      run_ids: [],
+      repeats: 3,
+    },
+    {
+      id: 'po-run',
+      section: 'Runs (curve as reference, 10 s, starting duty 0.5)',
+      title: 'P&O run',
+      instructions: 'Run P&O for 10 s against the baseline curve as reference.',
+      kind: 'run',
+      status: 'done',
+      value: null,
+      unit: null,
+      notes: '',
+      curve_ids: [],
+      run_ids: [DEMO_RUN.id, 'demo-fixture-missing-run'],
+      repeats: 3,
+    },
+    {
+      id: 'q3-temperature-after-runs',
+      section: 'Runs (curve as reference, 10 s, starting duty 0.5)',
+      title: 'Q3 temperature after the runs',
+      instructions: 'By hand or probe.',
+      kind: 'text',
+      status: 'skipped',
+      value: '',
+      unit: null,
+      notes: 'No probe fitted on this bench.',
+      curve_ids: [],
+      run_ids: [],
+      repeats: 1,
+    },
+    {
+      id: 'downloads',
+      section: 'After',
+      title: 'Curves and runs downloaded',
+      instructions: 'Curves and runs downloaded; report downloaded as Markdown.',
+      kind: 'check',
+      status: 'todo',
+      value: null,
+      unit: null,
+      notes: '',
+      curve_ids: [],
+      run_ids: [],
+      repeats: 1,
+    },
+  ],
+  open_questions: [
+    {
+      id: 'temperature',
+      text:
+        'Panel temperature is not measured (no PT100 fitted; the MAX31865 is off). Voc falls ' +
+        'with temperature, so curves taken at different times are not strictly comparable. How ' +
+        'to record it: a contact thermometer on the panel back, an IR thermometer, or a fitted ' +
+        'PT100?',
+      answer: '',
+    },
+    {
+      id: 'unexpected-behaviour',
+      text: 'Was there any unexpected behaviour during the session?',
+      answer: 'None on this bundled sample.',
+    },
+  ],
+}
+
+export const DEMO_REPORTS: ReportSummary[] = [
+  {
+    id: DEMO_REPORT.id,
+    title: DEMO_REPORT.title,
+    template_id: DEMO_REPORT.template_id,
+    setup: DEMO_REPORT.setup,
+    created_at: DEMO_REPORT.created_at,
+    updated_at: DEMO_REPORT.updated_at,
+    n_steps: DEMO_REPORT.steps.length,
+    n_done: DEMO_REPORT.steps.filter((s) => s.status === 'done').length,
+    n_failed: DEMO_REPORT.steps.filter((s) => s.status === 'failed').length,
+  },
+]
+
+/** Every linked run this fixture report points at that actually resolves
+ * (DEMO_RUN itself) - keyed by id, matching ReportView's `runDetails` prop
+ * shape, so demo mode can show per-step run statistics with no fetch. */
+export const DEMO_RUN_DETAILS: Record<string, RunDetail> = {
+  [DEMO_RUN.id]: DEMO_RUN,
+}
