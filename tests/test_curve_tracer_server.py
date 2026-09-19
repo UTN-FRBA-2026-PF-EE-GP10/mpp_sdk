@@ -23,6 +23,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 from harness.common import AlgorithmSpec, algorithm_specs  # noqa: E402
 from mpp_sdk import IdealSingleDiode  # noqa: E402
 from mpp_sdk.curves import CurveRecord, PanelSetup, save  # noqa: E402
+from mpp_sdk.curves import library as curve_library  # noqa: E402
 from mpp_sdk.curves.record import now_utc  # noqa: E402
 from mpp_sdk.runs import RunRecord, RunSample  # noqa: E402
 from mpp_sdk.runs import load as load_run  # noqa: E402
@@ -31,6 +32,7 @@ from scripts.curve_tracer_server import (  # noqa: E402
     _DEFAULT_I_MAX,
     _DEFAULT_RUN_DURATION_S,
     _DEFAULT_V_MAX,
+    _MAX_BATCH_DELETE_IDS,
     _MAX_RUN_DURATION_S,
     _curve_path,
     _downsample_samples,
@@ -355,6 +357,92 @@ def test_curve_path_rejects_an_id_containing_a_slash(client):
 
 
 # ------------------------------------------------------------------
+# POST /api/curves/delete-batch
+# ------------------------------------------------------------------
+
+
+def test_delete_curves_batch_removes_every_file(client, tmp_path):
+    a = _save(tmp_path, label="a")
+    b = _save(tmp_path, label="b")
+    r = client.post("/api/curves/delete-batch", json={"ids": [a.stem, b.stem]})
+    assert r.status_code == 200
+    assert sorted(r.json()["deleted"]) == sorted([a.stem, b.stem])
+    assert r.json()["failed"] == []
+    assert not a.exists()
+    assert not b.exists()
+
+
+def test_delete_curves_batch_reports_an_invalid_id_as_failed_not_a_500(client):
+    r = client.post("/api/curves/delete-batch", json={"ids": ["weird id"]})
+    assert r.status_code == 200
+    assert r.json()["deleted"] == []
+    assert r.json()["failed"] == [{"id": "weird id", "error": "invalid curve id"}]
+
+
+def test_delete_curves_batch_reports_an_unknown_id_as_failed(client):
+    r = client.post("/api/curves/delete-batch", json={"ids": ["does-not-exist"]})
+    assert r.status_code == 200
+    assert r.json()["deleted"] == []
+    assert r.json()["failed"] == [{"id": "does-not-exist", "error": "curve not found"}]
+
+
+def test_delete_curves_batch_mixed_result_deletes_the_good_ones_and_reports_the_rest(
+    client, tmp_path
+):
+    ok = _save(tmp_path, label="ok")
+    r = client.post(
+        "/api/curves/delete-batch",
+        json={"ids": [ok.stem, "does-not-exist", "weird id"]},
+    )
+    assert r.status_code == 200
+    assert r.json()["deleted"] == [ok.stem]
+    failed_ids = {entry["id"] for entry in r.json()["failed"]}
+    assert failed_ids == {"does-not-exist", "weird id"}
+    assert not ok.exists()
+
+
+def test_delete_curves_batch_reports_a_filesystem_error_and_keeps_going(
+    client, tmp_path, monkeypatch
+):
+    """One file that cannot be removed (permissions, disk) must be reported
+    as failed, not turn the whole request into a 500 that skips the rest."""
+    stuck = _save(tmp_path, label="stuck")
+    ok = _save(tmp_path, label="ok")
+    real_delete = curve_library.delete
+
+    def flaky_delete(path):
+        if path.stem == stuck.stem:
+            raise PermissionError(13, "Permission denied")
+        real_delete(path)
+
+    monkeypatch.setattr(curve_library, "delete", flaky_delete)
+    r = client.post("/api/curves/delete-batch", json={"ids": [stuck.stem, ok.stem]})
+    assert r.status_code == 200
+    assert r.json()["deleted"] == [ok.stem]
+    assert [f["id"] for f in r.json()["failed"]] == [stuck.stem]
+    assert stuck.exists()
+    assert not ok.exists()
+
+
+def test_delete_curves_batch_ignores_a_repeated_id(client, tmp_path):
+    a = _save(tmp_path, label="a")
+    r = client.post("/api/curves/delete-batch", json={"ids": [a.stem, a.stem]})
+    assert r.json() == {"deleted": [a.stem], "failed": []}
+
+
+def test_delete_curves_batch_empty_list_is_a_no_op(client):
+    r = client.post("/api/curves/delete-batch", json={"ids": []})
+    assert r.status_code == 200
+    assert r.json() == {"deleted": [], "failed": []}
+
+
+def test_delete_curves_batch_over_the_limit_is_rejected_with_400(client):
+    ids = [f"id-{i}" for i in range(_MAX_BATCH_DELETE_IDS + 1)]
+    r = client.post("/api/curves/delete-batch", json={"ids": ids})
+    assert r.status_code == 400
+
+
+# ------------------------------------------------------------------
 # POST /api/save-curve
 # ------------------------------------------------------------------
 
@@ -664,6 +752,61 @@ def test_delete_run_unknown_id_is_404(client):
 
 def test_delete_run_rejects_an_id_with_disallowed_characters(client):
     r = client.delete("/api/runs/weird id")
+    assert r.status_code == 400
+
+
+# ------------------------------------------------------------------
+# POST /api/runs/delete-batch
+# ------------------------------------------------------------------
+
+
+def test_delete_runs_batch_removes_every_file(client):
+    a = _save_run(client.run_dir, label="a")
+    b = _save_run(client.run_dir, label="b")
+    r = client.post("/api/runs/delete-batch", json={"ids": [a.stem, b.stem]})
+    assert r.status_code == 200
+    assert sorted(r.json()["deleted"]) == sorted([a.stem, b.stem])
+    assert r.json()["failed"] == []
+    assert not a.exists()
+    assert not b.exists()
+
+
+def test_delete_runs_batch_reports_an_invalid_id_as_failed_not_a_500(client):
+    r = client.post("/api/runs/delete-batch", json={"ids": ["weird id"]})
+    assert r.status_code == 200
+    assert r.json()["deleted"] == []
+    assert r.json()["failed"] == [{"id": "weird id", "error": "invalid run id"}]
+
+
+def test_delete_runs_batch_reports_an_unknown_id_as_failed(client):
+    r = client.post("/api/runs/delete-batch", json={"ids": ["does-not-exist"]})
+    assert r.status_code == 200
+    assert r.json()["deleted"] == []
+    assert r.json()["failed"] == [{"id": "does-not-exist", "error": "run not found"}]
+
+
+def test_delete_runs_batch_mixed_result_deletes_the_good_ones_and_reports_the_rest(client):
+    ok = _save_run(client.run_dir, label="ok")
+    r = client.post(
+        "/api/runs/delete-batch",
+        json={"ids": [ok.stem, "does-not-exist", "weird id"]},
+    )
+    assert r.status_code == 200
+    assert r.json()["deleted"] == [ok.stem]
+    failed_ids = {entry["id"] for entry in r.json()["failed"]}
+    assert failed_ids == {"does-not-exist", "weird id"}
+    assert not ok.exists()
+
+
+def test_delete_runs_batch_empty_list_is_a_no_op(client):
+    r = client.post("/api/runs/delete-batch", json={"ids": []})
+    assert r.status_code == 200
+    assert r.json() == {"deleted": [], "failed": []}
+
+
+def test_delete_runs_batch_over_the_limit_is_rejected_with_400(client):
+    ids = [f"id-{i}" for i in range(_MAX_BATCH_DELETE_IDS + 1)]
+    r = client.post("/api/runs/delete-batch", json={"ids": ids})
     assert r.status_code == 400
 
 

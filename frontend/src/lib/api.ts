@@ -98,6 +98,24 @@ export async function deleteCurve(id: string): Promise<void> {
   await parseJsonOrThrow(r, 'DELETE /api/curves/{id}')
 }
 
+export interface BatchDeleteResult {
+  deleted: string[]
+  failed: { id: string; error: string }[]
+}
+
+// One request instead of N separate DELETE calls for a multi-curve
+// cleanup - always resolves with which ids succeeded and which failed
+// (the server returns 200 even on a partial failure), never throws for an
+// individual bad id the way a single deleteCurve() call would.
+export async function deleteCurvesBatch(ids: string[]): Promise<BatchDeleteResult> {
+  const r = await fetch('/api/curves/delete-batch', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids }),
+  })
+  return (await parseJsonOrThrow(r, 'POST /api/curves/delete-batch')) as BatchDeleteResult
+}
+
 export async function fetchMeasurementKinds(): Promise<string[]> {
   const r = await fetch('/api/measurement-kinds')
   return (await parseJsonOrThrow(r, 'GET /api/measurement-kinds')) as string[]
@@ -162,6 +180,16 @@ export async function fetchRun(id: string, maxSamples?: number): Promise<RunDeta
 export async function deleteRun(id: string): Promise<void> {
   const r = await fetch(`/api/runs/${encodeURIComponent(id)}`, { method: 'DELETE' })
   await parseJsonOrThrow(r, 'DELETE /api/runs/{id}')
+}
+
+// Same shape and reasoning as deleteCurvesBatch above.
+export async function deleteRunsBatch(ids: string[]): Promise<BatchDeleteResult> {
+  const r = await fetch('/api/runs/delete-batch', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids }),
+  })
+  return (await parseJsonOrThrow(r, 'POST /api/runs/delete-batch')) as BatchDeleteResult
 }
 
 // The registered algorithm labels POST /api/runs/start accepts - see

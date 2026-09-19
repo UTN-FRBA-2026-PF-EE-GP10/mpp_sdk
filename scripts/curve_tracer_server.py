@@ -54,6 +54,7 @@ import queue
 import re
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, NamedTuple
@@ -828,6 +829,13 @@ _RUN_ID_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
 # save() names files identically to the run library's.
 _CURVE_ID_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
 
+# Ceiling on how many ids one POST /api/{curves,runs}/delete-batch request
+# may name. The workbench only ever offers "select all" over one already-
+# rendered kind/date's list, which never approaches this - the cap exists
+# to stop an oversized body from making the server loop through an
+# unbounded list of filesystem operations in a single request.
+_MAX_BATCH_DELETE_IDS = 500
+
 # The player animates the whole series in a browser on a Pi-served page.
 # Unbounded, a long run (a multi-minute capture can be hundreds of
 # thousands of samples) is a multi-megabyte response and tens of thousands
@@ -867,6 +875,45 @@ def _curve_path(curve_id: str) -> Path:
     if not path.exists():
         raise HTTPException(status_code=404, detail="curve not found")
     return path
+
+
+class _BatchDeleteRequest(BaseModel):
+    """Body of both `POST /api/curves/delete-batch` and
+    `POST /api/runs/delete-batch`."""
+
+    ids: list[str]
+
+
+def _delete_batch(
+    ids: list[str], path_for: Callable[[str], Path], delete: Callable[[Path], None]
+) -> dict:
+    """Shared by the curves and runs batch-delete routes below: resolve
+    and delete each id independently, so one bad id (mistyped, already
+    removed, a stale selection) does not abort the rest of the batch -
+    the workbench's batch-delete button needs to say which ones failed
+    and keep the rest of the request going, not fail atomically.
+
+    `path_for` is `_curve_path` or `_run_path`, reused unchanged so a
+    batch delete is held to exactly the same id-validation and
+    directory-containment rules as the single-item DELETE route above -
+    never a filesystem path taken directly from the request body."""
+    deleted: list[str] = []
+    failed: list[dict] = []
+    # dict.fromkeys drops repeats in order: a repeated id would otherwise
+    # report "not found" for a file this same request just removed.
+    for item_id in dict.fromkeys(ids):
+        try:
+            path = path_for(item_id)
+            delete(path)
+        except HTTPException as exc:
+            failed.append({"id": item_id, "error": str(exc.detail)})
+        except OSError as exc:
+            # A permission or disk error on one file must not end the batch
+            # with a 500 that also skips every id after it.
+            failed.append({"id": item_id, "error": f"could not delete: {exc.strerror or exc}"})
+        else:
+            deleted.append(item_id)
+    return {"deleted": deleted, "failed": failed}
 
 
 def _downsample_samples(
@@ -1002,6 +1049,19 @@ def create_app(
     @app.delete("/api/curves/{curve_id}", status_code=204)
     def delete_curve(curve_id: str) -> None:
         curve_library.delete(_curve_path(curve_id))
+
+    @app.post("/api/curves/delete-batch")
+    def post_delete_curves_batch(body: _BatchDeleteRequest) -> dict:
+        """Delete several curves in one request - the workbench's "Delete
+        N selected" button, so a multi-curve cleanup isn't N separate round
+        trips. Always 200, even when some ids fail (see `_delete_batch`);
+        the only thing rejected outright is an oversized request body."""
+        if len(body.ids) > _MAX_BATCH_DELETE_IDS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"at most {_MAX_BATCH_DELETE_IDS} ids per request",
+            )
+        return _delete_batch(body.ids, _curve_path, curve_library.delete)
 
     @app.post("/api/save-curve")
     def post_save_curve(body: _SaveCurveRequest) -> dict:
@@ -1287,6 +1347,17 @@ def create_app(
     @app.delete("/api/runs/{run_id}", status_code=204)
     def delete_run(run_id: str) -> None:
         run_library.delete(_run_path(run_id))
+
+    @app.post("/api/runs/delete-batch")
+    def post_delete_runs_batch(body: _BatchDeleteRequest) -> dict:
+        """Delete several runs in one request - same shape and reasoning
+        as `post_delete_curves_batch` above."""
+        if len(body.ids) > _MAX_BATCH_DELETE_IDS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"at most {_MAX_BATCH_DELETE_IDS} ids per request",
+            )
+        return _delete_batch(body.ids, _run_path, run_library.delete)
 
     @app.post("/api/start-sweep", status_code=204)
     def post_start_sweep() -> None:

@@ -1,7 +1,9 @@
-import { useState } from 'react'
+import { Trash2 } from 'lucide-react'
+import { useMemo, useState } from 'react'
 import { ProvenanceBadge } from '@/components/ProvenanceBadge'
 import { RunPlayerDialog } from '@/components/RunPlayerDialog'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Table,
@@ -11,8 +13,10 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { deleteRunsBatch } from '@/lib/api'
 import { formatCapturedAt, formatSeconds } from '@/lib/format'
 import type { RunSummary } from '@/lib/runs'
+import { useSandbox } from '@/lib/sandbox'
 import type { CurveRecord } from '@/types'
 
 /**
@@ -21,6 +25,10 @@ import type { CurveRecord } from '@/types'
  * to RunPlayerDialog, the one place a run is played back (App.tsx is the
  * only other thing that could reach it, and doesn't need to - a run only
  * ever surfaces grouped under its date).
+ *
+ * Also owns this date's batch delete - same "Select" / "Select all" /
+ * "Delete N selected" shape as CurveCategoryPane's, one
+ * POST /api/runs/delete-batch request instead of N separate DELETE calls.
  */
 export function RunDatePane({
   date,
@@ -34,14 +42,143 @@ export function RunDatePane({
   onRunsChanged: () => void
 }) {
   const [selected, setSelected] = useState<RunSummary | null>(null)
+  const sandbox = useSandbox()
+
+  const [selectMode, setSelectMode] = useState(false)
+  const [rawSelectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [batchDeleting, setBatchDeleting] = useState(false)
+  const [batchFailed, setBatchFailed] = useState<{ id: string; error: string }[] | null>(null)
+
+  // Derived, not stored: a reload can drop runs this pane had selected
+  // (deleted elsewhere, or already removed by an earlier batch here), and
+  // filtering here rather than syncing state in an effect means "Delete N
+  // selected" can never count an id that no longer exists, with no extra
+  // render pass.
+  const selectedIds = useMemo(() => {
+    const known = new Set(runs.map((r) => r.id))
+    return new Set([...rawSelectedIds].filter((id) => known.has(id)))
+  }, [rawSelectedIds, runs])
+
+  function exitSelectMode() {
+    setSelectMode(false)
+    setSelectedIds(new Set())
+    setBatchFailed(null)
+  }
+
+  function toggleSelected(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function toggleSelectAll() {
+    setSelectedIds((prev) => (prev.size === runs.length ? new Set() : new Set(runs.map((r) => r.id))))
+  }
+
+  async function handleBatchDelete() {
+    if (sandbox.enabled || selectedIds.size === 0 || batchDeleting) return // defense in depth
+    const ids = Array.from(selectedIds)
+    if (
+      !window.confirm(
+        `Delete ${ids.length} selected run${ids.length === 1 ? '' : 's'} from ${date}? This cannot be undone.`,
+      )
+    ) {
+      return
+    }
+    setBatchDeleting(true)
+    setBatchFailed(null)
+    try {
+      const result = await deleteRunsBatch(ids)
+      // Only the ones that failed stay selected - a retry then only
+      // targets what's actually still there.
+      setSelectedIds(new Set(result.failed.map((f) => f.id)))
+      if (result.failed.length > 0) {
+        setBatchFailed(result.failed)
+      } else {
+        exitSelectMode()
+      }
+      onRunsChanged()
+    } catch (e) {
+      // The request itself failed (network/server error), so nothing is
+      // known to have been deleted - every id stays selected rather than
+      // guessing which ones might have gone through.
+      setBatchFailed(ids.map((id) => ({ id, error: e instanceof Error ? e.message : String(e) })))
+    } finally {
+      setBatchDeleting(false)
+    }
+  }
+
+  const allSelected = runs.length > 0 && selectedIds.size === runs.length
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{date}</CardTitle>
-        <CardDescription>Closed-loop MPPT runs captured this day.</CardDescription>
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <CardTitle>{date}</CardTitle>
+            <CardDescription>Closed-loop MPPT runs captured this day.</CardDescription>
+          </div>
+
+          {runs.length > 0 &&
+            (selectMode ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={toggleSelectAll}
+                    aria-label="Select all"
+                    className="size-4 accent-primary"
+                  />
+                  Select all
+                </label>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleBatchDelete}
+                  disabled={sandbox.enabled || selectedIds.size === 0 || batchDeleting}
+                  focusableWhenDisabled
+                  title={
+                    sandbox.enabled
+                      ? 'Deleting is unavailable in demo mode'
+                      : selectedIds.size === 0
+                        ? 'Select at least one run first'
+                        : undefined
+                  }
+                >
+                  <Trash2 />
+                  {batchDeleting ? 'Deleting...' : `Delete ${selectedIds.size} selected`}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={exitSelectMode}
+                  disabled={batchDeleting}
+                >
+                  Cancel
+                </Button>
+              </div>
+            ) : (
+              <Button variant="outline" size="sm" onClick={() => setSelectMode(true)}>
+                Select
+              </Button>
+            ))}
+        </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-2">
+        {batchFailed && batchFailed.length > 0 && (
+          <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            Failed to delete {batchFailed.length} {batchFailed.length === 1 ? 'run' : 'runs'}:{' '}
+            {batchFailed
+              .map((f) => `"${runs.find((r) => r.id === f.id)?.label || f.id}" (${f.error})`)
+              .join(', ')}
+            . Still selected - try again, or Cancel to give up.
+          </p>
+        )}
+
         {runs.length === 0 ? (
           <p className="text-sm text-muted-foreground">No runs recorded for this date yet.</p>
         ) : (
@@ -49,6 +186,7 @@ export function RunDatePane({
             <Table>
               <TableHeader>
                 <TableRow>
+                  {selectMode && <TableHead className="w-8" />}
                   <TableHead>Label</TableHead>
                   <TableHead>Algorithm</TableHead>
                   <TableHead>Captured</TableHead>
@@ -74,6 +212,17 @@ export function RunDatePane({
                     }}
                     className="cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                   >
+                    {selectMode && (
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(r.id)}
+                          onChange={() => toggleSelected(r.id)}
+                          aria-label={`Select "${r.label || 'Untitled run'}" for batch delete`}
+                          className="size-4 accent-primary"
+                        />
+                      </TableCell>
+                    )}
                     <TableCell className="font-medium">{r.label || 'Untitled run'}</TableCell>
                     <TableCell>{r.algorithm}</TableCell>
                     <TableCell>{formatCapturedAt(r.captured_at)}</TableCell>
