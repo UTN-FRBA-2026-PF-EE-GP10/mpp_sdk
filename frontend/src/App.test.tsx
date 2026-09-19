@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { CaptureModeProvider } from '@/components/CaptureModeProvider'
+import { SetupModeProvider } from '@/components/SetupModeProvider'
 import { ThemeProvider } from '@/components/ThemeProvider'
 import { UnitsProvider } from '@/components/UnitsProvider'
 import type { CurveRecord } from '@/types'
@@ -76,9 +77,11 @@ function renderApp() {
   return render(
     <ThemeProvider>
       <UnitsProvider>
-        <CaptureModeProvider>
-          <App />
-        </CaptureModeProvider>
+        <SetupModeProvider>
+          <CaptureModeProvider>
+            <App />
+          </CaptureModeProvider>
+        </SetupModeProvider>
       </UnitsProvider>
     </ThemeProvider>,
   )
@@ -336,5 +339,63 @@ describe('App remeasure workflow', () => {
     await waitFor(() => expect(saveCurve).toHaveBeenCalledTimes(2))
     await waitFor(() => expect(deleteCurve).toHaveBeenCalledWith('live-1'))
     await waitFor(() => expect(screen.queryByText(/Remeasure pending/)).toBeNull())
+  })
+})
+
+describe('App setup mode', () => {
+  it('toggles between Full and Single from the header and persists the choice', async () => {
+    vi.mocked(fetchCurves).mockResolvedValue([])
+    vi.mocked(fetchRuns).mockResolvedValue([])
+    renderApp()
+
+    const toggle = screen.getByTitle(/Setup: Full/i)
+    expect(toggle.textContent).toBe('Full')
+
+    fireEvent.click(toggle)
+
+    expect(screen.getByTitle(/Setup: Single/i).textContent).toBe('Single')
+    expect(window.localStorage.getItem('mpp-sdk.setup-mode')).toBe('single')
+  })
+
+  it('shows the Full-setup ADC reminder only after switching into it, and dismisses on request', async () => {
+    vi.mocked(fetchCurves).mockResolvedValue([])
+    vi.mocked(fetchRuns).mockResolvedValue([])
+    renderApp()
+
+    // Full is the default - nothing was switched into, so no reminder yet.
+    expect(screen.queryByText(/switch the ADC range to Mid/)).toBeNull()
+
+    fireEvent.click(screen.getByTitle(/Setup: Full/i)) // -> single
+    expect(screen.queryByText(/switch the ADC range to Mid/)).toBeNull()
+
+    fireEvent.click(screen.getByTitle(/Setup: Single/i)) // -> full
+    expect(screen.getByText(/switch the ADC range to Mid/)).toBeTruthy()
+
+    fireEvent.click(screen.getByText('Dismiss'))
+    expect(screen.queryByText(/switch the ADC range to Mid/)).toBeNull()
+  })
+
+  it('keeps panel B when remeasuring a two-panel curve while Single setup is active', async () => {
+    const twoPanelCurve: CurveRecord = {
+      ...liveCurve(1),
+      panels: [
+        { id: 'A', tilt_deg: 90 },
+        { id: 'B', tilt_deg: 60 },
+      ],
+    }
+    vi.mocked(fetchCurves).mockResolvedValue([twoPanelCurve])
+    vi.mocked(fetchRuns).mockResolvedValue([])
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    renderApp()
+    await waitFor(() => expect(within(baselineNavRow()).getByText('1')).toBeTruthy())
+
+    // Switching to Single must not silently drop panel B from a curve
+    // that already has one - the point of this test.
+    fireEvent.click(screen.getByTitle(/Setup: Full/i))
+
+    await startRemeasureFromBaselinePane()
+
+    expect(screen.getByText('Panel B tilt')).toBeTruthy()
+    expect(screen.getByText(/keeps both, even though setup is Single/)).toBeTruthy()
   })
 })

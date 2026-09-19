@@ -28,6 +28,10 @@ export function CurveMetadata({ record, className }: { record: CurveRecord; clas
   return (
     <dl className={className}>
       <Field label="Captured" value={formatCapturedAt(record.captured_at)} />
+      <Field
+        label="Panels"
+        value={`${record.panels.length} panel${record.panels.length === 1 ? '' : 's'}`}
+      />
       <Field label="Panel A" value={panelTilt(record, 'A')} />
       <Field label="Panel B" value={panelTilt(record, 'B')} />
       <Field label="Voc" value={`${record.voc.toFixed(2)} V`} />
