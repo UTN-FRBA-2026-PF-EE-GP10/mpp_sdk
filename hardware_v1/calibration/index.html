@@ -10,29 +10,31 @@
       
       
       
-        <link rel="canonical" href="https://utn-frba-2026-pf-ee-gp10.github.io/mpp_sdk/">
+        <link rel="canonical" href="https://utn-frba-2026-pf-ee-gp10.github.io/mpp_sdk/hardware_v1/calibration/">
       
       
+        <link rel="prev" href="../../measurement_procedure/">
       
-        <link rel="next" href="general_information/">
+      
+        <link rel="next" href="../../algorithms/perturb_observe/">
       
       
         
       
       
-      <link rel="icon" href="assets/images/favicon.png">
+      <link rel="icon" href="../../assets/images/favicon.png">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
     
     
       
-        <title>mpp-sdk docs</title>
+        <title>ADC calibration - mpp-sdk docs</title>
       
     
     
-      <link rel="stylesheet" href="assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
       
         
-        <link rel="stylesheet" href="assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
       
       
 
@@ -51,7 +53,7 @@
       
     
     
-    <script>__md_scope=new URL(".",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
 
@@ -76,7 +78,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#mpp-sdk-documentation" class="md-skip">
+        <a href="#adc-calibration-hardware-v1" class="md-skip">
           Skip to content
         </a>
       
@@ -92,7 +94,7 @@
 
 <header class="md-header md-header--shadow" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="." title="mpp-sdk docs" class="md-header__button md-logo" aria-label="mpp-sdk docs" data-md-component="logo">
+    <a href="../.." title="mpp-sdk docs" class="md-header__button md-logo" aria-label="mpp-sdk docs" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -112,7 +114,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Home
+              ADC calibration
             
           </span>
         </div>
@@ -230,7 +232,7 @@
 
 <nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="." title="mpp-sdk docs" class="md-nav__button md-logo" aria-label="mpp-sdk docs" data-md-component="logo">
+    <a href="../.." title="mpp-sdk docs" class="md-nav__button md-logo" aria-label="mpp-sdk docs" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -257,37 +259,10 @@
       
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Home
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="." class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
         
   
   
@@ -303,48 +278,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#start-here" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Start here
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#algorithm-references" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Algorithm references
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -356,7 +289,7 @@
   
   
     <li class="md-nav__item">
-      <a href="general_information/" class="md-nav__link">
+      <a href="../../general_information/" class="md-nav__link">
         
   
   
@@ -383,7 +316,7 @@
   
   
     <li class="md-nav__item">
-      <a href="rationale/" class="md-nav__link">
+      <a href="../../rationale/" class="md-nav__link">
         
   
   
@@ -410,7 +343,7 @@
   
   
     <li class="md-nav__item">
-      <a href="methodology/" class="md-nav__link">
+      <a href="../../methodology/" class="md-nav__link">
         
   
   
@@ -437,7 +370,7 @@
   
   
     <li class="md-nav__item">
-      <a href="measurement_procedure/" class="md-nav__link">
+      <a href="../../measurement_procedure/" class="md-nav__link">
         
   
   
@@ -461,8 +394,10 @@
       
   
   
+    
   
   
+  
     
     
     
@@ -473,11 +408,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
         
           
           <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
@@ -498,7 +433,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
             
@@ -513,10 +448,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="hardware_v1/calibration/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADC calibration
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -532,6 +494,81 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-it-does" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What it does
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-it-is-needed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why it is needed
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#when-to-redo-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When to redo it
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-to-redo-it-about-15-minutes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How to redo it (about 15 minutes)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#check-the-result" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Check the result
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -603,7 +640,7 @@
   
   
     <li class="md-nav__item">
-      <a href="algorithms/perturb_observe/" class="md-nav__link">
+      <a href="../../algorithms/perturb_observe/" class="md-nav__link">
         
   
   
@@ -634,7 +671,7 @@
   
   
     <li class="md-nav__item">
-      <a href="algorithms/incremental_conductance/" class="md-nav__link">
+      <a href="../../algorithms/incremental_conductance/" class="md-nav__link">
         
   
   
@@ -665,7 +702,7 @@
   
   
     <li class="md-nav__item">
-      <a href="algorithms/fuzzy_logic/" class="md-nav__link">
+      <a href="../../algorithms/fuzzy_logic/" class="md-nav__link">
         
   
   
@@ -696,7 +733,7 @@
   
   
     <li class="md-nav__item">
-      <a href="algorithms/scan_and_track/" class="md-nav__link">
+      <a href="../../algorithms/scan_and_track/" class="md-nav__link">
         
   
   
@@ -727,7 +764,7 @@
   
   
     <li class="md-nav__item">
-      <a href="algorithms/particle_swarm/" class="md-nav__link">
+      <a href="../../algorithms/particle_swarm/" class="md-nav__link">
         
   
   
@@ -758,7 +795,7 @@
   
   
     <li class="md-nav__item">
-      <a href="algorithms/restart_policy/" class="md-nav__link">
+      <a href="../../algorithms/restart_policy/" class="md-nav__link">
         
   
   
@@ -816,10 +853,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#start-here" class="md-nav__link">
+  <a href="#what-it-does" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Start here
+        What it does
       
     </span>
   </a>
@@ -827,10 +864,43 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#algorithm-references" class="md-nav__link">
+  <a href="#why-it-is-needed" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Algorithm references
+        Why it is needed
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#when-to-redo-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When to redo it
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-to-redo-it-about-15-minutes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How to redo it (about 15 minutes)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#check-the-result" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Check the result
       
     </span>
   </a>
@@ -857,36 +927,126 @@
   
 
 
-<h1 id="mpp-sdk-documentation">mpp-sdk documentation<a class="headerlink" href="#mpp-sdk-documentation" title="Permanent link">&para;</a></h1>
-<p>A Python SDK for designing, comparing, and deploying <strong>Maximum Power Point
-Tracking</strong> (MPPT) algorithms for photovoltaic systems.</p>
-<h2 id="start-here">Start here<a class="headerlink" href="#start-here" title="Permanent link">&para;</a></h2>
+<h1 id="adc-calibration-hardware-v1">ADC calibration (hardware v1)<a class="headerlink" href="#adc-calibration-hardware-v1" title="Permanent link">&para;</a></h1>
+<p>The board measures V in with the INA229, and V out with the RP2040's
+on-chip ADC. The INA229 needs no calibration. The on-chip ADC does, and
+this page explains why and how.</p>
+<h2 id="what-it-does">What it does<a class="headerlink" href="#what-it-does" title="Permanent link">&para;</a></h2>
+<p>The ADC gives a raw code (0 to 4095) for the voltage on its pin. The
+firmware turns that code into volts with one straight line:</p>
+<div class="highlight"><pre><span></span><code>pin voltage = 0.79322 mV x (code - 13.19)
+</code></pre></div>
+<p>Then it multiplies by the divider ratio (8.5 on the <code>Low</code> range) to get the
+voltage at the terminals.</p>
+<p>The two numbers are the <strong>gain</strong> (0.79322 mV per code) and the <strong>zero</strong>
+(13.19 codes). They are in <code>firmware/pipico_board/src/adc_cal.rs</code>. The
+same line is used for <code>ADC_PWR</code>, <code>ADC_VOUT</code> and <code>ADC_Input_Curr</code>: they
+share one ADC.</p>
+<h2 id="why-it-is-needed">Why it is needed<a class="headerlink" href="#why-it-is-needed" title="Permanent link">&para;</a></h2>
+<p>The ADC reads about <strong>13 codes at 0 V</strong>. On the <code>Low</code> range that is about
+<strong>90 mV at the terminals</strong>. Before the calibration:</p>
 <ul>
-<li><strong><a href="general_information/">General Information</a></strong> - what the system is, the
-  four SDK pillars, minimum PV theory, what pvlib contributes, and why the
-  panels are wired in series.</li>
-<li><strong><a href="rationale/">Rationale</a></strong> - the design decisions behind the project.</li>
-<li><strong><a href="methodology/">Methodology</a></strong> - how the harnesses measure MPPT
-  performance, what each metric means, the restart trigger policy, noise
-  robustness, and the sim-to-real (PLECS / bench) comparison protocol.</li>
-<li><strong><a href="measurement_procedure/">Measurement Procedure</a></strong> - the checklist
-  for capturing a curve, running a tilted series, and running a
-  closed-loop run on the bench.</li>
+<li>V out showed 85-95 mV with the converter off and 0 V on the output.</li>
+<li>Below 1.2 V, readings were 6-16 % too high.</li>
+<li>From 3 V to 18 V, readings were already within 0.5 %.</li>
 </ul>
-<h2 id="algorithm-references">Algorithm references<a class="headerlink" href="#algorithm-references" title="Permanent link">&para;</a></h2>
-<p>One page each, with the equations and references:</p>
+<p>So the calibration matters most near 0 V and at low voltage. Measured on
+2026-09-19, against a multimeter:</p>
+<table>
+<thead>
+<tr>
+<th>Test</th>
+<th>Meter</th>
+<th>ADC_VOUT</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Output at 0 V, converter off</td>
+<td>0.000 V</td>
+<td>0.000 V</td>
+</tr>
+<tr>
+<td>Supply on the output</td>
+<td>5.030 V</td>
+<td>5.006 V</td>
+</tr>
+<tr>
+<td>Converter switching, D = 0.45, 5 V in, 10 Ohm load</td>
+<td>3.2 V</td>
+<td>3.221 V</td>
+</tr>
+<tr>
+<td>Converter switching, D = 0.40, 12 V in, 10 Ohm load</td>
+<td>7.00 V</td>
+<td>7.006 V</td>
+</tr>
+</tbody>
+</table>
+<div class="admonition note">
+<p class="admonition-title">Remaining error</p>
+<p>The RP2040 ADC has uneven code steps near codes 512 and 1536 (errata
+RP2040-E11; about 3.4 V and 10.2 V at the terminals on <code>Low</code>). A
+straight line cannot follow them: expect up to about 50 mV of error
+there. For better accuracy, use the INA229 (V in only).</p>
+</div>
+<h2 id="when-to-redo-it">When to redo it<a class="headerlink" href="#when-to-redo-it" title="Permanent link">&para;</a></h2>
 <ul>
-<li><a href="algorithms/perturb_observe/">Perturb &amp; Observe</a> - classical hill-climbing baseline</li>
-<li><a href="algorithms/incremental_conductance/">Incremental Conductance</a> - explicit at-the-MPP test</li>
-<li><a href="algorithms/fuzzy_logic/">Fuzzy Logic</a> - graduated-step local tracker</li>
-<li><a href="algorithms/scan_and_track/">Scan-and-Track</a> - global MPPT (scan + local refine)</li>
-<li><a href="algorithms/particle_swarm/">Particle Swarm</a> - global MPPT (population search)</li>
-<li><a href="algorithms/restart_policy/">Restart Policy</a> - when a global tracker re-searches</li>
+<li>After you change the ADC range (<code>ADC_DIVIDER_RANGE</code> and its jumpers).
+  For example, <code>Mid</code> for two panels in series.</li>
+<li>On a different board, or after you change the Pico.</li>
 </ul>
-<p>The first three are <strong>local</strong> trackers (they get trapped on local maxima under
-partial shading); the last two are <strong>global</strong> methods that escape the trap.</p>
-<hr />
-<p>Source and full roadmap: <a href="https://github.com/UTN-FRBA-2026-PF-EE-GP10/mpp_sdk">github.com/UTN-FRBA-2026-PF-EE-GP10/mpp_sdk</a>.</p>
+<h2 id="how-to-redo-it-about-15-minutes">How to redo it (about 15 minutes)<a class="headerlink" href="#how-to-redo-it-about-15-minutes" title="Permanent link">&para;</a></h2>
+<p>You need a bench power supply and a multimeter.</p>
+<ol>
+<li><strong>Keep the duty at 0.</strong> Leave the workbench server idle. Do not press
+   <strong>Start Measurement</strong> or <strong>Start run</strong>.</li>
+<li><strong>Connect the supply to the input</strong>, J3: + on pin 1 or 2, − on pin 3 or</li>
+<li>Set the current limit to 50 mA.</li>
+<li>
+<p><strong>Read the log</strong> with the debug probe
+   (<code>cargo run --release</code> in <code>firmware/pipico_board</code>). Once per second the
+   firmware prints a line like this:</p>
+<div class="highlight"><pre><span></span><code>ADC cal: PWR raw=1495.4 ... | INA229 V=9970 mV
+</code></pre></div>
+<p><code>raw</code> is the ADC code, and <code>INA229 V</code> is the true voltage.</p>
+</li>
+<li>
+<p><strong>Take two points, far apart.</strong> One low (1-2 V) and one near the top
+   of the range (18 V on <code>Low</code>). Hold each voltage for 10 s and write down
+   <code>raw</code> and <code>INA229 V</code>. Do not use two high points: the zero then comes
+   out wrong.</p>
+</li>
+<li>
+<p><strong>Calculate the two numbers.</strong> With points (c1, V1) and (c2, V2), in
+   codes and terminal mV, and the divider ratio R (8.5 on <code>Low</code>):</p>
+<div class="highlight"><pre><span></span><code>slope = (V2 - V1) / (c2 - c1)       terminal mV per code
+zero  = c1 - V1 / slope             codes
+gain  = slope / R                   pin mV per code
+</code></pre></div>
+<p>Example (2026-09-19): (192.4, 1200) and (2677.6, 17970) give
+slope 6.748, zero 14.6 and gain 0.7939. The numbers in the firmware
+come from a fit through all eight points taken that day; two points
+give almost the same line.</p>
+</li>
+<li>
+<p><strong>Put them in <code>adc_cal.rs</code></strong>: <code>UV_X100_PER_CODE</code> is the gain in
+   microvolts x 100 (0.7939 mV becomes 79390), <code>ZERO_CODE_X100</code> is the
+   zero x 100 (14.6 becomes 1460). Build and flash.</p>
+</li>
+</ol>
+<h2 id="check-the-result">Check the result<a class="headerlink" href="#check-the-result" title="Permanent link">&para;</a></h2>
+<p>Put the supply on the <strong>output</strong>, J4: + on pin 1 or 2, − on pin 3 or 4.
+This is safe with the duty at 0: the output diode stops the supply from
+feeding the converter. Compare <code>ADC_VOUT</code> in the log against the meter at
+two or three voltages. It must agree within about 50 mV.</p>
+<div class="admonition danger">
+<p class="admonition-title">Never run the converter with no load</p>
+<p>With nothing on the output, the SEPIC output rises far above the input:
+about 50 V at 10 % duty with 18 V in. To check V out while the converter
+switches, put a load resistor on the output (10 Ohm, 10 W) and use
+<code>scripts/duty_sweep.py</code>.</p>
+</div>
 
 
 
@@ -958,10 +1118,10 @@ partial shading); the last two are <strong>global</strong> methods that escape t
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": ".", "features": ["navigation.sections", "navigation.top", "content.code.copy", "search.suggest"], "search": "assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "content.code.copy", "search.suggest"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
       
         <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
       
