@@ -92,14 +92,14 @@ describe('NewReportPane', () => {
     fireEvent.change(screen.getByPlaceholderText(/e.g. Panel A alone/), {
       target: { value: 'Panel A alone' },
     })
-    fireEvent.change(screen.getByLabelText('Operator'), { target: { value: 'fede' } })
+    fireEvent.change(screen.getByLabelText('Operator'), { target: { value: 'bench operator' } })
     fireEvent.click(screen.getByText('Create report'))
 
     await waitFor(() =>
       expect(createReport).toHaveBeenCalledWith({
         template_id: 'single-panel-characterization',
         title: 'Panel A alone',
-        fields: { panel: 'Luxen LN-10P', operator: 'fede' },
+        fields: { panel: 'Luxen LN-10P', operator: 'bench operator' },
       }),
     )
     await waitFor(() => expect(onCreated).toHaveBeenCalledWith(newReport()))
