@@ -147,28 +147,41 @@ export default function App() {
 
   useEffect(() => {
     if (sandboxEnabled) return
+    // A retry or reload can start while an older request is still out.
+    // Only the newest one may set the list or the error, or a slow stale
+    // answer would overwrite the current state.
+    let current = true
     fetchCurves()
       .then((data) => {
+        if (!current) return
         setFetchedRecords(data)
         setCurvesError(null)
       })
       .catch((e) => {
         console.error('fetching curves failed', e)
-        setCurvesError(e instanceof Error ? e.message : String(e))
+        if (current) setCurvesError(e instanceof Error ? e.message : String(e))
       })
+    return () => {
+      current = false
+    }
   }, [reloadToken, sandboxEnabled])
 
   useEffect(() => {
     if (sandboxEnabled) return
+    let current = true
     fetchRuns()
       .then((data) => {
+        if (!current) return
         setFetchedRuns(data)
         setRunsError(null)
       })
       .catch((e) => {
         console.error('fetching runs failed', e)
-        setRunsError(e instanceof Error ? e.message : String(e))
+        if (current) setRunsError(e instanceof Error ? e.message : String(e))
       })
+    return () => {
+      current = false
+    }
   }, [reloadToken, sandboxEnabled])
 
   // 'firmware-replay' ("Demo with PICO") needs a real board on the other

@@ -202,9 +202,25 @@ describe('CurveDashboardPane - accessible names', () => {
   it('names the curve in each icon-only action button', () => {
     const props = baseProps()
     renderPane(<CurveDashboardPane {...props} />)
-    expect(screen.getByRole('button', { name: 'Download "both flat"' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Remeasure "both flat"' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Delete "both flat"' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /^Download "both flat", captured / })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /^Remeasure "both flat", captured / })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /^Delete "both flat", captured / })).toBeTruthy()
+  })
+
+  it('keeps the names apart for two curves with the same label', () => {
+    renderPane(
+      <>
+        <CurveDashboardPane {...baseProps()} />
+        <CurveDashboardPane
+          {...baseProps({ record: record({ id: 'other', captured_at: '2026-09-14T10:30:00Z' }) })}
+        />
+      </>,
+    )
+    const names = screen
+      .getAllByRole('button', { name: /^Delete "both flat"/ })
+      .map((b) => b.getAttribute('aria-label'))
+    expect(names).toHaveLength(2)
+    expect(new Set(names).size).toBe(2)
   })
 })
 

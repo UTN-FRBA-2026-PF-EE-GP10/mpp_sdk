@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { CaptureModeProvider } from '@/components/CaptureModeProvider'
@@ -208,6 +208,27 @@ describe('App load errors', () => {
 
     await waitFor(() => expect(screen.queryByText(/Couldn't load your saved curves/)).toBeNull())
     await waitFor(() => expect(within(baselineNavRow()).getByText('1')).toBeTruthy())
+  })
+
+  it('ignores a stale answer from an older request after a newer retry', async () => {
+    vi.mocked(fetchCurves).mockRejectedValue(new Error('network error'))
+    vi.mocked(fetchRuns).mockResolvedValue([])
+    renderApp()
+    await waitFor(() => expect(screen.getByText(/Couldn't load your saved curves/)).toBeTruthy())
+
+    let resolveStale: (value: CurveRecord[]) => void = () => {}
+    vi.mocked(fetchCurves).mockReturnValueOnce(
+      new Promise<CurveRecord[]>((resolve) => {
+        resolveStale = resolve
+      }),
+    )
+    fireEvent.click(screen.getByText('Retry'))
+    vi.mocked(fetchCurves).mockRejectedValueOnce(new Error('still broken'))
+    fireEvent.click(screen.getByText('Retry'))
+    await waitFor(() => expect(screen.getByText(/still broken/)).toBeTruthy())
+
+    await act(async () => resolveStale([liveCurve(1)]))
+    expect(screen.getByText(/still broken/)).toBeTruthy()
   })
 
   it('never shows a load-error banner in Demo mode, where nothing is fetched', async () => {

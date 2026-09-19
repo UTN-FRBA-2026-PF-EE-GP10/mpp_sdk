@@ -62,6 +62,9 @@ export function CurveDashboardPane({
   const [actionError, setActionError] = useState<string | null>(null)
 
   const label = record.label || 'Untitled curve'
+  // Labels repeat (every unnamed curve is "Untitled curve"), so the
+  // capture time keeps each tile's button names apart.
+  const capturedAt = formatCapturedAt(record.captured_at)
   const deleteDisabled = sandbox.enabled || remeasurePending || deleting
   const remeasureDisabled = sandbox.enabled || remeasurePending
 
@@ -174,7 +177,7 @@ export function CurveDashboardPane({
                 variant="ghost"
                 size="icon-sm"
                 title="Save (download)"
-                aria-label={`Download "${label}"`}
+                aria-label={`Download "${label}", captured ${capturedAt}`}
               >
                 <Download />
               </Button>
@@ -202,7 +205,7 @@ export function CurveDashboardPane({
           // focusableWhenDisabled keeps it hoverable/focusable (base-ui
           // still blocks the click itself) so the reason stays reachable.
           focusableWhenDisabled
-          aria-label={`Remeasure "${label}"`}
+          aria-label={`Remeasure "${label}", captured ${capturedAt}`}
           title={
             sandbox.enabled
               ? 'Remeasure needs real hardware - unavailable in demo mode'
@@ -220,7 +223,7 @@ export function CurveDashboardPane({
           onClick={handleDelete}
           disabled={deleteDisabled}
           focusableWhenDisabled
-          aria-label={`Delete "${label}"`}
+          aria-label={`Delete "${label}", captured ${capturedAt}`}
           title={
             sandbox.enabled
               ? 'Deleting is unavailable in demo mode'
