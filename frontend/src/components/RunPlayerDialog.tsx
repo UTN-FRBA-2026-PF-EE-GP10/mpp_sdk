@@ -13,6 +13,7 @@ import { formatCapturedAt, formatSeconds } from '@/lib/format'
 import { findCurveForRun, referenceCurveMessage, trailUpTo } from '@/lib/runPlayback'
 import { useSandbox } from '@/lib/sandbox'
 import type { RunDetail, RunSummary } from '@/lib/runs'
+import { mppPoint } from '@/lib/curveMath'
 import type { CurvePoint, CurveRecord } from '@/types'
 
 const SPEEDS = [0.25, 0.5, 1, 2, 4]
@@ -227,6 +228,7 @@ function RunPlayer({
   const referenceMessage = useFallback
     ? null
     : referenceCurveMessage(detail.curve_ref, referenceCurve)
+  const mppTh = useMemo(() => mppPoint(referencePoints), [referencePoints])
 
   return (
     <div className="flex flex-col gap-3">
@@ -245,7 +247,7 @@ function RunPlayer({
         current={current}
       />
 
-      <RunReadouts sample={current} />
+      <RunReadouts sample={current} mppTh={mppTh} />
 
       <RunTransport playback={playback} />
     </div>
