@@ -4,12 +4,15 @@ import {
   ivChartOptions,
   markerRingColor,
   MPP_COLOR,
+  MPP_TH_DRAW_ORDER,
+  mppThColor,
   OPERATING_POINT_DRAW_ORDER,
   referenceColor,
   REFERENCE_DRAW_ORDER,
   TRAIL_COLOR,
   TRAIL_DRAW_ORDER,
 } from '@/lib/chartConfig'
+import { mppPoint } from '@/lib/curveMath'
 import { useTheme } from '@/lib/theme'
 import { useUnits } from '@/lib/units'
 import type { RunSample } from '@/lib/runs'
@@ -23,6 +26,10 @@ import type { CurvePoint } from '@/types'
  * there" reads directly off the picture. `referencePoints` is empty when
  * the run has no usable curve_ref; the caller is responsible for saying
  * so elsewhere in the UI (see referenceCurveMessage in lib/runPlayback.ts).
+ *
+ * MPP_th is the reference curve's maximum-power point (`mppPoint`, the
+ * same rule the curve panes use for their MPP), marked on both reference
+ * traces: the peak the algorithm should reach.
  */
 export function RunChart({
   referencePoints,
@@ -67,6 +74,33 @@ export function RunChart({
           order: REFERENCE_DRAW_ORDER,
         },
       )
+      const mppTh = mppPoint(referencePoints)
+      if (mppTh) {
+        const marker = {
+          showLine: false,
+          borderColor: markerRingColor(resolvedDark),
+          backgroundColor: mppThColor(resolvedDark),
+          borderWidth: 2,
+          pointStyle: 'rectRot' as const,
+          pointRadius: 7,
+          pointHoverRadius: 9,
+          order: MPP_TH_DRAW_ORDER,
+        }
+        datasets.push(
+          {
+            ...marker,
+            label: 'MPP_th (I)',
+            data: [{ x: mppTh.v, y: mppTh.i * factor }],
+            yAxisID: 'y',
+          },
+          {
+            ...marker,
+            label: 'MPP_th (P)',
+            data: [{ x: mppTh.v, y: mppTh.v * mppTh.i * factor }],
+            yAxisID: 'p',
+          },
+        )
+      }
     }
     datasets.push(
       {

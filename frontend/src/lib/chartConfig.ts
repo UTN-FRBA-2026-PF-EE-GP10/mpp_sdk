@@ -43,6 +43,9 @@ export const POWER_DRAW_ORDER = 2
 // point has to win over its own trail, which has to win over the faded
 // reference curve sitting furthest back.
 export const OPERATING_POINT_DRAW_ORDER = 0
+// MPP_th sits under the operating point (which must stay visible as it
+// passes over the peak) and over the trail and the reference curve.
+export const MPP_TH_DRAW_ORDER = 0.5
 export const TRAIL_DRAW_ORDER = 1
 export const REFERENCE_DRAW_ORDER = 2
 
@@ -90,6 +93,14 @@ export const REFERENCE_ALPHA = 0.55
 
 export function referenceColor(dark: boolean, alpha = REFERENCE_ALPHA): string {
   return fadeColor(dark ? NEUTRAL_TEXT_DARK : NEUTRAL_TEXT_LIGHT, alpha)
+}
+
+/** The run player's MPP_th marker: the reference curve's own grey at full
+ * strength. It belongs to the reference curve, so it takes that curve's
+ * neutral rather than a fourth categorical hue; its diamond shape keeps it
+ * apart from the cyan circle of the operating point. */
+export function mppThColor(dark: boolean): string {
+  return dark ? NEUTRAL_TEXT_DARK : NEUTRAL_TEXT_LIGHT
 }
 
 /** The ring drawn around a marker that sits on top of another mark (the
