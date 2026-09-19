@@ -10,7 +10,9 @@
 
 - **Priority**: P1 - the workbench does everything the thesis needs, but
   only the people who built it know how to drive it.
-- **Effort**: L (two bench sessions, then the page).
+- **Effort**: L (two bench sessions, and the page in two versions).
+- **Schedule**: **Session 1, panel A alone: Saturday 2026-09-19** -> page
+  v1. **Session 2, panels A and B: the week after** -> page v2.
 - **Risk**: LOW for the page. Part A drives the real converter at the full
   two-panel voltage: it carries plan 040's risks and follows its safety
   rules.
@@ -59,16 +61,61 @@ before anything else.
 
 ## Part A: the bench work (operator)
 
-### Session 1 (optional, recommended): one panel
+### Session 1: panel A alone (Saturday 2026-09-19) -> page v1
 
-A short practice run with **panel A alone** on the input and the ADC
-range left on `Low`: capture one curve and one P&O run. It checks the
-whole chain at low power before the string doubles the voltage. Keep its
-data; the page does not need it.
+Panel A alone on the input. This is also the first closed-loop run on the
+real converter (plan 040 Steps 0-4): go slowly, and treat any abort as a
+finding.
+
+#### Session 1 setup
+
+- [ ] Panel A alone on the input, facing the light squarely.
+- [ ] ADC range stays **`Low`** (~27.3 V full scale covers one panel's
+      ~17-19 V). The boot log prints the range.
+- [ ] Firmware on `main`: `FIRMWARE_MODE = MppTracker`,
+      `MAX31865_ENABLED = false`. The log shows V and I every second and
+      `T=n/a`.
+- [ ] Server on `main`; the pill reads **PICO connected**.
+- [ ] **Light below 700 mA**: one panel's datasheet Isc (0.79 A) is above
+      the tracer's cutoff, so use the lamp or weak sun (power is not a
+      limit for one panel: ~10 W against 16.1 W). Record the source,
+      setting, distance, or time and sky.
+- [ ] Heatsink on Q3, or keep runs short. Someone able to cut power.
+- [ ] A multimeter for Step 0.
+- [ ] Browser at desktop width, **light theme**, units **A/W**, zoom 100 %.
+
+#### Session 1 steps
+
+0. **Meter check (plan 040 Step 0).** At a fixed duty, compare the meter
+   on the converter output with the **V out** readout. Write down both.
+1. **Light check.** One sweep. Isc must read below 700 mA; if not,
+   reduce the light.
+2. **Curve.** Save it as **Baseline** (the panel fields describe the
+   two-panel rig; with A alone, write "panel A alone" in the notes).
+3. **First run.** **P&O**, 10 s, starting duty 0.5, the curve as
+   **Reference curve**, default limits. Watch the bench, not the screen.
+4. **Same curve, the other algorithms.** InCond, Fuzzy, Scan&Track and PSO,
+   same settings. On one panel there is one peak: all five should end near
+   the same power. The global trackers sweep away first; that is expected.
+5. **Seed test.** P&O once from starting duty 0.85. On one peak it should
+   still climb back; the page contrasts this with the two-peak case in v2.
+6. **A stopped run.** One short run, **Stop run** halfway.
+7. **Link-down (plan 040 Step 4).** One short run, SPI cable out halfway.
+   It must abort `link-down` with the duty at 0.
+
+#### Session 1 screenshots
+
+The Session 2 screenshot table below, except S6 and S7 (tilt). In S8 use P&O on the
+panel-A curve.
+
+#### Session 1: keep
+
+The same as Session 2, plus the meter readings and the run's samples per
+second (plan 040 needs that number).
 
 ### Session 2: the full setup
 
-#### Setup
+#### Session 2 setup
 
 - [ ] Panels A and B in series. **Check a bypass diode across each panel**
       (on the panel's junction box, or a meter in diode mode). Without it
@@ -86,7 +133,7 @@ data; the page does not need it.
       **A/W**, zoom 100 %.
 - [ ] A multimeter (plan 040 Step 0, if not done yet).
 
-#### Steps
+#### Session 2 steps
 
 1. **Light check.** One sweep at B = 90°. Isc must read below 700 mA and
    P at MPP below 16 W. If not, reduce the light and repeat.
@@ -103,7 +150,7 @@ data; the page does not need it.
    starting duty matters.
 6. **A stopped run.** One short run stopped with **Stop run** halfway.
 
-#### Screenshots (name them exactly; PNG)
+#### Session 2 screenshots (name them exactly; PNG)
 
 | # | UI state | File |
 |---|----------|------|
@@ -121,7 +168,7 @@ data; the page does not need it.
 | S12 | **Open in player**, scrubbed to the end | `s12-player.png` |
 | S13 | The pill red (**PICO not connected**): SPI cable out, nothing running | `s13-disconnected.png` |
 
-#### Keep
+#### Session 2: keep
 
 - [ ] Download every curve and run (JSON), and keep the originals from the
       Pi's `data/curves/` and `data/runs/`.
@@ -139,6 +186,18 @@ The repo is public (AGENTS.md "What not to commit").
 - [ ] Check the `label` and `notes` you typed: no place names or serials.
 
 ## Part B: write the page (any agent)
+
+**Two versions of one page.** **v1** (after Session 1) covers panel A
+alone: outline items 1-3, 5-7, 9-10, 12-15 below, with "Step 4: the
+tilted series" and the two-peak comparison left out, and a note at the
+top: "Two panels (A and B): coming after the next session". **v2** (after
+Session 2) switches the page to the two-panel rig and adds the tilted
+series and the local-vs-global comparison. Graphs for v1: F1 (one panel),
+F3, F5, F7 (five runs on one peak), F9, F10, plus a run-trajectory graph
+on the single-peak curve. v2 adds F2, F4, F6, F8.
+
+The figure script is written once, for both versions: it takes the data
+directory as input, so v2 only adds data.
 
 ### Files
 
@@ -242,6 +301,10 @@ Mermaid needs `pymdownx.superfences` custom fences in `mkdocs.yml`
 
 - **A sweep aborts at a cutoff** - reduce the light. Do not raise
   `TRACER_I_MAX_MA` or `TRACER_P_MAX_MW` to make the page work.
+- **Session 1: the first run behaves unexpectedly** (the converter makes
+  a noise that does not settle, Q3 too hot to touch, the panel voltage
+  collapses and stays there, duty stuck at a rail) - stop, record it in
+  plan 040. Page v1 waits for a clean run.
 - **The tilted curves never show two peaks** - check the bypass diodes and
   the tilt before anything else. The page's central graph (F4) depends on
   it; do not write Step 4 without it.
