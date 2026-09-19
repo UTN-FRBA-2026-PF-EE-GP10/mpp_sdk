@@ -159,7 +159,9 @@ library needed on their end.
 want, then **Export N selected**. Type a title when asked - this becomes
 the file name. The browser downloads `<title>.mppsession.json`.
 
-**Open**: click **Open session** in the header, or drag the file onto the
+**Open**: start the workbench on any machine with
+`mpp-sdk curve-tracer-web --demo` (no board needed), open it in a browser,
+then click **Open session** in the header, or drag the file onto the
 page. The workbench switches to a read-only view of that file: a
 **Viewing: `<title>`** banner appears at the top, with a **Close** button
 that returns to the normal view. While viewing a session:
@@ -169,7 +171,8 @@ that returns to the normal view. While viewing a session:
 - The curve and run views work the same as usual, including opening a run
   in the player - the player reads the run's samples straight from the
   file.
-- It works with no server running at all, the same as `--demo` mode.
+- No board and no saved library are needed: everything comes from the
+  file.
 
 A bad file (wrong format, too large, or corrupted) shows an error message
 and leaves the current view untouched.
