@@ -165,6 +165,13 @@ export function RunPane({
         curves={curves}
         onClose={() => setOpenRun(null)}
         onDeleted={onRunSaved}
+        // The preview of the run just watched keeps the grey curve the
+        // live view drew, even when the saved run cannot name it.
+        fallbackReferencePoints={
+          openRun !== null && openRun.id === live?.saved_run_id
+            ? live.reference_points
+            : undefined
+        }
       />
     </Card>
   )

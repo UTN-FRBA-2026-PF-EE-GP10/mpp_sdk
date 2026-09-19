@@ -13,7 +13,7 @@ import { formatCapturedAt, formatSeconds } from '@/lib/format'
 import { findCurveForRun, referenceCurveMessage, trailUpTo } from '@/lib/runPlayback'
 import { useSandbox } from '@/lib/sandbox'
 import type { RunDetail, RunSummary } from '@/lib/runs'
-import type { CurveRecord } from '@/types'
+import type { CurvePoint, CurveRecord } from '@/types'
 
 const SPEEDS = [0.25, 0.5, 1, 2, 4]
 
@@ -37,11 +37,17 @@ export function RunPlayerDialog({
   curves,
   onClose,
   onDeleted,
+  fallbackReferencePoints,
 }: {
   run: RunSummary | null
   curves: CurveRecord[]
   onClose: () => void
   onDeleted: () => void
+  /** The curve the live view drew for this run (the server's
+   * `reference_points`), used when the saved run's `curve_ref` finds
+   * nothing - e.g. the built-in panel, which no saved curve describes.
+   * Only RunPane passes it, for the run it has just watched. */
+  fallbackReferencePoints?: CurvePoint[]
 }) {
   return (
     <Dialog
@@ -58,6 +64,7 @@ export function RunPlayerDialog({
             curves={curves}
             onClose={onClose}
             onDeleted={onDeleted}
+            fallbackReferencePoints={fallbackReferencePoints}
           />
         )}
       </DialogPopup>
@@ -70,11 +77,13 @@ function RunPlayerContent({
   curves,
   onClose,
   onDeleted,
+  fallbackReferencePoints,
 }: {
   run: RunSummary
   curves: CurveRecord[]
   onClose: () => void
   onDeleted: () => void
+  fallbackReferencePoints?: CurvePoint[]
 }) {
   const sandbox = useSandbox()
 
@@ -157,7 +166,13 @@ function RunPlayerContent({
         <p className="text-sm text-muted-foreground">Loading run...</p>
       )}
 
-      {detail && <RunPlayer detail={detail} curves={curves} />}
+      {detail && (
+        <RunPlayer
+          detail={detail}
+          curves={curves}
+          fallbackReferencePoints={fallbackReferencePoints}
+        />
+      )}
 
       {deleteError && (
         <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
@@ -185,7 +200,15 @@ function RunPlayerContent({
   )
 }
 
-function RunPlayer({ detail, curves }: { detail: RunDetail; curves: CurveRecord[] }) {
+function RunPlayer({
+  detail,
+  curves,
+  fallbackReferencePoints,
+}: {
+  detail: RunDetail
+  curves: CurveRecord[]
+  fallbackReferencePoints?: CurvePoint[]
+}) {
   const playback = useRunPlayback(detail.samples)
   const current = playback.index >= 0 ? detail.samples[playback.index] : null
   // Memoised so an unrelated re-render (e.g. the delete button's local
@@ -198,7 +221,12 @@ function RunPlayer({ detail, curves }: { detail: RunDetail; curves: CurveRecord[
   )
 
   const referenceCurve = findCurveForRun(curves, detail.curve_ref)
-  const referenceMessage = referenceCurveMessage(detail.curve_ref, referenceCurve)
+  const fallback = fallbackReferencePoints ?? NO_POINTS
+  const useFallback = referenceCurve === null && fallback.length > 0
+  const referencePoints = referenceCurve?.points ?? (useFallback ? fallback : NO_POINTS)
+  const referenceMessage = useFallback
+    ? null
+    : referenceCurveMessage(detail.curve_ref, referenceCurve)
 
   return (
     <div className="flex flex-col gap-3">
@@ -212,7 +240,7 @@ function RunPlayer({ detail, curves }: { detail: RunDetail; curves: CurveRecord[
       {referenceMessage && <p className="text-xs text-muted-foreground">{referenceMessage}</p>}
 
       <RunChart
-        referencePoints={referenceCurve?.points ?? NO_POINTS}
+        referencePoints={referencePoints}
         trail={trail}
         current={current}
       />

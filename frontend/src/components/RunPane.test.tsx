@@ -495,7 +495,9 @@ describe('RunPane in demo (sandbox) mode', () => {
           status: 'done',
           source: 'simulated',
           curve_ref: curve.id,
-          reference_points: curve.points,
+          // Empty on purpose: the preview falls back to the live view's
+          // reference points, which would hide a broken curve_ref lookup.
+          reference_points: [],
           saved_run_id: 'sim-run-1',
         }),
       )
@@ -537,6 +539,69 @@ describe('RunPane in demo (sandbox) mode', () => {
         expect.arrayContaining([{ label: 'Reference I(V)', n: curve.points.length }]),
       ),
     )
+  })
+
+  it('keeps the live grey curve in the preview of a run saved with no reference (built-in panel)', async () => {
+    vi.mocked(fetchRunConfig).mockResolvedValue({
+      algorithms: ['P&O'],
+      maxDurationS: 600,
+      defaultDurationS: 10,
+      defaultInitialDuty: 0.5,
+      defaultVMax: 40,
+      defaultIMax: 1,
+    })
+    vi.mocked(startRun).mockResolvedValue({
+      status: 'running',
+      algorithm: 'P&O',
+      label: 'P&O',
+      duration_s: 10,
+    })
+    const builtIn = DEMO_CURVES[0].points
+    vi.mocked(fetchLiveRun)
+      .mockResolvedValueOnce(liveState({ status: 'idle' }))
+      .mockResolvedValue(
+        liveState({
+          status: 'done',
+          source: 'simulated',
+          curve_ref: null,
+          reference_points: builtIn,
+          saved_run_id: 'sim-run-2',
+        }),
+      )
+    const summary: RunSummary = {
+      id: 'sim-run-2',
+      path: '/data/runs/sim-run-2.json',
+      captured_at: '2026-09-19T08:00:00Z',
+      label: 'P&O',
+      algorithm: 'P&O',
+      n_samples: 1,
+      duration_s: 1,
+      aborted: false,
+      curve_ref: null,
+      notes: '',
+      source: 'simulated',
+    }
+    vi.mocked(fetchRuns).mockResolvedValue([summary])
+    vi.mocked(fetchRun).mockResolvedValue({
+      ...summary,
+      downsampled: false,
+      samples: [{ t: 0, v: 12, i: 0.25, d: 0.4 }],
+    })
+    renderPaneInSandbox(DEMO_CURVES)
+
+    await selectAlgorithm('P&O')
+    fireEvent.click(screen.getByText('Start simulated run'))
+    await waitFor(() => expect(screen.getByText('Open in player')).toBeTruthy())
+    fireEvent.click(screen.getByText('Open in player'))
+    await waitFor(() => expect(screen.getByLabelText('Playback position')).toBeTruthy())
+
+    const dialog = screen.getByRole('dialog')
+    await waitFor(() =>
+      expect(chartDatasets(dialog)).toEqual(
+        expect.arrayContaining([{ label: 'Reference I(V)', n: builtIn.length }]),
+      ),
+    )
+    expect(within(dialog).queryByText(/No reference curve/)).toBeNull()
   })
 
   it('marks a simulated run unmistakably while it is live', async () => {
