@@ -55,6 +55,7 @@ def run_control_loop(
     duration_s: float,
     v_max: float,
     i_max: float,
+    v_out_max: float | None = None,
     initial_duty: float = 0.5,
     clock=time.monotonic,
     sleep=time.sleep,
@@ -79,6 +80,10 @@ def run_control_loop(
     (source is driven to 0 duty before returning either way):
 
     - `"overvoltage"` / `"overcurrent"`: a reading exceeded `v_max`/`i_max`.
+    - `"output-overvoltage"`: the converter output (`source.vout`, absent on
+      a simulated source, which never trips this) exceeded `v_out_max`. The
+      panel limits cannot see this: with a light or missing load the SEPIC
+      output climbs far past the input while the panel side looks normal.
     - `"link-down"`: `source.consecutive_bad_frames` (absent on a fake or
       simulated source, which reads as 0 and never trips this) reached
       `max_consecutive_bad_frames` - SPI has no presence detection, so a
@@ -116,6 +121,11 @@ def run_control_loop(
             if voltage > v_max or current > i_max:
                 aborted = True
                 reason = "overvoltage" if voltage > v_max else "overcurrent"
+                break
+            v_out = getattr(source, "vout", None)
+            if v_out_max is not None and v_out is not None and v_out > v_out_max:
+                aborted = True
+                reason = "output-overvoltage"
                 break
             if getattr(source, "consecutive_bad_frames", 0) >= max_consecutive_bad_frames:
                 aborted = True
@@ -175,6 +185,12 @@ def main() -> None:
     parser.add_argument("--label", required=True)
     parser.add_argument("--v-max", type=float, default=40.0)
     parser.add_argument("--i-max", type=float, default=1.0)
+    parser.add_argument(
+        "--v-out-max",
+        type=float,
+        default=25.0,
+        help="converter output limit (below the ADC Low range, ~27 V)",
+    )
     parser.add_argument("--no-sweep", action="store_true", help="skip the curve sweep")
     parser.add_argument("--curve", default=None, help="existing curve filename (with --no-sweep)")
     parser.add_argument("--bus", type=int, default=0)
@@ -205,6 +221,7 @@ def main() -> None:
             duration_s=args.duration_s,
             v_max=args.v_max,
             i_max=args.i_max,
+            v_out_max=args.v_out_max,
         )
 
     record = RunRecord(

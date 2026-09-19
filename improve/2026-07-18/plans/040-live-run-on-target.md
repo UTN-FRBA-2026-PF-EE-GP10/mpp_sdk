@@ -118,6 +118,11 @@ offset, now calibrated out - see `docs/hardware_v1/calibration.md`.
 
 ## Preconditions
 
+- [ ] **A load on the converter output** (a 10 Ohm, 10 W resistor on J4).
+      With a light or missing load the SEPIC output climbs far above the
+      panel voltage. The run aborts if V out passes `v_out_max` (25 V by
+      default), but only a load keeps it in range. With 10 Ohm, one panel's
+      MPP sits near D = 0.37 and about 8 V out.
 - [ ] Pico powered and responding. The connection indicator must read
       **PICO connected**. If it reads "PICO not connected", stop - the
       board-absence detection is telling the truth, and a run started

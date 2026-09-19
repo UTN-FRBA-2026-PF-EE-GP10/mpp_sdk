@@ -268,6 +268,11 @@ _DEFAULT_INITIAL_DUTY = 0.5
 # GET /api/run-config so the page shows the values actually enforced.
 _DEFAULT_V_MAX = 40.0
 _DEFAULT_I_MAX = 1.0
+# The converter output. The SEPIC has no output limit of its own: with a
+# light or missing load its output climbs far past the input. 25 V stays
+# under the on-chip ADC's `Low` range (~27 V), so the reading that trips
+# this is still a real one, and well under C15's 100 V rating.
+_DEFAULT_V_OUT_MAX = 25.0
 
 # Live /api/runs/live polling only ever needs enough points to draw a
 # chart, not the full record (that's what the saved RunRecord is for) -
@@ -310,6 +315,7 @@ class _RunRequest:
     i_max: float
     curve_ref: str | None
     label: str
+    v_out_max: float = _DEFAULT_V_OUT_MAX
     # Defaulted so a caller that does not care about the seed does not
     # have to state one; the route always passes it explicitly.
     initial_duty: float = _DEFAULT_INITIAL_DUTY
@@ -514,6 +520,7 @@ def _execute_run(
             initial_duty=request.initial_duty,
             v_max=request.v_max,
             i_max=request.i_max,
+            v_out_max=request.v_out_max,
             should_stop=stop_event.is_set,
             max_consecutive_bad_frames=max_consecutive_bad_frames,
             on_sample=on_sample,
@@ -810,6 +817,7 @@ class _StartRunRequest(BaseModel):
     initial_duty: float = _DEFAULT_INITIAL_DUTY
     v_max: float = _DEFAULT_V_MAX
     i_max: float = _DEFAULT_I_MAX
+    v_out_max: float = _DEFAULT_V_OUT_MAX
     curve_ref: str | None = None
     # (volts, amps) pairs; simulated runs only, instead of `curve_ref`.
     curve_points: list[tuple[float, float]] | None = None
@@ -1023,6 +1031,7 @@ def create_app(
             "default_initial_duty": _DEFAULT_INITIAL_DUTY,
             "default_v_max": _DEFAULT_V_MAX,
             "default_i_max": _DEFAULT_I_MAX,
+            "default_v_out_max": _DEFAULT_V_OUT_MAX,
         }
 
     @app.get("/api/curves")
@@ -1187,6 +1196,7 @@ def create_app(
         for field_name, value in (
             ("v_max", body.v_max),
             ("i_max", body.i_max),
+            ("v_out_max", body.v_out_max),
             ("initial_duty", body.initial_duty),
             *(() if body.duration_s is None else (("duration_s", body.duration_s),)),
         ):
@@ -1285,8 +1295,11 @@ def create_app(
             raise HTTPException(status_code=400, detail="v_max must be positive")
         if body.i_max <= 0:
             raise HTTPException(status_code=400, detail="i_max must be positive")
+        if body.v_out_max <= 0:
+            raise HTTPException(status_code=400, detail="v_out_max must be positive")
         v_max = min(body.v_max, _DEFAULT_V_MAX)
         i_max = min(body.i_max, _DEFAULT_I_MAX)
+        v_out_max = min(body.v_out_max, _DEFAULT_V_OUT_MAX)
         label = body.label.strip() or spec.label
 
         if not run_cache.try_start(
@@ -1304,6 +1317,7 @@ def create_app(
             initial_duty=body.initial_duty,
             v_max=v_max,
             i_max=i_max,
+            v_out_max=v_out_max,
             curve_ref=curve_ref,
             label=label,
             curve_points=curve_points,

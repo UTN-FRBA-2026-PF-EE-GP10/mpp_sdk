@@ -45,6 +45,7 @@ export interface RunSample {
 export type AbortReason =
   | 'overvoltage'
   | 'overcurrent'
+  | 'output-overvoltage'
   | 'link-down'
   | 'stopped'
   | (string & {})

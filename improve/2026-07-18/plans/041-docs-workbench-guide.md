@@ -81,6 +81,8 @@ finding.
       limit for one panel: ~10 W against 16.1 W). Record the source,
       setting, distance, or time and sky.
 - [ ] Heatsink on Q3, or keep runs short. Someone able to cut power.
+- [ ] **A load on the output: the 10 Ohm, 10 W resistor on J4.** Without
+      a load the SEPIC output climbs far above the panel voltage.
 - [ ] A multimeter for Step 0.
 - [ ] Browser at desktop width, **light theme**, units **A/W**, zoom 100 %.
 
@@ -124,6 +126,9 @@ second (plan 040 needs that number).
       prints the range: check it says `Mid`.
 - [ ] Firmware on `main`: `FIRMWARE_MODE = MppTracker`,
       `MAX31865_ENABLED = false`.
+- [ ] **A load on the output rated for the full power.** Two panels can
+      give ~14 W: use two 10 Ohm, 10 W resistors in series (20 Ohm). The MPP
+      then sits near D = 0.37 and ~17 V out, inside the `Mid` range.
 - [ ] Heatsink on Q3 (Q3 dissipates the whole sweep; two panels is the
       ~16 W case).
 - [ ] Light source recorded: lamp setting and distance, or sun with time

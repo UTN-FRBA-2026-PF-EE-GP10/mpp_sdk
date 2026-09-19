@@ -208,6 +208,9 @@ export interface RunConfig {
   /** Volts and amps. The bounds a run is held to unless narrowed. */
   defaultVMax: number
   defaultIMax: number
+  /** Volts. The converter output limit - the panel-side limits cannot see
+   * the SEPIC output climbing under a light or missing load. */
+  defaultVOutMax: number
 }
 
 /** The algorithm roster and the bounds the server enforces. Served rather
@@ -222,6 +225,7 @@ export async function fetchRunConfig(): Promise<RunConfig> {
     default_initial_duty: number
     default_v_max: number
     default_i_max: number
+    default_v_out_max: number
   }
   return {
     algorithms: payload.algorithms ?? [],
@@ -230,6 +234,7 @@ export async function fetchRunConfig(): Promise<RunConfig> {
     defaultInitialDuty: payload.default_initial_duty,
     defaultVMax: payload.default_v_max,
     defaultIMax: payload.default_i_max,
+    defaultVOutMax: payload.default_v_out_max,
   }
 }
 
@@ -246,6 +251,7 @@ export interface StartRunInput {
   initial_duty?: number
   v_max?: number
   i_max?: number
+  v_out_max?: number
   curve_ref?: string | null
   /** (volts, amps) pairs for a simulated run, instead of `curve_ref` -
    * demo mode's bundled curves are not in the server's library. */

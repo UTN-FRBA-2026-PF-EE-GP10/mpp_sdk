@@ -6,6 +6,12 @@ describe('abortReasonMessage', () => {
     expect(abortReasonMessage('overvoltage')).toMatch(/v_max/)
   })
 
+  it('explains an output overvoltage and points at the load', () => {
+    const message = abortReasonMessage('output-overvoltage')
+    expect(message).toMatch(/v_out_max/)
+    expect(message).toMatch(/load/)
+  })
+
   it('explains overcurrent', () => {
     expect(abortReasonMessage('overcurrent')).toMatch(/i_max/)
   })
