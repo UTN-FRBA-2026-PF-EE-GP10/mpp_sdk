@@ -95,20 +95,26 @@ voltage is not.
 
 ### Step 0: put a meter on the converter output
 
-- [ ] With the converter running at a known steady duty (the
+- [x] With the converter running at a known steady duty (the
       `power_supply` firmware mode, or a short fixed-duty test), measure
       the real output voltage with a multimeter.
-- [ ] Compare against `ADC_VOUT` as reported by `GET /api/data` and in the
+- [x] Compare against `ADC_VOUT` as reported by `GET /api/data` and in the
       live-run readout.
-- [ ] Record the error. If it is small, note it and move on. If it is not,
+- [x] Record the error. If it is small, note it and move on. If it is not,
       correct the divider constant in the firmware before running anything
       whose output voltage you intend to cite.
-- [ ] Check it at more than one output voltage if you can - a divider
+- [x] Check it at more than one output voltage if you can - a divider
       error scales, an ADC offset error does not, and the two are
       distinguishable only with two points.
 
 This closes the part of plan 010 that plan 010 could not close, because
 until now nothing displayed `ADC_VOUT` where it mattered.
+
+**Done 2026-09-19.** With a 10 Ohm load and a bench supply on the input:
+`ADC_VOUT` read 7.006 V against a meter's 7.00 V (D = 0.40, 12 V in) and
+3.221 V against 3.2 V (D = 0.45, 5 V in); with a supply on the output and
+no switching, 5.006 V against 5.030 V. The error was a ~13-code zero
+offset, now calibrated out - see `docs/hardware_v1/calibration.md`.
 
 ## Preconditions
 
@@ -126,7 +132,7 @@ until now nothing displayed `ADC_VOUT` where it mattered.
 - [ ] `data/runs/` backed up or empty, so the first real run is easy to
       find.
 - [ ] Someone physically at the bench, able to cut power.
-- [ ] Step 0 below done, or an explicit decision to treat the displayed
+- [x] Step 0 below done, or an explicit decision to treat the displayed
       V out as indicative only.
 
 ## Steps

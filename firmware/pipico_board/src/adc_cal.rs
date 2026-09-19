@@ -1,48 +1,37 @@
-//! RP2040 ADC DNL correction (RP2040-E11).
+//! On-chip ADC calibration: one straight line from raw code to pin voltage.
 //!
-//! The RP2040's on-chip 12-bit SAR ADC has mismatched capacitors in its
-//! DAC. The errata (RP2040-E11) lists four unusually wide codes (DNL
-//! spikes): 512, 1536, 2560 and 3584. Every code above a spike reads low
-//! by that spike's excess width.
+//! Measured on the bench against the INA229, which reads the same input
+//! node as `ADC_PWR` (through the shunt and the relay's resting contact,
+//! no diode between). Points from 0.5 V to 18 V on the input, `Low` divider
+//! range, least-squares fit on the raw codes:
 //!
-//! `dnl_fix` linearizes the raw reading by adding back the excess width
-//! of every spike below it.
+//! ```text
+//! pin voltage = 0.79322 mV * (code - 13.19)
+//! ```
+//!
+//! The offset (about 13 codes, ~90 mV at the terminals on `Low`) was the
+//! main error: the uncorrected reading was 16 % high at 0.5 V and showed
+//! ~90 mV on `ADC_VOUT` with 0 V on the output. The line leaves at most
+//! ~40 mV of error, near 4 V, where the RP2040-E11 DNL spike at code 512
+//! bends the curve. That is not corrected: the INA229 stays the reference
+//! for the algorithm.
+//!
+//! `ADC_VOUT` uses the same line: with a battery on the output, it gave the
+//! same raw code as `ADC_PWR` at the same voltage (596.6 against 596.7 at
+//! 3.974 V). Redo the fit after changing the divider range or the board:
+//! the `ADC cal:` log line gives one point per second (raw code against the
+//! INA229), and two supply voltages far apart are enough.
 
-/// The four spike codes from RP2040-E11, with each one's excess width in
-/// LSBs. The widths are nominal estimates, not measured on this board's
-/// die: a sweep of a known ramp into the ADC would pin them down. The
-/// codes themselves are fixed by the silicon.
-const DNL_SPIKES: [(u16, u16); 4] = [(512, 4), (1536, 5), (2560, 5), (3584, 3)];
+/// Pin voltage per raw code, in microvolts x 100 (793.22 uV).
+const UV_X100_PER_CODE: u64 = 79_322;
 
-/// Full-scale code after DNL correction (4095 + every spike's width).
-pub const CORRECTED_FULL_SCALE: u32 = {
-    let mut total = 4095u32;
-    let mut i = 0;
-    while i < DNL_SPIKES.len() {
-        total += DNL_SPIKES[i].1 as u32;
-        i += 1;
-    }
-    total
-};
+/// Raw code at 0 V on the pin, x 100 (13.19 codes).
+const ZERO_CODE_X100: u64 = 1_319;
 
-/// Corrects the RP2040-E11 DNL spike error on a raw 12-bit ADC reading.
-///
-/// - `raw`: raw ADC sample in 0..4095.
-/// - Returns: linearized code in 0..`CORRECTED_FULL_SCALE`.
-///
-/// Strictly monotonic: `dnl_fix(raw + 1) > dnl_fix(raw)`.
-#[inline]
-pub fn dnl_fix(raw: u16) -> u16 {
-    let raw = raw.min(4095);
-    let mut corrected = raw;
-    for &(code, width) in DNL_SPIKES.iter() {
-        if raw > code {
-            corrected += width;
-        } else if raw == code {
-            // A reading on a spike code could be anywhere inside the wide
-            // step - place it at the center.
-            corrected += width / 2;
-        }
-    }
-    corrected
+/// Converts a raw 12-bit ADC code to the voltage at the ADC pin, in mV.
+/// Codes at or below the zero point read 0.
+pub fn raw_to_pin_mv(raw: u16) -> u16 {
+    let above_zero_x100 = (raw as u64 * 100).saturating_sub(ZERO_CODE_X100);
+    // x100 codes * (uV x100 per code) = uV x 10_000; / 10_000_000 = mV.
+    (above_zero_x100 * UV_X100_PER_CODE / 10_000_000) as u16
 }

@@ -32,14 +32,14 @@ re-enabling; no plan file, tracked via the PR that disabled it.
 |------|-------|----------|--------|------------|--------|
 | 001 | Firmware: curve-tracer relay + Tracer_pwm foundation | P2 | S | - | DONE |
 | 002 | Firmware: SEPIC gate PWM on GPIO15 at 100 kHz (+ duty clamp) | P1 | S-M | - | DONE (95% clamp boundary untested, pick up in 003; plan file removed) |
-| 003 | Bench: duty sweep into a 10 Ohm load, transfer-ratio check | P1 | M (bench) | 002 flashed | TODO |
+| 003 | Bench: duty sweep into a 10 Ohm load, transfer-ratio check | P1 | M (bench) | 002 flashed | DONE (2026-09-19, `scripts/duty_sweep.py`: D 0-0.45 at 5 V in, V out ~0.3-0.4 V below the ideal ratio (diode drop), efficiency 43 % to 82 %; 86 % at D = 0.40, 12 V in. Data and note in `data/bench/`; plan file removed) |
 | 004 | Firmware: PIO SPI-slave frame-timeout recovery + 1 MHz speed fix | P1 | M | - | DONE |
 | 005 | Stable (exponential-Euler) integrator for DynamicSimulatedSource | P1 | S | - | DONE |
 | 006 | Commit firmware Cargo.locks, enforce --locked in CI | P1 | S | - | DONE |
 | 007 | Characterization tests for harness/common.py | P2 | M | - | DONE |
 | 008 | NoisySource cached read (idempotent read()) | P2 | S | 007 | DONE (plan file removed, see PR history) |
 | 009 | Docs and tooling sweep after the merge wave | P3 | S | - | DONE (plan file removed, see PR history) |
-| 010 | Firmware: read on-chip ADC (ADC_PWR/ADC_VOUT/ADC_Input_Curr) | P2 | M | - | IN PROGRESS (PWR/VOUT calibrated + on-target checked, ~9% error accepted; Input_Curr needs INA281 gain/shunt) |
+| 010 | Firmware: read on-chip ADC (ADC_PWR/ADC_VOUT/ADC_Input_Curr) | P2 | M | - | IN PROGRESS (PWR/VOUT calibrated 2026-09-19 against the INA229 with a two-constant line, removing a ~13-code zero offset; `ADC_VOUT` meter-checked with the converter switching, 7.006 V against 7.00 V - see `docs/hardware_v1/calibration.md`. Input_Curr still needs the INA281 gain/shunt) |
 | 011 | Firmware: `power_supply` mode vs `mpp_tracker` mode | P2 | M | 002, 010 | DONE (feed-forward + proportional-trim ClosedLoop confirmed on-target; MppTracker regression-checked unaffected; plan file removed, see PR history) |
 | 012 | Docs: CCM/DCM behavior and `power_supply` mode rationale | P3 | S | 011 (mode note only; CCM/DCM part is independent) | DONE (plan file removed, see PR history) |
 | 013 | Firmware: NeoPixel packet-receive heartbeat (GPIO4) | P3 | S-M | - | DONE (on-target confirmed at 200 kHz - 1 MHz caused NeoPixel-crosstalk MISO corruption, plan file removed) |
@@ -69,7 +69,7 @@ re-enabling; no plan file, tracked via the PR that disabled it.
 | 037 | Surface asynchronous command failures in the workbench UI | P1 | S | 032 (soft) | DONE (queued command failures and refused Start/Release requests both show in `CurveWorkbench`; plan file removed) |
 | 038 | Save the displayed capture, not an unversioned latest sweep (save/display race) | P1 | M | 037 (soft), 032 (soft) | TODO |
 | 039 | Firmware: PIO SPI slave cannot recover from an idle frame timeout | P1 | M-L (bench) | - | TODO (workaround shipped: Pi polls below FRAME_TIMEOUT) |
-| 040 | Bench: drive the converter from the web UI, on target | P1 | M (bench) | powered board; 039 is the open risk underneath; its Step 0 closes 010's unverified ADC_VOUT | TODO (replaces 034's Step 7) |
+| 040 | Bench: drive the converter from the web UI, on target | P1 | M (bench) | powered board; 039 is the open risk underneath; its Step 0 closes 010's unverified ADC_VOUT | IN PROGRESS (Step 0 done 2026-09-19: `ADC_VOUT` within 6 mV of a meter at 7 V with the converter switching; replaces 034's Step 7) |
 | 041 | Docs: one-page guide - the full two-panel setup (A fixed, B tilted) with the workbench | P1 | L (bench + page) | 040 Step 0 before quoting V out | TODO (Session 1, panel A alone, 2026-09-19 -> page v1; Session 2, panels A and B, the week after -> page v2) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) |

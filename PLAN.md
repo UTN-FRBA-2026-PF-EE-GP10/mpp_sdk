@@ -315,12 +315,13 @@ additional uncertainty of a ported algorithm.
       curve-tracer sweep/stream/bulk-read, relay release). CRC-8 frames
       replace the earlier XOR checksum, which missed a framing defect
       found on the bench.
-- [ ] Calibration procedure: ADC scale / offset done for `ADC_PWR` and
-      `ADC_VOUT`. The firmware also corrects the RP2040-E11 DNL spikes
-      (`adc_cal::dnl_fix`) and scales the on-chip channels by a live
-      ratio against the INA229. `ADC_Input_Curr` still needs the INA281
-      gain/shunt, and `ADC_VOUT` still needs a meter check alongside the
-      first on-target closed-loop run.
+- [x] Calibration procedure: the on-chip ADC (`ADC_PWR`, `ADC_VOUT`) is
+      calibrated against the INA229 with a two-constant line, and
+      `ADC_VOUT` is checked against a meter with the converter switching
+      (see `docs/hardware_v1/calibration.md`). Open: `ADC_Input_Curr`
+      still needs the INA281 gain/shunt.
+- [x] Bench duty sweep: transfer ratio and efficiency into a 10 Ohm load
+      (`scripts/duty_sweep.py`, data in `data/bench/`).
 - [ ] Bench validation: reproduce a simulated tracking efficiency on
       real hardware within a documented tolerance. Not yet run - this
       needs a closed-loop MPPT run driven by the Python algorithm on the
