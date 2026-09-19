@@ -905,6 +905,8 @@ _REPORT_TITLE_MAX_LEN = 200
 _REPORT_NOTES_MAX_LEN = 5000
 _REPORT_FIELD_VALUE_MAX_LEN = 500
 _REPORT_MAX_LINKED_IDS = 100
+# Longer than any id the curve and run libraries create.
+_REPORT_LINKED_ID_MAX_LEN = 200
 
 # Ceiling on how many ids one POST /api/{curves,runs}/delete-batch request
 # may name. The workbench only ever offers "select all" over one already-
@@ -1245,6 +1247,20 @@ def create_app(
                     ),
                 )
 
+    def _check_field_keys(fields: dict[str, str], known: set[str]) -> None:
+        # The template decides which setup fields exist, so the report
+        # view can show them all as one fixed table.
+        unknown = sorted(set(fields) - known)
+        if unknown:
+            raise HTTPException(status_code=400, detail=f"unknown field {unknown[0]!r}")
+
+    def _check_linked_ids(ids: list[str], pattern: re.Pattern[str], kind: str) -> None:
+        # Linked ids are stored, never opened as paths, but they must look
+        # like real library ids so a report cannot grow without limit.
+        for linked in ids:
+            if len(linked) > _REPORT_LINKED_ID_MAX_LEN or not pattern.fullmatch(linked):
+                raise HTTPException(status_code=400, detail=f"invalid {kind} id {linked!r:.80}")
+
     @app.post("/api/reports")
     def post_create_report(body: _CreateReportRequest) -> dict:
         if not body.title.strip():
@@ -1261,6 +1277,7 @@ def create_app(
             ) from None
         fields = body.fields or {}
         _check_field_lengths(fields)
+        _check_field_keys(fields, {fd.key for fd in template.field_defs})
         record = report_library.create(template, body.title, fields=fields)
         return record.to_dict()
 
@@ -1300,6 +1317,7 @@ def create_app(
         fields = dict(r.fields)
         if body.fields is not None:
             _check_field_lengths(body.fields)
+            _check_field_keys(body.fields, set(r.fields))
             fields.update(body.fields)
 
         steps = list(r.steps)
@@ -1325,6 +1343,10 @@ def create_app(
                         )
                     changes["status"] = step_patch.status
                 if step_patch.value is not None:
+                    # NaN and infinity would be written as bare tokens that
+                    # strict JSON readers (a browser, a session file) reject.
+                    if isinstance(step_patch.value, float) and not math.isfinite(step_patch.value):
+                        raise HTTPException(status_code=400, detail="value must be finite")
                     changes["value"] = step_patch.value
                 if step_patch.notes is not None:
                     if len(step_patch.notes) > _REPORT_NOTES_MAX_LEN:
@@ -1339,6 +1361,7 @@ def create_app(
                             status_code=400,
                             detail=f"at most {_REPORT_MAX_LINKED_IDS} linked curve ids per step",
                         )
+                    _check_linked_ids(step_patch.curve_ids, _CURVE_ID_RE, "curve")
                     changes["curve_ids"] = tuple(step_patch.curve_ids)
                 if step_patch.run_ids is not None:
                     if len(step_patch.run_ids) > _REPORT_MAX_LINKED_IDS:
@@ -1346,6 +1369,7 @@ def create_app(
                             status_code=400,
                             detail=f"at most {_REPORT_MAX_LINKED_IDS} linked run ids per step",
                         )
+                    _check_linked_ids(step_patch.run_ids, _RUN_ID_RE, "run")
                     changes["run_ids"] = tuple(step_patch.run_ids)
                 steps[idx] = replace(steps[idx], **changes)
 

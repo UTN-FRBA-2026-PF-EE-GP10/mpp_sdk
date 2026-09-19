@@ -1756,8 +1756,8 @@ def test_post_create_report_writes_a_file_under_the_report_dir(client):
 
 
 def test_post_create_report_overrides_field_defaults(client):
-    r = _create_report(client, fields={"operator": "fede"})
-    assert r.json()["fields"]["operator"] == "fede"
+    r = _create_report(client, fields={"operator": "bench operator"})
+    assert r.json()["fields"]["operator"] == "bench operator"
     # An untouched field keeps its template default.
     assert r.json()["fields"]["adc_range"] == "Low"
 
@@ -1862,12 +1862,12 @@ def test_patch_report_updates_title_and_fields(client):
     report_id = _create_report(client).json()["id"]
     r = client.patch(
         f"/api/reports/{report_id}",
-        json={"title": "Panel A, second pass", "fields": {"operator": "fede"}},
+        json={"title": "Panel A, second pass", "fields": {"operator": "bench operator"}},
     )
     assert r.status_code == 200
     body = r.json()
     assert body["title"] == "Panel A, second pass"
-    assert body["fields"]["operator"] == "fede"
+    assert body["fields"]["operator"] == "bench operator"
     # Fields not named in the patch are untouched.
     assert body["fields"]["panel"] == "Luxen LN-10P, 10 W, 12 V"
 
@@ -2066,3 +2066,112 @@ def test_reports_routes_are_unaffected_by_demo_mode(demo_client):
     assert r.status_code == 200
     report_id = r.json()["id"]
     assert demo_client.get(f"/api/reports/{report_id}").status_code == 200
+
+
+# ------------------------------------------------------------------
+# Reports: review follow-ups
+# ------------------------------------------------------------------
+
+
+def test_reports_reports_a_malformed_file_without_failing_the_whole_list(client):
+    _create_report(client, title="good")
+    client.report_dir.mkdir(parents=True, exist_ok=True)
+    (client.report_dir / "bad.json").write_text("not json")
+    r = client.get("/api/reports")
+    assert r.status_code == 200
+    entries = r.json()
+    assert any(e.get("title") == "good" for e in entries)
+    assert any("error" in e for e in entries)
+
+
+def test_patch_report_cannot_change_fixed_fields(client):
+    created = _create_report(client).json()
+    report_id = created["id"]
+    step = next(s for s in created["steps"] if s["id"] == "baseline-curve")
+    r = client.patch(
+        f"/api/reports/{report_id}",
+        json={
+            "id": "other-id",
+            "template_id": "full-setup-characterization",
+            "created_at": "1999-01-01T00:00:00+00:00",
+            "steps": [{"id": "baseline-curve", "repeats": 1, "kind": "text", "title": "x"}],
+        },
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["id"] == report_id
+    assert body["template_id"] == created["template_id"]
+    assert body["created_at"] == created["created_at"]
+    patched = next(s for s in body["steps"] if s["id"] == "baseline-curve")
+    assert patched["repeats"] == step["repeats"] == 3
+    assert patched["kind"] == "curve"
+    assert patched["title"] == step["title"]
+
+
+@pytest.mark.parametrize("value", ["NaN", "Infinity", "-Infinity"])
+def test_patch_report_rejects_a_non_finite_value(client, value):
+    report_id = _create_report(client).json()["id"]
+    r = client.patch(
+        f"/api/reports/{report_id}",
+        content=f'{{"steps": [{{"id": "panel-label-voc", "value": {value}}}]}}',
+        headers={"content-type": "application/json"},
+    )
+    assert r.status_code == 400
+    # The file on disk stays strict JSON.
+    text = (client.report_dir / f"{report_id}.json").read_text()
+    assert "NaN" not in text and "Infinity" not in text
+
+
+@pytest.mark.parametrize("bad_id", ["", "a/b", "../etc", "x" * 201, "space id"])
+@pytest.mark.parametrize(
+    ("step_id", "key"), [("baseline-curve", "curve_ids"), ("po-run", "run_ids")]
+)
+def test_patch_report_rejects_a_malformed_linked_id(client, bad_id, step_id, key):
+    report_id = _create_report(client).json()["id"]
+    r = client.patch(f"/api/reports/{report_id}", json={"steps": [{"id": step_id, key: [bad_id]}]})
+    assert r.status_code == 400
+
+
+def test_patch_report_accepts_several_linked_ids_for_repeats(client):
+    report_id = _create_report(client).json()["id"]
+    ids = [f"20260919T16000{n}Z-baseline" for n in range(3)]
+    r = client.patch(
+        f"/api/reports/{report_id}", json={"steps": [{"id": "baseline-curve", "curve_ids": ids}]}
+    )
+    assert r.status_code == 200
+    step = next(s for s in r.json()["steps"] if s["id"] == "baseline-curve")
+    assert step["curve_ids"] == ids
+
+
+def test_post_create_report_rejects_a_field_the_template_does_not_define(client):
+    r = _create_report(client, fields={"not-a-field": "x"})
+    assert r.status_code == 400
+
+
+def test_patch_report_rejects_a_field_the_report_does_not_have(client):
+    report_id = _create_report(client).json()["id"]
+    r = client.patch(f"/api/reports/{report_id}", json={"fields": {"not-a-field": "x"}})
+    assert r.status_code == 400
+
+
+def test_patch_report_rejects_a_duplicate_step_id(client):
+    report_id = _create_report(client).json()["id"]
+    r = client.patch(
+        f"/api/reports/{report_id}",
+        json={"steps": [{"id": "po-run", "status": "done"}, {"id": "po-run", "status": "failed"}]},
+    )
+    assert r.status_code == 400
+
+
+def test_patch_report_rejects_a_duplicate_open_question_id(client):
+    report_id = _create_report(client).json()["id"]
+    r = client.patch(
+        f"/api/reports/{report_id}",
+        json={
+            "open_questions": [
+                {"id": "temperature", "answer": "a"},
+                {"id": "temperature", "answer": "b"},
+            ]
+        },
+    )
+    assert r.status_code == 400

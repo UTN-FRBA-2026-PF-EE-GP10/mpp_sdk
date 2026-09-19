@@ -61,7 +61,7 @@ def save(record: ReportRecord, directory: Path | None = None) -> tuple[ReportRec
         report_id = base_id if suffix == 0 else f"{base_id}-{suffix + 1}"
         candidate = record if report_id == record.id else _with_id(record, report_id)
         path = directory / f"{report_id}.json"
-        body = json.dumps(candidate.to_dict(), indent=2) + "\n"
+        body = json.dumps(candidate.to_dict(), indent=2, allow_nan=False) + "\n"
         try:
             with path.open("x", encoding="utf-8") as f:
                 f.write(body)
@@ -164,7 +164,7 @@ def update(record: ReportRecord, directory: Path | None = None) -> Path:
     path = directory / f"{record.id}.json"
     if not path.exists():
         raise FileNotFoundError(f"{path}: no such report to update")
-    body = json.dumps(record.to_dict(), indent=2) + "\n"
+    body = json.dumps(record.to_dict(), indent=2, allow_nan=False) + "\n"
     fd, tmp_name = tempfile.mkstemp(dir=directory, prefix=f".{record.id}-", suffix=".tmp")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
