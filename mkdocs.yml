@@ -30,6 +30,8 @@ nav:
   - Rationale: rationale.md
   - Methodology: methodology.md
   - Measurement Procedure: measurement_procedure.md
+  - Hardware v1:
+      - ADC calibration: hardware_v1/calibration.md
   - Algorithms:
       - Perturb & Observe: algorithms/perturb_observe.md
       - Incremental Conductance: algorithms/incremental_conductance.md

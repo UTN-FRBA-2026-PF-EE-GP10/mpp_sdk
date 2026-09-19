@@ -300,40 +300,24 @@ the Pi). Set it to `true` once a PT100 is fitted. Check `THREE_WIRE` in
 `ADC_PWR`/`ADC_VOUT`/`ADC_Input_Curr` (GPIO26-28) are read every 100 ms and
 logged at ~1 Hz in millivolts.
 
-#### DNL correction (`adc_cal.rs`)
+#### Calibration (`adc_cal.rs`)
 
-The RP2040's 12-bit SAR ADC has a known silicon erratum (RP2040-E11): four
-codes are unusually wide (DNL spikes), at 512, 1536, 2560 and 3584. Every
-code above a spike reads low by its excess width. `adc_cal::dnl_fix()` adds
-those widths back on every sample, before `raw_to_mv()`.
+Every raw code goes through one straight line, fitted on the bench against
+the INA229 (which reads the same input node as `ADC_PWR`):
 
-The spike codes are fixed by the silicon. The widths in `DNL_SPIKES` are
-nominal estimates, not measured on this die. A slow ramp into the ADC
-would measure them.
+```text
+pin voltage = 0.79322 mV x (code - 13.19)
+```
 
-#### INA229 cross-calibration
+then the divider ratio. The zero (about 13 codes, ~90 mV at the terminals
+on `Low`) was the main error: before it, `ADC_VOUT` showed ~90 mV with 0 V
+on the output. Checked against a meter with the converter switching: 7.00 V
+read as 7.006 V. The RP2040-E11 DNL steps (codes 512 and 1536) are not
+corrected and leave up to ~50 mV near 3.4 V and 10.2 V.
 
-Since the RP2040 has a single ADC core behind an input mux, gain error and
-reference error are shared across all channels. On every 100 ms tick, the
-firmware compares the on-chip ADC's `ADC_PWR` reading (after DNL fix +
-divider scaling) against the INA229's `MEAS_V_MV` (±0.1% Vbus accuracy) and
-derives a correction ratio. This ratio is then applied to all three channels:
-
-- **`ADC_PWR`**: replaced directly by `MEAS_V_MV` (the INA229 reference).
-  It is then no longer an independent check of the INA229.
-- **`ADC_VOUT`**: `vout_uncal * (v_ina / pwr_uncal)`.
-- **`ADC_Input_Curr`**: `iin_uncal * (v_ina / pwr_uncal)` (pin mV, not yet
-  resolved to current - the INA281's gain/shunt are not applied yet).
-
-The correction factor is logged at 1 Hz as `cal=X.XX` (1.00 = no correction,
-0.00 = bypassed). Calibration is bypassed when either reading is below 1.0 V
-to avoid dividing by zero or amplifying floor noise at low input.
-
-The ratio corrects what the channels share: ADC gain and the reference
-voltage. It cannot correct what they do not share. It also contains the
-`ADC_PWR` divider's own resistor error, which `ADC_VOUT` (a separate 1%
-divider) and `ADC_Input_Curr` (no divider) do not have. So `ADC_VOUT` still
-needs a meter check before its reading is cited.
+The `ADC cal:` log line (1 Hz) prints each channel's raw code, averaged
+over the second, beside the INA229: one calibration point per line. See
+`docs/hardware_v1/calibration.md` for why it is needed and how to redo it.
 
 - **`ADC_PWR`/`ADC_VOUT`**: Both go through a 3x 75k + 10k
   (1% tolerance) divider, ADC reading across the 10k: `V_actual = V_adc *
@@ -348,16 +332,14 @@ needs a meter check before its reading is cited.
   auto-sensed, and the selected range is logged once at boot as a
   cross-check.
 
-  | `AdcDividerRange` | Jumpers shorted | Divider | Full scale (`VREF=3.218 V`) |
+  | `AdcDividerRange` | Jumpers shorted | Divider | Full scale |
   |-------------------|------------------|---------|------------------------------|
   | `Full` (default)  | 0 (all 3x 75k in series) | 235k/10k | ~75.6 V |
   | `Mid`              | 1 (2x 75k remain)        | 160k/10k | ~51.5 V |
   | `Low`              | 2 (1x 75k remains)       | 85k/10k  | ~27.3 V |
 
-- **ADC reference voltage**: `ADC_VREF_MV = 3218` in `raw_to_mv()` is a
-  measured constant, not the nominal 3.3 V - multimeter reading at the
-  Pico's `ADC_VREF` pin (physical pin 35). Re-measure and update this
-  constant if the divider resistors or reference circuit ever change.
+- **After changing the range**, redo the calibration (or at least check
+  `ADC_VOUT` against a meter): each range has its own divider resistors.
 
 ## Curve tracer
 

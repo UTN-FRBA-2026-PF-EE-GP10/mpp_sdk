@@ -44,9 +44,10 @@ const DUTY_MAX: u16 = 62258;
 pub static MEAS_V_MV: AtomicU16 = AtomicU16::new(0);
 pub static MEAS_I_MA: AtomicU16 = AtomicU16::new(0);
 pub static MEAS_T_CC: AtomicI16 = AtomicI16::new(spi_slave_pio::TEMP_NOT_AVAILABLE_CC);
-// On-chip ADC, in millivolts. PWR/VOUT are calibrated (divider scaling
-// applied). Input_Curr (the INA281 cross-check for MEAS_I_MA) is still
-// raw pin mV - its gain/shunt are not resolved yet.
+// On-chip ADC, in millivolts, through the bench calibration in adc_cal.rs.
+// PWR/VOUT are the terminal voltages (divider applied). Input_Curr (the
+// INA281 cross-check for MEAS_I_MA) is still pin mV - its gain/shunt are
+// not resolved yet.
 pub static MEAS_ADC_PWR_MV: AtomicU16 = AtomicU16::new(0);
 pub static MEAS_ADC_VOUT_MV: AtomicU16 = AtomicU16::new(0);
 pub static MEAS_ADC_IIN_MV: AtomicU16 = AtomicU16::new(0);
@@ -204,14 +205,7 @@ async fn onchip_adc_task(
     mut ch_vout: AdcChannel<'static>,
     mut ch_iin: AdcChannel<'static>,
 ) {
-    // Measured at the Pico's ADC_VREF pin (pin 35), not the nominal 3.3 V.
-    // See README for the ADC accuracy notes.
-    const ADC_VREF_MV: u32 = 3218;
-
-    fn raw_to_mv(raw: u16) -> u16 {
-        let linearized = adc_cal::dnl_fix(raw);
-        (linearized as u32 * ADC_VREF_MV / adc_cal::CORRECTED_FULL_SCALE) as u16
-    }
+    use adc_cal::raw_to_pin_mv as raw_to_mv;
 
     // Scales by the divider's total-to-bottom-leg (10k) ratio, matching
     // the currently-shorted jumper state. Saturates instead of wrapping:
@@ -231,70 +225,76 @@ async fn onchip_adc_task(
         ADC_DIVIDER_RANGE
     );
 
+    // Per-second sums for the calibration log line below: the raw codes
+    // (before the DNL fix, the divider or any correction) and the INA229,
+    // averaged over the same window. One line is then one calibration
+    // point: ADC code against a reference voltage.
+    let mut cal_n: u32 = 0;
+    let mut cal_pwr_raw: u32 = 0;
+    let mut cal_vout_raw: u32 = 0;
+    let mut cal_ina_mv: u32 = 0;
+
     let mut tick: u32 = 0;
     loop {
-        let pwr_uncal = adc
-            .blocking_read(&mut ch_pwr)
-            .ok()
-            .map(|raw| divider_to_actual_mv(raw_to_mv(raw)));
+        let pwr_raw = adc.blocking_read(&mut ch_pwr).ok();
         let v_ina = MEAS_V_MV.load(Ordering::Relaxed);
-
-        // Cross-calibrate against INA229 if Vin is high enough to be valid (> 1.0 V).
-        // Since all channels share the same ADC core and divider network topology,
-        // the gain correction ratio (v_ina / pwr_uncal) applies to Vout and Iin equally.
-        let cal_ratio = match pwr_uncal {
-            Some(pwr) if pwr >= 1000 && v_ina >= 1000 => Some((v_ina as u32, pwr as u32)),
-            _ => None,
-        };
-
-        if let Some(pwr) = pwr_uncal {
-            let pwr_corr = if let Some((vina, _)) = cal_ratio {
-                vina as u16
-            } else {
-                pwr
-            };
-            MEAS_ADC_PWR_MV.store(pwr_corr, Ordering::Relaxed);
+        if let Some(raw) = pwr_raw {
+            MEAS_ADC_PWR_MV.store(divider_to_actual_mv(raw_to_mv(raw)), Ordering::Relaxed);
         }
 
-        if let Ok(raw) = adc.blocking_read(&mut ch_vout) {
-            let vout_uncal = divider_to_actual_mv(raw_to_mv(raw));
-            let vout_corr = if let Some((vina, pwr)) = cal_ratio {
-                ((vout_uncal as u32 * vina) / pwr).min(u16::MAX as u32) as u16
-            } else {
-                vout_uncal
-            };
-            MEAS_ADC_VOUT_MV.store(vout_corr, Ordering::Relaxed);
+        let vout_raw = adc.blocking_read(&mut ch_vout).ok();
+        if let (Some(p), Some(v)) = (pwr_raw, vout_raw) {
+            cal_n += 1;
+            cal_pwr_raw += p as u32;
+            cal_vout_raw += v as u32;
+            cal_ina_mv += v_ina as u32;
+        }
+        if let Some(raw) = vout_raw {
+            MEAS_ADC_VOUT_MV.store(divider_to_actual_mv(raw_to_mv(raw)), Ordering::Relaxed);
         }
 
-        // ADC_Input_Curr (INA281 cross-check) scaled by the same ADC core gain factor.
+        // ADC_Input_Curr (INA281 cross-check): pin mV, same calibration line.
         if let Ok(raw) = adc.blocking_read(&mut ch_iin) {
-            let iin_uncal = raw_to_mv(raw);
-            let iin_corr = if let Some((vina, pwr)) = cal_ratio {
-                ((iin_uncal as u32 * vina) / pwr).min(u16::MAX as u32) as u16
-            } else {
-                iin_uncal
-            };
-            MEAS_ADC_IIN_MV.store(iin_corr, Ordering::Relaxed);
+            MEAS_ADC_IIN_MV.store(raw_to_mv(raw), Ordering::Relaxed);
         }
         ADC_SAMPLE_COUNT.fetch_add(1, Ordering::Relaxed);
 
         tick = tick.wrapping_add(1);
         if tick.is_multiple_of(10) {
             // ~1 Hz at the 100 ms poll period.
-            // Show correction factor as X.XX (1.00 = no correction, 0.00 = bypassed).
-            let (cal_int, cal_frac) = match cal_ratio {
-                Some((vina, pwr)) => ((vina / pwr) as u16, ((vina * 100 / pwr) % 100) as u16),
-                None => (0, 0),
-            };
             defmt::info!(
-                "ADC_PWR={} mV ADC_VOUT={} mV ADC_Input_Curr={} mV (INA229 I={} mA) cal={}.{:02}",
+                "ADC_PWR={} mV ADC_VOUT={} mV ADC_Input_Curr={} mV (INA229 V={} mV I={} mA)",
                 MEAS_ADC_PWR_MV.load(Ordering::Relaxed),
                 MEAS_ADC_VOUT_MV.load(Ordering::Relaxed),
                 MEAS_ADC_IIN_MV.load(Ordering::Relaxed),
-                MEAS_I_MA.load(Ordering::Relaxed),
-                cal_int,
-                cal_frac
+                MEAS_V_MV.load(Ordering::Relaxed),
+                MEAS_I_MA.load(Ordering::Relaxed)
             );
+            if let Some(n) = core::num::NonZeroU32::new(cal_n) {
+                // Means with one decimal, as integer tenths: defmt has no
+                // cheap float formatting on this target.
+                let pwr_x10 = cal_pwr_raw * 10 / n;
+                let vout_x10 = cal_vout_raw * 10 / n;
+                let pwr_mean = (cal_pwr_raw / n) as u16;
+                let vout_mean = (cal_vout_raw / n) as u16;
+                defmt::info!(
+                    "ADC cal: PWR raw={}.{} pin={} mV scaled={} mV | VOUT raw={}.{} pin={} mV scaled={} mV | INA229 V={} mV (n={})",
+                    pwr_x10 / 10,
+                    pwr_x10 % 10,
+                    raw_to_mv(pwr_mean),
+                    divider_to_actual_mv(raw_to_mv(pwr_mean)),
+                    vout_x10 / 10,
+                    vout_x10 % 10,
+                    raw_to_mv(vout_mean),
+                    divider_to_actual_mv(raw_to_mv(vout_mean)),
+                    cal_ina_mv / n,
+                    n
+                );
+            }
+            cal_n = 0;
+            cal_pwr_raw = 0;
+            cal_vout_raw = 0;
+            cal_ina_mv = 0;
         }
         Timer::after_millis(100).await;
     }
