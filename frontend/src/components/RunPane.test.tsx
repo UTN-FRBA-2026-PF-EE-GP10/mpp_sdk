@@ -129,6 +129,7 @@ describe('RunPane', () => {
       defaultInitialDuty: 0.5,
       defaultVMax: 40,
       defaultIMax: 1,
+      defaultVOutMax: 25,
     })
     vi.spyOn(window, 'confirm').mockReturnValue(false)
     renderPane()
@@ -148,6 +149,7 @@ describe('RunPane', () => {
       defaultInitialDuty: 0.5,
       defaultVMax: 40,
       defaultIMax: 1,
+      defaultVOutMax: 25,
     })
     vi.mocked(startRun).mockResolvedValue({
       status: 'running',
@@ -164,7 +166,7 @@ describe('RunPane', () => {
 
     await waitFor(() =>
       expect(startRun).toHaveBeenCalledWith(
-        expect.objectContaining({ algorithm: 'P&O', curve_ref: null }),
+        expect.objectContaining({ algorithm: 'P&O', curve_ref: null, v_out_max: 25 }),
       ),
     )
   })
@@ -177,6 +179,7 @@ describe('RunPane', () => {
       defaultInitialDuty: 0.5,
       defaultVMax: 40,
       defaultIMax: 1,
+      defaultVOutMax: 25,
     })
     vi.mocked(startRun).mockResolvedValue({
       status: 'running',
@@ -210,6 +213,7 @@ describe('RunPane', () => {
       defaultInitialDuty: 0.5,
       defaultVMax: 40,
       defaultIMax: 1,
+      defaultVOutMax: 25,
     })
     vi.mocked(startRun).mockResolvedValue({
       status: 'running',
@@ -239,6 +243,7 @@ describe('RunPane', () => {
       defaultInitialDuty: 0.5,
       defaultVMax: 40,
       defaultIMax: 1,
+      defaultVOutMax: 25,
     })
     vi.mocked(startRun).mockResolvedValue({
       status: 'running',
@@ -266,6 +271,7 @@ describe('RunPane', () => {
       defaultInitialDuty: 0.5,
       defaultVMax: 40,
       defaultIMax: 1,
+      defaultVOutMax: 25,
     })
     vi.mocked(startRun).mockResolvedValue({
       status: 'running',
@@ -296,6 +302,7 @@ describe('RunPane', () => {
       defaultInitialDuty: 0.5,
       defaultVMax: 40,
       defaultIMax: 1,
+      defaultVOutMax: 25,
     })
     vi.mocked(startRun).mockResolvedValue({
       status: 'running',
@@ -343,6 +350,7 @@ describe('RunPane', () => {
       defaultInitialDuty: 0.5,
       defaultVMax: 40,
       defaultIMax: 1,
+      defaultVOutMax: 25,
     })
     vi.mocked(fetchLiveRun).mockResolvedValue(liveState())
     vi.mocked(stopRun).mockResolvedValue(undefined)
@@ -367,6 +375,7 @@ describe('RunPane', () => {
       defaultInitialDuty: 0.5,
       defaultVMax: 40,
       defaultIMax: 1,
+      defaultVOutMax: 25,
     })
     vi.mocked(fetchLiveRun).mockResolvedValue(liveState({ status: 'idle' }))
     renderPane()
@@ -386,6 +395,7 @@ describe('RunPane in demo (sandbox) mode', () => {
       defaultInitialDuty: 0.5,
       defaultVMax: 40,
       defaultIMax: 1,
+      defaultVOutMax: 25,
     })
     vi.mocked(startRun).mockResolvedValue({
       status: 'running',
@@ -419,6 +429,7 @@ describe('RunPane in demo (sandbox) mode', () => {
       defaultInitialDuty: 0.5,
       defaultVMax: 40,
       defaultIMax: 1,
+      defaultVOutMax: 25,
     })
     vi.mocked(startRun).mockResolvedValue({
       status: 'running',
@@ -480,6 +491,7 @@ describe('RunPane in demo (sandbox) mode', () => {
       defaultInitialDuty: 0.5,
       defaultVMax: 40,
       defaultIMax: 1,
+      defaultVOutMax: 25,
     })
     vi.mocked(startRun).mockResolvedValue({
       status: 'running',
@@ -549,6 +561,7 @@ describe('RunPane in demo (sandbox) mode', () => {
       defaultInitialDuty: 0.5,
       defaultVMax: 40,
       defaultIMax: 1,
+      defaultVOutMax: 25,
     })
     vi.mocked(startRun).mockResolvedValue({
       status: 'running',
@@ -612,6 +625,7 @@ describe('RunPane in demo (sandbox) mode', () => {
       defaultInitialDuty: 0.5,
       defaultVMax: 40,
       defaultIMax: 1,
+      defaultVOutMax: 25,
     })
     vi.mocked(startRun).mockResolvedValue({
       status: 'running',

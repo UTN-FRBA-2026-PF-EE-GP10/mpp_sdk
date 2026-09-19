@@ -211,6 +211,7 @@ function RunSetupForm({
   // never shows a bound the server would not actually enforce.
   const [vMax, setVMax] = useState<number | null>(null)
   const [iMax, setIMax] = useState<number | null>(null)
+  const [vOutMax, setVOutMax] = useState<number | null>(null)
 
   const algorithms = config?.algorithms ?? []
 
@@ -230,6 +231,7 @@ function RunSetupForm({
     }
     setInitialDuty((d) => d ?? config.defaultInitialDuty)
     setVMax((v) => v ?? config.defaultVMax)
+    setVOutMax((v) => v ?? config.defaultVOutMax)
     setIMax((i) => i ?? config.defaultIMax)
     // Only re-run when the fetched roster changes - re-selecting on every
     // `algorithm` change would fight the operator's own picks.
@@ -264,6 +266,7 @@ function RunSetupForm({
       initial_duty: initialDuty ?? config?.defaultInitialDuty,
       v_max: vMax ?? config?.defaultVMax ?? 0,
       i_max: iMax ?? config?.defaultIMax ?? 0,
+      v_out_max: vOutMax ?? config?.defaultVOutMax ?? 0,
       curve_ref: simulated ? null : curveRef || null,
       curve_points: simulated && chosen ? chosen.points.map((p) => [p.v, p.i]) : null,
       // Lets the saved run's curve_ref name the chosen demo curve, even
@@ -360,14 +363,29 @@ function RunSetupForm({
               className="rounded-md border bg-transparent px-2 py-1.5 text-sm text-foreground"
             />
           </label>
+          <label className="flex flex-1 flex-col gap-1 text-sm text-muted-foreground">
+            v_out_max (V)
+            <input
+              type="number"
+              value={vOutMax ?? ''}
+              onChange={(e) => setVOutMax(Number(e.target.value))}
+              className="rounded-md border bg-transparent px-2 py-1.5 text-sm text-foreground"
+            />
+          </label>
         </div>
       </div>
 
       <p className="text-xs text-muted-foreground">
         Leave duration blank to run up to the server's {config?.maxDurationS ?? '...'}s safety backstop
         - a longer request is clamped to it, never rejected. The run aborts immediately if a
-        reading ever exceeds v_max/i_max.
+        reading ever exceeds v_max/i_max, or the converter output exceeds v_out_max.
       </p>
+      {!simulated && (
+        <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-300">
+          Put a load on the converter output (for example 10 Ohm, 10 W) before a real run. With no
+          load the SEPIC output climbs far above the panel voltage.
+        </p>
+      )}
       {!simulated && curveRef === '' && (
         <p className="text-xs text-muted-foreground">
           No reference curve selected - the run still works, there is simply no curve to grade it

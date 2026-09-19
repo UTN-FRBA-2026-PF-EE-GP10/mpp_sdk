@@ -32,6 +32,7 @@ from scripts.curve_tracer_server import (  # noqa: E402
     _DEFAULT_I_MAX,
     _DEFAULT_RUN_DURATION_S,
     _DEFAULT_V_MAX,
+    _DEFAULT_V_OUT_MAX,
     _MAX_BATCH_DELETE_IDS,
     _MAX_RUN_DURATION_S,
     _curve_path,
@@ -274,10 +275,12 @@ def test_run_config_serves_the_bounds_a_run_is_actually_held_to(client):
     assert body["max_duration_s"] == _MAX_RUN_DURATION_S
     assert body["default_v_max"] == _DEFAULT_V_MAX
     assert body["default_i_max"] == _DEFAULT_I_MAX
+    assert body["default_v_out_max"] == _DEFAULT_V_OUT_MAX
 
     # A start request that omits the limits must be held to exactly these.
     assert _StartRunRequest(algorithm="P&O").v_max == body["default_v_max"]
     assert _StartRunRequest(algorithm="P&O").i_max == body["default_i_max"]
+    assert _StartRunRequest(algorithm="P&O").v_out_max == body["default_v_out_max"]
 
 
 # ------------------------------------------------------------------
@@ -941,6 +944,30 @@ def test_start_run_rejects_a_nan_v_max(client):
     assert client.run_requests.empty()
 
 
+def test_start_run_rejects_a_nan_v_out_max(client):
+    r = client.post(
+        "/api/runs/start",
+        content=b'{"algorithm":"P&O","v_out_max":NaN}',
+        headers={"content-type": "application/json"},
+    )
+    assert r.status_code == 400
+    assert "v_out_max" in r.json()["detail"]
+    assert client.run_requests.empty()
+
+
+@pytest.mark.parametrize(("sent", "held"), [(10.0, 10.0), (500.0, _DEFAULT_V_OUT_MAX)])
+def test_start_run_narrows_v_out_max_but_never_widens_it(client, sent, held):
+    r = client.post("/api/runs/start", json={"algorithm": "P&O", "v_out_max": sent})
+    assert r.status_code == 200
+    assert client.run_requests.get_nowait().v_out_max == held
+
+
+def test_start_run_rejects_a_non_positive_v_out_max(client):
+    r = client.post("/api/runs/start", json={"algorithm": "P&O", "v_out_max": 0})
+    assert r.status_code == 400
+    assert client.run_requests.empty()
+
+
 def test_start_run_rejects_an_infinite_i_max(client):
     r = client.post(
         "/api/runs/start",
@@ -1174,7 +1201,13 @@ def test_run_live_exposes_vout_live(client):
     source = _FakeRunSource()
     source.vout = 27.5
     request = _RunRequest(
-        spec=_po_spec(), duration_s=0.02, v_max=100.0, i_max=100.0, curve_ref=None, label="bench"
+        spec=_po_spec(),
+        duration_s=0.02,
+        v_max=100.0,
+        i_max=100.0,
+        v_out_max=100.0,
+        curve_ref=None,
+        label="bench",
     )
     assert client.run_cache.try_start(algorithm="P&O", label="bench", curve_ref=None)
 

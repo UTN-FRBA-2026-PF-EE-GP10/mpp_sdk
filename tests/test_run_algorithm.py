@@ -215,6 +215,62 @@ def test_safety_abort_on_overvoltage_stops_and_zeroes_duty():
     assert source._duty == 0.0  # driven to zero, not left at the offending duty
 
 
+def _ticking_clock(step=0.1):
+    """Advances on every call, so a loop whose abort is missing still ends
+    at its duration and fails an assertion rather than hanging."""
+    clock = _FakeClock()
+
+    def tick():
+        clock.advance(step)
+        return clock()
+
+    return tick
+
+
+class _FakeSourceWithVout(_FakeSource):
+    """Adds the converter output SpiMcuSource exposes: a light load makes
+    it climb with duty while the panel side stays well inside its limits."""
+
+    @property
+    def vout(self):
+        return 60.0 * self._duty
+
+
+def test_safety_abort_on_output_overvoltage_stops_and_zeroes_duty():
+    source = _FakeSourceWithVout()
+    samples, aborted, reason = run_control_loop(
+        source,
+        _FixedDutyAlgorithm(0.5),
+        duration_s=10.0,
+        v_max=100.0,
+        i_max=100.0,
+        v_out_max=25.0,  # V out at the 0.5 seed is 30 V
+        initial_duty=0.5,
+        clock=_ticking_clock(),
+        sleep=lambda _: None,
+    )
+    assert aborted is True
+    assert reason == "output-overvoltage"
+    assert samples == []
+    assert source._duty == 0.0
+
+
+def test_output_limit_never_trips_on_a_source_without_vout():
+    """A simulated source has no converter output to read."""
+    clock = _FakeClock()
+    _, aborted, reason = run_control_loop(
+        _FakeSource(),
+        _FixedDutyAlgorithm(0.5),
+        duration_s=0.0,
+        v_max=100.0,
+        i_max=100.0,
+        v_out_max=0.001,
+        clock=clock,
+        sleep=lambda _: None,
+    )
+    assert (aborted, reason) == (False, None)
+
+
 def test_safety_abort_on_overcurrent():
     source = _FakeSource()
     clock = _FakeClock()
