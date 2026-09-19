@@ -813,6 +813,16 @@ class _StartRunRequest(BaseModel):
     curve_ref: str | None = None
     # (volts, amps) pairs; simulated runs only, instead of `curve_ref`.
     curve_points: list[tuple[float, float]] | None = None
+    # Only accepted alongside curve_points: demo mode's bundled curves are
+    # not in the server's curve library, so there is no id to save as
+    # curve_ref the way a real curve_ref run gets one for free. This lets
+    # the caller supply that id anyway, purely as a label for the saved
+    # RunRecord - the run player looks it up among its own curve list
+    # (the demo fixtures, in demo mode) the same way it already does for
+    # curve_ref. It must match _DEMO_LABEL_RE and must not name a real
+    # library curve, and it is never resolved to a path - unlike
+    # curve_ref, it never reaches _curve_path.
+    reference_label: str | None = None
     label: str = ""
     simulated: bool = False
 
@@ -835,6 +845,11 @@ _CURVE_ID_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
 # to stop an oversized body from making the server loop through an
 # unbounded list of filesystem operations in a single request.
 _MAX_BATCH_DELETE_IDS = 500
+
+# Labels for curves that exist only in the page (demo mode's fixtures),
+# saved as a simulated run's curve_ref. No dots, so never "." or "..", and
+# bounded, unlike a library id.
+_DEMO_LABEL_RE = re.compile(r"^demo-[A-Za-z0-9_-]{1,64}$")
 
 # The player animates the whole series in a browser on a Pi-served page.
 # Unbounded, a long run (a multi-minute capture can be hundreds of
@@ -1182,6 +1197,10 @@ def create_app(
             raise HTTPException(status_code=400, detail=f"unknown algorithm {body.algorithm!r}")
         curve_ref = body.curve_ref or None
         curve_points: tuple[tuple[float, float], ...] | None = None
+        if body.reference_label is not None and body.curve_points is None:
+            raise HTTPException(
+                status_code=400, detail="reference_label is only accepted alongside curve_points"
+            )
         if body.curve_points is not None:
             # A hardware run tracks the real panel, so an inline curve could
             # only ever be a misleading picture next to it.
@@ -1214,6 +1233,26 @@ def create_app(
             except ValueError as exc:
                 raise HTTPException(status_code=400, detail=str(exc)) from exc
             reference_points = curve_points
+            if body.reference_label is not None:
+                # The "demo-" prefix keeps these labels apart from library
+                # ids (timestamp-first), and the collision check covers a
+                # hand-named file: a run tracked against inline points must
+                # never point the player at a different, real curve.
+                if not _DEMO_LABEL_RE.fullmatch(body.reference_label):
+                    raise HTTPException(
+                        status_code=400,
+                        detail="reference_label must be demo-<name> (letters, digits, - or _)",
+                    )
+                if (curve_library.default_dir() / f"{body.reference_label}.json").exists():
+                    raise HTTPException(
+                        status_code=400,
+                        detail="reference_label names a real curve in the library",
+                    )
+                # Saved as curve_ref on the RunRecord below - a label the
+                # caller's own curve list (demo mode's fixtures) can look
+                # up by id, even though it names no file in this server's
+                # curve library. Never passed to _curve_path.
+                curve_ref = body.reference_label
         elif curve_ref is not None:
             # raises 400/404 if it doesn't check out
             reference_points = curve_library.load(_curve_path(curve_ref)).points
