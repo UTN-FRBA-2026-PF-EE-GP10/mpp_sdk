@@ -39,8 +39,9 @@ P|/P$ restart condition used by PSO-MPPT schemes [Liu et al. 2012].
 - **Step detector, blind to ramps**: a change that creeps in over many
   control periods is followed, not flagged. An abrupt shading change is a
   discontinuity and fires within `samples` steps.
-- State is four scalars (`_ref`, `_count`, `_armed`, plus the fixed
-  `threshold`/`samples`/`smoothing`) and the update is branch-light -
+- State is three scalars (`_ref`, `_count`, `_armed`), plus three fixed
+  configuration values (`threshold`/`samples`/`smoothing`), and the
+  update is branch-light -
   MCU-portable by design. See the docstring at
   `mpp_sdk/algorithms/restart.py:7-53` for the authoritative behavior; this
   page is explanatory.
