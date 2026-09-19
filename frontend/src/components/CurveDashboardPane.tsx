@@ -170,7 +170,12 @@ export function CurveDashboardPane({
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
-              <Button variant="ghost" size="icon-sm" title="Save (download)">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                title="Save (download)"
+                aria-label={`Download "${label}"`}
+              >
                 <Download />
               </Button>
             }
@@ -197,6 +202,7 @@ export function CurveDashboardPane({
           // focusableWhenDisabled keeps it hoverable/focusable (base-ui
           // still blocks the click itself) so the reason stays reachable.
           focusableWhenDisabled
+          aria-label={`Remeasure "${label}"`}
           title={
             sandbox.enabled
               ? 'Remeasure needs real hardware - unavailable in demo mode'
@@ -214,6 +220,7 @@ export function CurveDashboardPane({
           onClick={handleDelete}
           disabled={deleteDisabled}
           focusableWhenDisabled
+          aria-label={`Delete "${label}"`}
           title={
             sandbox.enabled
               ? 'Deleting is unavailable in demo mode'

@@ -77,7 +77,10 @@ describe('CurveDashboardPane - opening', () => {
   it('opens the expanded view when the card itself is clicked', () => {
     const props = baseProps()
     renderPane(<CurveDashboardPane {...props} />)
-    fireEvent.click(screen.getByRole('button', { name: /both flat/ }))
+    // Not getByRole('button', { name: /both flat/ }) - the action buttons'
+    // own accessible names now name the curve too (see the aria-label
+    // additions below), so that query would match more than the card.
+    fireEvent.click(screen.getByText('both flat').closest('[role="button"]')!)
     expect(props.onOpen).toHaveBeenCalled()
   })
 
@@ -189,6 +192,19 @@ describe('CurveDashboardPane - remeasure', () => {
     const buttons = screen.getAllByTitle('A replacement capture is already pending for this curve')
     expect(buttons).toHaveLength(2) // both remeasure and delete
     for (const b of buttons) expect(b.getAttribute('aria-disabled')).toBe('true')
+  })
+})
+
+describe('CurveDashboardPane - accessible names', () => {
+  // Icon-only buttons used to carry only a `title`, which is not a
+  // reliable accessible name source and gives no way to tell one curve's
+  // Delete button from another's when several tiles are on screen.
+  it('names the curve in each icon-only action button', () => {
+    const props = baseProps()
+    renderPane(<CurveDashboardPane {...props} />)
+    expect(screen.getByRole('button', { name: 'Download "both flat"' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Remeasure "both flat"' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Delete "both flat"' })).toBeTruthy()
   })
 })
 
