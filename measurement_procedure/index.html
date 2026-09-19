@@ -1019,9 +1019,13 @@ Quickstart to install the <code>web</code> extra first.</p>
   section.</li>
 <li>A closed-loop run has no on-target safety cutoff besides the duty
   ceiling. The Pi side aborts the run if a reading ever exceeds the
-  v_max/i_max limits, or if the SPI link drops mid-run. This protection
-  only exists while the controlling process (the workbench server, or
-  <code>run-algorithm</code>) is running.</li>
+  v_max/i_max limits, if the converter output exceeds v_out_max, or if the
+  SPI link drops mid-run. This protection only exists while the
+  controlling process (the workbench server, or <code>run-algorithm</code>) is
+  running.</li>
+<li><strong>Always put a load on the converter output before a run</strong> (10 Ohm,
+  10 W for one panel; 20 Ohm for two). With a light or missing load the
+  SEPIC output climbs far above the panel voltage.</li>
 </ul>
 <h2 id="before-you-start">Before you start<a class="headerlink" href="#before-you-start" title="Permanent link">&para;</a></h2>
 <ul>
