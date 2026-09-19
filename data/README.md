@@ -35,6 +35,16 @@
   (provenance: `hardware`, `simulated`, or `unknown` - see `RUN_SOURCES`
   in the same file), and `samples` (`t`/`v`/`i`/`d` per control step). See
   `mpp_sdk/runs/record.py` for the full schema.
+- `data/reports/` - measurement reports, one JSON file per report,
+  written by `mpp_sdk.reports.library`. Git-ignored, same reasoning as
+  `data/curves/` and `data/runs/`. A report is a filled-in copy of a
+  template (`mpp_sdk/reports/templates/*.json`, shipped with the SDK,
+  not user data): setup fields, a checklist of steps with a status and,
+  where relevant, a value and linked curve/run ids, and open questions
+  with their answers. Unlike curves and runs, a report is mutable -
+  edited over the course of a session via `mpp_sdk.reports.library.update`
+  - so its filename never changes once created. See
+  `mpp_sdk/reports/record.py` for the full schema.
 
 ## Before committing any measured file
 

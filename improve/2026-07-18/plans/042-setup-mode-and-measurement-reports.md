@@ -234,3 +234,73 @@ firmware commit, operator.
 - [ ] Curves and runs downloaded; report downloaded as Markdown.
 
 **Open questions**: temperature (above); any unexpected behaviour.
+
+## Addendum (2026-09-19): repeats, sessions, UX pass
+
+### Repeated measurements (Part B and Part C)
+
+A result from one sweep or one run is one sample. To get its spread, a
+`curve` or `run` step asks for **N repeats** and links N items.
+
+- Template and report steps carry `repeats` (integer 1-20, default 1;
+  only `curve` and `run` steps may be above 1). It comes from the template
+  and a PATCH cannot change it. More links than `repeats` are allowed.
+- Shipped templates: the baseline curve, each tilt curve and every
+  algorithm run ask for 3. The stop and link-down tests stay at 1.
+- The report view (Part C) computes the statistics in the browser, over
+  the linked items of one step. A session file (Part D) opened with no
+  server then shows the same numbers.
+  - Curves: Voc, Isc, Vmp, Imp, P at the MPP.
+  - Runs: held power, P / MPP_th, time to converge.
+  - For each: n, median, mean, standard deviation (n - 1), min, max.
+    With n = 1, show the value alone, with no deviation.
+  - A step shows "2 / 3 repeats" until it has enough links.
+- The Markdown download has the same table.
+
+### Part D: session files and view mode (frontend)
+
+A **session file** holds a report and every curve and run linked to it,
+or a set of chosen curves and runs, in one JSON file. Other people open
+it in the workbench to look at it. No board or saved library is needed.
+
+```json
+{
+  "format": "mpp-sdk-session",
+  "schema": 1,
+  "exported_at": "2026-09-19T18:00:00+00:00",
+  "title": "Panel A alone under the lamp",
+  "setup": "single",
+  "report": null,
+  "curves": [{"id": "<id as in /api/curves>", "record": {"...": "as served"}}],
+  "runs": [{"id": "<id as in /api/runs>", "record": {"...": "full samples"}}],
+  "missing": {"curve_ids": [], "run_ids": []}
+}
+```
+
+- **Export**: from the sidebar selection (curves and runs chosen in
+  select mode), and from a report (Part C: the report and all of its
+  linked items). The browser builds the file from the existing API. Runs
+  are fetched with all their samples. Linked items that no longer exist
+  go in `missing`. The file name is `<title>.mppsession.json`.
+- **Import**: an **Open session** control, and dropping a file on the
+  page. The file is checked before use: `format`, `schema`, a size limit
+  (50 MB), and every record parsed the same way API data is. A bad file
+  gives a clear message and no view change.
+- **View mode**: the workbench shows only the session's content,
+  read-only, in the same views (curve dashboard, curve dialog, runs, run
+  player, and the report once Part C exists). Capture, run start, delete,
+  rename, remeasure and report edits are off. A header badge shows
+  "Viewing: <title>" and a **Close** button returns to the normal mode.
+  Nothing is written to the server. It works when no server answers, the
+  same way demo (sandbox) mode does.
+- Tests (vitest): a round trip from export to import; rejection of bad
+  files; view mode is read-only; Close restores the previous mode.
+
+### UX pass (frontend, in parallel)
+
+A usability review of the current workbench, done by an agent that then
+makes small, independent fixes. Each fix gets its own commit: clearer
+labels and empty states, error messages that say what to do,
+consistent units and number formats, keyboard and focus order,
+accessible names, and mobile width. The review does not change the
+sidebar structure or the header: Parts C and D change those.

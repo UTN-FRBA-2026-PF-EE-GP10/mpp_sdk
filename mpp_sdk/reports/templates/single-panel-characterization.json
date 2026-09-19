@@ -1,0 +1,274 @@
+{
+  "schema": 1,
+  "template_id": "single-panel-characterization",
+  "version": 1,
+  "title": "Single panel characterization",
+  "setup": "single",
+  "field_defs": [
+    {
+      "key": "panel",
+      "label": "Panel",
+      "hint": "Panel model and rating, from its label.",
+      "default": "Luxen LN-10P, 10 W, 12 V"
+    },
+    {
+      "key": "light_source",
+      "label": "Light source and setting",
+      "hint": "Lamp or sun, and its setting (dimmer level, or distance and time of day).",
+      "default": ""
+    },
+    {
+      "key": "distance",
+      "label": "Distance",
+      "hint": "Distance from the light source to the panel.",
+      "default": ""
+    },
+    {
+      "key": "load_resistor",
+      "label": "Load resistor",
+      "hint": "Resistor value and power rating on the converter output.",
+      "default": "10 Ohm, 10 W"
+    },
+    {
+      "key": "adc_range",
+      "label": "ADC range",
+      "hint": "On-chip ADC range used for this session.",
+      "default": "Low"
+    },
+    {
+      "key": "supply_used",
+      "label": "Supply used for checks",
+      "hint": "Power supply used for board checks, if any.",
+      "default": ""
+    },
+    {
+      "key": "firmware_commit",
+      "label": "Firmware commit",
+      "hint": "Git commit of the firmware running on the board.",
+      "default": ""
+    },
+    {
+      "key": "operator",
+      "label": "Operator",
+      "hint": "Name of the person running the session.",
+      "default": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "panel-label-voc",
+      "section": "Before energizing",
+      "title": "Panel label Voc",
+      "instructions": "Read Voc (open-circuit voltage) from the panel label. Record it here.",
+      "kind": "number",
+      "unit": "V"
+    },
+    {
+      "id": "panel-label-isc",
+      "section": "Before energizing",
+      "title": "Panel label Isc",
+      "instructions": "Read Isc (short-circuit current) from the panel label. Record it here.",
+      "kind": "number",
+      "unit": "A"
+    },
+    {
+      "id": "panel-label-vmp",
+      "section": "Before energizing",
+      "title": "Panel label Vmp",
+      "instructions": "Read Vmp (voltage at maximum power) from the panel label. Record it here.",
+      "kind": "number",
+      "unit": "V"
+    },
+    {
+      "id": "panel-label-imp",
+      "section": "Before energizing",
+      "title": "Panel label Imp",
+      "instructions": "Read Imp (current at maximum power) from the panel label. Record it here.",
+      "kind": "number",
+      "unit": "A"
+    },
+    {
+      "id": "firmware-config",
+      "section": "Before energizing",
+      "title": "Firmware configuration",
+      "instructions": "Check the firmware is built as MppTracker, with ADC_DIVIDER_RANGE = Low and MAX31865_ENABLED = false. Check the boot log shows the range and T=n/a. Pass: both match.",
+      "kind": "check"
+    },
+    {
+      "id": "load-on-output",
+      "section": "Before energizing",
+      "title": "Load on the output",
+      "instructions": "Connect a 10 Ohm, 10 W load to the converter output on J4. Pass: the load is connected and rated for the expected power.",
+      "kind": "check"
+    },
+    {
+      "id": "heatsink-and-power-cut",
+      "section": "Before energizing",
+      "title": "Heatsink and power cut",
+      "instructions": "Check that Q3 has its heatsink fitted, or plan to keep runs short. Check that someone at the bench can cut power right away. Pass: both are true.",
+      "kind": "check"
+    },
+    {
+      "id": "single-mode-pico-connected",
+      "section": "Before energizing",
+      "title": "Workbench mode and connection",
+      "instructions": "Check the workbench is in Single mode. Check the PICO connected pill is shown. Pass: both are true.",
+      "kind": "check"
+    },
+    {
+      "id": "run-config-limits",
+      "section": "Link and limits",
+      "title": "Run config limits",
+      "instructions": "Open the run config and check it shows v_max 40 V, i_max 1 A, v_out_max 25 V. Pass: all three match.",
+      "kind": "check"
+    },
+    {
+      "id": "link-waiting-for-sweep",
+      "section": "Link and limits",
+      "title": "Link status before a sweep",
+      "instructions": "With nothing running, check the link reads \"waiting for sweep\". Pass: the link shows that text.",
+      "kind": "check"
+    },
+    {
+      "id": "light-check-isc",
+      "section": "Light and curve",
+      "title": "Light check",
+      "instructions": "Run one sweep. Record Isc, in amps. Pass: Isc is below 0.7 A (700 mA). If it is not, reduce the light and sweep again.",
+      "kind": "number",
+      "unit": "A"
+    },
+    {
+      "id": "baseline-curve",
+      "section": "Light and curve",
+      "title": "Baseline curve",
+      "instructions": "Save 3 sweeps, one after the other, as the baseline curves. The report shows the median and spread of Voc, Isc and P at the MPP. Pass: the 3 curves are saved and linked here.",
+      "kind": "curve",
+      "repeats": 3
+    },
+    {
+      "id": "curve-shape",
+      "section": "Light and curve",
+      "title": "Curve shape",
+      "instructions": "Check the curve: one knee, points dense near it, not noisy. Pass: the shape matches.",
+      "kind": "check"
+    },
+    {
+      "id": "po-run",
+      "section": "Runs (curve as reference, 10 s, starting duty 0.5)",
+      "title": "P&O run",
+      "instructions": "Start a Perturb & Observe run with the baseline curve as reference, 10 s duration, starting duty 0.5. Pass: the run converges near the MPP. Do it 3 times and link every run: the report shows the median and spread of the results.",
+      "kind": "run",
+      "repeats": 3
+    },
+    {
+      "id": "po-held-power",
+      "section": "Runs (curve as reference, 10 s, starting duty 0.5)",
+      "title": "P&O held power",
+      "instructions": "From the P&O run, record the held power as a percentage of the theoretical MPP power (P / MPP_th).",
+      "kind": "number",
+      "unit": "%"
+    },
+    {
+      "id": "po-samples-per-second",
+      "section": "Runs (curve as reference, 10 s, starting duty 0.5)",
+      "title": "P&O samples per second",
+      "instructions": "From the P&O run, record the samples per second. This sets the link-down detection threshold.",
+      "kind": "number",
+      "unit": "samples/s"
+    },
+    {
+      "id": "vout-during-po-run-adc",
+      "section": "Runs (curve as reference, 10 s, starting duty 0.5)",
+      "title": "V out during the run (board)",
+      "instructions": "Record V out reported by the board during the P&O run.",
+      "kind": "number",
+      "unit": "V"
+    },
+    {
+      "id": "vout-during-po-run-meter",
+      "section": "Runs (curve as reference, 10 s, starting duty 0.5)",
+      "title": "V out during the run (meter)",
+      "instructions": "Record V out measured with a meter at the same time. Compare it with the board reading above.",
+      "kind": "number",
+      "unit": "V"
+    },
+    {
+      "id": "incond-run",
+      "section": "Runs (curve as reference, 10 s, starting duty 0.5)",
+      "title": "IncCond run",
+      "instructions": "Start an Incremental Conductance run with the same settings (baseline curve, 10 s, starting duty 0.5). Pass: the run completes and is linked here. Do it 3 times and link every run: the report shows the median and spread of the results.",
+      "kind": "run",
+      "repeats": 3
+    },
+    {
+      "id": "fuzzy-run",
+      "section": "Runs (curve as reference, 10 s, starting duty 0.5)",
+      "title": "Fuzzy Logic run",
+      "instructions": "Start a Fuzzy Logic run with the same settings (baseline curve, 10 s, starting duty 0.5). Pass: the run completes and is linked here. Do it 3 times and link every run: the report shows the median and spread of the results.",
+      "kind": "run",
+      "repeats": 3
+    },
+    {
+      "id": "scan-and-track-run",
+      "section": "Runs (curve as reference, 10 s, starting duty 0.5)",
+      "title": "Scan & Track run",
+      "instructions": "Start a Scan & Track run with the same settings (baseline curve, 10 s, starting duty 0.5). Pass: the run completes and is linked here. Do it 3 times and link every run: the report shows the median and spread of the results.",
+      "kind": "run",
+      "repeats": 3
+    },
+    {
+      "id": "pso-run",
+      "section": "Runs (curve as reference, 10 s, starting duty 0.5)",
+      "title": "Particle Swarm run",
+      "instructions": "Start a Particle Swarm run with the same settings (baseline curve, 10 s, starting duty 0.5). Pass: the run completes and is linked here. Do it 3 times and link every run: the report shows the median and spread of the results.",
+      "kind": "run",
+      "repeats": 3
+    },
+    {
+      "id": "seed-test",
+      "section": "Runs (curve as reference, 10 s, starting duty 0.5)",
+      "title": "Seed test",
+      "instructions": "Start a P&O run from starting duty 0.85 instead of 0.5. Pass: it still converges on the one peak. Do it 3 times and link every run: the report shows the median and spread of the results.",
+      "kind": "run",
+      "repeats": 3
+    },
+    {
+      "id": "stop-test",
+      "section": "Runs (curve as reference, 10 s, starting duty 0.5)",
+      "title": "Stop test",
+      "instructions": "Start a run and stop it halfway through. Pass: the run aborts with status \"stopped\" and duty goes to 0.",
+      "kind": "run"
+    },
+    {
+      "id": "link-down-test",
+      "section": "Runs (curve as reference, 10 s, starting duty 0.5)",
+      "title": "Link-down test",
+      "instructions": "Start a run and pull the SPI cable mid-run. Pass: the run aborts with status \"link-down\" and duty goes to 0.",
+      "kind": "run"
+    },
+    {
+      "id": "q3-temperature-after-runs",
+      "section": "Runs (curve as reference, 10 s, starting duty 0.5)",
+      "title": "Q3 temperature after the runs",
+      "instructions": "Record Q3's temperature after the runs, by hand or with a probe.",
+      "kind": "text"
+    },
+    {
+      "id": "downloads",
+      "section": "After",
+      "title": "Downloads",
+      "instructions": "Check that every curve and run used in this report is downloaded, and that this report is downloaded as Markdown. Pass: all files are saved.",
+      "kind": "check"
+    }
+  ],
+  "open_questions": [
+    {
+      "id": "temperature",
+      "text": "Panel temperature is not measured (no PT100 fitted; the MAX31865 is off). Voc falls with temperature, so curves taken at different times are not strictly comparable. How to record it: a contact thermometer on the panel back, an IR thermometer, or a fitted PT100?"
+    },
+    {
+      "id": "unexpected-behaviour",
+      "text": "Was there any unexpected behaviour during the session?"
+    }
+  ]
+}

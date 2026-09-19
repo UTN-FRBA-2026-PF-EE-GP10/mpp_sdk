@@ -1,0 +1,218 @@
+{
+  "schema": 1,
+  "template_id": "full-setup-characterization",
+  "version": 1,
+  "title": "Full setup characterization (two panels)",
+  "setup": "full",
+  "field_defs": [
+    {
+      "key": "panel_a",
+      "label": "Panel A",
+      "hint": "Panel model and rating, from its label. Fixed at 90 degrees.",
+      "default": "Hissuma PSF10MONO, 10 W"
+    },
+    {
+      "key": "panel_b",
+      "label": "Panel B",
+      "hint": "Panel model and rating, from its label. Tilts to 90/70/60/45/30 degrees.",
+      "default": "Hissuma PSF10MONO, 10 W"
+    },
+    {
+      "key": "light_source",
+      "label": "Light source and setting",
+      "hint": "Lamp or sun, and its setting (dimmer level, or distance and time of day).",
+      "default": ""
+    },
+    {
+      "key": "distance",
+      "label": "Distance",
+      "hint": "Distance from the light source to the panels.",
+      "default": ""
+    },
+    {
+      "key": "load_resistor",
+      "label": "Load resistor",
+      "hint": "Resistor value and power rating on the converter output.",
+      "default": "20 Ohm (two 10 Ohm, 10 W in series)"
+    },
+    {
+      "key": "adc_range",
+      "label": "ADC range",
+      "hint": "On-chip ADC range used for this session.",
+      "default": "Mid"
+    },
+    {
+      "key": "supply_used",
+      "label": "Supply used for checks",
+      "hint": "Power supply used for board checks, if any.",
+      "default": ""
+    },
+    {
+      "key": "firmware_commit",
+      "label": "Firmware commit",
+      "hint": "Git commit of the firmware running on the board.",
+      "default": ""
+    },
+    {
+      "key": "operator",
+      "label": "Operator",
+      "hint": "Name of the person running the session.",
+      "default": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "adc-range-mid-and-recalibration",
+      "section": "Before energizing",
+      "title": "ADC range and calibration",
+      "instructions": "Switch the ADC range to Mid: two panels in series reach roughly 34-44 V, past the Low range. Recalibrate against the INA229 (see docs/hardware_v1/calibration.md). Pass: the range is Mid and calibration is complete.",
+      "kind": "check"
+    },
+    {
+      "id": "firmware-config",
+      "section": "Before energizing",
+      "title": "Firmware configuration",
+      "instructions": "Check the firmware is built as MppTracker, with ADC_DIVIDER_RANGE = Mid and MAX31865_ENABLED = false. Check the boot log shows the range and T=n/a. Pass: both match.",
+      "kind": "check"
+    },
+    {
+      "id": "bypass-diode-check",
+      "section": "Before energizing",
+      "title": "Bypass diode check",
+      "instructions": "Check each panel's bypass diode is present and correctly oriented. With two panels in series, a shaded panel without a working bypass diode can be driven into reverse breakdown. Pass: both diodes check out.",
+      "kind": "check"
+    },
+    {
+      "id": "load-on-output",
+      "section": "Before energizing",
+      "title": "Load on the output",
+      "instructions": "Connect two 10 Ohm, 10 W resistors in series (20 Ohm total) to the converter output on J4. Pass: the load is connected and rated for the expected power.",
+      "kind": "check"
+    },
+    {
+      "id": "heatsink-and-power-cut",
+      "section": "Before energizing",
+      "title": "Heatsink and power cut",
+      "instructions": "Check that Q3 has its heatsink fitted, or plan to keep runs short. Check that someone at the bench can cut power right away. Pass: both are true.",
+      "kind": "check"
+    },
+    {
+      "id": "full-mode-pico-connected",
+      "section": "Before energizing",
+      "title": "Workbench mode and connection",
+      "instructions": "Check the workbench is in Full mode. Check the PICO connected pill is shown. Pass: both are true.",
+      "kind": "check"
+    },
+    {
+      "id": "run-config-limits",
+      "section": "Link and limits",
+      "title": "Run config limits",
+      "instructions": "Open the run config and check it shows v_max 40 V, i_max 1 A, v_out_max 25 V. Pass: all three match.",
+      "kind": "check"
+    },
+    {
+      "id": "link-waiting-for-sweep",
+      "section": "Link and limits",
+      "title": "Link status before a sweep",
+      "instructions": "With nothing running, check the link reads \"waiting for sweep\". Pass: the link shows that text.",
+      "kind": "check"
+    },
+    {
+      "id": "light-check-isc",
+      "section": "Light and curve",
+      "title": "Light check",
+      "instructions": "With both panels at 90 degrees, run one sweep. Record Isc, in amps. Pass: Isc matches what is expected for the light level. If it does not, adjust the light and sweep again.",
+      "kind": "number",
+      "unit": "A"
+    },
+    {
+      "id": "baseline-curve",
+      "section": "Light and curve",
+      "title": "Baseline curve",
+      "instructions": "Save 3 sweeps with both panels at 90 degrees, one after the other, as the baseline curves. The report shows the median and spread of Voc, Isc and P at the MPP. Pass: the 3 curves are saved and linked here.",
+      "kind": "curve",
+      "repeats": 3
+    },
+    {
+      "id": "tilt-curve-70",
+      "section": "Light and curve",
+      "title": "Curve at B = 70 degrees",
+      "instructions": "Tilt panel B to 70 degrees, panel A stays at 90. Save 3 sweeps, one after the other. Pass: the 3 curves are saved and linked here.",
+      "kind": "curve",
+      "repeats": 3
+    },
+    {
+      "id": "tilt-curve-60",
+      "section": "Light and curve",
+      "title": "Curve at B = 60 degrees",
+      "instructions": "Tilt panel B to 60 degrees, panel A stays at 90. Save 3 sweeps, one after the other. Pass: the 3 curves are saved and linked here.",
+      "kind": "curve",
+      "repeats": 3
+    },
+    {
+      "id": "tilt-curve-45",
+      "section": "Light and curve",
+      "title": "Curve at B = 45 degrees",
+      "instructions": "Tilt panel B to 45 degrees, panel A stays at 90. Save 3 sweeps, one after the other. Pass: the 3 curves are saved and linked here.",
+      "kind": "curve",
+      "repeats": 3
+    },
+    {
+      "id": "tilt-curve-30",
+      "section": "Light and curve",
+      "title": "Curve at B = 30 degrees",
+      "instructions": "Tilt panel B to 30 degrees, panel A stays at 90. Save 3 sweeps, one after the other. Pass: the 3 curves are saved and linked here, and they show two local maxima (partial shading).",
+      "kind": "curve",
+      "repeats": 3
+    },
+    {
+      "id": "po-run-two-peak",
+      "section": "Runs (on the B = 30 degree curve)",
+      "title": "P&O run",
+      "instructions": "Start a Perturb & Observe run with the B = 30 degree curve as reference, 10 s duration, starting duty 0.5. Pass: recorded and linked here, noting which peak it settles on. Do it 3 times and link every run: the report shows the median and spread of the results.",
+      "kind": "run",
+      "repeats": 3
+    },
+    {
+      "id": "scan-and-track-run-two-peak",
+      "section": "Runs (on the B = 30 degree curve)",
+      "title": "Scan & Track run",
+      "instructions": "Start a Scan & Track run with the same settings (B = 30 degree curve, 10 s, starting duty 0.5). Pass: recorded and linked here, noting which peak it settles on. Do it 3 times and link every run: the report shows the median and spread of the results.",
+      "kind": "run",
+      "repeats": 3
+    },
+    {
+      "id": "pso-run-two-peak",
+      "section": "Runs (on the B = 30 degree curve)",
+      "title": "Particle Swarm run",
+      "instructions": "Start a Particle Swarm run with the same settings (B = 30 degree curve, 10 s, starting duty 0.5). Pass: recorded and linked here, noting which peak it settles on. Do it 3 times and link every run: the report shows the median and spread of the results.",
+      "kind": "run",
+      "repeats": 3
+    },
+    {
+      "id": "seed-test-lower-peak",
+      "section": "Runs (on the B = 30 degree curve)",
+      "title": "Seed test near the lower peak",
+      "instructions": "Start a P&O run seeded at a starting duty near the lower peak of the B = 30 degree curve. Pass: recorded and linked here, noting which peak it settles on. Do it 3 times and link every run: the report shows the median and spread of the results.",
+      "kind": "run",
+      "repeats": 3
+    },
+    {
+      "id": "downloads",
+      "section": "After",
+      "title": "Downloads",
+      "instructions": "Check that every curve and run used in this report is downloaded, and that this report is downloaded as Markdown. Pass: all files are saved.",
+      "kind": "check"
+    }
+  ],
+  "open_questions": [
+    {
+      "id": "temperature",
+      "text": "Panel temperature is not measured (no PT100 fitted; the MAX31865 is off). Voc falls with temperature, so curves taken at different times are not strictly comparable. How to record it: a contact thermometer on the panel back, an IR thermometer, or a fitted PT100?"
+    },
+    {
+      "id": "unexpected-behaviour",
+      "text": "Was there any unexpected behaviour during the session?"
+    }
+  ]
+}
