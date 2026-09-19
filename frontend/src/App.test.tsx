@@ -193,6 +193,36 @@ async function startRemeasureFromBaselinePane() {
   await screen.findByText(/Remeasure pending/)
 }
 
+describe('App load errors', () => {
+  it('shows a banner naming what failed, with a way to retry, instead of a silently empty library', async () => {
+    vi.mocked(fetchCurves).mockRejectedValue(new Error('network error'))
+    vi.mocked(fetchRuns).mockResolvedValue([])
+    renderApp()
+
+    await waitFor(() => expect(screen.getByText(/Couldn't load your saved curves/)).toBeTruthy())
+    expect(screen.getByText(/network error/)).toBeTruthy()
+    expect(screen.queryByText(/Couldn't load your saved runs/)).toBeNull()
+
+    vi.mocked(fetchCurves).mockResolvedValue([liveCurve(1)])
+    fireEvent.click(screen.getByText('Retry'))
+
+    await waitFor(() => expect(screen.queryByText(/Couldn't load your saved curves/)).toBeNull())
+    await waitFor(() => expect(within(baselineNavRow()).getByText('1')).toBeTruthy())
+  })
+
+  it('never shows a load-error banner in Demo mode, where nothing is fetched', async () => {
+    vi.mocked(fetchCurves).mockRejectedValue(new Error('network error'))
+    vi.mocked(fetchRuns).mockResolvedValue([])
+    renderApp()
+
+    await waitFor(() => expect(screen.getByText(/Couldn't load your saved curves/)).toBeTruthy())
+
+    await pickCaptureMode('Demo')
+
+    expect(screen.queryByText(/Couldn't load your saved curves/)).toBeNull()
+  })
+})
+
 describe('App remeasure workflow', () => {
   it('confirms, then navigates to Measure prefilled and shows a banner naming the curve', async () => {
     vi.mocked(fetchCurves).mockResolvedValue([liveCurve(1)])

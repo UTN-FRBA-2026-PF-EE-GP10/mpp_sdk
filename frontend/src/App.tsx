@@ -81,6 +81,11 @@ export default function App() {
   const [pendingRemeasure, setPendingRemeasure] = useState<PendingRemeasure | null>(null)
   const [measurePrefill, setMeasurePrefill] = useState<MeasurePrefill | null>(null)
   const [remeasureError, setRemeasureError] = useState<string | null>(null)
+  // A failed initial load used to only reach the console - the operator
+  // saw an empty sidebar with no way to tell "nothing saved yet" from
+  // "the request failed", and no way to retry short of reloading the page.
+  const [curvesError, setCurvesError] = useState<string | null>(null)
+  const [runsError, setRunsError] = useState<string | null>(null)
 
   /** Step 1-2 of the remeasure workflow (confirming already happened in
    * CurveDashboardPane): mark the deletion pending and send the operator
@@ -143,15 +148,27 @@ export default function App() {
   useEffect(() => {
     if (sandboxEnabled) return
     fetchCurves()
-      .then(setFetchedRecords)
-      .catch((e) => console.error('fetching curves failed', e))
+      .then((data) => {
+        setFetchedRecords(data)
+        setCurvesError(null)
+      })
+      .catch((e) => {
+        console.error('fetching curves failed', e)
+        setCurvesError(e instanceof Error ? e.message : String(e))
+      })
   }, [reloadToken, sandboxEnabled])
 
   useEffect(() => {
     if (sandboxEnabled) return
     fetchRuns()
-      .then(setFetchedRuns)
-      .catch((e) => console.error('fetching runs failed', e))
+      .then((data) => {
+        setFetchedRuns(data)
+        setRunsError(null)
+      })
+      .catch((e) => {
+        console.error('fetching runs failed', e)
+        setRunsError(e instanceof Error ? e.message : String(e))
+      })
   }, [reloadToken, sandboxEnabled])
 
   // 'firmware-replay' ("Demo with PICO") needs a real board on the other
@@ -265,6 +282,29 @@ export default function App() {
       {sandboxEnabled && (
         <div className="border-b border-violet-500/30 bg-violet-500/10 px-4 py-1.5 text-center text-xs font-medium text-violet-700 dark:text-violet-300">
           Demo mode - showing bundled sample data, not your library. No live board, no writes.
+        </div>
+      )}
+
+      {/* Outside demo mode only - sandbox mode never fetches, so any
+          error here is left over from before it was entered and would be
+          stale (see the fetch effects above, which skip the request but
+          not the previous error state). A failed load must not read as
+          "nothing saved yet" - that empty state means something different
+          to an operator deciding whether to trust the library. */}
+      {!sandboxEnabled && (curvesError || runsError) && (
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-destructive/40 bg-destructive/10 px-4 py-1.5 text-xs font-medium text-destructive">
+          <span>
+            {curvesError && `Couldn't load your saved curves: ${curvesError}. `}
+            {runsError && `Couldn't load your saved runs: ${runsError}. `}
+            Check the connection to the Pi and try again.
+          </span>
+          <button
+            type="button"
+            onClick={() => setReloadToken((t) => t + 1)}
+            className="shrink-0 rounded-md border border-destructive/40 px-2 py-0.5 hover:bg-destructive/20"
+          >
+            Retry
+          </button>
         </div>
       )}
 
