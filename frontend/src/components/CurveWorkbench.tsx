@@ -19,6 +19,7 @@ import { useLiveSweep } from '@/hooks/useLiveSweep'
 import { saveCurve } from '@/lib/api'
 import { formatCapturedAt } from '@/lib/format'
 import { useSetupMode } from '@/lib/setupMode'
+import { useUnits } from '@/lib/units'
 import {
   getMeasurementKindInfo,
   PANEL_A_TILT_DEG,
@@ -218,6 +219,7 @@ export function CurveWorkbench({
   initialPanels?: PanelSetup[]
 }) {
   const info = getMeasurementKindInfo(kind)
+  const { formatCurrent, formatPower } = useUnits()
   // The replay buttons belong to the two demo modes only - see the note
   // where they are rendered.
   const showDemoCurveButtons = demo || emphasizeReplay
@@ -391,10 +393,8 @@ export function CurveWorkbench({
                         <ProvenanceBadge source={r.source} />
                       </TableCell>
                       <TableCell className="text-right">{r.voc.toFixed(2)} V</TableCell>
-                      <TableCell className="text-right">{(r.isc * 1000).toFixed(1)} mA</TableCell>
-                      <TableCell className="text-right">
-                        {(r.p_mpp * 1000).toFixed(1)} mW
-                      </TableCell>
+                      <TableCell className="text-right">{formatCurrent(r.isc)}</TableCell>
+                      <TableCell className="text-right">{formatPower(r.p_mpp)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
