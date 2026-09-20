@@ -12,12 +12,16 @@ import type { CurveRecord } from '@/types'
 // way App.test.tsx/CurveWorkbench.test.tsx already do for the same reason.
 vi.mock('react-chartjs-2', () => ({ Line: () => null }))
 
-function renderView(ui: Parameters<typeof render>[0]) {
-  return render(
+function wrapped(ui: Parameters<typeof render>[0]) {
+  return (
     <ThemeProvider>
       <UnitsProvider>{ui}</UnitsProvider>
-    </ThemeProvider>,
+    </ThemeProvider>
   )
+}
+
+function renderView(ui: Parameters<typeof render>[0]) {
+  return render(wrapped(ui))
 }
 
 function curve(overrides: Partial<CurveRecord> = {}): CurveRecord {
@@ -406,6 +410,62 @@ describe('ReportView - expandable linked items', () => {
       ],
     })
   }
+
+  it('expands a row that was linked after Expand all, rather than leaving it alone collapsed', () => {
+    const base = report()
+    const oneCurve = report({ steps: [{ ...base.steps[2], curve_ids: ['c1'] }] })
+    const twoCurves = report({ steps: [{ ...base.steps[2], curve_ids: ['c1', 'c2'] }] })
+    const second = curve({ id: 'c2', label: 'Second sweep' })
+    const view = renderView(
+      <ReportView
+        report={oneCurve}
+        curves={[curve(), second]}
+        runs={[]}
+        runDetails={{}}
+        readOnly={false}
+        onPatch={vi.fn()}
+      />,
+    )
+    fireEvent.click(screen.getByText('Expand all'))
+
+    view.rerender(
+      wrapped(
+        <ReportView
+          report={twoCurves}
+          curves={[curve(), second]}
+          runs={[]}
+          runDetails={{}}
+          readOnly={false}
+          onPatch={vi.fn()}
+        />,
+      ),
+    )
+
+    const fresh = screen.getByRole('button', { name: /Second sweep/ })
+    expect(fresh.getAttribute('aria-expanded')).toBe('true')
+  })
+
+  it('expands every row before the browser prints, so a printed report has its charts', () => {
+    renderView(
+      <ReportView
+        report={reportWithLinkedItems()}
+        curves={[curve()]}
+        runs={[runSummary()]}
+        runDetails={{ r1: runDetail() }}
+        readOnly={false}
+        onPatch={vi.fn()}
+      />,
+    )
+    expect(document.querySelector('.h-56')).toBeNull()
+
+    fireEvent(window, new Event('beforeprint'))
+
+    expect(document.querySelector('.h-56')).not.toBeNull()
+
+    fireEvent(window, new Event('afterprint'))
+
+    expect(document.querySelector('.h-56')).toBeNull()
+  })
 
   it('a curve row starts collapsed, showing its key numbers, then expands and collapses on click', () => {
     renderView(

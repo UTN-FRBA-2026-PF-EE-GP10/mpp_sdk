@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronRight } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { CurveChart } from '@/components/CurveChart'
 import { CurveDetailDialog } from '@/components/CurveDetailDialog'
 import { RunChart } from '@/components/RunChart'
@@ -54,10 +54,13 @@ const INITIAL_EXPAND_SIGNAL: ExpandAllSignal = { expanded: false, token: 0 }
  * same render instead of a following one. */
 function useRowExpansion(signal: ExpandAllSignal): [boolean, () => void] {
   const [expanded, setExpanded] = useState(false)
-  const [seenToken, setSeenToken] = useState(signal.token)
+  // Starts at the initial token, never at the current one: a row that
+  // mounts after an Expand all (a curve linked just now) must adopt that
+  // state too, instead of sitting collapsed among expanded rows.
+  const [seenToken, setSeenToken] = useState(INITIAL_EXPAND_SIGNAL.token)
   if (signal.token !== seenToken) {
     setSeenToken(signal.token)
-    if (signal.token !== 0) setExpanded(signal.expanded)
+    setExpanded(signal.expanded)
   }
   return [expanded, () => setExpanded((v) => !v)]
 }
@@ -120,6 +123,21 @@ export function ReportView({
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [expandAllSignal, setExpandAllSignal] = useState<ExpandAllSignal>(INITIAL_EXPAND_SIGNAL)
+
+  // A collapsed row has no chart in the DOM at all, so Ctrl+P would print
+  // a report with no charts. Expanding on beforeprint keeps the printed
+  // document complete without asking the operator to remember a button.
+  useEffect(() => {
+    const expandForPrint = () =>
+      setExpandAllSignal((s) => ({ expanded: true, token: s.token + 1 }))
+    const restore = () => setExpandAllSignal((s) => ({ expanded: false, token: s.token + 1 }))
+    window.addEventListener('beforeprint', expandForPrint)
+    window.addEventListener('afterprint', restore)
+    return () => {
+      window.removeEventListener('beforeprint', expandForPrint)
+      window.removeEventListener('afterprint', restore)
+    }
+  }, [])
 
   const sections = useMemo(() => groupStepsBySection(report.steps), [report.steps])
   const mostRecentCurve = useMemo(
@@ -671,6 +689,11 @@ function CurveLinkRow({
       {expanded && (
         <div className="flex flex-col gap-2 border-t p-2">
           <CurveChart points={record.points} heightClassName="h-56" />
+          {metrics && (
+            <p className="text-muted-foreground">
+              Vmp {metrics.vmp.toFixed(2)} V - Imp {formatCurrent(metrics.imp)}
+            </p>
+          )}
           <div className="flex items-center gap-2 print:hidden">
             <Button size="xs" variant="outline" onClick={onOpen}>
               Open
@@ -871,6 +894,13 @@ function RunLinkRow({
                 trail={detail.samples}
                 current={detail.samples[detail.samples.length - 1] ?? null}
               />
+              {m && (
+                <p className="text-muted-foreground">
+                  {m.timeToConvergeS === null
+                    ? 'Did not settle within 5 % of MPP_th'
+                    : `Converged in ${m.timeToConvergeS.toFixed(1)} s`}
+                </p>
+              )}
             </>
           ) : (
             <p className="text-muted-foreground">Loading run detail...</p>
