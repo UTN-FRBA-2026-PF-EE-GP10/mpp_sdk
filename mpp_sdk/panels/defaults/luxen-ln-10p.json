@@ -7,5 +7,7 @@
   "p_max_w": 10.0,
   "voc": 23.5,
   "isc": 0.57,
-  "notes": "Reads a little above its label values in strong sun. Vmp/Imp not on hand - left unset rather than guessed."
+  "vmp": 18.6,
+  "imp": 0.54,
+  "notes": "Label values are at STC (AM 1.5G, 1000 W/m2, cell 25 C). Power tolerance is 0 to +3 W, so it can read above its label values, more so in strong sun."
 }

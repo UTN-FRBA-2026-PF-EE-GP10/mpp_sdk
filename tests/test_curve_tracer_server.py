@@ -1729,13 +1729,28 @@ def test_get_panels_reflects_the_seeded_files_on_disk(client):
     assert (client.panel_dir / "hissuma-psf10mono.json").exists()
 
 
-def test_luxen_default_leaves_vmp_and_imp_unset(client):
+def test_luxen_default_carries_its_full_label(client):
     r = client.get("/api/panels")
     luxen = next(p for p in r.json() if p["id"] == "luxen-ln-10p")
     assert luxen["voc"] == 23.5
     assert luxen["isc"] == 0.57
-    assert luxen["vmp"] is None
-    assert luxen["imp"] is None
+    assert luxen["vmp"] == 18.6
+    assert luxen["imp"] == 0.54
+    assert "STC" in luxen["notes"]
+
+
+def test_a_panel_model_with_unset_numbers_is_served_as_null_never_zero(client):
+    # No shipped default has an unset number any more, so this is the
+    # server-side coverage for "unknown stays unknown" - a synthetic one.
+    created = _create_panel(client, name="Unknown Vmp", voc=21.0).json()
+    for r in (
+        client.get(f"/api/panels/{created['id']}").json(),
+        next(p for p in client.get("/api/panels").json() if p["id"] == created["id"]),
+    ):
+        assert r["voc"] == 21.0
+        assert r["vmp"] is None
+        assert r["imp"] is None
+        assert r["p_max_w"] is None
 
 
 def test_hissuma_default_carries_vmp_and_imp(client):
@@ -1877,7 +1892,9 @@ def test_patch_panel_writes_atomically_no_temp_file_left_behind(client):
     panel_id = _create_panel(client, name="Acme A-1").json()["id"]
     client.patch(f"/api/panels/{panel_id}", json={"voc": 41.0})
     names = {p.name for p in client.panel_dir.iterdir()}
-    assert names == {f"{p_id}.json" for p_id in [panel_id, "luxen-ln-10p", "hissuma-psf10mono"]}
+    expected = {f"{p_id}.json" for p_id in [panel_id, "luxen-ln-10p", "hissuma-psf10mono"]}
+    # The seeded-ids record sits beside the panel files; nothing else may.
+    assert names == expected | {".seeded-defaults"}
 
 
 def test_patch_panel_persists_an_edit_to_a_shipped_default(client):
@@ -1947,6 +1964,65 @@ def test_get_panels_lists_a_malformed_file_without_failing_the_whole_list(client
     entries = r.json()
     assert any(e.get("id") == "luxen-ln-10p" for e in entries)
     assert any("error" in e for e in entries)
+
+
+def test_the_seeded_ids_record_is_not_listed_as_a_broken_panel(client):
+    entries = client.get("/api/panels").json()
+    assert (client.panel_dir / ".seeded-defaults").exists()
+    assert all("error" not in e for e in entries)
+    assert {e["id"] for e in entries} == {"luxen-ln-10p", "hissuma-psf10mono"}
+
+
+def test_a_deleted_shipped_panel_stays_deleted_after_a_server_restart(
+    client, monkeypatch, tmp_path
+):
+    assert client.delete("/api/panels/luxen-ln-10p").status_code == 204
+
+    # A restart is a fresh create_app() against the same directories.
+    with _make_client(monkeypatch, tmp_path) as restarted:
+        ids = {p["id"] for p in restarted.get("/api/panels").json()}
+        assert ids == {"hissuma-psf10mono"}
+        assert restarted.get("/api/panels/luxen-ln-10p").status_code == 404
+
+
+def test_an_edited_shipped_panel_survives_a_server_restart(client, monkeypatch, tmp_path):
+    assert client.patch("/api/panels/luxen-ln-10p", json={"voc": 23.9}).status_code == 200
+    with _make_client(monkeypatch, tmp_path) as restarted:
+        assert restarted.get("/api/panels/luxen-ln-10p").json()["voc"] == 23.9
+
+
+def test_a_custom_panel_named_like_a_shipped_default_gets_a_suffixed_id(client):
+    created = _create_panel(client, name="Luxen LN-10P", voc=99.0)
+    assert created.status_code == 200
+    assert created.json()["id"] == "luxen-ln-10p-2"
+
+    # Both exist, and the shipped one still has its own label values.
+    assert client.get("/api/panels/luxen-ln-10p-2").json()["voc"] == 99.0
+    assert client.get("/api/panels/luxen-ln-10p").json()["voc"] == 23.5
+
+
+def test_a_malformed_shipped_default_does_not_stop_the_server_starting(
+    monkeypatch, tmp_path, caplog
+):
+    from mpp_sdk.panels import defaults as panel_defaults
+
+    shipped = tmp_path / "shipped"
+    shipped.mkdir()
+    (shipped / "broken.json").write_text("{not json")
+    (shipped / "good.json").write_text(
+        json.dumps({"schema": 1, "id": "good-one", "name": "Good one", "voc": 20.0})
+    )
+    monkeypatch.setattr(panel_defaults, "_defaults_dir", lambda: shipped)
+
+    with (
+        caplog.at_level("WARNING", logger="mpp_sdk.panels.defaults"),
+        _make_client(monkeypatch, tmp_path / "app") as booted,  # must not raise
+    ):
+        r = booted.get("/api/panels")
+
+    assert r.status_code == 200
+    assert [p["id"] for p in r.json()] == ["good-one"]
+    assert any("broken.json" in rec.getMessage() for rec in caplog.records)
 
 
 def test_panels_routes_are_unaffected_by_demo_mode(demo_client):

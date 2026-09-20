@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import logging
 import os
 import re
 import tempfile
@@ -21,6 +22,7 @@ from pathlib import Path
 from .defaults import list_default_panels
 from .record import PanelModelRecord
 
+_log = logging.getLogger(__name__)
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 _SLUG_MAX_LEN = 40
 
@@ -170,21 +172,79 @@ def load_all(directory: Path | None = None) -> list[PanelModelRecord]:
     return [load(path) for path in sorted(directory.glob("*.json"))]
 
 
+# Which shipped ids this directory has ever been seeded with. Not a
+# `*.json` file on purpose: `load_all` and `GET /api/panels` glob `*.json`
+# and would list it as a broken panel model.
+_SEEDED_MARKER = ".seeded-defaults"
+_SEEDED_SCHEMA = 1
+
+
+def _read_seeded(directory: Path) -> set[str]:
+    """The ids recorded in the marker, or an empty set if the marker is
+    missing or unreadable. A malformed marker must never stop the server
+    starting; the worst case is that an id is treated as not yet seeded,
+    which `ensure_defaults_seeded` handles without overwriting anything."""
+    try:
+        data = json.loads((directory / _SEEDED_MARKER).read_text(encoding="utf-8"))
+        ids = data["seeded"]
+        if not isinstance(ids, list):
+            return set()
+        return {i for i in ids if isinstance(i, str)}
+    except OSError, ValueError, KeyError, TypeError:
+        return set()
+
+
+def _write_seeded(directory: Path, seeded: set[str]) -> None:
+    body = json.dumps({"schema": _SEEDED_SCHEMA, "seeded": sorted(seeded)}, indent=2) + "\n"
+    fd, tmp_name = tempfile.mkstemp(dir=directory, prefix=f"{_SEEDED_MARKER}-", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(body)
+        os.replace(tmp_name, directory / _SEEDED_MARKER)
+    except BaseException:
+        with contextlib.suppress(FileNotFoundError):
+            os.unlink(tmp_name)
+        raise
+
+
 def ensure_defaults_seeded(directory: Path | None = None) -> None:
-    """Write each shipped default panel model into `directory` the first
-    time it has no file for that id. Never touches a file that is
-    already there, so an operator's edit to a shipped panel (a corrected
-    Voc, an added Vmp) survives every later call - including the next
-    server restart, which calls this again on startup."""
+    """Write each shipped default panel model into `directory` once, the
+    first time that shipped id is seen there, and record it in a small
+    marker file (`.seeded-defaults`).
+
+    The record, not the presence of the panel's file, decides whether an
+    id is seeded. That is what makes both directions work: an operator's
+    edit to a shipped panel is never overwritten (an existing file is
+    left alone), and a shipped panel the operator deleted stays deleted
+    across restarts (`delete` does not touch the record, so the id is
+    still recorded). A shipped id added by a later SDK version is not in
+    the record yet, so it still arrives on upgrade.
+
+    A directory that predates the marker starts with an empty record: any
+    shipped file already on disk is only recorded, never rewritten."""
     directory = directory if directory is not None else default_dir()
     directory.mkdir(parents=True, exist_ok=True)
+    seeded = _read_seeded(directory)
+    before = set(seeded)
     for default in list_default_panels():
-        path = directory / f"{default.id}.json"
-        if path.exists():
+        if default.id in seeded:
             continue
-        body = json.dumps(default.to_dict(), indent=2, allow_nan=False) + "\n"
+        path = directory / f"{default.id}.json"
+        if not path.exists():
+            body = json.dumps(default.to_dict(), indent=2, allow_nan=False) + "\n"
+            try:
+                with path.open("x", encoding="utf-8") as f:
+                    f.write(body)
+            except FileExistsError:
+                pass  # seeded concurrently by another process - fine, leave it
+        # The marker is written after the panel files, so a crash in
+        # between retries on the next start instead of recording a panel
+        # that was never written.
+        seeded.add(default.id)
+    if seeded != before:
         try:
-            with path.open("x", encoding="utf-8") as f:
-                f.write(body)
-        except FileExistsError:
-            pass  # seeded concurrently by another process - fine, leave it
+            _write_seeded(directory, seeded)
+        except OSError as exc:
+            # Not worth stopping the server for: the panels are already
+            # written, and the next start simply records them again.
+            _log.warning("could not record seeded panel models in %s: %s", directory, exc)
