@@ -1,7 +1,7 @@
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useDebouncedPatch } from './useDebouncedPatch'
-import type { ReportRecord } from '@/lib/reports'
+import type { SessionRecord } from '@/lib/sessions'
 
 afterEach(() => {
   cleanup()
@@ -10,7 +10,7 @@ afterEach(() => {
 })
 
 function patcher() {
-  return vi.fn().mockResolvedValue({} as ReportRecord)
+  return vi.fn().mockResolvedValue({} as SessionRecord)
 }
 
 describe('useDebouncedPatch', () => {

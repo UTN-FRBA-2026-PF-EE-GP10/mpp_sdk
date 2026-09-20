@@ -1,4 +1,4 @@
-"""Unit tests for `mpp_sdk.reports`: templates (loading and validation)
+"""Unit tests for `mpp_sdk.sessions`: templates (loading and validation)
 and `library.py`'s create/load/update/delete round trip. Pure stdlib, no
 hardware, no network - every test uses `tmp_path` as the library
 directory.
@@ -9,25 +9,25 @@ from datetime import UTC, datetime
 
 import pytest
 
-from mpp_sdk.reports import (
+from mpp_sdk.sessions import (
     STEP_KINDS,
     STEP_STATUSES,
     OpenQuestion,
-    ReportRecord,
-    ReportStep,
+    SessionRecord,
+    SessionStep,
     delete,
     get_template,
     list_templates,
     load,
     load_all,
 )
-from mpp_sdk.reports import library as report_library
-from mpp_sdk.reports.record import now_utc
+from mpp_sdk.sessions import library as session_library
+from mpp_sdk.sessions.record import now_utc
 
 _CREATED_AT = datetime(2026, 9, 19, 16, 0, 0, tzinfo=UTC)
 
 
-def _step(**overrides) -> ReportStep:
+def _step(**overrides) -> SessionStep:
     fields = {
         "id": "meter-vout",
         "section": "Before energizing",
@@ -36,10 +36,10 @@ def _step(**overrides) -> ReportStep:
         "kind": "check",
     }
     fields.update(overrides)
-    return ReportStep(**fields)
+    return SessionStep(**fields)
 
 
-def _record(**overrides) -> ReportRecord:
+def _record(**overrides) -> SessionRecord:
     fields = {
         "id": "20260919T160000Z-panel-a-lamp",
         "title": "Panel A alone under the lamp",
@@ -53,7 +53,7 @@ def _record(**overrides) -> ReportRecord:
         "open_questions": (OpenQuestion(id="temperature", text="how to record it?"),),
     }
     fields.update(overrides)
-    return ReportRecord(**fields)
+    return SessionRecord(**fields)
 
 
 # ------------------------------------------------------------------
@@ -67,11 +67,11 @@ def test_list_templates_returns_both_shipped_templates():
 
 
 def test_shipped_templates_validate_unique_step_ids_and_known_kinds():
-    """`ReportTemplate.from_dict` (called by `list_templates`) raises on a
+    """`SessionTemplate.from_dict` (called by `list_templates`) raises on a
     duplicate step id or an unknown kind - so a template that loads at all
     has already passed both checks. Re-verified explicitly here so a
     future template edit that broke one of these fails this test, not
-    just "some report failed to load" downstream."""
+    just "some session failed to load" downstream."""
     for template in list_templates():
         step_ids = [s.id for s in template.steps]
         assert len(step_ids) == len(set(step_ids)), template.template_id
@@ -126,8 +126,8 @@ def test_get_template_unknown_id_raises_key_error():
         get_template("does-not-exist")
 
 
-def test_report_template_from_dict_rejects_a_duplicate_step_id():
-    from mpp_sdk.reports.templates import ReportTemplate
+def test_session_template_from_dict_rejects_a_duplicate_step_id():
+    from mpp_sdk.sessions.templates import SessionTemplate
 
     data = {
         "schema": 1,
@@ -143,11 +143,11 @@ def test_report_template_from_dict_rejects_a_duplicate_step_id():
         "open_questions": [],
     }
     with pytest.raises(ValueError, match="duplicate step id"):
-        ReportTemplate.from_dict(data)
+        SessionTemplate.from_dict(data)
 
 
-def test_report_template_from_dict_rejects_an_unknown_kind():
-    from mpp_sdk.reports.templates import ReportTemplate
+def test_session_template_from_dict_rejects_an_unknown_kind():
+    from mpp_sdk.sessions.templates import SessionTemplate
 
     data = {
         "schema": 1,
@@ -162,7 +162,7 @@ def test_report_template_from_dict_rejects_an_unknown_kind():
         "open_questions": [],
     }
     with pytest.raises(ValueError, match="unknown"):
-        ReportTemplate.from_dict(data)
+        SessionTemplate.from_dict(data)
 
 
 def _one_step_template(**step) -> dict:
@@ -190,17 +190,17 @@ def _one_step_template(**step) -> dict:
         ({"repeats": 3, "kind": "number"}, "only curve and run"),
     ],
 )
-def test_report_template_from_dict_rejects_bad_repeats(step, match):
-    from mpp_sdk.reports.templates import ReportTemplate
+def test_session_template_from_dict_rejects_bad_repeats(step, match):
+    from mpp_sdk.sessions.templates import SessionTemplate
 
     with pytest.raises(ValueError, match=match):
-        ReportTemplate.from_dict(_one_step_template(**step))
+        SessionTemplate.from_dict(_one_step_template(**step))
 
 
-def test_report_template_repeats_defaults_to_one():
-    from mpp_sdk.reports.templates import ReportTemplate
+def test_session_template_repeats_defaults_to_one():
+    from mpp_sdk.sessions.templates import SessionTemplate
 
-    template = ReportTemplate.from_dict(_one_step_template())
+    template = SessionTemplate.from_dict(_one_step_template())
     assert template.steps[0].repeats == 1
 
 
@@ -223,9 +223,9 @@ def test_full_setup_template_defaults_to_the_hissuma_panels():
 # ------------------------------------------------------------------
 
 
-def test_create_builds_a_report_from_a_template_and_persists_it(tmp_path):
+def test_create_builds_a_session_from_a_template_and_persists_it(tmp_path):
     template = get_template("single-panel-characterization")
-    record = report_library.create(template, "Panel A alone", directory=tmp_path)
+    record = session_library.create(template, "Panel A alone", directory=tmp_path)
     assert record.template_id == template.template_id
     assert record.setup == "single"
     assert record.n_steps == template.n_steps
@@ -236,14 +236,14 @@ def test_create_builds_a_report_from_a_template_and_persists_it(tmp_path):
 
 def test_create_seeds_fields_from_template_defaults(tmp_path):
     template = get_template("single-panel-characterization")
-    record = report_library.create(template, "Panel A alone", directory=tmp_path)
+    record = session_library.create(template, "Panel A alone", directory=tmp_path)
     assert record.fields["panel"] == "Luxen LN-10P, 10 W, 12 V"
     assert record.fields["adc_range"] == "Low"
 
 
 def test_create_overrides_defaults_with_given_fields(tmp_path):
     template = get_template("single-panel-characterization")
-    record = report_library.create(
+    record = session_library.create(
         template, "Panel A alone", fields={"operator": "bench operator"}, directory=tmp_path
     )
     assert record.fields["operator"] == "bench operator"
@@ -252,8 +252,8 @@ def test_create_overrides_defaults_with_given_fields(tmp_path):
 
 def test_create_on_collision_appends_a_suffix_to_the_id_and_the_body(tmp_path):
     template = get_template("single-panel-characterization")
-    first = report_library.create(template, "dup", directory=tmp_path, created_at=_CREATED_AT)
-    second = report_library.create(template, "dup", directory=tmp_path, created_at=_CREATED_AT)
+    first = session_library.create(template, "dup", directory=tmp_path, created_at=_CREATED_AT)
+    second = session_library.create(template, "dup", directory=tmp_path, created_at=_CREATED_AT)
     assert first.id != second.id
     assert second.id.endswith("-2")
     # The id inside the saved body must match the filename it lives in.
@@ -267,13 +267,13 @@ def test_create_on_collision_appends_a_suffix_to_the_id_and_the_body(tmp_path):
 
 def test_save_then_load_round_trips(tmp_path):
     record = _record(steps=(_step(), _step(id="baseline", kind="curve", repeats=3)))
-    _saved, path = report_library.save(record, tmp_path)
+    _saved, path = session_library.save(record, tmp_path)
     assert load(path) == record
 
 
 def test_save_names_file_from_the_records_own_id(tmp_path):
     record = _record()
-    _saved, path = report_library.save(record, tmp_path)
+    _saved, path = session_library.save(record, tmp_path)
     assert path.name == "20260919T160000Z-panel-a-lamp.json"
 
 
@@ -314,9 +314,9 @@ def test_load_rejects_not_valid_json(tmp_path):
 
 def test_update_overwrites_the_existing_file_in_place(tmp_path):
     record = _record()
-    _saved, path = report_library.save(record, tmp_path)
+    _saved, path = session_library.save(record, tmp_path)
 
-    updated = ReportRecord(
+    updated = SessionRecord(
         id=record.id,
         title="Panel A, second pass",
         template_id=record.template_id,
@@ -328,23 +328,23 @@ def test_update_overwrites_the_existing_file_in_place(tmp_path):
         steps=record.steps,
         open_questions=record.open_questions,
     )
-    returned_path = report_library.update(updated, directory=tmp_path)
+    returned_path = session_library.update(updated, directory=tmp_path)
     assert returned_path == path
     assert load(path).title == "Panel A, second pass"
 
 
 def test_update_leaves_no_temp_file_behind(tmp_path):
     record = _record()
-    report_library.save(record, tmp_path)
-    report_library.update(record, directory=tmp_path)
+    session_library.save(record, tmp_path)
+    session_library.update(record, directory=tmp_path)
     names = {p.name for p in tmp_path.iterdir()}
     assert names == {f"{record.id}.json"}
 
 
-def test_update_of_a_report_with_no_existing_file_raises(tmp_path):
+def test_update_of_a_session_with_no_existing_file_raises(tmp_path):
     record = _record()
     with pytest.raises(FileNotFoundError):
-        report_library.update(record, directory=tmp_path)
+        session_library.update(record, directory=tmp_path)
 
 
 # ------------------------------------------------------------------
@@ -353,19 +353,19 @@ def test_update_of_a_report_with_no_existing_file_raises(tmp_path):
 
 
 def test_delete_removes_the_file_and_returns_true(tmp_path):
-    _saved, path = report_library.save(_record(), tmp_path)
+    _saved, path = session_library.save(_record(), tmp_path)
     assert delete(path, tmp_path) is True
     assert not path.exists()
 
 
 def test_delete_of_an_already_gone_file_is_a_no_op_returning_false(tmp_path):
-    _saved, path = report_library.save(_record(), tmp_path)
+    _saved, path = session_library.save(_record(), tmp_path)
     path.unlink()
     assert delete(path, tmp_path) is False
 
 
 def test_delete_refuses_a_path_outside_the_library_directory(tmp_path):
-    outside = tmp_path.parent / "not-a-report.json"
+    outside = tmp_path.parent / "not-a-session.json"
     outside.write_text("{}")
     try:
         with pytest.raises(ValueError, match="outside"):
@@ -383,8 +383,8 @@ def test_delete_refuses_a_path_outside_the_library_directory(tmp_path):
 def test_load_all_returns_every_record_oldest_first(tmp_path):
     early = _record(id="20260919T160000Z-one", title="one")
     late = _record(id="20260919T170000Z-two", title="two")
-    report_library.save(late, tmp_path)
-    report_library.save(early, tmp_path)
+    session_library.save(late, tmp_path)
+    session_library.save(early, tmp_path)
     records = load_all(tmp_path)
     assert [r.title for r in records] == ["one", "two"]
 
@@ -413,7 +413,7 @@ def test_progress_counts_reflect_step_status():
 
 
 def test_step_statuses_and_kinds_are_pinned():
-    # A rename here is a breaking change for saved reports and the
+    # A rename here is a breaking change for saved sessions and the
     # frontend's vocabulary - pin the tuples so a future rename is a
     # deliberate edit to this test.
     assert STEP_STATUSES == ("todo", "done", "failed", "skipped")

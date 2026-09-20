@@ -1,15 +1,23 @@
-// A session file bundles a report (Part C, not built here yet) and every
-// curve and run linked to it - or a set of curves/runs chosen by hand in
-// select mode - into one JSON file, so someone else can open the workbench
-// with no board and no saved library and still see the whole picture.
-// Import replaces the data source the same way demo (sandbox) mode does
-// (see lib/sandbox.ts): everything read-only, nothing fetched from or
-// written to a server. See CurveCategoryPane.tsx/RunDatePane.tsx for where
-// a file is built, and components/SessionProvider.tsx for where an
-// imported one is held.
+// A session file bundles a session record (mpp_sdk.sessions.record.SessionRecord
+// - see lib/sessions.ts) and every curve and run linked to it - or a set of
+// curves/runs chosen by hand in select mode - into one JSON file, so someone
+// else can open the workbench with no board and no saved library and still
+// see the whole picture. Import replaces the data source the same way demo
+// (sandbox) mode does (see lib/sandbox.ts): everything read-only, nothing
+// fetched from or written to a server. See CurveCategoryPane.tsx/
+// RunDatePane.tsx/sessionExport.ts for where a file is built, and
+// ImportedSessionProvider.tsx for where an imported one is held.
+//
+// "Session" now names two different things in this codebase, so they are
+// kept apart by name: a *session* (lib/sessions.ts's SessionRecord) is the
+// bench-session record itself; a *session file* (this module) is the
+// exported bundle - and the state that holds one open for read-only viewing
+// is the *imported session* (ImportedSessionProvider/useImportedSession
+// below), never plain "session".
 
 import { createContext, useContext } from 'react'
 import { useSandbox } from '@/lib/sandbox'
+import type { OpenQuestion, SessionRecord, SessionStep } from '@/lib/sessions'
 import type { RunDetail, RunSample } from '@/lib/runs'
 import type { CurvePoint, CurveRecord, PanelSetup } from '@/types'
 
@@ -36,16 +44,16 @@ export interface SessionMissing {
   run_ids: string[]
 }
 
-/** The `mpp-sdk-session` file format, schema 1. `report` stays opaque here
- * - Part C owns its shape. This module only carries it through import and
- * export unchanged. */
+/** The `mpp-sdk-session` file format, schema 1. `session` is `null` for a
+ * file built from a hand-picked set of curves/runs (select mode), rather
+ * than exported from a bench session. */
 export interface SessionFile {
   format: typeof SESSION_FORMAT
   schema: number
   exported_at: string
   title: string
   setup: string
-  report: unknown | null
+  session: SessionRecord | null
   curves: SessionCurveEntry[]
   runs: SessionRunEntry[]
   missing: SessionMissing
@@ -85,6 +93,15 @@ function requireArray(value: unknown, field: string): unknown[] {
     throw new SessionParseError(`${field} must be an array`)
   }
   return value
+}
+
+function requireStringRecord(value: unknown, field: string): Record<string, string> {
+  if (!isPlainObject(value)) {
+    throw new SessionParseError(`${field} must be an object`)
+  }
+  const result: Record<string, string> = {}
+  for (const [key, v] of Object.entries(value)) result[key] = requireString(v, `${field}.${key}`)
+  return result
 }
 
 function parsePanels(value: unknown, field: string): PanelSetup[] {
@@ -172,6 +189,71 @@ export function parseSessionRunDetail(raw: unknown, context: string): RunDetail 
   }
 }
 
+function parseOpenQuestion(raw: unknown, context: string): OpenQuestion {
+  if (!isPlainObject(raw)) throw new SessionParseError(`${context} must be an object`)
+  return {
+    id: requireString(raw.id, `${context}.id`),
+    text: requireString(raw.text, `${context}.text`),
+    answer: requireString(raw.answer, `${context}.answer`),
+  }
+}
+
+function parseSessionStep(raw: unknown, context: string): SessionStep {
+  if (!isPlainObject(raw)) throw new SessionParseError(`${context} must be an object`)
+  const value = raw.value
+  if (value !== null && typeof value !== 'number' && typeof value !== 'string') {
+    throw new SessionParseError(`${context}.value must be a number, a string, or null`)
+  }
+  const unit = raw.unit
+  if (unit !== null && typeof unit !== 'string') {
+    throw new SessionParseError(`${context}.unit must be a string or null`)
+  }
+  return {
+    id: requireString(raw.id, `${context}.id`),
+    section: requireString(raw.section, `${context}.section`),
+    title: requireString(raw.title, `${context}.title`),
+    instructions: requireString(raw.instructions, `${context}.instructions`),
+    kind: requireString(raw.kind, `${context}.kind`),
+    status: requireString(raw.status, `${context}.status`),
+    value,
+    unit,
+    notes: requireString(raw.notes, `${context}.notes`),
+    curve_ids: requireArray(raw.curve_ids, `${context}.curve_ids`).map((v, i) =>
+      requireString(v, `${context}.curve_ids[${i}]`),
+    ),
+    run_ids: requireArray(raw.run_ids, `${context}.run_ids`).map((v, i) =>
+      requireString(v, `${context}.run_ids[${i}]`),
+    ),
+    repeats: requireNumber(raw.repeats, `${context}.repeats`),
+  }
+}
+
+/** Validates a session record the same shape GET /api/sessions/{id} serves -
+ * same reasoning as parseSessionCurveRecord/parseSessionRunDetail above: a
+ * session file is whatever the operator was handed, not the server's own
+ * trusted JSON. */
+export function parseSessionRecord(raw: unknown, context = 'session'): SessionRecord {
+  if (!isPlainObject(raw)) {
+    throw new SessionParseError(`${context} must be an object`)
+  }
+  return {
+    id: requireString(raw.id, `${context}.id`),
+    title: requireString(raw.title, `${context}.title`),
+    template_id: requireString(raw.template_id, `${context}.template_id`),
+    template_version: requireNumber(raw.template_version, `${context}.template_version`),
+    setup: requireString(raw.setup, `${context}.setup`),
+    created_at: requireString(raw.created_at, `${context}.created_at`),
+    updated_at: requireString(raw.updated_at, `${context}.updated_at`),
+    fields: requireStringRecord(raw.fields, `${context}.fields`),
+    steps: requireArray(raw.steps, `${context}.steps`).map((s, i) =>
+      parseSessionStep(s, `${context}.steps[${i}]`),
+    ),
+    open_questions: requireArray(raw.open_questions, `${context}.open_questions`).map((q, i) =>
+      parseOpenQuestion(q, `${context}.open_questions[${i}]`),
+    ),
+  }
+}
+
 function parseMissing(value: unknown): SessionMissing {
   if (value === undefined) return { curve_ids: [], run_ids: [] }
   if (!isPlainObject(value)) throw new SessionParseError('missing must be an object')
@@ -218,13 +300,16 @@ export function parseSessionFile(raw: unknown): SessionFile {
     return { id, record: parseSessionRunDetail(entry.record, `runs[${i}] ("${id}")`) }
   })
 
+  const session =
+    raw.session === undefined || raw.session === null ? null : parseSessionRecord(raw.session, 'session')
+
   return {
     format: SESSION_FORMAT,
     schema: SESSION_SCHEMA,
     exported_at: exportedAt,
     title,
     setup,
-    report: raw.report ?? null,
+    session,
     curves: curveEntries,
     runs: runEntries,
     missing: parseMissing(raw.missing),
@@ -252,13 +337,18 @@ export async function readSessionFile(file: File): Promise<SessionFile> {
 /** Builds a session file from records already in hand - curves are always
  * full records by the time they reach this app (GET /api/curves serves
  * points inline), and runs are expected to already carry every sample
- * (max_samples=0), so nothing here re-fetches or truncates anything. */
+ * (max_samples=0), so nothing here re-fetches or truncates anything.
+ * `missing` names curve/run ids a session's steps linked that could not be
+ * found (see sessionExport.ts's sessionExportFile, which fills it in);
+ * select mode's loose export (CurveCategoryPane/RunDatePane) never has
+ * missing ids of its own, so it is left at its default, empty value. */
 export function buildSessionFile(options: {
   title: string
   setup: string
   curves: CurveRecord[]
   runs: RunDetail[]
-  report?: unknown | null
+  session?: SessionRecord | null
+  missing?: SessionMissing
 }): SessionFile {
   return {
     format: SESSION_FORMAT,
@@ -266,10 +356,10 @@ export function buildSessionFile(options: {
     exported_at: new Date().toISOString(),
     title: options.title,
     setup: options.setup,
-    report: options.report ?? null,
+    session: options.session ?? null,
     curves: options.curves.map((record) => ({ id: record.id, record })),
     runs: options.runs.map((record) => ({ id: record.id, record })),
-    missing: { curve_ids: [], run_ids: [] },
+    missing: options.missing ?? { curve_ids: [], run_ids: [] },
   }
 }
 
@@ -284,13 +374,13 @@ export function sessionFileName(title: string): string {
 
 /** Same Blob-object-URL download as curveExport.ts's downloadCurve - no
  * server involvement, so no download endpoint to add. */
-export function downloadSessionFile(session: SessionFile): void {
-  const blob = new Blob([JSON.stringify(session, null, 2)], { type: 'application/json' })
+export function downloadSessionFile(file: SessionFile): void {
+  const blob = new Blob([JSON.stringify(file, null, 2)], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
   try {
     const a = document.createElement('a')
     a.href = url
-    a.download = sessionFileName(session.title)
+    a.download = sessionFileName(file.title)
     document.body.appendChild(a)
     a.click()
     a.remove()
@@ -299,27 +389,30 @@ export function downloadSessionFile(session: SessionFile): void {
   }
 }
 
-export interface SessionValue {
+/** The state of the session file currently open for read-only viewing, if
+ * any - kept apart from `SessionRecord`/`SessionFile` above by name
+ * ("imported session") since all three now share the word "session". */
+export interface ImportedSessionValue {
   /** True once a session file has been imported - view mode. */
   active: boolean
   title: string | null
   setup: string | null
-  report: unknown | null
+  session: SessionRecord | null
   curves: CurveRecord[]
   runs: RunDetail[]
   missing: SessionMissing
-  enter: (session: SessionFile) => void
+  enter: (file: SessionFile) => void
   close: () => void
 }
 
 // Fails safe the same way CaptureModeContext does (lib/captureMode.ts): a
-// component rendered without SessionProvider (most tests) gets "no session
-// active" rather than a throw.
-const DEFAULT_SESSION_VALUE: SessionValue = {
+// component rendered without ImportedSessionProvider (most tests) gets "no
+// imported session active" rather than a throw.
+const DEFAULT_IMPORTED_SESSION_VALUE: ImportedSessionValue = {
   active: false,
   title: null,
   setup: null,
-  report: null,
+  session: null,
   curves: [],
   runs: [],
   missing: { curve_ids: [], run_ids: [] },
@@ -327,10 +420,12 @@ const DEFAULT_SESSION_VALUE: SessionValue = {
   close: () => {},
 }
 
-export const SessionContext = createContext<SessionValue>(DEFAULT_SESSION_VALUE)
+export const ImportedSessionContext = createContext<ImportedSessionValue>(
+  DEFAULT_IMPORTED_SESSION_VALUE,
+)
 
-export function useSession(): SessionValue {
-  return useContext(SessionContext)
+export function useImportedSession(): ImportedSessionValue {
+  return useContext(ImportedSessionContext)
 }
 
 export type ReadOnlyReason = 'demo' | 'view'
@@ -348,8 +443,8 @@ export interface ReadOnlyValue {
  * the two is actually active, rather than always blaming demo mode. */
 export function useReadOnly(): ReadOnlyValue {
   const sandbox = useSandbox()
-  const session = useSession()
-  if (session.active) return { enabled: true, reason: 'view' }
+  const importedSession = useImportedSession()
+  if (importedSession.active) return { enabled: true, reason: 'view' }
   if (sandbox.enabled) return { enabled: true, reason: 'demo' }
   return { enabled: false, reason: null }
 }

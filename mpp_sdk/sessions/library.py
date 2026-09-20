@@ -1,10 +1,10 @@
-"""Read/write `ReportRecord`s to `data/reports/` (or wherever
-`MPP_SDK_REPORT_DIR` points), one JSON file per report.
+"""Read/write `SessionRecord`s to `data/sessions/` (or wherever
+`MPP_SDK_SESSION_DIR` points), one JSON file per session.
 
-Unlike `mpp_sdk.curves.library`/`mpp_sdk.runs.library`, a report is
+Unlike `mpp_sdk.curves.library`/`mpp_sdk.runs.library`, a session is
 mutable - it is filled in step by step over a session, not captured once
 and left alone - so this module adds `update`, which overwrites a
-report's file in place, atomically.
+session's file in place, atomically.
 """
 
 from __future__ import annotations
@@ -17,31 +17,31 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 
-from .record import OpenQuestion, ReportRecord, ReportStep, now_utc
-from .templates import ReportTemplate
+from .record import OpenQuestion, SessionRecord, SessionStep, now_utc
+from .templates import SessionTemplate
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 _SLUG_MAX_LEN = 40
 
 
 def default_dir() -> Path:
-    """`data/reports/` under the repo root, overridable via
-    `MPP_SDK_REPORT_DIR` (tests use this to avoid touching the real
+    """`data/sessions/` under the repo root, overridable via
+    `MPP_SDK_SESSION_DIR` (tests use this to avoid touching the real
     directory)."""
-    override = os.environ.get("MPP_SDK_REPORT_DIR")
+    override = os.environ.get("MPP_SDK_SESSION_DIR")
     if override:
         return Path(override)
-    return _REPO_ROOT / "data" / "reports"
+    return _REPO_ROOT / "data" / "sessions"
 
 
 def _slug(title: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
-    return slug[:_SLUG_MAX_LEN].rstrip("-") or "report"
+    return slug[:_SLUG_MAX_LEN].rstrip("-") or "session"
 
 
-def save(record: ReportRecord, directory: Path | None = None) -> tuple[ReportRecord, Path]:
+def save(record: SessionRecord, directory: Path | None = None) -> tuple[SessionRecord, Path]:
     """Write `record` as a new file, `{record.id}.json`. `record.id` is
-    treated as a *proposed* id: on a collision (two reports created in
+    treated as a *proposed* id: on a collision (two sessions created in
     the same second from the same title) this appends `-2`, `-3`, ... to
     it - same idea as `mpp_sdk.curves.library.save`'s filename suffixing,
     except here the id is also part of the record's own body, so the
@@ -58,9 +58,9 @@ def save(record: ReportRecord, directory: Path | None = None) -> tuple[ReportRec
     base_id = record.id
     suffix = 0
     while True:
-        report_id = base_id if suffix == 0 else f"{base_id}-{suffix + 1}"
-        candidate = record if report_id == record.id else _with_id(record, report_id)
-        path = directory / f"{report_id}.json"
+        session_id = base_id if suffix == 0 else f"{base_id}-{suffix + 1}"
+        candidate = record if session_id == record.id else _with_id(record, session_id)
+        path = directory / f"{session_id}.json"
         body = json.dumps(candidate.to_dict(), indent=2, allow_nan=False) + "\n"
         try:
             with path.open("x", encoding="utf-8") as f:
@@ -71,13 +71,13 @@ def save(record: ReportRecord, directory: Path | None = None) -> tuple[ReportRec
         return candidate, path
 
 
-def _with_id(record: ReportRecord, report_id: str) -> ReportRecord:
+def _with_id(record: SessionRecord, session_id: str) -> SessionRecord:
     # dataclasses.replace would work just as well here; spelled out as a
     # plain constructor call so this file doesn't need to know every
-    # field ReportRecord happens to carry stays untouched, only that id
+    # field SessionRecord happens to carry stays untouched, only that id
     # does not.
-    return ReportRecord(
-        id=report_id,
+    return SessionRecord(
+        id=session_id,
         title=record.title,
         template_id=record.template_id,
         template_version=record.template_version,
@@ -91,16 +91,16 @@ def _with_id(record: ReportRecord, report_id: str) -> ReportRecord:
 
 
 def create(
-    template: ReportTemplate,
+    template: SessionTemplate,
     title: str,
     fields: dict[str, str] | None = None,
     directory: Path | None = None,
     created_at: datetime | None = None,
-) -> ReportRecord:
-    """Build a new report from `template` and persist it. Field values
+) -> SessionRecord:
+    """Build a new session from `template` and persist it. Field values
     default to each `FieldDef.default` (e.g. the panel model on this
     bench doesn't change often), overridden by `fields` where given.
-    Every template step becomes a fresh `todo` `ReportStep` with no
+    Every template step becomes a fresh `todo` `SessionStep` with no
     linked curves/runs yet."""
     directory = directory if directory is not None else default_dir()
     created_at = created_at if created_at is not None else now_utc()
@@ -108,7 +108,7 @@ def create(
     if fields:
         merged_fields.update(fields)
     steps = tuple(
-        ReportStep(
+        SessionStep(
             id=s.id,
             section=s.section,
             title=s.title,
@@ -121,7 +121,7 @@ def create(
     )
     open_questions = tuple(OpenQuestion(id=q.id, text=q.text) for q in template.open_questions)
     stem = f"{created_at.strftime('%Y%m%dT%H%M%SZ')}-{_slug(title)}"
-    record = ReportRecord(
+    record = SessionRecord(
         id=stem,
         title=title,
         template_id=template.template_id,
@@ -137,9 +137,9 @@ def create(
     return saved
 
 
-def load(path: Path) -> ReportRecord:
-    """Parse one report file. Raises `ValueError` naming the file and the
-    offending field on a missing key, a bad type, or an unknown
+def load(path: Path) -> SessionRecord:
+    """Parse one session file. Raises `ValueError` naming the file and
+    the offending field on a missing key, a bad type, or an unknown
     `schema` - same reasoning as `curves.library.load`/`runs.library.load`:
     these files are hand-editable JSON, not just internal state."""
     try:
@@ -147,15 +147,15 @@ def load(path: Path) -> ReportRecord:
     except json.JSONDecodeError as exc:
         raise ValueError(f"{path}: not valid JSON: {exc}") from exc
     try:
-        return ReportRecord.from_dict(data)
+        return SessionRecord.from_dict(data)
     except ValueError as exc:
         raise ValueError(f"{path}: {exc}") from exc
 
 
-def update(record: ReportRecord, directory: Path | None = None) -> Path:
-    """Overwrite an existing report's file in place, atomically (a temp
+def update(record: SessionRecord, directory: Path | None = None) -> Path:
+    """Overwrite an existing session's file in place, atomically (a temp
     file in the same directory, then `os.replace`) - a crash mid-write
-    must never leave a half-written report behind. `record.id` must
+    must never leave a half-written session behind. `record.id` must
     already name a file (the API layer loads, modifies, then calls this
     with the same record it loaded); a missing file means something
     upstream resolved the wrong id, so this raises rather than silently
@@ -163,7 +163,7 @@ def update(record: ReportRecord, directory: Path | None = None) -> Path:
     directory = directory if directory is not None else default_dir()
     path = directory / f"{record.id}.json"
     if not path.exists():
-        raise FileNotFoundError(f"{path}: no such report to update")
+        raise FileNotFoundError(f"{path}: no such session to update")
     body = json.dumps(record.to_dict(), indent=2, allow_nan=False) + "\n"
     fd, tmp_name = tempfile.mkstemp(dir=directory, prefix=f".{record.id}-", suffix=".tmp")
     try:
@@ -178,7 +178,7 @@ def update(record: ReportRecord, directory: Path | None = None) -> Path:
 
 
 def delete(path: Path, directory: Path | None = None) -> bool:
-    """Delete one report file. Same idempotent, directory-scoped
+    """Delete one session file. Same idempotent, directory-scoped
     behaviour as `curves.library.delete`/`runs.library.delete` - see
     `curves.library.delete`'s docstring for the reasoning. Returns `True`
     if a file was removed, `False` if it was already gone; raises
@@ -196,12 +196,12 @@ def delete(path: Path, directory: Path | None = None) -> bool:
     return True
 
 
-def load_all(directory: Path | None = None) -> list[ReportRecord]:
+def load_all(directory: Path | None = None) -> list[SessionRecord]:
     """Load every `*.json` record in `directory` (default `default_dir()`),
     oldest first (filenames are timestamp-prefixed, so this is
     chronological) - same order as `curves.library.load_all`/
     `runs.library.load_all`. A file that fails to parse raises rather
-    than being skipped - a silently-dropped report is worse than a loud
+    than being skipped - a silently-dropped session is worse than a loud
     error."""
     directory = directory if directory is not None else default_dir()
     if not directory.exists():

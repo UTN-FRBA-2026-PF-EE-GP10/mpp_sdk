@@ -129,7 +129,7 @@
       "id": "baseline-curve",
       "section": "Light and curve",
       "title": "Baseline curve",
-      "instructions": "Save 3 sweeps with both panels at 90 degrees, one after the other, as the baseline curves. The report shows the median and spread of Voc, Isc and P at the MPP. Pass: the 3 curves are saved and linked here.",
+      "instructions": "Save 3 sweeps with both panels at 90 degrees, one after the other, as the baseline curves. The session shows the median and spread of Voc, Isc and P at the MPP. Pass: the 3 curves are saved and linked here.",
       "kind": "curve",
       "repeats": 3
     },
@@ -169,7 +169,7 @@
       "id": "po-run-two-peak",
       "section": "Runs (on the B = 30 degree curve)",
       "title": "P&O run",
-      "instructions": "Start a Perturb & Observe run with the B = 30 degree curve as reference, 10 s duration, starting duty 0.5. Pass: recorded and linked here, noting which peak it settles on. Do it 3 times and link every run: the report shows the median and spread of the results.",
+      "instructions": "Start a Perturb & Observe run with the B = 30 degree curve as reference, 10 s duration, starting duty 0.5. Pass: recorded and linked here, noting which peak it settles on. Do it 3 times and link every run: the session shows the median and spread of the results.",
       "kind": "run",
       "repeats": 3
     },
@@ -177,7 +177,7 @@
       "id": "scan-and-track-run-two-peak",
       "section": "Runs (on the B = 30 degree curve)",
       "title": "Scan & Track run",
-      "instructions": "Start a Scan & Track run with the same settings (B = 30 degree curve, 10 s, starting duty 0.5). Pass: recorded and linked here, noting which peak it settles on. Do it 3 times and link every run: the report shows the median and spread of the results.",
+      "instructions": "Start a Scan & Track run with the same settings (B = 30 degree curve, 10 s, starting duty 0.5). Pass: recorded and linked here, noting which peak it settles on. Do it 3 times and link every run: the session shows the median and spread of the results.",
       "kind": "run",
       "repeats": 3
     },
@@ -185,7 +185,7 @@
       "id": "pso-run-two-peak",
       "section": "Runs (on the B = 30 degree curve)",
       "title": "Particle Swarm run",
-      "instructions": "Start a Particle Swarm run with the same settings (B = 30 degree curve, 10 s, starting duty 0.5). Pass: recorded and linked here, noting which peak it settles on. Do it 3 times and link every run: the report shows the median and spread of the results.",
+      "instructions": "Start a Particle Swarm run with the same settings (B = 30 degree curve, 10 s, starting duty 0.5). Pass: recorded and linked here, noting which peak it settles on. Do it 3 times and link every run: the session shows the median and spread of the results.",
       "kind": "run",
       "repeats": 3
     },
@@ -193,7 +193,7 @@
       "id": "seed-test-lower-peak",
       "section": "Runs (on the B = 30 degree curve)",
       "title": "Seed test near the lower peak",
-      "instructions": "Start a P&O run seeded at a starting duty near the lower peak of the B = 30 degree curve. Pass: recorded and linked here, noting which peak it settles on. Do it 3 times and link every run: the report shows the median and spread of the results.",
+      "instructions": "Start a P&O run seeded at a starting duty near the lower peak of the B = 30 degree curve. Pass: recorded and linked here, noting which peak it settles on. Do it 3 times and link every run: the session shows the median and spread of the results.",
       "kind": "run",
       "repeats": 3
     },
@@ -201,7 +201,7 @@
       "id": "downloads",
       "section": "After",
       "title": "Downloads",
-      "instructions": "Check that every curve and run used in this report is downloaded, and that this report is downloaded as Markdown. Pass: all files are saved.",
+      "instructions": "Check that every curve and run used in this session is downloaded, and that this session is downloaded as Markdown. Pass: all files are saved.",
       "kind": "check"
     }
   ],

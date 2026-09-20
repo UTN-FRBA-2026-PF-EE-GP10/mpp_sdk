@@ -14,7 +14,7 @@ import {
 import { deleteCurve } from '@/lib/api'
 import { downloadCurve } from '@/lib/curveExport'
 import { formatCapturedAt } from '@/lib/format'
-import { readOnlyReasonText, useReadOnly } from '@/lib/session'
+import { readOnlyReasonText, useReadOnly } from '@/lib/sessionFile'
 import type { CurveRecord } from '@/types'
 
 /**

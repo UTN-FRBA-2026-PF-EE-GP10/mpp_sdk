@@ -5,7 +5,7 @@ import {
   curveStepStats,
   runMetrics,
   runStepStats,
-} from '@/lib/reportStats'
+} from '@/lib/sessionStats'
 import type { RunSample } from '@/lib/runs'
 import type { CurveRecord } from '@/types'
 

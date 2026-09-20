@@ -1,4 +1,4 @@
-"""One measurement report: a filled-in copy of a checklist template,
+"""One bench session: a filled-in copy of a checklist template,
 tracked from setup to teardown, with its curves and runs linked in rather
 than copied.
 
@@ -21,7 +21,7 @@ STEP_KINDS = ("check", "number", "text", "curve", "run")
 """What a step asks for. `check`: done or not, no value. `number`: a
 value with a `unit` (a meter reading, a percentage). `text`: free text.
 `curve` / `run`: the step expects one or more linked curves/runs (see
-`ReportStep.curve_ids`/`run_ids`) - the panel-label numbers or a meter
+`SessionStep.curve_ids`/`run_ids`) - the panel-label numbers or a meter
 reading are `number` steps even though a curve or run informs them; only
 a step whose whole point is "capture and attach this" is `curve`/`run`."""
 
@@ -36,10 +36,10 @@ kind shares."""
 
 
 @dataclass(frozen=True)
-class ReportStep:
-    """One checklist item, filled in from a `mpp_sdk.reports.templates.
+class SessionStep:
+    """One checklist item, filled in from a `mpp_sdk.sessions.templates.
     TemplateStep`. `curve_ids`/`run_ids` are ids as served by
-    `/api/curves`/`/api/runs` (filename stems) - a report never copies
+    `/api/curves`/`/api/runs` (filename stems) - a session never copies
     curve or run data, it links to it, so a linked item stays exactly as
     fresh (or as deleted) as the library entry it points at."""
 
@@ -52,7 +52,7 @@ class ReportStep:
     # float for a `number` step, str for `text`, unused (None) for
     # `check`/`curve`/`run` - not enforced against `kind` here, the same
     # way CurveRecord doesn't enforce `measurement` against a fixed enum
-    # (see MEASUREMENT_KINDS's docstring): a hand-edited report file must
+    # (see MEASUREMENT_KINDS's docstring): a hand-edited session file must
     # not become unreadable over a value that no longer matches its kind.
     value: float | str | None = None
     unit: str | None = None
@@ -80,7 +80,7 @@ class ReportStep:
         }
 
     @classmethod
-    def from_dict(cls, d: dict) -> ReportStep:
+    def from_dict(cls, d: dict) -> SessionStep:
         return cls(
             id=d["id"],
             section=d["section"],
@@ -99,7 +99,7 @@ class ReportStep:
 
 @dataclass(frozen=True)
 class OpenQuestion:
-    """One unresolved question carried on the report, e.g. "how do we
+    """One unresolved question carried on the session, e.g. "how do we
     record panel temperature" - answered in place, not closed and
     forgotten, so the answer travels with the session it came from."""
 
@@ -116,13 +116,13 @@ class OpenQuestion:
 
 
 @dataclass(frozen=True)
-class ReportRecord:
-    """One measurement report. Unlike `CurveRecord`/`RunRecord`, this
-    carries its own `id`: a report is mutable (edited step by step over a
+class SessionRecord:
+    """One bench session. Unlike `CurveRecord`/`RunRecord`, this carries
+    its own `id`: a session is mutable (edited step by step over a
     session, via PATCH), so its id has to be stable and known up front
-    for a client to keep referring to the same report - it is not, as for
-    curves/runs, just the filename stem an API layer derives on read.
-    `mpp_sdk.reports.library.save` mints it once, at creation."""
+    for a client to keep referring to the same session - it is not, as
+    for curves/runs, just the filename stem an API layer derives on read.
+    `mpp_sdk.sessions.library.save` mints it once, at creation."""
 
     id: str
     title: str
@@ -132,7 +132,7 @@ class ReportRecord:
     created_at: datetime
     updated_at: datetime
     fields: dict[str, str]
-    steps: tuple[ReportStep, ...]
+    steps: tuple[SessionStep, ...]
     open_questions: tuple[OpenQuestion, ...] = field(default_factory=tuple)
 
     @property
@@ -163,10 +163,10 @@ class ReportRecord:
         }
 
     @classmethod
-    def from_dict(cls, d: dict) -> ReportRecord:
+    def from_dict(cls, d: dict) -> SessionRecord:
         schema = d.get("schema")
         if schema != _SCHEMA:
-            raise ValueError(f"unsupported report record schema {schema!r}, expected {_SCHEMA}")
+            raise ValueError(f"unsupported session record schema {schema!r}, expected {_SCHEMA}")
         try:
             return cls(
                 id=d["id"],
@@ -177,20 +177,20 @@ class ReportRecord:
                 created_at=datetime.fromisoformat(d["created_at"]),
                 updated_at=datetime.fromisoformat(d["updated_at"]),
                 fields=dict(d.get("fields", {})),
-                steps=tuple(ReportStep.from_dict(s) for s in d["steps"]),
+                steps=tuple(SessionStep.from_dict(s) for s in d["steps"]),
                 open_questions=tuple(
                     OpenQuestion.from_dict(q) for q in d.get("open_questions", ())
                 ),
             )
         except KeyError as exc:
-            raise ValueError(f"report record missing field {exc.args[0]!r}") from exc
+            raise ValueError(f"session record missing field {exc.args[0]!r}") from exc
         except (TypeError, ValueError) as exc:
-            raise ValueError(f"report record has an invalid field: {exc}") from exc
+            raise ValueError(f"session record has an invalid field: {exc}") from exc
 
 
 __all__ = [
-    "ReportRecord",
-    "ReportStep",
+    "SessionRecord",
+    "SessionStep",
     "OpenQuestion",
     "STEP_KINDS",
     "STEP_STATUSES",

@@ -5,12 +5,12 @@
 // see CurvePoint's convention in types.ts and RunSample's in runs.ts.
 
 import type {
-  ReportPatch,
-  ReportRecord,
-  ReportSummary,
-  ReportTemplate,
-  ReportTemplateSummary,
-} from '@/lib/reports'
+  SessionPatch,
+  SessionRecord,
+  SessionSummary,
+  SessionTemplate,
+  SessionTemplateSummary,
+} from '@/lib/sessions'
 import type { LiveRunState, RunDetail, RunSummary } from '@/lib/runs'
 import type { CurvePoint, CurveRecord, PanelSetup } from '@/types'
 
@@ -310,59 +310,59 @@ export async function fetchLiveRun(maxSamples?: number): Promise<LiveRunState> {
   return (await parseJsonOrThrow(r, 'GET /api/runs/live')) as LiveRunState
 }
 
-// --- Measurement reports (plan 042 Part B/C) ------------------------------
+// --- Bench sessions --------------------------------------------------------
 
-export async function fetchReportTemplates(): Promise<ReportTemplateSummary[]> {
-  const r = await fetch('/api/report-templates')
-  return (await parseJsonOrThrow(r, 'GET /api/report-templates')) as ReportTemplateSummary[]
+export async function fetchSessionTemplates(): Promise<SessionTemplateSummary[]> {
+  const r = await fetch('/api/session-templates')
+  return (await parseJsonOrThrow(r, 'GET /api/session-templates')) as SessionTemplateSummary[]
 }
 
-export async function fetchReportTemplate(templateId: string): Promise<ReportTemplate> {
-  const r = await fetch(`/api/report-templates/${encodeURIComponent(templateId)}`)
-  return (await parseJsonOrThrow(r, 'GET /api/report-templates/{id}')) as ReportTemplate
+export async function fetchSessionTemplate(templateId: string): Promise<SessionTemplate> {
+  const r = await fetch(`/api/session-templates/${encodeURIComponent(templateId)}`)
+  return (await parseJsonOrThrow(r, 'GET /api/session-templates/{id}')) as SessionTemplate
 }
 
-export async function fetchReports(): Promise<ReportSummary[]> {
-  const r = await fetch('/api/reports')
-  const payload = (await parseJsonOrThrow(r, 'GET /api/reports')) as (
-    | ReportSummary
+export async function fetchSessions(): Promise<SessionSummary[]> {
+  const r = await fetch('/api/sessions')
+  const payload = (await parseJsonOrThrow(r, 'GET /api/sessions')) as (
+    | SessionSummary
     | { id: string; path: string; error: string }
   )[]
   // Same "a malformed file reports {id, path, error}" pattern as
-  // fetchCurves/fetchRuns above (curve_tracer_server.py's get_reports).
-  return payload.filter((entry): entry is ReportSummary => !('error' in entry))
+  // fetchCurves/fetchRuns above (curve_tracer_server.py's get_sessions).
+  return payload.filter((entry): entry is SessionSummary => !('error' in entry))
 }
 
-export interface CreateReportInput {
+export interface CreateSessionInput {
   template_id: string
   title: string
   fields?: Record<string, string>
 }
 
-export async function createReport(input: CreateReportInput): Promise<ReportRecord> {
-  const r = await fetch('/api/reports', {
+export async function createSession(input: CreateSessionInput): Promise<SessionRecord> {
+  const r = await fetch('/api/sessions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
   })
-  return (await parseJsonOrThrow(r, 'POST /api/reports')) as ReportRecord
+  return (await parseJsonOrThrow(r, 'POST /api/sessions')) as SessionRecord
 }
 
-export async function fetchReport(id: string): Promise<ReportRecord> {
-  const r = await fetch(`/api/reports/${encodeURIComponent(id)}`)
-  return (await parseJsonOrThrow(r, 'GET /api/reports/{id}')) as ReportRecord
+export async function fetchSession(id: string): Promise<SessionRecord> {
+  const r = await fetch(`/api/sessions/${encodeURIComponent(id)}`)
+  return (await parseJsonOrThrow(r, 'GET /api/sessions/{id}')) as SessionRecord
 }
 
-export async function patchReport(id: string, patch: ReportPatch): Promise<ReportRecord> {
-  const r = await fetch(`/api/reports/${encodeURIComponent(id)}`, {
+export async function patchSession(id: string, patch: SessionPatch): Promise<SessionRecord> {
+  const r = await fetch(`/api/sessions/${encodeURIComponent(id)}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(patch),
   })
-  return (await parseJsonOrThrow(r, 'PATCH /api/reports/{id}')) as ReportRecord
+  return (await parseJsonOrThrow(r, 'PATCH /api/sessions/{id}')) as SessionRecord
 }
 
-export async function deleteReport(id: string): Promise<void> {
-  const r = await fetch(`/api/reports/${encodeURIComponent(id)}`, { method: 'DELETE' })
-  await parseJsonOrThrow(r, 'DELETE /api/reports/{id}')
+export async function deleteSession(id: string): Promise<void> {
+  const r = await fetch(`/api/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' })
+  await parseJsonOrThrow(r, 'DELETE /api/sessions/{id}')
 }

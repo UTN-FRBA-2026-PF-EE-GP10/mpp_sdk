@@ -20,9 +20,9 @@ import {
   buildSessionFile,
   downloadSessionFile,
   readOnlyReasonText,
+  useImportedSession,
   useReadOnly,
-  useSession,
-} from '@/lib/session'
+} from '@/lib/sessionFile'
 import { useSetupMode } from '@/lib/setupMode'
 import type { CurveRecord } from '@/types'
 
@@ -51,7 +51,7 @@ export function RunDatePane({
 }) {
   const [selected, setSelected] = useState<RunSummary | null>(null)
   const readOnly = useReadOnly()
-  const session = useSession()
+  const importedSession = useImportedSession()
   const { mode: setupMode } = useSetupMode()
 
   const [selectMode, setSelectMode] = useState(false)
@@ -90,11 +90,11 @@ export function RunDatePane({
     setSelectedIds((prev) => (prev.size === runs.length ? new Set() : new Set(runs.map((r) => r.id))))
   }
 
-  /** Downloads the selected runs as a session file - see lib/session.ts.
+  /** Downloads the selected runs as a session file - see lib/sessionFile.ts.
    * A run's full samples are needed (max_samples=0), not just the summary
    * already in `runs`: in view mode those samples are already in hand
-   * (session.runs carries full RunDetail), everywhere else they're fetched
-   * one GET /api/runs/{id} at a time. */
+   * (importedSession.runs carries full RunDetail), everywhere else they're
+   * fetched one GET /api/runs/{id} at a time. */
   async function handleExport() {
     const ids = Array.from(selectedIds)
     if (ids.length === 0 || exporting) return
@@ -106,8 +106,10 @@ export function RunDatePane({
     try {
       const details: RunDetail[] = []
       for (const id of ids) {
-        const fromSession = session.active ? session.runs.find((r) => r.id === id) : undefined
-        details.push(fromSession ?? (await fetchRun(id, 0)))
+        const fromImported = importedSession.active
+          ? importedSession.runs.find((r) => r.id === id)
+          : undefined
+        details.push(fromImported ?? (await fetchRun(id, 0)))
       }
       downloadSessionFile(
         buildSessionFile({ title: title.trim() || defaultTitle, setup: setupMode, curves: [], runs: details }),

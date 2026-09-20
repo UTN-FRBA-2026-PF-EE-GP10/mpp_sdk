@@ -1,5 +1,5 @@
-// Shapes for measurement reports, mirroring mpp_sdk/reports/record.py and
-// mpp_sdk/reports/templates.py, and the GET/POST/PATCH /api/report* routes
+// Shapes for bench sessions, mirroring mpp_sdk/sessions/record.py and
+// mpp_sdk/sessions/templates.py, and the GET/POST/PATCH /api/session* routes
 // in scripts/curve_tracer_server.py. Same split as lib/runs.ts: wire types
 // and pure helpers live here, api.ts is the one place that crosses the wire.
 
@@ -9,7 +9,7 @@ export type StepKind = (typeof STEP_KINDS)[number]
 export const STEP_STATUSES = ['todo', 'done', 'failed', 'skipped'] as const
 export type StepStatus = (typeof STEP_STATUSES)[number]
 
-export interface ReportStep {
+export interface SessionStep {
   id: string
   section: string
   title: string
@@ -23,7 +23,7 @@ export interface ReportStep {
   run_ids: string[]
   /** How many curves/runs this step asks for - only curve/run steps may
    * be above 1. Set by the template; PATCH cannot change it (see
-   * mpp_sdk/reports/record.py's ReportStep docstring). */
+   * mpp_sdk/sessions/record.py's SessionStep docstring). */
   repeats: number
 }
 
@@ -33,7 +33,7 @@ export interface OpenQuestion {
   answer: string
 }
 
-export interface ReportRecord {
+export interface SessionRecord {
   id: string
   title: string
   template_id: string
@@ -42,12 +42,12 @@ export interface ReportRecord {
   created_at: string
   updated_at: string
   fields: Record<string, string>
-  steps: ReportStep[]
+  steps: SessionStep[]
   open_questions: OpenQuestion[]
 }
 
-/** GET /api/reports's entry shape - summary only, no steps. */
-export interface ReportSummary {
+/** GET /api/sessions's entry shape - summary only, no steps. */
+export interface SessionSummary {
   id: string
   title: string
   template_id: string
@@ -59,8 +59,8 @@ export interface ReportSummary {
   n_failed: number
 }
 
-/** GET /api/report-templates's entry shape. */
-export interface ReportTemplateSummary {
+/** GET /api/session-templates's entry shape. */
+export interface SessionTemplateSummary {
   template_id: string
   version: number
   title: string
@@ -90,8 +90,8 @@ export interface TemplateQuestion {
   text: string
 }
 
-/** GET /api/report-templates/{id}'s shape - a report without values. */
-export interface ReportTemplate {
+/** GET /api/session-templates/{id}'s shape - a session without values. */
+export interface SessionTemplate {
   template_id: string
   version: number
   title: string
@@ -101,9 +101,9 @@ export interface ReportTemplate {
   open_questions: TemplateQuestion[]
 }
 
-// --- PATCH payload shapes - exactly PATCH /api/reports/{id}'s body -------
+// --- PATCH payload shapes - exactly PATCH /api/sessions/{id}'s body ------
 
-export interface ReportStepPatch {
+export interface SessionStepPatch {
   id: string
   status?: string
   value?: number | string
@@ -117,10 +117,10 @@ export interface OpenQuestionPatch {
   answer: string
 }
 
-export interface ReportPatch {
+export interface SessionPatch {
   title?: string
   fields?: Record<string, string>
-  steps?: ReportStepPatch[]
+  steps?: SessionStepPatch[]
   open_questions?: OpenQuestionPatch[]
 }
 
@@ -130,8 +130,8 @@ export interface ReportPatch {
  * racing several. `fields` merges key by key; `steps`/`open_questions`
  * merge by `id`, so an edit to one step's notes and another step's status
  * in the same window both survive in the combined request. */
-export function mergeReportPatch(a: ReportPatch, b: ReportPatch): ReportPatch {
-  const merged: ReportPatch = { ...a }
+export function mergeSessionPatch(a: SessionPatch, b: SessionPatch): SessionPatch {
+  const merged: SessionPatch = { ...a }
   if (b.title !== undefined) merged.title = b.title
   if (b.fields) merged.fields = { ...(a.fields ?? {}), ...b.fields }
   if (b.steps) {
@@ -150,7 +150,7 @@ export function mergeReportPatch(a: ReportPatch, b: ReportPatch): ReportPatch {
   return merged
 }
 
-export function isEmptyPatch(patch: ReportPatch): boolean {
+export function isEmptyPatch(patch: SessionPatch): boolean {
   return (
     patch.title === undefined &&
     !patch.fields &&
@@ -159,21 +159,21 @@ export function isEmptyPatch(patch: ReportPatch): boolean {
   )
 }
 
-export interface ReportSection {
+export interface SessionSection {
   section: string
-  steps: ReportStep[]
+  steps: SessionStep[]
 }
 
 /**
  * Groups steps by their `section`, preserving each section's and each
- * step's first-seen order - the order `mpp_sdk.reports.library.create`
+ * step's first-seen order - the order `mpp_sdk.sessions.library.create`
  * wrote them in (template order), not alphabetical. A PATCH never
  * reorders or adds/removes steps, so this is safe to recompute on every
  * render rather than cached.
  */
-export function groupStepsBySection(steps: ReportStep[]): ReportSection[] {
+export function groupStepsBySection(steps: SessionStep[]): SessionSection[] {
   const order: string[] = []
-  const bySection = new Map<string, ReportStep[]>()
+  const bySection = new Map<string, SessionStep[]>()
   for (const step of steps) {
     if (!bySection.has(step.section)) {
       bySection.set(step.section, [])
@@ -184,15 +184,15 @@ export function groupStepsBySection(steps: ReportStep[]): ReportSection[] {
   return order.map((section) => ({ section, steps: bySection.get(section) ?? [] }))
 }
 
-/** "12 / 20" - the progress count shown in the sidebar and the report
+/** "12 / 20" - the progress count shown in the sidebar and the session
  * header. Shared so the two never disagree on what counts as "done". */
-export function progressLabel(report: Pick<ReportSummary, 'n_done' | 'n_steps'>): string {
-  return `${report.n_done} / ${report.n_steps}`
+export function progressLabel(session: Pick<SessionSummary, 'n_done' | 'n_steps'>): string {
+  return `${session.n_done} / ${session.n_steps}`
 }
 
 /** A template/field key like "light_source" read as "Light source" - used
  * as a fallback label for the setup-fields table, which otherwise has no
- * access to the template's own field labels (see ReportView's doc comment
+ * access to the template's own field labels (see SessionView's doc comment
  * on why it never fetches the template). */
 export function humanizeKey(key: string): string {
   const spaced = key.replace(/[_-]+/g, ' ').trim()

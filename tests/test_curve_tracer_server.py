@@ -35,20 +35,20 @@ from scripts.curve_tracer_server import (  # noqa: E402
     _DEFAULT_V_OUT_MAX,
     _MAX_BATCH_DELETE_IDS,
     _MAX_RUN_DURATION_S,
-    _REPORT_FIELD_VALUE_MAX_LEN,
-    _REPORT_MAX_LINKED_IDS,
-    _REPORT_NOTES_MAX_LEN,
-    _REPORT_TITLE_MAX_LEN,
+    _SESSION_FIELD_VALUE_MAX_LEN,
+    _SESSION_MAX_LINKED_IDS,
+    _SESSION_NOTES_MAX_LEN,
+    _SESSION_TITLE_MAX_LEN,
     _curve_path,
     _downsample_samples,
     _LiveRunCache,
     _make_simulated_source,
     _poll_loop,
-    _report_path,
     _run_live,
     _run_path,
     _run_simulated,
     _RunRequest,
+    _session_path,
     _StartRunRequest,
     _SweepCache,
     create_app,
@@ -65,8 +65,8 @@ def _make_client(monkeypatch, tmp_path, *, demo=False):
     monkeypatch.setenv("MPP_SDK_CURVE_DIR", str(tmp_path))
     run_dir = tmp_path / "runs"
     monkeypatch.setenv("MPP_SDK_RUN_DIR", str(run_dir))
-    report_dir = tmp_path / "reports"
-    monkeypatch.setenv("MPP_SDK_REPORT_DIR", str(report_dir))
+    session_dir = tmp_path / "sessions"
+    monkeypatch.setenv("MPP_SDK_SESSION_DIR", str(session_dir))
     cache = _SweepCache()
     commands: queue.Queue[str] = queue.Queue()
     run_cache = _LiveRunCache()
@@ -84,7 +84,7 @@ def _make_client(monkeypatch, tmp_path, *, demo=False):
     test_client.cache = cache  # type: ignore[attr-defined]
     test_client.commands = commands  # type: ignore[attr-defined]
     test_client.run_dir = run_dir  # type: ignore[attr-defined]
-    test_client.report_dir = report_dir  # type: ignore[attr-defined]
+    test_client.session_dir = session_dir  # type: ignore[attr-defined]
     test_client.run_cache = run_cache  # type: ignore[attr-defined]
     test_client.run_requests = run_requests  # type: ignore[attr-defined]
     test_client.stop_event = stop_event  # type: ignore[attr-defined]
@@ -1696,12 +1696,12 @@ def test_poll_loop_exits_on_shutdown_event_but_not_on_a_run_stop():
 
 
 # ------------------------------------------------------------------
-# GET /api/report-templates
+# GET /api/session-templates
 # ------------------------------------------------------------------
 
 
-def test_get_report_templates_lists_both_shipped_templates(client):
-    r = client.get("/api/report-templates")
+def test_get_session_templates_lists_both_shipped_templates(client):
+    r = client.get("/api/session-templates")
     assert r.status_code == 200
     ids = {t["template_id"] for t in r.json()}
     assert ids == {"single-panel-characterization", "full-setup-characterization"}
@@ -1710,8 +1710,8 @@ def test_get_report_templates_lists_both_shipped_templates(client):
         assert entry["n_steps"] > 0
 
 
-def test_get_report_template_returns_the_full_template(client):
-    r = client.get("/api/report-templates/single-panel-characterization")
+def test_get_session_template_returns_the_full_template(client):
+    r = client.get("/api/session-templates/single-panel-characterization")
     assert r.status_code == 200
     body = r.json()
     assert body["setup"] == "single"
@@ -1720,25 +1720,25 @@ def test_get_report_template_returns_the_full_template(client):
     assert len(step_ids) == len(set(step_ids)), "step ids must be unique"
 
 
-def test_get_report_template_unknown_id_is_404(client):
-    r = client.get("/api/report-templates/does-not-exist")
+def test_get_session_template_unknown_id_is_404(client):
+    r = client.get("/api/session-templates/does-not-exist")
     assert r.status_code == 404
 
 
 # ------------------------------------------------------------------
-# POST /api/reports
+# POST /api/sessions
 # ------------------------------------------------------------------
 
 
-def _create_report(
+def _create_session(
     client, template_id="single-panel-characterization", title="Panel A alone", **kw
 ):
     body = {"template_id": template_id, "title": title, **kw}
-    return client.post("/api/reports", json=body)
+    return client.post("/api/sessions", json=body)
 
 
-def test_post_create_report_returns_the_new_report(client):
-    r = _create_report(client)
+def test_post_create_session_returns_the_new_session(client):
+    r = _create_session(client)
     assert r.status_code == 200
     body = r.json()
     assert body["title"] == "Panel A alone"
@@ -1749,75 +1749,75 @@ def test_post_create_report_returns_the_new_report(client):
     assert body["open_questions"][0]["id"] == "temperature"
 
 
-def test_post_create_report_writes_a_file_under_the_report_dir(client):
-    r = _create_report(client)
-    report_id = r.json()["id"]
-    assert (client.report_dir / f"{report_id}.json").exists()
+def test_post_create_session_writes_a_file_under_the_session_dir(client):
+    r = _create_session(client)
+    session_id = r.json()["id"]
+    assert (client.session_dir / f"{session_id}.json").exists()
 
 
-def test_post_create_report_overrides_field_defaults(client):
-    r = _create_report(client, fields={"operator": "bench operator"})
+def test_post_create_session_overrides_field_defaults(client):
+    r = _create_session(client, fields={"operator": "bench operator"})
     assert r.json()["fields"]["operator"] == "bench operator"
     # An untouched field keeps its template default.
     assert r.json()["fields"]["adc_range"] == "Low"
 
 
-def test_post_create_report_rejects_an_unknown_template(client):
-    r = _create_report(client, template_id="does-not-exist")
+def test_post_create_session_rejects_an_unknown_template(client):
+    r = _create_session(client, template_id="does-not-exist")
     assert r.status_code == 400
 
 
-def test_post_create_report_rejects_an_empty_title(client):
-    r = _create_report(client, title="   ")
+def test_post_create_session_rejects_an_empty_title(client):
+    r = _create_session(client, title="   ")
     assert r.status_code == 400
 
 
-def test_post_create_report_rejects_an_oversized_title(client):
-    r = _create_report(client, title="x" * (_REPORT_TITLE_MAX_LEN + 1))
+def test_post_create_session_rejects_an_oversized_title(client):
+    r = _create_session(client, title="x" * (_SESSION_TITLE_MAX_LEN + 1))
     assert r.status_code == 400
 
 
-def test_post_create_report_rejects_an_oversized_field_value(client):
-    r = _create_report(client, fields={"operator": "x" * (_REPORT_FIELD_VALUE_MAX_LEN + 1)})
+def test_post_create_session_rejects_an_oversized_field_value(client):
+    r = _create_session(client, fields={"operator": "x" * (_SESSION_FIELD_VALUE_MAX_LEN + 1)})
     assert r.status_code == 400
 
 
 # ------------------------------------------------------------------
-# GET /api/reports/{id}, GET /api/reports
+# GET /api/sessions/{id}, GET /api/sessions
 # ------------------------------------------------------------------
 
 
-def test_get_report_returns_the_full_record(client):
-    report_id = _create_report(client).json()["id"]
-    r = client.get(f"/api/reports/{report_id}")
+def test_get_session_returns_the_full_record(client):
+    session_id = _create_session(client).json()["id"]
+    r = client.get(f"/api/sessions/{session_id}")
     assert r.status_code == 200
-    assert r.json()["id"] == report_id
+    assert r.json()["id"] == session_id
 
 
-def test_get_report_unknown_id_is_404(client):
-    r = client.get("/api/reports/does-not-exist")
+def test_get_session_unknown_id_is_404(client):
+    r = client.get("/api/sessions/does-not-exist")
     assert r.status_code == 404
 
 
-def test_get_report_rejects_an_id_with_disallowed_characters(client):
-    r = client.get("/api/reports/weird id")
+def test_get_session_rejects_an_id_with_disallowed_characters(client):
+    r = client.get("/api/sessions/weird id")
     assert r.status_code == 400
 
 
-def test_report_path_rejects_an_id_containing_a_slash(client):
+def test_session_path_rejects_an_id_containing_a_slash(client):
     with pytest.raises(fastapi.HTTPException) as exc_info:
-        _report_path("../secret")
+        _session_path("../secret")
     assert exc_info.value.status_code == 400
 
 
-def test_get_reports_lists_newest_first_with_progress_counts(client):
-    first = _create_report(client, title="first").json()
-    second = _create_report(client, title="second").json()
+def test_get_sessions_lists_newest_first_with_progress_counts(client):
+    first = _create_session(client, title="first").json()
+    second = _create_session(client, title="second").json()
     # Two different titles always mint different ids (the slug differs),
     # even if both land in the same second.
     assert first["id"] != second["id"]
 
-    r = client.get("/api/reports")
+    r = client.get("/api/sessions")
     assert r.status_code == 200
     ids = [entry["id"] for entry in r.json()]
     assert ids == sorted(ids, reverse=True)
@@ -1837,10 +1837,10 @@ def test_get_reports_lists_newest_first_with_progress_counts(client):
         assert entry["n_failed"] == 0
 
 
-def test_get_reports_progress_counts_reflect_step_status(client):
-    report_id = _create_report(client).json()["id"]
+def test_get_sessions_progress_counts_reflect_step_status(client):
+    session_id = _create_session(client).json()["id"]
     client.patch(
-        f"/api/reports/{report_id}",
+        f"/api/sessions/{session_id}",
         json={
             "steps": [
                 {"id": "panel-label-voc", "status": "done"},
@@ -1848,20 +1848,20 @@ def test_get_reports_progress_counts_reflect_step_status(client):
             ]
         },
     )
-    entry = next(e for e in client.get("/api/reports").json() if e["id"] == report_id)
+    entry = next(e for e in client.get("/api/sessions").json() if e["id"] == session_id)
     assert entry["n_done"] == 1
     assert entry["n_failed"] == 1
 
 
 # ------------------------------------------------------------------
-# PATCH /api/reports/{id}
+# PATCH /api/sessions/{id}
 # ------------------------------------------------------------------
 
 
-def test_patch_report_updates_title_and_fields(client):
-    report_id = _create_report(client).json()["id"]
+def test_patch_session_updates_title_and_fields(client):
+    session_id = _create_session(client).json()["id"]
     r = client.patch(
-        f"/api/reports/{report_id}",
+        f"/api/sessions/{session_id}",
         json={"title": "Panel A, second pass", "fields": {"operator": "bench operator"}},
     )
     assert r.status_code == 200
@@ -1872,10 +1872,10 @@ def test_patch_report_updates_title_and_fields(client):
     assert body["fields"]["panel"] == "Luxen LN-10P, 10 W, 12 V"
 
 
-def test_patch_report_updates_a_step_status_value_and_notes(client):
-    report_id = _create_report(client).json()["id"]
+def test_patch_session_updates_a_step_status_value_and_notes(client):
+    session_id = _create_session(client).json()["id"]
     r = client.patch(
-        f"/api/reports/{report_id}",
+        f"/api/sessions/{session_id}",
         json={
             "steps": [
                 {
@@ -1897,10 +1897,10 @@ def test_patch_report_updates_a_step_status_value_and_notes(client):
     assert other["status"] == "todo"
 
 
-def test_patch_report_links_curve_and_run_ids(client):
-    report_id = _create_report(client).json()["id"]
+def test_patch_session_links_curve_and_run_ids(client):
+    session_id = _create_session(client).json()["id"]
     r = client.patch(
-        f"/api/reports/{report_id}",
+        f"/api/sessions/{session_id}",
         json={
             "steps": [
                 {"id": "baseline-curve", "curve_ids": ["some-curve-id"]},
@@ -1915,10 +1915,10 @@ def test_patch_report_links_curve_and_run_ids(client):
     assert run_step["run_ids"] == ["some-run-id"]
 
 
-def test_patch_report_updates_an_open_question_answer(client):
-    report_id = _create_report(client).json()["id"]
+def test_patch_session_updates_an_open_question_answer(client):
+    session_id = _create_session(client).json()["id"]
     r = client.patch(
-        f"/api/reports/{report_id}",
+        f"/api/sessions/{session_id}",
         json={"open_questions": [{"id": "temperature", "answer": "measured by hand"}]},
     )
     assert r.status_code == 200
@@ -1926,69 +1926,69 @@ def test_patch_report_updates_an_open_question_answer(client):
     assert q["answer"] == "measured by hand"
 
 
-def test_patch_report_sets_updated_at_server_side(client):
-    report_id = _create_report(client).json()["id"]
-    created_at = client.get(f"/api/reports/{report_id}").json()["updated_at"]
-    r = client.patch(f"/api/reports/{report_id}", json={"title": "renamed"})
+def test_patch_session_sets_updated_at_server_side(client):
+    session_id = _create_session(client).json()["id"]
+    created_at = client.get(f"/api/sessions/{session_id}").json()["updated_at"]
+    r = client.patch(f"/api/sessions/{session_id}", json={"title": "renamed"})
     assert r.status_code == 200
     assert r.json()["updated_at"] >= created_at
 
 
-def test_patch_report_ignores_a_client_supplied_updated_at(client):
-    report_id = _create_report(client).json()["id"]
+def test_patch_session_ignores_a_client_supplied_updated_at(client):
+    session_id = _create_session(client).json()["id"]
     r = client.patch(
-        f"/api/reports/{report_id}",
+        f"/api/sessions/{session_id}",
         json={"title": "renamed", "updated_at": "1999-01-01T00:00:00+00:00"},
     )
     assert r.status_code == 200
     assert r.json()["updated_at"] != "1999-01-01T00:00:00+00:00"
 
 
-def test_patch_report_rejects_an_unknown_step_id(client):
-    report_id = _create_report(client).json()["id"]
+def test_patch_session_rejects_an_unknown_step_id(client):
+    session_id = _create_session(client).json()["id"]
     r = client.patch(
-        f"/api/reports/{report_id}", json={"steps": [{"id": "does-not-exist", "status": "done"}]}
+        f"/api/sessions/{session_id}", json={"steps": [{"id": "does-not-exist", "status": "done"}]}
     )
     assert r.status_code == 400
     assert "does-not-exist" in r.json()["detail"]
 
 
-def test_patch_report_rejects_an_unknown_open_question_id(client):
-    report_id = _create_report(client).json()["id"]
+def test_patch_session_rejects_an_unknown_open_question_id(client):
+    session_id = _create_session(client).json()["id"]
     r = client.patch(
-        f"/api/reports/{report_id}",
+        f"/api/sessions/{session_id}",
         json={"open_questions": [{"id": "does-not-exist", "answer": "x"}]},
     )
     assert r.status_code == 400
 
 
 @pytest.mark.parametrize("status", ["bogus", "", "DONE"])
-def test_patch_report_rejects_an_invalid_status(client, status):
-    report_id = _create_report(client).json()["id"]
+def test_patch_session_rejects_an_invalid_status(client, status):
+    session_id = _create_session(client).json()["id"]
     r = client.patch(
-        f"/api/reports/{report_id}", json={"steps": [{"id": "panel-label-voc", "status": status}]}
+        f"/api/sessions/{session_id}", json={"steps": [{"id": "panel-label-voc", "status": status}]}
     )
     assert r.status_code == 400
 
 
-def test_patch_report_rejects_an_oversized_notes_field(client):
-    report_id = _create_report(client).json()["id"]
+def test_patch_session_rejects_an_oversized_notes_field(client):
+    session_id = _create_session(client).json()["id"]
     r = client.patch(
-        f"/api/reports/{report_id}",
-        json={"steps": [{"id": "panel-label-voc", "notes": "x" * (_REPORT_NOTES_MAX_LEN + 1)}]},
+        f"/api/sessions/{session_id}",
+        json={"steps": [{"id": "panel-label-voc", "notes": "x" * (_SESSION_NOTES_MAX_LEN + 1)}]},
     )
     assert r.status_code == 400
 
 
-def test_patch_report_rejects_too_many_linked_curve_ids(client):
-    report_id = _create_report(client).json()["id"]
+def test_patch_session_rejects_too_many_linked_curve_ids(client):
+    session_id = _create_session(client).json()["id"]
     r = client.patch(
-        f"/api/reports/{report_id}",
+        f"/api/sessions/{session_id}",
         json={
             "steps": [
                 {
                     "id": "baseline-curve",
-                    "curve_ids": [f"c{i}" for i in range(_REPORT_MAX_LINKED_IDS + 1)],
+                    "curve_ids": [f"c{i}" for i in range(_SESSION_MAX_LINKED_IDS + 1)],
                 }
             ]
         },
@@ -1996,100 +1996,102 @@ def test_patch_report_rejects_too_many_linked_curve_ids(client):
     assert r.status_code == 400
 
 
-def test_patch_report_rejects_an_oversized_field_value(client):
-    report_id = _create_report(client).json()["id"]
+def test_patch_session_rejects_an_oversized_field_value(client):
+    session_id = _create_session(client).json()["id"]
     r = client.patch(
-        f"/api/reports/{report_id}",
-        json={"fields": {"operator": "x" * (_REPORT_FIELD_VALUE_MAX_LEN + 1)}},
+        f"/api/sessions/{session_id}",
+        json={"fields": {"operator": "x" * (_SESSION_FIELD_VALUE_MAX_LEN + 1)}},
     )
     assert r.status_code == 400
 
 
-def test_patch_report_rejects_an_oversized_title(client):
-    report_id = _create_report(client).json()["id"]
-    r = client.patch(f"/api/reports/{report_id}", json={"title": "x" * (_REPORT_TITLE_MAX_LEN + 1)})
+def test_patch_session_rejects_an_oversized_title(client):
+    session_id = _create_session(client).json()["id"]
+    r = client.patch(
+        f"/api/sessions/{session_id}", json={"title": "x" * (_SESSION_TITLE_MAX_LEN + 1)}
+    )
     assert r.status_code == 400
 
 
-def test_patch_report_writes_atomically_no_temp_file_left_behind(client):
-    """A crash mid-write must never leave a half-written report - checked
+def test_patch_session_writes_atomically_no_temp_file_left_behind(client):
+    """A crash mid-write must never leave a half-written session - checked
     here by confirming a normal PATCH leaves no stray temp file in the
-    report directory (mpp_sdk.reports.library.update writes to a temp
+    session directory (mpp_sdk.sessions.library.update writes to a temp
     file in the same directory, then os.replace)."""
-    report_id = _create_report(client).json()["id"]
-    client.patch(f"/api/reports/{report_id}", json={"title": "renamed"})
-    names = {p.name for p in client.report_dir.iterdir()}
-    assert names == {f"{report_id}.json"}
+    session_id = _create_session(client).json()["id"]
+    client.patch(f"/api/sessions/{session_id}", json={"title": "renamed"})
+    names = {p.name for p in client.session_dir.iterdir()}
+    assert names == {f"{session_id}.json"}
 
 
-def test_patch_report_unknown_id_is_404(client):
-    r = client.patch("/api/reports/does-not-exist", json={"title": "x"})
+def test_patch_session_unknown_id_is_404(client):
+    r = client.patch("/api/sessions/does-not-exist", json={"title": "x"})
     assert r.status_code == 404
 
 
-def test_patch_report_rejects_an_id_with_disallowed_characters(client):
-    r = client.patch("/api/reports/weird id", json={"title": "x"})
+def test_patch_session_rejects_an_id_with_disallowed_characters(client):
+    r = client.patch("/api/sessions/weird id", json={"title": "x"})
     assert r.status_code == 400
 
 
 # ------------------------------------------------------------------
-# DELETE /api/reports/{id}
+# DELETE /api/sessions/{id}
 # ------------------------------------------------------------------
 
 
-def test_delete_report_removes_the_file(client):
-    report_id = _create_report(client).json()["id"]
-    r = client.delete(f"/api/reports/{report_id}")
+def test_delete_session_removes_the_file(client):
+    session_id = _create_session(client).json()["id"]
+    r = client.delete(f"/api/sessions/{session_id}")
     assert r.status_code == 204
-    assert not (client.report_dir / f"{report_id}.json").exists()
-    assert client.get(f"/api/reports/{report_id}").status_code == 404
+    assert not (client.session_dir / f"{session_id}.json").exists()
+    assert client.get(f"/api/sessions/{session_id}").status_code == 404
 
 
-def test_delete_report_unknown_id_is_404(client):
-    r = client.delete("/api/reports/does-not-exist")
+def test_delete_session_unknown_id_is_404(client):
+    r = client.delete("/api/sessions/does-not-exist")
     assert r.status_code == 404
 
 
-def test_delete_report_rejects_an_id_with_disallowed_characters(client):
-    r = client.delete("/api/reports/weird id")
+def test_delete_session_rejects_an_id_with_disallowed_characters(client):
+    r = client.delete("/api/sessions/weird id")
     assert r.status_code == 400
 
 
 # ------------------------------------------------------------------
-# Reports work the same in --demo mode - no special-casing needed server
+# Sessions work the same in --demo mode - no special-casing needed server
 # side, since the frontend is what blocks writes there.
 # ------------------------------------------------------------------
 
 
-def test_reports_routes_are_unaffected_by_demo_mode(demo_client):
-    r = _create_report(demo_client)
+def test_sessions_routes_are_unaffected_by_demo_mode(demo_client):
+    r = _create_session(demo_client)
     assert r.status_code == 200
-    report_id = r.json()["id"]
-    assert demo_client.get(f"/api/reports/{report_id}").status_code == 200
+    session_id = r.json()["id"]
+    assert demo_client.get(f"/api/sessions/{session_id}").status_code == 200
 
 
 # ------------------------------------------------------------------
-# Reports: review follow-ups
+# Sessions: review follow-ups
 # ------------------------------------------------------------------
 
 
-def test_reports_reports_a_malformed_file_without_failing_the_whole_list(client):
-    _create_report(client, title="good")
-    client.report_dir.mkdir(parents=True, exist_ok=True)
-    (client.report_dir / "bad.json").write_text("not json")
-    r = client.get("/api/reports")
+def test_get_sessions_lists_a_malformed_file_without_failing_the_whole_list(client):
+    _create_session(client, title="good")
+    client.session_dir.mkdir(parents=True, exist_ok=True)
+    (client.session_dir / "bad.json").write_text("not json")
+    r = client.get("/api/sessions")
     assert r.status_code == 200
     entries = r.json()
     assert any(e.get("title") == "good" for e in entries)
     assert any("error" in e for e in entries)
 
 
-def test_patch_report_cannot_change_fixed_fields(client):
-    created = _create_report(client).json()
-    report_id = created["id"]
+def test_patch_session_cannot_change_fixed_fields(client):
+    created = _create_session(client).json()
+    session_id = created["id"]
     step = next(s for s in created["steps"] if s["id"] == "baseline-curve")
     r = client.patch(
-        f"/api/reports/{report_id}",
+        f"/api/sessions/{session_id}",
         json={
             "id": "other-id",
             "template_id": "full-setup-characterization",
@@ -2099,7 +2101,7 @@ def test_patch_report_cannot_change_fixed_fields(client):
     )
     assert r.status_code == 200
     body = r.json()
-    assert body["id"] == report_id
+    assert body["id"] == session_id
     assert body["template_id"] == created["template_id"]
     assert body["created_at"] == created["created_at"]
     patched = next(s for s in body["steps"] if s["id"] == "baseline-curve")
@@ -2109,16 +2111,16 @@ def test_patch_report_cannot_change_fixed_fields(client):
 
 
 @pytest.mark.parametrize("value", ["NaN", "Infinity", "-Infinity"])
-def test_patch_report_rejects_a_non_finite_value(client, value):
-    report_id = _create_report(client).json()["id"]
+def test_patch_session_rejects_a_non_finite_value(client, value):
+    session_id = _create_session(client).json()["id"]
     r = client.patch(
-        f"/api/reports/{report_id}",
+        f"/api/sessions/{session_id}",
         content=f'{{"steps": [{{"id": "panel-label-voc", "value": {value}}}]}}',
         headers={"content-type": "application/json"},
     )
     assert r.status_code == 400
     # The file on disk stays strict JSON.
-    text = (client.report_dir / f"{report_id}.json").read_text()
+    text = (client.session_dir / f"{session_id}.json").read_text()
     assert "NaN" not in text and "Infinity" not in text
 
 
@@ -2126,47 +2128,49 @@ def test_patch_report_rejects_a_non_finite_value(client, value):
 @pytest.mark.parametrize(
     ("step_id", "key"), [("baseline-curve", "curve_ids"), ("po-run", "run_ids")]
 )
-def test_patch_report_rejects_a_malformed_linked_id(client, bad_id, step_id, key):
-    report_id = _create_report(client).json()["id"]
-    r = client.patch(f"/api/reports/{report_id}", json={"steps": [{"id": step_id, key: [bad_id]}]})
+def test_patch_session_rejects_a_malformed_linked_id(client, bad_id, step_id, key):
+    session_id = _create_session(client).json()["id"]
+    r = client.patch(
+        f"/api/sessions/{session_id}", json={"steps": [{"id": step_id, key: [bad_id]}]}
+    )
     assert r.status_code == 400
 
 
-def test_patch_report_accepts_several_linked_ids_for_repeats(client):
-    report_id = _create_report(client).json()["id"]
+def test_patch_session_accepts_several_linked_ids_for_repeats(client):
+    session_id = _create_session(client).json()["id"]
     ids = [f"20260919T16000{n}Z-baseline" for n in range(3)]
     r = client.patch(
-        f"/api/reports/{report_id}", json={"steps": [{"id": "baseline-curve", "curve_ids": ids}]}
+        f"/api/sessions/{session_id}", json={"steps": [{"id": "baseline-curve", "curve_ids": ids}]}
     )
     assert r.status_code == 200
     step = next(s for s in r.json()["steps"] if s["id"] == "baseline-curve")
     assert step["curve_ids"] == ids
 
 
-def test_post_create_report_rejects_a_field_the_template_does_not_define(client):
-    r = _create_report(client, fields={"not-a-field": "x"})
+def test_post_create_session_rejects_a_field_the_template_does_not_define(client):
+    r = _create_session(client, fields={"not-a-field": "x"})
     assert r.status_code == 400
 
 
-def test_patch_report_rejects_a_field_the_report_does_not_have(client):
-    report_id = _create_report(client).json()["id"]
-    r = client.patch(f"/api/reports/{report_id}", json={"fields": {"not-a-field": "x"}})
+def test_patch_session_rejects_a_field_the_session_does_not_have(client):
+    session_id = _create_session(client).json()["id"]
+    r = client.patch(f"/api/sessions/{session_id}", json={"fields": {"not-a-field": "x"}})
     assert r.status_code == 400
 
 
-def test_patch_report_rejects_a_duplicate_step_id(client):
-    report_id = _create_report(client).json()["id"]
+def test_patch_session_rejects_a_duplicate_step_id(client):
+    session_id = _create_session(client).json()["id"]
     r = client.patch(
-        f"/api/reports/{report_id}",
+        f"/api/sessions/{session_id}",
         json={"steps": [{"id": "po-run", "status": "done"}, {"id": "po-run", "status": "failed"}]},
     )
     assert r.status_code == 400
 
 
-def test_patch_report_rejects_a_duplicate_open_question_id(client):
-    report_id = _create_report(client).json()["id"]
+def test_patch_session_rejects_a_duplicate_open_question_id(client):
+    session_id = _create_session(client).json()["id"]
     r = client.patch(
-        f"/api/reports/{report_id}",
+        f"/api/sessions/{session_id}",
         json={
             "open_questions": [
                 {"id": "temperature", "answer": "a"},

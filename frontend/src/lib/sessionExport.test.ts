@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { reportFilenameBase, reportToJson, reportToMarkdown } from '@/lib/reportExport'
-import type { ReportRecord } from '@/lib/reports'
+import { sessionExportFile, sessionFilenameBase, sessionToJson, sessionToMarkdown } from '@/lib/sessionExport'
+import type { SessionRecord } from '@/lib/sessions'
 import type { RunDetail, RunSummary } from '@/lib/runs'
 import type { CurveRecord } from '@/types'
 
-function report(overrides: Partial<ReportRecord> = {}): ReportRecord {
+function session(overrides: Partial<SessionRecord> = {}): SessionRecord {
   return {
     id: '20260919T160000Z-panel-a',
     title: 'Panel A alone under the lamp',
@@ -115,24 +115,24 @@ function runDetail(overrides: Partial<RunDetail> = {}): RunDetail {
   }
 }
 
-describe('reportFilenameBase', () => {
+describe('sessionFilenameBase', () => {
   it('combines the sanitized title with a filesystem-safe timestamp', () => {
     expect(
-      reportFilenameBase({ title: 'Panel A alone', created_at: '2026-09-19T16:00:00+00:00' }),
+      sessionFilenameBase({ title: 'Panel A alone', created_at: '2026-09-19T16:00:00+00:00' }),
     ).toBe('panel-a-alone_2026-09-19T16-00-00+00-00')
   })
 })
 
-describe('reportToJson', () => {
+describe('sessionToJson', () => {
   it('round-trips the record exactly', () => {
-    const r = report()
-    expect(JSON.parse(reportToJson(r))).toEqual(r)
+    const r = session()
+    expect(JSON.parse(sessionToJson(r))).toEqual(r)
   })
 })
 
-describe('reportToMarkdown', () => {
+describe('sessionToMarkdown', () => {
   it('includes the title, setup fields, and every step', () => {
-    const md = reportToMarkdown(report(), [curve()], [runSummary()], { r1: runDetail() })
+    const md = sessionToMarkdown(session(), [curve()], [runSummary()], { r1: runDetail() })
     expect(md).toContain('# Panel A alone under the lamp')
     expect(md).toContain('Light source: -')
     expect(md).toContain('#### Meter check of V out (done)')
@@ -140,13 +140,13 @@ describe('reportToMarkdown', () => {
   })
 
   it('shows a missing linked curve without crashing', () => {
-    const md = reportToMarkdown(report(), [curve()], [runSummary()], { r1: runDetail() })
+    const md = sessionToMarkdown(session(), [curve()], [runSummary()], { r1: runDetail() })
     expect(md).toContain('missing-curve: missing (deleted)')
   })
 
   it('includes per-step statistics for a curve step with repeats', () => {
-    const md = reportToMarkdown(
-      report(),
+    const md = sessionToMarkdown(
+      session(),
       [curve({ id: 'c1', voc: 20 }), curve({ id: 'missing-curve' })],
       [runSummary()],
       { r1: runDetail() },
@@ -156,13 +156,13 @@ describe('reportToMarkdown', () => {
   })
 
   it('includes run statistics (held power, P/MPP_th) when a run detail is supplied', () => {
-    const md = reportToMarkdown(report(), [curve()], [runSummary()], { r1: runDetail() })
+    const md = sessionToMarkdown(session(), [curve()], [runSummary()], { r1: runDetail() })
     expect(md).toMatch(/Held power:.*W/)
   })
 
   it('shows a missing linked run without crashing', () => {
-    const md = reportToMarkdown(
-      report({
+    const md = sessionToMarkdown(
+      session({
         steps: [
           {
             id: 'po-run',
@@ -188,8 +188,40 @@ describe('reportToMarkdown', () => {
   })
 
   it('includes open questions and their answers', () => {
-    const md = reportToMarkdown(report(), [curve()], [runSummary()], { r1: runDetail() })
+    const md = sessionToMarkdown(session(), [curve()], [runSummary()], { r1: runDetail() })
     expect(md).toContain('How to record it?')
     expect(md).toContain('Not yet decided.')
+  })
+})
+
+describe('sessionExportFile', () => {
+  it('bundles the session with every found curve and run its steps link', () => {
+    const file = sessionExportFile(session(), [curve()], { r1: runDetail() })
+    expect(file.session).toEqual(session())
+    expect(file.curves.map((e) => e.id)).toEqual(['c1'])
+    expect(file.runs.map((e) => e.id)).toEqual(['r1'])
+  })
+
+  it('names a linked curve or run the library does not have in missing', () => {
+    // baseline-curve links c1 and missing-curve; po-run links r1 only.
+    const file = sessionExportFile(session(), [curve()], { r1: runDetail() })
+    expect(file.missing.curve_ids).toEqual(['missing-curve'])
+    expect(file.missing.run_ids).toEqual([])
+  })
+
+  it('is a pure function of runDetails: an id absent from it is always missing, in flight or not', () => {
+    // sessionExportFile itself cannot tell "deleted from the library" apart
+    // from "not fetched yet" - that distinction lives in the caller (see
+    // SessionPane's runDetailsPending / SessionView's disabled Export
+    // button, which exist precisely so this function is never called
+    // while a linked run's detail fetch is still in flight).
+    const file = sessionExportFile(session(), [curve()], {})
+    expect(file.missing.run_ids).toEqual(['r1'])
+  })
+
+  it('titles and sets up the file from the session, not from a prompt', () => {
+    const file = sessionExportFile(session(), [curve()], { r1: runDetail() })
+    expect(file.title).toBe(session().title)
+    expect(file.setup).toBe(session().setup)
   })
 })

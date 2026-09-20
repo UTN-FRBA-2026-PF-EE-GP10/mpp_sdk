@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { RunDetail } from '@/lib/runs'
+import type { SessionRecord } from '@/lib/sessions'
 import {
   MAX_SESSION_BYTES,
   SESSION_FORMAT,
@@ -9,7 +10,7 @@ import {
   parseSessionFile,
   readSessionFile,
   sessionFileName,
-} from './session'
+} from './sessionFile'
 import type { CurveRecord } from '@/types'
 
 function curve(id: string): CurveRecord {
@@ -54,6 +55,37 @@ function run(id: string): RunDetail {
   }
 }
 
+function session(overrides: Partial<SessionRecord> = {}): SessionRecord {
+  return {
+    id: '20260919T160000Z-panel-a',
+    title: 'Panel A alone under the lamp',
+    template_id: 'single-panel-characterization',
+    template_version: 1,
+    setup: 'single',
+    created_at: '2026-09-19T16:00:00+00:00',
+    updated_at: '2026-09-19T17:30:00+00:00',
+    fields: { panel: 'Luxen LN-10P, 10 W, 12 V' },
+    steps: [
+      {
+        id: 'meter-vout',
+        section: 'Before energizing',
+        title: 'Meter check of V out',
+        instructions: 'Compare the meter to the board.',
+        kind: 'check',
+        status: 'done',
+        value: null,
+        unit: null,
+        notes: '',
+        curve_ids: [],
+        run_ids: [],
+        repeats: 1,
+      },
+    ],
+    open_questions: [{ id: 'temperature', text: 'How to record it?', answer: '' }],
+    ...overrides,
+  }
+}
+
 function toFile(content: string, name = 'session.mppsession.json'): File {
   return new File([content], name, { type: 'application/json' })
 }
@@ -72,7 +104,7 @@ describe('buildSessionFile / parseSessionFile round trip', () => {
     expect(parsed.schema).toBe(SESSION_SCHEMA)
     expect(parsed.title).toBe('Panel A alone under the lamp')
     expect(parsed.setup).toBe('single')
-    expect(parsed.report).toBeNull()
+    expect(parsed.session).toBeNull()
     expect(parsed.curves.map((e) => e.id)).toEqual(['c1', 'c2'])
     expect(parsed.curves[0].record).toEqual(curve('c1'))
     expect(parsed.runs.map((e) => e.id)).toEqual(['r1'])
@@ -86,15 +118,27 @@ describe('buildSessionFile / parseSessionFile round trip', () => {
       setup: 'full',
       curves: [curve('c1')],
       runs: [run('r1')],
-      report: { some: 'report data' },
+      session: session(),
     })
     const file = toFile(JSON.stringify(built))
     const parsed = await readSessionFile(file)
 
     expect(parsed.title).toBe('Two-panel session')
-    expect(parsed.report).toEqual({ some: 'report data' })
+    expect(parsed.session).toEqual(session())
     expect(parsed.curves[0].record.id).toBe('c1')
     expect(parsed.runs[0].record.samples.length).toBe(2)
+  })
+
+  it('carries missing ids through the round trip', () => {
+    const built = buildSessionFile({
+      title: 't',
+      setup: 'single',
+      curves: [],
+      runs: [],
+      missing: { curve_ids: ['gone-curve'], run_ids: ['gone-run'] },
+    })
+    const parsed = parseSessionFile(JSON.parse(JSON.stringify(built)))
+    expect(parsed.missing).toEqual({ curve_ids: ['gone-curve'], run_ids: ['gone-run'] })
   })
 })
 
@@ -149,6 +193,14 @@ describe('rejecting bad session files', () => {
     const built = buildSessionFile({ title: 't', setup: 'single', curves: [], runs: [run('r1')] })
     const broken = JSON.parse(JSON.stringify(built))
     broken.runs[0].record.samples[0] = { t: 0, v: 20 } // missing i, d
+    const file = toFile(JSON.stringify(broken))
+    await expect(readSessionFile(file)).rejects.toThrow(SessionParseError)
+  })
+
+  it('rejects a malformed session record (a step missing a field)', async () => {
+    const built = buildSessionFile({ title: 't', setup: 'single', curves: [], runs: [], session: session() })
+    const broken = JSON.parse(JSON.stringify(built))
+    delete broken.session.steps[0].kind
     const file = toFile(JSON.stringify(broken))
     await expect(readSessionFile(file)).rejects.toThrow(SessionParseError)
   })

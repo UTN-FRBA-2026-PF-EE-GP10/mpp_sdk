@@ -11,7 +11,7 @@
 // ProvenanceBadge renders both as an unmissable badge; this module
 // doesn't invent a second mechanism for the same fact.
 
-import type { ReportRecord, ReportSummary } from '@/lib/reports'
+import type { SessionRecord, SessionSummary } from '@/lib/sessions'
 import type { RunDetail, RunSample } from '@/lib/runs'
 import type { CurvePoint, CurveRecord } from '@/types'
 
@@ -204,20 +204,20 @@ export const DEMO_RUN: RunDetail = {
 
 export const DEMO_RUNS = [DEMO_RUN]
 
-// --- Bundled read-only measurement report --------------------------------
+// --- Bundled read-only bench session --------------------------------------
 //
-// One report, read-only in demo mode - same reasoning as the curves/run
+// One session, read-only in demo mode - same reasoning as the curves/run
 // fixtures above. Steps and field keys are drawn from the real
-// single-panel-characterization template (see mpp_sdk/reports/templates/)
+// single-panel-characterization template (see mpp_sdk/sessions/templates/)
 // so the fixture reads like a real session, but this is standalone data,
 // not fetched from any template. One step links a curve id that isn't
 // among DEMO_CURVES and one links a run id that isn't DEMO_RUN, on
 // purpose - so demo mode also shows the "missing linked item" case
 // without needing a special test fixture for it.
 
-export const DEMO_REPORT: ReportRecord = {
-  id: 'demo-fixture-panel-a-report',
-  title: 'Demo report - panel A alone (bundled sample)',
+export const DEMO_SESSION: SessionRecord = {
+  id: 'demo-fixture-panel-a-session',
+  title: 'Demo session - panel A alone (bundled sample)',
   template_id: 'single-panel-characterization',
   template_version: 1,
   setup: 'single',
@@ -309,7 +309,7 @@ export const DEMO_REPORT: ReportRecord = {
       id: 'downloads',
       section: 'After',
       title: 'Curves and runs downloaded',
-      instructions: 'Curves and runs downloaded; report downloaded as Markdown.',
+      instructions: 'Curves and runs downloaded; session downloaded as Markdown.',
       kind: 'check',
       status: 'todo',
       value: null,
@@ -338,22 +338,22 @@ export const DEMO_REPORT: ReportRecord = {
   ],
 }
 
-export const DEMO_REPORTS: ReportSummary[] = [
+export const DEMO_SESSIONS: SessionSummary[] = [
   {
-    id: DEMO_REPORT.id,
-    title: DEMO_REPORT.title,
-    template_id: DEMO_REPORT.template_id,
-    setup: DEMO_REPORT.setup,
-    created_at: DEMO_REPORT.created_at,
-    updated_at: DEMO_REPORT.updated_at,
-    n_steps: DEMO_REPORT.steps.length,
-    n_done: DEMO_REPORT.steps.filter((s) => s.status === 'done').length,
-    n_failed: DEMO_REPORT.steps.filter((s) => s.status === 'failed').length,
+    id: DEMO_SESSION.id,
+    title: DEMO_SESSION.title,
+    template_id: DEMO_SESSION.template_id,
+    setup: DEMO_SESSION.setup,
+    created_at: DEMO_SESSION.created_at,
+    updated_at: DEMO_SESSION.updated_at,
+    n_steps: DEMO_SESSION.steps.length,
+    n_done: DEMO_SESSION.steps.filter((s) => s.status === 'done').length,
+    n_failed: DEMO_SESSION.steps.filter((s) => s.status === 'failed').length,
   },
 ]
 
-/** Every linked run this fixture report points at that actually resolves
- * (DEMO_RUN itself) - keyed by id, matching ReportView's `runDetails` prop
+/** Every linked run this fixture session points at that actually resolves
+ * (DEMO_RUN itself) - keyed by id, matching SessionView's `runDetails` prop
  * shape, so demo mode can show per-step run statistics with no fetch. */
 export const DEMO_RUN_DETAILS: Record<string, RunDetail> = {
   [DEMO_RUN.id]: DEMO_RUN,

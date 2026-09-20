@@ -2,12 +2,12 @@ import { Menu } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ConnectionIndicator } from '@/components/ConnectionIndicator'
 import { CurveCategoryPane } from '@/components/CurveCategoryPane'
+import { ImportedSessionBar } from '@/components/ImportedSessionBar'
 import { MeasurePane } from '@/components/MeasurePane'
-import { NewReportPane } from '@/components/NewReportPane'
+import { NewSessionPane } from '@/components/NewSessionPane'
 import { OpenSessionButton } from '@/components/OpenSessionButton'
-import { ReportPane } from '@/components/ReportPane'
 import { RunDatePane } from '@/components/RunDatePane'
-import { SessionViewBar } from '@/components/SessionViewBar'
+import { SessionPane } from '@/components/SessionPane'
 import { SetupModeToggle } from '@/components/SetupModeToggle'
 import { Sidebar, type Selection } from '@/components/Sidebar'
 import { ThemeToggle } from '@/components/ThemeToggle'
@@ -15,12 +15,12 @@ import { UnitToggle } from '@/components/UnitToggle'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useConnectionStatus } from '@/hooks/useConnectionStatus'
 import { useSessionFileImport } from '@/hooks/useSessionFileImport'
-import { deleteCurve, fetchCurves, fetchMeasurementKinds, fetchReports, fetchRuns } from '@/lib/api'
+import { deleteCurve, fetchCurves, fetchMeasurementKinds, fetchRuns, fetchSessions } from '@/lib/api'
 import { useCaptureMode } from '@/lib/captureMode'
-import { DEMO_CURVES, DEMO_REPORTS, DEMO_RUNS } from '@/lib/demoFixtures'
-import type { ReportSummary } from '@/lib/reports'
+import { DEMO_CURVES, DEMO_RUNS, DEMO_SESSIONS } from '@/lib/demoFixtures'
 import { groupRunsByDate, type RunSummary } from '@/lib/runs'
-import { useSession } from '@/lib/session'
+import { useImportedSession } from '@/lib/sessionFile'
+import type { SessionSummary } from '@/lib/sessions'
 import { useSetupMode } from '@/lib/setupMode'
 import {
   isLiveConnection,
@@ -46,7 +46,7 @@ interface PendingRemeasure {
 export default function App() {
   const { mode: captureMode, setMode: setCaptureMode } = useCaptureMode()
   const sandboxEnabled = captureMode === 'simulated'
-  const session = useSession()
+  const importedSession = useImportedSession()
   const [selection, setSelection] = useState<Selection>({ root: 'measure' })
   // Jumps to the imported session's own content once it lands - Measure
   // (capture, run start) isn't a view-mode destination (see the
@@ -82,9 +82,9 @@ export default function App() {
   // useConnectionStatus's docstring and ConnectionIndicator's one-shot
   // check, which takes over answering "is a link available" in that mode.
   // An imported session (view mode) is offline the same way - see
-  // lib/session.ts.
+  // lib/sessionFile.ts.
   const { status: connectionStatus, link: connectionLink } = useConnectionStatus(
-    !sandboxEnabled && !session.active,
+    !sandboxEnabled && !importedSession.active,
   )
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   // Seeded with the known vocabulary so the sidebar renders before the
@@ -99,18 +99,20 @@ export default function App() {
   // fixtures on screen.
   const [fetchedRecords, setFetchedRecords] = useState<CurveRecord[]>([])
   const [fetchedRuns, setFetchedRuns] = useState<RunSummary[]>([])
-  const [fetchedReports, setFetchedReports] = useState<ReportSummary[]>([])
+  const [fetchedSessions, setFetchedSessions] = useState<SessionSummary[]>([])
   const [reloadToken, setReloadToken] = useState(0)
   // An imported session takes priority over demo fixtures - both are
-  // offline data sources, but a session is something the operator chose to
-  // look at, not a fallback default. See lib/session.ts.
-  const records = session.active ? session.curves : sandboxEnabled ? DEMO_CURVES : fetchedRecords
-  const runs = session.active ? session.runs : sandboxEnabled ? DEMO_RUNS : fetchedRuns
-  // Reports are never written in demo mode (see NewReportPane/ReportPane's
-  // sandbox gating) - the sidebar shows only the one bundled read-only
-  // fixture there, the same "swap the whole list" pattern as records/runs
-  // above, not a filtered view of whatever a real backend happens to have.
-  const reports = session.active ? [] : sandboxEnabled ? DEMO_REPORTS : fetchedReports
+  // offline data sources, but an imported session is something the
+  // operator chose to look at, not a fallback default. See
+  // lib/sessionFile.ts.
+  const records = importedSession.active ? importedSession.curves : sandboxEnabled ? DEMO_CURVES : fetchedRecords
+  const runs = importedSession.active ? importedSession.runs : sandboxEnabled ? DEMO_RUNS : fetchedRuns
+  // Sessions are never written in demo mode (see NewSessionPane/
+  // SessionPane's sandbox gating) - the sidebar shows only the one bundled
+  // read-only fixture there, the same "swap the whole list" pattern as
+  // records/runs above, not a filtered view of whatever a real backend
+  // happens to have.
+  const sessions = importedSession.active ? [] : sandboxEnabled ? DEMO_SESSIONS : fetchedSessions
 
   // Neither of these is persisted (no localStorage/sessionStorage) on
   // purpose: a reload must drop a pending remeasure and leave the old
@@ -178,14 +180,14 @@ export default function App() {
     // seeded vocabulary - no server round trip needed, and none should
     // happen while showing someone the workbench with no backend at all.
     // An imported session (view mode) is offline the same way.
-    if (sandboxEnabled || session.active) return
+    if (sandboxEnabled || importedSession.active) return
     fetchMeasurementKinds()
       .then((fetched) => setSeedKinds((prev) => Array.from(new Set([...prev, ...fetched]))))
       .catch((e) => console.error('fetching measurement kinds failed', e))
-  }, [sandboxEnabled, session.active])
+  }, [sandboxEnabled, importedSession.active])
 
   useEffect(() => {
-    if (sandboxEnabled || session.active) return
+    if (sandboxEnabled || importedSession.active) return
     // A retry or reload can start while an older request is still out.
     // Only the newest one may set the list or the error, or a slow stale
     // answer would overwrite the current state.
@@ -203,10 +205,10 @@ export default function App() {
     return () => {
       current = false
     }
-  }, [reloadToken, sandboxEnabled, session.active])
+  }, [reloadToken, sandboxEnabled, importedSession.active])
 
   useEffect(() => {
-    if (sandboxEnabled || session.active) return
+    if (sandboxEnabled || importedSession.active) return
     let current = true
     fetchRuns()
       .then((data) => {
@@ -221,14 +223,14 @@ export default function App() {
     return () => {
       current = false
     }
-  }, [reloadToken, sandboxEnabled, session.active])
+  }, [reloadToken, sandboxEnabled, importedSession.active])
 
   useEffect(() => {
-    if (sandboxEnabled || session.active) return
-    fetchReports()
-      .then(setFetchedReports)
-      .catch((e) => console.error('fetching reports failed', e))
-  }, [reloadToken, sandboxEnabled, session.active])
+    if (sandboxEnabled || importedSession.active) return
+    fetchSessions()
+      .then(setFetchedSessions)
+      .catch((e) => console.error('fetching sessions failed', e))
+  }, [reloadToken, sandboxEnabled, importedSession.active])
 
   // 'firmware-replay' ("Replay on the board") needs a real board on the
   // other end of a real link - ConnectionIndicator already refuses to let
@@ -269,7 +271,7 @@ export default function App() {
   const runGroups = useMemo(() => groupRunsByDate(runs), [runs])
 
   let content
-  if (selection.root === 'measure' && session.active) {
+  if (selection.root === 'measure' && importedSession.active) {
     content = (
       <Card>
         <CardHeader>
@@ -277,6 +279,28 @@ export default function App() {
           <CardDescription>
             Capture and run start need a real board and a saved library - both are off while
             viewing an imported session. Close the session (top of the page) to measure.
+          </CardDescription>
+        </CardHeader>
+      </Card>
+    )
+  } else if (
+    (selection.root === 'new-session' || selection.root === 'session') &&
+    importedSession.active
+  ) {
+    // Guards against two write paths: the sidebar already hides "New
+    // session" while an imported session is active (canCreateSession
+    // below), but a session file with no curves/runs never redirects the
+    // selection away from an already-open 'session' (see
+    // useSessionFileImport's onImported above) - so without this branch,
+    // SessionPane/NewSessionPane would stay mounted, live, and writable
+    // right under the read-only "Viewing" banner.
+    content = (
+      <Card>
+        <CardHeader>
+          <CardTitle>Sessions are unavailable</CardTitle>
+          <CardDescription>
+            Creating or editing a session needs a saved library - that's off while viewing an
+            imported session. Close the session (top of the page) first.
           </CardDescription>
         </CardHeader>
       </Card>
@@ -318,19 +342,19 @@ export default function App() {
         onRunsChanged={() => setReloadToken((t) => t + 1)}
       />
     )
-  } else if (selection.root === 'new-report') {
+  } else if (selection.root === 'new-session') {
     content = (
-      <NewReportPane
+      <NewSessionPane
         setupMode={setupMode}
-        onCreated={(report) => {
+        onCreated={(session) => {
           setReloadToken((t) => t + 1)
-          setSelection({ root: 'report', id: report.id })
+          setSelection({ root: 'session', id: session.id })
         }}
       />
     )
   } else {
     content = (
-      <ReportPane
+      <SessionPane
         key={selection.id}
         id={selection.id}
         curves={records}
@@ -383,7 +407,7 @@ export default function App() {
         </div>
       </header>
 
-      <SessionViewBar />
+      <ImportedSessionBar />
 
       {sessionImport.error && (
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-destructive/40 bg-destructive/10 px-4 py-1.5 text-xs font-medium text-destructive">
@@ -483,8 +507,8 @@ export default function App() {
           kinds={kinds}
           countsByKind={countsByKind}
           runGroups={runGroups}
-          reports={reports}
-          canCreateReport={!sandboxEnabled}
+          sessions={sessions}
+          canCreateSession={!sandboxEnabled && !importedSession.active}
           mobileOpen={mobileNavOpen}
           onCloseMobile={() => setMobileNavOpen(false)}
         />

@@ -5,7 +5,7 @@ import { CurveDetailDialog } from '@/components/CurveDetailDialog'
 import { Button } from '@/components/ui/button'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { deleteCurvesBatch } from '@/lib/api'
-import { buildSessionFile, downloadSessionFile, readOnlyReasonText, useReadOnly } from '@/lib/session'
+import { buildSessionFile, downloadSessionFile, readOnlyReasonText, useReadOnly } from '@/lib/sessionFile'
 import { useSetupMode } from '@/lib/setupMode'
 import { getMeasurementKindInfo, type CurveRecord } from '@/types'
 
@@ -18,7 +18,7 @@ import { getMeasurementKindInfo, type CurveRecord } from '@/types'
  *
  * Also owns this kind's select mode: "Select" turns on a checkbox per
  * tile (CurveDashboardPane's own `selectable` prop) plus "Select all",
- * "Export N selected" (a session file - see lib/session.ts) and
+ * "Export N selected" (a session file - see lib/sessionFile.ts) and
  * "Delete N selected" (one POST /api/curves/delete-batch request instead
  * of N separate DELETE calls - see lib/api.ts).
  */
@@ -89,7 +89,7 @@ export function CurveCategoryPane({
     )
   }
 
-  /** Downloads the selected curves as a session file - see lib/session.ts.
+  /** Downloads the selected curves as a session file - see lib/sessionFile.ts.
    * No fetch needed: `records` already carries every point (GET
    * /api/curves serves full records), in either live or view mode. */
   function handleExport() {
