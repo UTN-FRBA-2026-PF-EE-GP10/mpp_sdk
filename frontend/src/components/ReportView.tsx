@@ -1,6 +1,8 @@
-import { useMemo, useState } from 'react'
+import { ChevronDown, ChevronRight } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
 import { CurveChart } from '@/components/CurveChart'
 import { CurveDetailDialog } from '@/components/CurveDetailDialog'
+import { RunChart } from '@/components/RunChart'
 import { RunPlayerDialog } from '@/components/RunPlayerDialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -26,10 +28,42 @@ import {
   type ReportStepPatch,
   type StepStatus,
 } from '@/lib/reports'
-import { findCurveForRun } from '@/lib/runPlayback'
+import { findCurveForRun, referenceCurveMessage } from '@/lib/runPlayback'
 import { useUnits } from '@/lib/units'
 import type { RunDetail, RunSummary } from '@/lib/runs'
 import type { CurveRecord } from '@/types'
+
+/** A click on "Expand all"/"Collapse all" in the report header - each
+ * linked-item row is its own local expand/collapse state (per the design:
+ * not persisted, not a store), but bumping `token` here is how one click
+ * reaches every row at once. `token` changing is the signal; `expanded`
+ * is the value rows should adopt. A row's own later clicks take over
+ * again until the next bump. */
+interface ExpandAllSignal {
+  expanded: boolean
+  token: number
+}
+
+const INITIAL_EXPAND_SIGNAL: ExpandAllSignal = { expanded: false, token: 0 }
+
+/** Adopts `signal`'s value whenever it changes (token 0 means "no click
+ * yet" - rows stay collapsed by default), while still letting the row's
+ * own chevron toggle it in between signals. Adjusts state during render
+ * (the React-documented way to sync state to a changed prop) rather than
+ * an effect, so a fresh Expand all/Collapse all click takes effect in the
+ * same render instead of a following one. */
+function useRowExpansion(signal: ExpandAllSignal): [boolean, () => void] {
+  const [expanded, setExpanded] = useState(false)
+  // Starts at the initial token, never at the current one: a row that
+  // mounts after an Expand all (a curve linked just now) must adopt that
+  // state too, instead of sitting collapsed among expanded rows.
+  const [seenToken, setSeenToken] = useState(INITIAL_EXPAND_SIGNAL.token)
+  if (signal.token !== seenToken) {
+    setSeenToken(signal.token)
+    setExpanded(signal.expanded)
+  }
+  return [expanded, () => setExpanded((v) => !v)]
+}
 
 /**
  * The main pane for one measurement report - a readable document from
@@ -88,6 +122,22 @@ export function ReportView({
   const [openRun, setOpenRun] = useState<RunSummary | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [expandAllSignal, setExpandAllSignal] = useState<ExpandAllSignal>(INITIAL_EXPAND_SIGNAL)
+
+  // A collapsed row has no chart in the DOM at all, so Ctrl+P would print
+  // a report with no charts. Expanding on beforeprint keeps the printed
+  // document complete without asking the operator to remember a button.
+  useEffect(() => {
+    const expandForPrint = () =>
+      setExpandAllSignal((s) => ({ expanded: true, token: s.token + 1 }))
+    const restore = () => setExpandAllSignal((s) => ({ expanded: false, token: s.token + 1 }))
+    window.addEventListener('beforeprint', expandForPrint)
+    window.addEventListener('afterprint', restore)
+    return () => {
+      window.removeEventListener('beforeprint', expandForPrint)
+      window.removeEventListener('afterprint', restore)
+    }
+  }, [])
 
   const sections = useMemo(() => groupStepsBySection(report.steps), [report.steps])
   const mostRecentCurve = useMemo(
@@ -150,6 +200,24 @@ export function ReportView({
             onChange={(key, value) => schedule({ fields: { [key]: value } })}
           />
           <div className="flex flex-wrap gap-2 print:hidden">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                setExpandAllSignal((s) => ({ expanded: true, token: s.token + 1 }))
+              }
+            >
+              Expand all
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                setExpandAllSignal((s) => ({ expanded: false, token: s.token + 1 }))
+              }
+            >
+              Collapse all
+            </Button>
             <Button variant="outline" size="sm" onClick={() => downloadReportJson(report)}>
               Download JSON
             </Button>
@@ -186,6 +254,7 @@ export function ReportView({
                 readOnly={readOnly}
                 mostRecentCurve={mostRecentCurve}
                 mostRecentRun={mostRecentRun}
+                expandAllSignal={expandAllSignal}
                 onStatusChange={(status) => patchStep(step.id, { status })}
                 onValueChange={(value) => schedule({ steps: [{ id: step.id, value }] })}
                 onNotesChange={(notes) => schedule({ steps: [{ id: step.id, notes }] })}
@@ -359,6 +428,7 @@ function StepCard({
   readOnly,
   mostRecentCurve,
   mostRecentRun,
+  expandAllSignal,
   onStatusChange,
   onValueChange,
   onNotesChange,
@@ -376,6 +446,7 @@ function StepCard({
   readOnly: boolean
   mostRecentCurve: CurveRecord | null
   mostRecentRun: RunSummary | null
+  expandAllSignal: ExpandAllSignal
   onStatusChange: (status: StepStatus) => void
   onValueChange: (value: number | string) => void
   onNotesChange: (notes: string) => void
@@ -413,6 +484,7 @@ function StepCard({
           curves={curves}
           readOnly={readOnly}
           mostRecentCurve={mostRecentCurve}
+          expandAllSignal={expandAllSignal}
           onLink={onLinkCurve}
           onUnlink={onUnlinkCurve}
           onOpen={onOpenCurve}
@@ -427,6 +499,7 @@ function StepCard({
           runDetails={runDetails}
           readOnly={readOnly}
           mostRecentRun={mostRecentRun}
+          expandAllSignal={expandAllSignal}
           onLink={onLinkRun}
           onUnlink={onUnlinkRun}
           onOpen={onOpenRun}
@@ -568,11 +641,81 @@ function StatRow({ label, unit, stats }: { label: string; unit: string; stats: S
   )
 }
 
+/**
+ * One curve linked to a step, collapsed to a single row by default (the
+ * chart used to render at ~190x96px inline, too small to read at the
+ * bench - see the report header's Expand all for the printing angle on
+ * why this stays a click instead of always-open). Expansion is local,
+ * per-row state, except when overridden by `expandAllSignal`.
+ */
+function CurveLinkRow({
+  record,
+  readOnly,
+  expandAllSignal,
+  onUnlink,
+  onOpen,
+}: {
+  record: CurveRecord
+  readOnly: boolean
+  expandAllSignal: ExpandAllSignal
+  onUnlink: () => void
+  onOpen: () => void
+}) {
+  const { formatCurrent, formatPower } = useUnits()
+  const [expanded, toggle] = useRowExpansion(expandAllSignal)
+  const metrics = curveMetrics(record)
+
+  return (
+    <div className="rounded-md border text-xs">
+      <button
+        type="button"
+        onClick={toggle}
+        aria-expanded={expanded}
+        className="flex w-full flex-wrap items-center gap-2 px-2 py-2 text-left hover:bg-muted/40"
+      >
+        {expanded ? (
+          <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
+        ) : (
+          <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+        )}
+        <span className="font-medium text-foreground">{record.label || record.id}</span>
+        {metrics && (
+          <span className="text-muted-foreground">
+            Voc {metrics.voc.toFixed(2)} V - Isc {formatCurrent(metrics.isc)} - P_mpp{' '}
+            {formatPower(metrics.pMpp)} - {formatCapturedAt(record.captured_at)}
+          </span>
+        )}
+      </button>
+      {expanded && (
+        <div className="flex flex-col gap-2 border-t p-2">
+          <CurveChart points={record.points} heightClassName="h-56" />
+          {metrics && (
+            <p className="text-muted-foreground">
+              Vmp {metrics.vmp.toFixed(2)} V - Imp {formatCurrent(metrics.imp)}
+            </p>
+          )}
+          <div className="flex items-center gap-2 print:hidden">
+            <Button size="xs" variant="outline" onClick={onOpen}>
+              Open
+            </Button>
+            {!readOnly && (
+              <button type="button" className="text-xs text-muted-foreground underline" onClick={onUnlink}>
+                Unlink
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function CurveStepBody({
   step,
   curves,
   readOnly,
   mostRecentCurve,
+  expandAllSignal,
   onLink,
   onUnlink,
   onOpen,
@@ -581,11 +724,11 @@ function CurveStepBody({
   curves: CurveRecord[]
   readOnly: boolean
   mostRecentCurve: CurveRecord | null
+  expandAllSignal: ExpandAllSignal
   onLink: (id: string) => void
   onUnlink: (id: string) => void
   onOpen: (record: CurveRecord) => void
 }) {
-  const { formatCurrent, formatPower } = useUnits()
   const [pick, setPick] = useState('')
   const linkedRecords = step.curve_ids
     .map((id) => curves.find((c) => c.id === id))
@@ -619,38 +762,15 @@ function CurveStepBody({
             </p>
           )
         }
-        const metrics = curveMetrics(record)
         return (
-          <div key={id} className="flex flex-col gap-1 rounded-md border p-2 sm:flex-row sm:items-center sm:gap-3">
-            <div className="w-full sm:w-48">
-              <CurveChart points={record.points} heightClassName="h-24" />
-            </div>
-            <div className="flex-1 text-xs text-muted-foreground">
-              <button
-                type="button"
-                className="text-left font-medium text-foreground underline-offset-2 hover:underline"
-                onClick={() => onOpen(record)}
-              >
-                {record.label || id}
-              </button>
-              {metrics && (
-                <p>
-                  Voc {metrics.voc.toFixed(2)} V - Isc {formatCurrent(metrics.isc)} - Vmp{' '}
-                  {metrics.vmp.toFixed(2)} V - Imp {formatCurrent(metrics.imp)} - P_mpp{' '}
-                  {formatPower(metrics.pMpp)}
-                </p>
-              )}
-            </div>
-            {!readOnly && (
-              <button
-                type="button"
-                className="shrink-0 self-start text-xs text-muted-foreground underline print:hidden"
-                onClick={() => onUnlink(id)}
-              >
-                Unlink
-              </button>
-            )}
-          </div>
+          <CurveLinkRow
+            key={id}
+            record={record}
+            readOnly={readOnly}
+            expandAllSignal={expandAllSignal}
+            onUnlink={() => onUnlink(id)}
+            onOpen={() => onOpen(record)}
+          />
         )
       })}
 
@@ -704,6 +824,103 @@ function CurveStepBody({
   )
 }
 
+/**
+ * One run linked to a step, collapsed to a single row by default - same
+ * treatment as CurveLinkRow. Expanded, it shows the run's full trace via
+ * RunChart (a static playthrough: `trail` is every sample, `current` is
+ * the last one - not the animated player, which lives in the dialog
+ * behind Open) rather than just readouts, since `runDetails` already
+ * carries everything RunChart needs (reference curve points, samples).
+ */
+function RunLinkRow({
+  summary,
+  detail,
+  curves,
+  readOnly,
+  expandAllSignal,
+  onUnlink,
+  onOpen,
+}: {
+  summary: RunSummary
+  detail: RunDetail | undefined
+  curves: CurveRecord[]
+  readOnly: boolean
+  expandAllSignal: ExpandAllSignal
+  onUnlink: () => void
+  onOpen: () => void
+}) {
+  const { formatPower } = useUnits()
+  const [expanded, toggle] = useRowExpansion(expandAllSignal)
+  const reference = detail ? findCurveForRun(curves, detail.curve_ref) : null
+  const mppTh = reference ? curveMetrics(reference) : null
+  const m = detail ? runMetrics(detail.samples, mppTh ? { v: mppTh.vmp, i: mppTh.imp } : null) : null
+  const refMessage = detail ? referenceCurveMessage(detail.curve_ref, reference) : null
+
+  return (
+    <div className="rounded-md border text-xs">
+      <button
+        type="button"
+        onClick={toggle}
+        aria-expanded={expanded}
+        className="flex w-full flex-wrap items-center gap-2 px-2 py-2 text-left hover:bg-muted/40"
+      >
+        {expanded ? (
+          <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
+        ) : (
+          <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+        )}
+        <span className="font-medium text-foreground">{summary.label || summary.id}</span>
+        <span className="text-muted-foreground">
+          {summary.algorithm} - {summary.duration_s.toFixed(1)} s
+          {summary.aborted ? ' - aborted' : ''}
+          {m ? (
+            <>
+              {' - Held '}
+              {formatPower(m.heldPower)}
+              {m.pOverMppTh !== null && ` - P/MPP_th ${(m.pOverMppTh * 100).toFixed(1)} %`}
+            </>
+          ) : (
+            ' - loading statistics...'
+          )}
+        </span>
+      </button>
+      {expanded && (
+        <div className="flex flex-col gap-2 border-t p-2">
+          {detail ? (
+            <>
+              {refMessage && <p className="text-muted-foreground">{refMessage}</p>}
+              <RunChart
+                referencePoints={reference?.points ?? []}
+                trail={detail.samples}
+                current={detail.samples[detail.samples.length - 1] ?? null}
+              />
+              {m && (
+                <p className="text-muted-foreground">
+                  {m.timeToConvergeS === null
+                    ? 'Did not settle within 5 % of MPP_th'
+                    : `Converged in ${m.timeToConvergeS.toFixed(1)} s`}
+                </p>
+              )}
+            </>
+          ) : (
+            <p className="text-muted-foreground">Loading run detail...</p>
+          )}
+          <div className="flex items-center gap-2 print:hidden">
+            <Button size="xs" variant="outline" onClick={onOpen}>
+              Open
+            </Button>
+            {!readOnly && (
+              <button type="button" className="text-xs text-muted-foreground underline" onClick={onUnlink}>
+                Unlink
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function RunStepBody({
   step,
   curves,
@@ -711,6 +928,7 @@ function RunStepBody({
   runDetails,
   readOnly,
   mostRecentRun,
+  expandAllSignal,
   onLink,
   onUnlink,
   onOpen,
@@ -721,11 +939,11 @@ function RunStepBody({
   runDetails: Record<string, RunDetail>
   readOnly: boolean
   mostRecentRun: RunSummary | null
+  expandAllSignal: ExpandAllSignal
   onLink: (id: string) => void
   onUnlink: (id: string) => void
   onOpen: (run: RunSummary) => void
 }) {
-  const { formatPower } = useUnits()
   const [pick, setPick] = useState('')
   const unlinkedRuns = runs.filter((r) => !step.run_ids.includes(r.id))
   const canLinkMostRecent = !readOnly && mostRecentRun !== null && !step.run_ids.includes(mostRecentRun.id)
@@ -769,46 +987,17 @@ function RunStepBody({
             </p>
           )
         }
-        const detail = runDetails[id]
-        const reference = detail ? findCurveForRun(curves, detail.curve_ref) : null
-        const mppTh = reference ? curveMetrics(reference) : null
-        const m = detail ? runMetrics(detail.samples, mppTh ? { v: mppTh.vmp, i: mppTh.imp } : null) : null
         return (
-          <div key={id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-2 text-xs">
-            <div>
-              <button
-                type="button"
-                className="text-left font-medium text-foreground underline-offset-2 hover:underline"
-                onClick={() => onOpen(summary)}
-              >
-                {summary.label || id}
-              </button>
-              <p className="text-muted-foreground">
-                {summary.algorithm} - {summary.duration_s.toFixed(1)} s
-                {summary.aborted ? ' - aborted' : ''}
-              </p>
-              {m ? (
-                <p className="text-muted-foreground">
-                  Held {formatPower(m.heldPower)}
-                  {m.pOverMppTh !== null && ` - P/MPP_th ${(m.pOverMppTh * 100).toFixed(1)} %`}
-                  {m.timeToConvergeS !== null
-                    ? ` - converged in ${m.timeToConvergeS.toFixed(2)} s`
-                    : ''}
-                </p>
-              ) : (
-                <p className="text-muted-foreground">Loading statistics...</p>
-              )}
-            </div>
-            {!readOnly && (
-              <button
-                type="button"
-                className="text-xs text-muted-foreground underline print:hidden"
-                onClick={() => onUnlink(id)}
-              >
-                Unlink
-              </button>
-            )}
-          </div>
+          <RunLinkRow
+            key={id}
+            summary={summary}
+            detail={runDetails[id]}
+            curves={curves}
+            readOnly={readOnly}
+            expandAllSignal={expandAllSignal}
+            onUnlink={() => onUnlink(id)}
+            onOpen={() => onOpen(summary)}
+          />
         )
       })}
 

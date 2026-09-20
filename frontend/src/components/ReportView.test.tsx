@@ -12,12 +12,16 @@ import type { CurveRecord } from '@/types'
 // way App.test.tsx/CurveWorkbench.test.tsx already do for the same reason.
 vi.mock('react-chartjs-2', () => ({ Line: () => null }))
 
-function renderView(ui: Parameters<typeof render>[0]) {
-  return render(
+function wrapped(ui: Parameters<typeof render>[0]) {
+  return (
     <ThemeProvider>
       <UnitsProvider>{ui}</UnitsProvider>
-    </ThemeProvider>,
+    </ThemeProvider>
   )
+}
+
+function renderView(ui: Parameters<typeof render>[0]) {
+  return render(wrapped(ui))
 }
 
 function curve(overrides: Partial<CurveRecord> = {}): CurveRecord {
@@ -390,5 +394,211 @@ describe('ReportView - read-only (demo)', () => {
     // constructed with `undefined` whenever readOnly is true - see
     // ReportView's own onPatch wiring).
     expect(onPatch).not.toHaveBeenCalled()
+  })
+})
+
+// A linked curve/run used to render as an always-open ~190x96px chart -
+// too small to read at the bench. These cover the fix: each linked item
+// is now a one-line row that expands on click.
+describe('ReportView - expandable linked items', () => {
+  function reportWithLinkedItems(): ReportRecord {
+    const base = report()
+    return report({
+      steps: [
+        { ...base.steps[2], curve_ids: ['c1'] }, // baseline-curve
+        { ...base.steps[3], run_ids: ['r1'] }, // po-run
+      ],
+    })
+  }
+
+  it('expands a row that was linked after Expand all, rather than leaving it alone collapsed', () => {
+    const base = report()
+    const oneCurve = report({ steps: [{ ...base.steps[2], curve_ids: ['c1'] }] })
+    const twoCurves = report({ steps: [{ ...base.steps[2], curve_ids: ['c1', 'c2'] }] })
+    const second = curve({ id: 'c2', label: 'Second sweep' })
+    const view = renderView(
+      <ReportView
+        report={oneCurve}
+        curves={[curve(), second]}
+        runs={[]}
+        runDetails={{}}
+        readOnly={false}
+        onPatch={vi.fn()}
+      />,
+    )
+    fireEvent.click(screen.getByText('Expand all'))
+
+    view.rerender(
+      wrapped(
+        <ReportView
+          report={twoCurves}
+          curves={[curve(), second]}
+          runs={[]}
+          runDetails={{}}
+          readOnly={false}
+          onPatch={vi.fn()}
+        />,
+      ),
+    )
+
+    const fresh = screen.getByRole('button', { name: /Second sweep/ })
+    expect(fresh.getAttribute('aria-expanded')).toBe('true')
+  })
+
+  it('expands every row before the browser prints, so a printed report has its charts', () => {
+    renderView(
+      <ReportView
+        report={reportWithLinkedItems()}
+        curves={[curve()]}
+        runs={[runSummary()]}
+        runDetails={{ r1: runDetail() }}
+        readOnly={false}
+        onPatch={vi.fn()}
+      />,
+    )
+    expect(document.querySelector('.h-56')).toBeNull()
+
+    fireEvent(window, new Event('beforeprint'))
+
+    expect(document.querySelector('.h-56')).not.toBeNull()
+
+    fireEvent(window, new Event('afterprint'))
+
+    expect(document.querySelector('.h-56')).toBeNull()
+  })
+
+  it('a curve row starts collapsed, showing its key numbers, then expands and collapses on click', () => {
+    renderView(
+      <ReportView
+        report={reportWithLinkedItems()}
+        curves={[curve()]}
+        runs={[runSummary()]}
+        runDetails={{ r1: runDetail() }}
+        readOnly={false}
+        onPatch={vi.fn()}
+      />,
+    )
+    const toggle = screen.getByRole('button', { name: /Baseline sweep/ })
+    // Key numbers on the collapsed line - Voc is unit-independent, a
+    // simple thing to pin without also pinning the mA/W formatting.
+    expect(toggle.textContent).toMatch(/Voc 19\.30 V/)
+    expect(toggle.textContent).toMatch(/P_mpp/)
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    expect(document.querySelector('.h-56')).toBeNull() // no chart yet
+    expect(screen.queryByText('Open')).toBeNull()
+
+    fireEvent.click(toggle)
+
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    expect(document.querySelector('.h-56')).not.toBeNull() // CurveChart, at a readable size
+    const row = toggle.parentElement as HTMLElement
+    expect(within(row).getByText('Open')).toBeTruthy()
+    expect(within(row).getByText('Unlink')).toBeTruthy()
+
+    fireEvent.click(toggle)
+
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    expect(document.querySelector('.h-56')).toBeNull()
+  })
+
+  it('a run row starts collapsed, showing algorithm/duration/held power, then expands to its trace', () => {
+    renderView(
+      <ReportView
+        report={reportWithLinkedItems()}
+        curves={[curve()]}
+        runs={[runSummary()]}
+        runDetails={{ r1: runDetail() }}
+        readOnly={false}
+        onPatch={vi.fn()}
+      />,
+    )
+    const toggle = screen.getByRole('button', { name: /P&O run 1/ })
+    expect(toggle.textContent).toMatch(/P&O/)
+    expect(toggle.textContent).toMatch(/10\.0 s/)
+    expect(toggle.textContent).toMatch(/Held/)
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    expect(document.querySelector('.h-80')).toBeNull() // no RunChart yet
+
+    fireEvent.click(toggle)
+
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    expect(document.querySelector('.h-80')).not.toBeNull() // RunChart, the run's full trace
+    const row = toggle.parentElement as HTMLElement
+    expect(within(row).getByText('Open')).toBeTruthy()
+    expect(within(row).getByText('Unlink')).toBeTruthy()
+
+    fireEvent.click(toggle)
+
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+  })
+
+  it('"Expand all" opens every linked item and "Collapse all" closes them again', () => {
+    renderView(
+      <ReportView
+        report={reportWithLinkedItems()}
+        curves={[curve()]}
+        runs={[runSummary()]}
+        runDetails={{ r1: runDetail() }}
+        readOnly={false}
+        onPatch={vi.fn()}
+      />,
+    )
+    const curveToggle = screen.getByRole('button', { name: /Baseline sweep/ })
+    const runToggle = screen.getByRole('button', { name: /P&O run 1/ })
+    expect(curveToggle.getAttribute('aria-expanded')).toBe('false')
+    expect(runToggle.getAttribute('aria-expanded')).toBe('false')
+
+    fireEvent.click(screen.getByText('Expand all'))
+
+    expect(curveToggle.getAttribute('aria-expanded')).toBe('true')
+    expect(runToggle.getAttribute('aria-expanded')).toBe('true')
+    expect(document.querySelector('.h-56')).not.toBeNull()
+    expect(document.querySelector('.h-80')).not.toBeNull()
+
+    fireEvent.click(screen.getByText('Collapse all'))
+
+    expect(curveToggle.getAttribute('aria-expanded')).toBe('false')
+    expect(runToggle.getAttribute('aria-expanded')).toBe('false')
+    expect(document.querySelector('.h-56')).toBeNull()
+    expect(document.querySelector('.h-80')).toBeNull()
+
+    // A row can still be toggled by itself in between signals.
+    fireEvent.click(curveToggle)
+    expect(curveToggle.getAttribute('aria-expanded')).toBe('true')
+    expect(runToggle.getAttribute('aria-expanded')).toBe('false')
+  })
+
+  it('a missing linked curve/run still shows its message and never crashes, with no expand row', () => {
+    const missingBoth = report({
+      steps: [
+        { ...report().steps[2], curve_ids: ['missing-curve'] },
+        { ...report().steps[3], run_ids: ['missing-run'] },
+      ],
+    })
+    renderView(
+      <ReportView report={missingBoth} curves={[]} runs={[]} readOnly onPatch={undefined} />,
+    )
+    expect(screen.getByText(/missing-curve.*missing/)).toBeTruthy()
+    expect(screen.getByText(/missing-run.*missing/)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /missing-curve/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /missing-run/ })).toBeNull()
+  })
+
+  it('read-only mode shows no Unlink action on an expanded row', () => {
+    renderView(
+      <ReportView
+        report={reportWithLinkedItems()}
+        curves={[curve()]}
+        runs={[runSummary()]}
+        runDetails={{ r1: runDetail() }}
+        readOnly
+        onPatch={undefined}
+      />,
+    )
+    const toggle = screen.getByRole('button', { name: /Baseline sweep/ })
+    fireEvent.click(toggle)
+    const row = toggle.parentElement as HTMLElement
+    expect(within(row).getByText('Open')).toBeTruthy()
+    expect(within(row).queryByText('Unlink')).toBeNull()
   })
 })
