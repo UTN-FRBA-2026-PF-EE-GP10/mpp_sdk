@@ -18,9 +18,13 @@
 //!
 //! `ADC_VOUT` uses the same line: with a battery on the output, it gave the
 //! same raw code as `ADC_PWR` at the same voltage (596.6 against 596.7 at
-//! 3.974 V). Redo the fit after changing the divider range or the board:
-//! the `ADC cal:` log line gives one point per second (raw code against the
-//! INA229), and two supply voltages far apart are enough.
+//! 3.974 V).
+//!
+//! This line describes the RP2040's own ADC, not the divider ahead of it.
+//! Changing the divider range (jumpers + `ADC_DIVIDER_RANGE` in `main.rs`,
+//! see `docs/hardware_v1/calibration.md`) does not move this fit: the gain
+//! and zero stay valid. Redo this fit only on a different board, or after
+//! changing the Pico.
 
 /// Pin voltage per raw code, in microvolts x 100 (793.22 uV).
 const UV_X100_PER_CODE: u64 = 79_322;
@@ -34,4 +38,37 @@ pub fn raw_to_pin_mv(raw: u16) -> u16 {
     let above_zero_x100 = (raw as u64 * 100).saturating_sub(ZERO_CODE_X100);
     // x100 codes * (uV x100 per code) = uV x 10_000; / 10_000_000 = mV.
     (above_zero_x100 * UV_X100_PER_CODE / 10_000_000) as u16
+}
+
+/// Divider ratios (terminal mV per pin mV, x100), one per jumper range.
+///
+/// These come from the nominal resistor values on the divider
+/// (`firmware/pipico_board/README.md`'s range table): `(R_top + R_bottom) /
+/// R_bottom`, e.g. Low is `(75k + 10k) / 10k = 8.50`. They are separate
+/// from `raw_to_pin_mv` above: the divider sits ahead of the ADC pin and is
+/// a different part of the signal chain from the RP2040's own gain/zero.
+///
+/// The two-point check in `docs/hardware_v1/calibration.md` ("Changing the
+/// ADC range") measures the real ratio against a meter. If it is off by
+/// more than about 1% (1% resistor tolerance, stacked over three
+/// resistors, can do that), replace the nominal value here with the
+/// measured one - never adjust `UV_X100_PER_CODE`/`ZERO_CODE_X100` above to
+/// compensate for a divider error.
+pub const RATIO_LOW_X100: u32 = 850; // 1x 75k + 10k
+pub const RATIO_MID_X100: u32 = 1_600; // 2x 75k + 10k
+pub const RATIO_FULL_X100: u32 = 2_350; // 3x 75k + 10k
+
+/// Applies the jumper-selected divider ratio to a pin-mV reading
+/// (`raw_to_pin_mv`'s output), giving the voltage at the panel/output
+/// terminals. Saturates instead of wrapping: on `Full`, terminal readings
+/// above ~65.5 V (still within that range's ~75.6 V full scale) would
+/// otherwise overflow u16 silently.
+pub fn divider_to_actual_mv(range: crate::AdcDividerRange, pin_mv: u16) -> u16 {
+    let ratio_x100 = match range {
+        crate::AdcDividerRange::Full => RATIO_FULL_X100,
+        crate::AdcDividerRange::Mid => RATIO_MID_X100,
+        crate::AdcDividerRange::Low => RATIO_LOW_X100,
+    };
+    let mv = pin_mv as u32 * ratio_x100 / 100;
+    mv.min(u16::MAX as u32) as u16
 }

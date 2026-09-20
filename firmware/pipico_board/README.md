@@ -338,8 +338,11 @@ over the second, beside the INA229: one calibration point per line. See
   | `Mid`              | 1 (2x 75k remain)        | 160k/10k | ~51.5 V |
   | `Low`              | 2 (1x 75k remains)       | 85k/10k  | ~27.3 V |
 
-- **After changing the range**, redo the calibration (or at least check
-  `ADC_VOUT` against a meter): each range has its own divider resistors.
+- **After changing the range**, the ADC gain/zero fit above still applies -
+  it describes the RP2040's own ADC, not the divider. What changing the
+  range needs: move the jumpers, set `ADC_DIVIDER_RANGE` to match, reflash,
+  then check `ADC_VOUT`/`ADC_PWR` against a meter at two points. See
+  "Changing the ADC range" in `docs/hardware_v1/calibration.md`.
 
 ## Curve tracer
 
