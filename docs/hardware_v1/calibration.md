@@ -48,9 +48,11 @@ So the calibration matters most near 0 V and at low voltage. Measured on
 
 ## When to redo it
 
-- After you change the ADC range (`ADC_DIVIDER_RANGE` and its jumpers).
-  For example, `Mid` for two panels in series.
 - On a different board, or after you change the Pico.
+
+Changing the ADC range does **not** need a redo. The gain and zero
+describe the RP2040's own ADC, not the divider ahead of it. See "Changing
+the ADC range" below for what a range change does need.
 
 ## How to redo it (about 15 minutes)
 
@@ -104,3 +106,73 @@ two or three voltages. It must agree within about 50 mV.
     about 50 V at 10 % duty with 18 V in. To check V out while the converter
     switches, put a load resistor on the output (10 Ohm, 10 W) and use
     `scripts/duty_sweep.py`.
+
+## Changing the ADC range
+
+The board has three ranges: `Low`, `Mid`, `Full`. Each range trades full-scale
+voltage for ADC resolution. `Low` gives the most resolution but the lowest
+ceiling; `Full` gives the highest ceiling but the least resolution per volt.
+
+| Range | Full scale | When to use it |
+|-------|-----------|-----------------|
+| `Low` | about 27.3 V | one panel (the firmware setting today) |
+| `Mid` | about 51.5 V | two panels in series (about 44 V open-circuit) |
+| `Full` | about 75.6 V | highest input the board can see |
+
+This needs four steps: move the jumpers, set the constant, reflash, and
+check the result against a meter. It does **not** need a new gain/zero fit
+(see "When to redo it" above).
+
+### 1. Move the jumpers
+
+Both the input divider (feeds `ADC_PWR`) and the output divider (feeds
+`ADC_VOUT`) have three 75k resistors in series ahead of a 10k leg. Two of
+the three resistors, on each divider, can be bridged out with a jumper:
+
+- **Input**: `JP6` bridges out one 75k resistor, `JP7` bridges out another.
+  `JP9` is a fixed link between the input terminal and the rest of the
+  divider. Leave `JP9` shorted; it is not part of the range choice.
+- **Output**: `JP8` bridges out one 75k resistor, `JP13` bridges out
+  another. `JP10` is the equivalent fixed link on the output side. Leave
+  `JP10` shorted too.
+
+With no jumper fitted, a divider is in its `Full` range: that is how the
+board is built. These designators come from the "AnalogConverters" sheet of
+the schematic under `hardware/`.
+
+Short 0, 1, or 2 of `{JP6, JP7}` (input) and the same count of `{JP8,
+JP13}` (output) to pick the range:
+
+| Range | Input jumpers shorted | Output jumpers shorted |
+|-------|------------------------|--------------------------|
+| `Full` | none | none |
+| `Mid` | one of `JP6`/`JP7` (either) | one of `JP8`/`JP13` (either) |
+| `Low` | both `JP6` and `JP7` | both `JP8` and `JP13` |
+
+The two resistors on each side are the same value (75k, 1%), so it does not
+matter which one you bridge for `Mid`.
+
+### 2. Set the constant
+
+In `firmware/pipico_board/src/main.rs`, set `ADC_DIVIDER_RANGE` to match
+the jumpers you just set. This is not auto-sensed. The firmware logs the
+selected range once at boot as a cross-check.
+
+### 3. Reflash
+
+Build and flash (`cargo run --release` in `firmware/pipico_board`, see its
+README).
+
+### 4. Check the result
+
+Put a supply on the input, about 2 V, and read the `ADC cal:` log line
+against a meter. Then move the supply near the top of the new range (for
+example, about 25 V on `Low`) and check again. Expect agreement within
+about 1 %.
+
+If it is off by more than that, the range's divider ratio is slightly off
+(the 75k/10k resistors are 1% parts, and three of them stack). Adjust that
+range's ratio in `firmware/pipico_board/src/adc_cal.rs`
+(`RATIO_LOW_X100`/`RATIO_MID_X100`/`RATIO_FULL_X100`) to the measured
+value. Do not touch the gain or zero: those describe the RP2040's ADC, not
+the divider, and a range change does not affect them.

@@ -428,8 +428,8 @@ export default function App() {
       {showFullReminder && (
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-500/30 bg-amber-500/10 px-4 py-1.5 text-xs font-medium text-amber-800 dark:text-amber-300">
           <span>
-            Full setup: two panels reach ~34-44 V - switch the ADC range to Mid and recalibrate
-            (docs/hardware_v1/calibration.md).
+            Full setup: two panels reach ~34-44 V - switch the ADC range to Mid and check it
+            against a meter (docs/hardware_v1/calibration.md).
           </span>
           <button
             type="button"

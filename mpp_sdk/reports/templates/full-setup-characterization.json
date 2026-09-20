@@ -64,8 +64,8 @@
     {
       "id": "adc-range-mid-and-recalibration",
       "section": "Before energizing",
-      "title": "ADC range and calibration",
-      "instructions": "Switch the ADC range to Mid: two panels in series reach roughly 34-44 V, past the Low range. Recalibrate against the INA229 (see docs/hardware_v1/calibration.md). Pass: the range is Mid and calibration is complete.",
+      "title": "ADC range and check",
+      "instructions": "Switch the ADC range to Mid: two panels in series reach roughly 34-44 V, past the Low range. Check the ADC reading against a meter (see docs/hardware_v1/calibration.md, \"Changing the ADC range\"). Pass: the range is Mid and the check agrees with the meter within about 1%.",
       "kind": "check"
     },
     {

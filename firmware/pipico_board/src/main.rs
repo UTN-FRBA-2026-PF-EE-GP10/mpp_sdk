@@ -207,17 +207,11 @@ async fn onchip_adc_task(
 ) {
     use adc_cal::raw_to_pin_mv as raw_to_mv;
 
-    // Scales by the divider's total-to-bottom-leg (10k) ratio, matching
-    // the currently-shorted jumper state. Saturates instead of wrapping:
-    // on `Full`, inputs above ~65.5 V (still within that range's ~75.6 V
-    // full scale) would otherwise overflow u16 silently.
+    // Matches the currently-shorted jumper state. The ratio numbers and the
+    // saturating conversion live in adc_cal.rs, next to the rest of the ADC
+    // calibration.
     fn divider_to_actual_mv(adc_mv: u16) -> u16 {
-        let mv = match ADC_DIVIDER_RANGE {
-            AdcDividerRange::Full => adc_mv as u32 * 235 / 10, // 3x 75k + 10k
-            AdcDividerRange::Mid => adc_mv as u32 * 160 / 10,  // 2x 75k + 10k
-            AdcDividerRange::Low => adc_mv as u32 * 85 / 10,   // 1x 75k + 10k
-        };
-        mv.min(u16::MAX as u32) as u16
+        adc_cal::divider_to_actual_mv(ADC_DIVIDER_RANGE, adc_mv)
     }
 
     defmt::info!(
