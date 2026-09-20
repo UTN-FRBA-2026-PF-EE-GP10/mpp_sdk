@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "id": "hissuma-psf10mono",
+  "name": "Hissuma PSF10MONO",
+  "manufacturer": "Hissuma",
+  "model": "PSF10MONO",
+  "p_max_w": 10.0,
+  "voc": 17.0,
+  "isc": 0.79,
+  "vmp": 14.0,
+  "imp": 0.72,
+  "notes": "Single-panel values from harness/panel_config.py; the full bench setup runs two of these in series."
+}

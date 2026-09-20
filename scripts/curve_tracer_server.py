@@ -66,6 +66,7 @@ from mpp_sdk import IdealSingleDiode, MeasuredPanel, SEPICConverter, SimulatedSo
 from mpp_sdk.curves import MEASUREMENT_KINDS, CurveRecord, PanelSetup
 from mpp_sdk.curves import library as curve_library
 from mpp_sdk.curves.record import now_utc
+from mpp_sdk.panels import library as panel_library
 from mpp_sdk.runs import RunRecord
 from mpp_sdk.runs import library as run_library
 from mpp_sdk.runs.record import RunSample
@@ -805,6 +806,40 @@ class _SaveCurveRequest(BaseModel):
     notes: str = ""
 
 
+class _CreatePanelRequest(BaseModel):
+    """Body of `POST /api/panels`. `id` is never accepted here - it is
+    minted from `name` by `mpp_sdk.panels.library.create`, the same
+    "server mints the id" story `POST /api/save-curve` and
+    `POST /api/sessions` already follow."""
+
+    name: str
+    manufacturer: str = ""
+    model: str = ""
+    p_max_w: float | None = None
+    voc: float | None = None
+    isc: float | None = None
+    vmp: float | None = None
+    imp: float | None = None
+    notes: str = ""
+
+
+class _PatchPanelRequest(BaseModel):
+    """Body of `PATCH /api/panels/{id}`. Every field is optional - only
+    what's given changes. There is no way to explicitly clear a numeric
+    field back to null through this route, the same simplification
+    `_PatchSessionStepRequest.value` already makes."""
+
+    name: str | None = None
+    manufacturer: str | None = None
+    model: str | None = None
+    p_max_w: float | None = None
+    voc: float | None = None
+    isc: float | None = None
+    vmp: float | None = None
+    imp: float | None = None
+    notes: str | None = None
+
+
 class _CreateSessionRequest(BaseModel):
     """Body of `POST /api/sessions`. `fields` overrides the template's
     per-field defaults (e.g. the panel model) for keys given; any field
@@ -898,6 +933,20 @@ _CURVE_ID_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
 # stem, see SessionRecord's docstring for why it's stored in the body too).
 _SESSION_ID_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
 
+# Same scheme, same reasoning, for panel models - mpp_sdk/panels/library.py's
+# save() names files identically.
+_PANEL_ID_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
+
+# String bounds for POST/PATCH /api/panels - an operator types these by
+# hand (or a picker composes them), so a mistaken paste must not be able
+# to grow a library file without limit. Matches mpp_sdk/panels/record.py's
+# own bounds, checked again here so a bad request is rejected before it
+# ever reaches the library layer.
+_PANEL_NAME_MAX_LEN = 200
+_PANEL_MANUFACTURER_MAX_LEN = 200
+_PANEL_MODEL_MAX_LEN = 200
+_PANEL_NOTES_MAX_LEN = 2000
+
 # String/list size bounds for POST/PATCH /api/sessions - an operator types
 # these by hand, so a mistaken paste or a runaway client script must not
 # be able to grow a session file without limit.
@@ -976,6 +1025,66 @@ def _session_path(session_id: str) -> Path:
     if not path.exists():
         raise HTTPException(status_code=404, detail="session not found")
     return path
+
+
+def _panel_path(panel_id: str) -> Path:
+    """Resolve a URL-supplied panel model id to a file inside the panel
+    library directory, or raise the appropriate HTTPException - same
+    validated-id, directory-containment pattern as `_session_path`/
+    `_curve_path`/`_run_path` above (never a filesystem path taken
+    directly from the URL)."""
+    if not _PANEL_ID_RE.fullmatch(panel_id):
+        raise HTTPException(status_code=400, detail="invalid panel id")
+    directory = panel_library.default_dir()
+    path = (directory / f"{panel_id}.json").resolve()
+    if directory.resolve() not in path.parents:
+        raise HTTPException(status_code=400, detail="invalid panel id")
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="panel not found")
+    return path
+
+
+def _check_panel_fields(
+    *,
+    name: str | None,
+    manufacturer: str | None,
+    model: str | None,
+    notes: str | None,
+    p_max_w: float | None,
+    voc: float | None,
+    isc: float | None,
+    vmp: float | None,
+    imp: float | None,
+) -> None:
+    """Shared by POST and PATCH /api/panels: reject an oversized string or
+    a non-finite/non-positive number before it ever reaches the library
+    layer (which checks the same things again on write - belt and braces,
+    same reasoning as `_curve_path`'s directory-containment check)."""
+    if name is not None and len(name) > _PANEL_NAME_MAX_LEN:
+        raise HTTPException(
+            status_code=400, detail=f"name must be at most {_PANEL_NAME_MAX_LEN} characters"
+        )
+    if manufacturer is not None and len(manufacturer) > _PANEL_MANUFACTURER_MAX_LEN:
+        raise HTTPException(
+            status_code=400,
+            detail=f"manufacturer must be at most {_PANEL_MANUFACTURER_MAX_LEN} characters",
+        )
+    if model is not None and len(model) > _PANEL_MODEL_MAX_LEN:
+        raise HTTPException(
+            status_code=400, detail=f"model must be at most {_PANEL_MODEL_MAX_LEN} characters"
+        )
+    if notes is not None and len(notes) > _PANEL_NOTES_MAX_LEN:
+        raise HTTPException(
+            status_code=400, detail=f"notes must be at most {_PANEL_NOTES_MAX_LEN} characters"
+        )
+    numeric_fields = (("p_max_w", p_max_w), ("voc", voc), ("isc", isc), ("vmp", vmp), ("imp", imp))
+    for field_name, value in numeric_fields:
+        if value is None:
+            continue
+        if not math.isfinite(value) or value <= 0:
+            raise HTTPException(
+                status_code=400, detail=f"{field_name} must be a finite positive number"
+            )
 
 
 class _BatchDeleteRequest(BaseModel):
@@ -1070,6 +1179,13 @@ def create_app(
     run_requests = run_requests if run_requests is not None else queue.Queue()
     stop_event = stop_event if stop_event is not None else threading.Event()
     specs = {s.label.lower(): s for s in algorithm_specs()}
+
+    # Seeded once, here, rather than per-request: this is "first use" of
+    # the panel library for this server process. A file this writes is
+    # never touched again by this call, so an operator's later edit to a
+    # shipped panel (PATCH /api/panels/{id}) survives every future server
+    # restart - see mpp_sdk/panels/library.py's ensure_defaults_seeded.
+    panel_library.ensure_defaults_seeded()
 
     app = FastAPI(title="curve-tracer")
 
@@ -1185,6 +1301,124 @@ def create_app(
         path = curve_library.save(record)
         return {"path": str(path)}
 
+    @app.get("/api/panels")
+    def get_panels() -> list[dict]:
+        """List saved panel models. The shipped defaults (Luxen LN-10P,
+        Hissuma PSF10MONO) are seeded into the library once, at app
+        startup (see `panel_library.ensure_defaults_seeded` below) - by
+        the time any request reaches here they are ordinary library
+        entries, editable and deletable like any other."""
+        directory = panel_library.default_dir()
+        paths = sorted(directory.glob("*.json")) if directory.exists() else []
+        entries = []
+        for path in paths:
+            # Panel model files, like curve/run/session files, are
+            # hand-editable JSON - a single malformed one must not take
+            # the whole listing down (see get_curves for the same pattern).
+            try:
+                r = panel_library.load(path)
+                entries.append(r.to_dict())
+            except ValueError as exc:
+                entries.append({"id": path.stem, "path": str(path), "error": str(exc)})
+        return entries
+
+    @app.post("/api/panels")
+    def post_create_panel(body: _CreatePanelRequest) -> dict:
+        if not body.name.strip():
+            raise HTTPException(status_code=400, detail="name must not be empty")
+        _check_panel_fields(
+            name=body.name,
+            manufacturer=body.manufacturer,
+            model=body.model,
+            notes=body.notes,
+            p_max_w=body.p_max_w,
+            voc=body.voc,
+            isc=body.isc,
+            vmp=body.vmp,
+            imp=body.imp,
+        )
+        try:
+            record = panel_library.create(
+                name=body.name,
+                manufacturer=body.manufacturer,
+                model=body.model,
+                p_max_w=body.p_max_w,
+                voc=body.voc,
+                isc=body.isc,
+                vmp=body.vmp,
+                imp=body.imp,
+                notes=body.notes,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return record.to_dict()
+
+    @app.get("/api/panels/{panel_id}")
+    def get_panel(panel_id: str) -> dict:
+        path = _panel_path(panel_id)
+        try:
+            r = panel_library.load(path)
+        except ValueError as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+        return r.to_dict()
+
+    @app.patch("/api/panels/{panel_id}")
+    def patch_panel(panel_id: str, body: _PatchPanelRequest) -> dict:
+        """Partial update: only the fields given in the body change.
+        Written through `panel_library.update`, which replaces the file
+        atomically (temp file + `os.replace`) - editing a panel model
+        never rewrites a session that already snapshotted its old values
+        (see mpp_sdk/panels/library.py's module docstring)."""
+        path = _panel_path(panel_id)
+        try:
+            r = panel_library.load(path)
+        except ValueError as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+        if body.name is not None and not body.name.strip():
+            raise HTTPException(status_code=400, detail="name must not be empty")
+        _check_panel_fields(
+            name=body.name,
+            manufacturer=body.manufacturer,
+            model=body.model,
+            notes=body.notes,
+            p_max_w=body.p_max_w,
+            voc=body.voc,
+            isc=body.isc,
+            vmp=body.vmp,
+            imp=body.imp,
+        )
+
+        changes: dict = {}
+        if body.name is not None:
+            changes["name"] = body.name
+        if body.manufacturer is not None:
+            changes["manufacturer"] = body.manufacturer
+        if body.model is not None:
+            changes["model"] = body.model
+        if body.notes is not None:
+            changes["notes"] = body.notes
+        for field_name, value in (
+            ("p_max_w", body.p_max_w),
+            ("voc", body.voc),
+            ("isc", body.isc),
+            ("vmp", body.vmp),
+            ("imp", body.imp),
+        ):
+            if value is not None:
+                changes[field_name] = value
+
+        updated = replace(r, **changes)
+        try:
+            panel_library.update(updated)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return updated.to_dict()
+
+    @app.delete("/api/panels/{panel_id}", status_code=204)
+    def delete_panel(panel_id: str) -> None:
+        panel_library.delete(_panel_path(panel_id))
+
     @app.get("/api/session-templates")
     def get_session_templates() -> list[dict]:
         return [
@@ -1254,6 +1488,31 @@ def create_app(
         if unknown:
             raise HTTPException(status_code=400, detail=f"unknown field {unknown[0]!r}")
 
+    def _readonly_field_keys(template_id: str) -> set[str]:
+        # Data-driven, not a regex on the key name: a template's own
+        # FieldDef.readonly says which fields it snapshots (panel model
+        # Voc/Isc/Vmp/Imp today), so a future snapshot field is protected
+        # by declaring it there, not by a pattern match here that could
+        # miss it. Falls back to "nothing is read-only" for a session
+        # whose template was since removed - the field-existence check
+        # above already covers that session, this one is only extra
+        # protection on top for a template that still exists.
+        try:
+            template = get_session_template(template_id)
+        except KeyError:
+            return set()
+        return {fd.key for fd in template.field_defs if fd.readonly}
+
+    def _check_no_readonly_fields(fields: dict[str, str], readonly_keys: set[str]) -> None:
+        # This is what actually enforces "a session snapshots a panel
+        # model's values, it does not track them live" - the frontend
+        # only disables the input; without this check here, any other
+        # client could still PATCH a snapshotted field back to life (see
+        # patch_panel's docstring for the guarantee this backs).
+        locked = sorted(set(fields) & readonly_keys)
+        if locked:
+            raise HTTPException(status_code=400, detail=f"field {locked[0]!r} is read-only")
+
     def _check_linked_ids(ids: list[str], pattern: re.Pattern[str], kind: str) -> None:
         # Linked ids are stored, never opened as paths, but they must look
         # like real library ids so a session cannot grow without limit.
@@ -1319,6 +1578,7 @@ def create_app(
         if body.fields is not None:
             _check_field_lengths(body.fields)
             _check_field_keys(body.fields, set(r.fields))
+            _check_no_readonly_fields(body.fields, _readonly_field_keys(r.template_id))
             fields.update(body.fields)
 
         steps = list(r.steps)

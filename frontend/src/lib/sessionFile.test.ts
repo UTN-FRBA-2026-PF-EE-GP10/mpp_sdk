@@ -129,6 +129,34 @@ describe('buildSessionFile / parseSessionFile round trip', () => {
     expect(parsed.runs[0].record.samples.length).toBe(2)
   })
 
+  it('keeps an unset panel model snapshot unset through a session file, never 0, NaN or null', async () => {
+    // A panel model with an unset Vmp/Imp snapshots those two fields as
+    // empty strings (see lib/panels.ts); a session file must hand them
+    // back as the same empty strings.
+    const unset = session({
+      fields: {
+        panel: 'Acme A-1',
+        panel_model_voc: '21',
+        panel_model_isc: '',
+        panel_model_vmp: '',
+        panel_model_imp: '',
+      },
+    })
+    const built = buildSessionFile({
+      title: 'Unset snapshot',
+      setup: 'single',
+      curves: [],
+      runs: [],
+      session: unset,
+    })
+    const parsed = await readSessionFile(toFile(JSON.stringify(built)))
+
+    expect(parsed.session?.fields).toEqual(unset.fields)
+    for (const key of ['panel_model_isc', 'panel_model_vmp', 'panel_model_imp']) {
+      expect(parsed.session?.fields[key]).toBe('')
+    }
+  })
+
   it('carries missing ids through the round trip', () => {
     const built = buildSessionFile({
       title: 't',

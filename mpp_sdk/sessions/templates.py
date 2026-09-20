@@ -25,20 +25,41 @@ class FieldDef:
     """One setup field a template asks for - the workbench renders these
     as a small editable table (Part C). `default` seeds a new session's
     `fields[key]` (e.g. the panel model on this bench doesn't change
-    often, so a new session should not start with it blank)."""
+    often, so a new session should not start with it blank).
+
+    `readonly` marks a field a session only ever gets written into once,
+    at creation, by something other than the operator typing into the
+    table - a panel model snapshot (`panel_model_voc` and friends) is the
+    only case today. It is the data `PATCH /api/sessions/{id}` checks
+    against to refuse an edit to one of these fields after the fact (see
+    `curve_tracer_server.py`'s `patch_session`) - declared here, on the
+    template, rather than inferred from the key's shape, so a future
+    snapshot field can't be forgotten by a regex that doesn't know about
+    it yet."""
 
     key: str
     label: str
     hint: str = ""
     default: str = ""
+    readonly: bool = False
 
     def to_dict(self) -> dict:
-        return {"key": self.key, "label": self.label, "hint": self.hint, "default": self.default}
+        return {
+            "key": self.key,
+            "label": self.label,
+            "hint": self.hint,
+            "default": self.default,
+            "readonly": self.readonly,
+        }
 
     @classmethod
     def from_dict(cls, d: dict) -> FieldDef:
         return cls(
-            key=d["key"], label=d["label"], hint=d.get("hint", ""), default=d.get("default", "")
+            key=d["key"],
+            label=d["label"],
+            hint=d.get("hint", ""),
+            default=d.get("default", ""),
+            readonly=bool(d.get("readonly", False)),
         )
 
 

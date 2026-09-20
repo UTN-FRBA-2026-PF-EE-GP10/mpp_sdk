@@ -139,6 +139,25 @@ describe('sessionToMarkdown', () => {
     expect(md).toContain('Matched within 0.1 V.')
   })
 
+  it('renders an unset panel model snapshot as a dash, never 0, NaN, null or undefined', () => {
+    const unset = session({
+      fields: {
+        panel: 'Acme A-1',
+        panel_model_voc: '21',
+        panel_model_vmp: '',
+        panel_model_imp: '',
+      },
+    })
+    const md = sessionToMarkdown(unset, [curve()], [runSummary()], { r1: runDetail() })
+    expect(md).toContain('- Panel model voc: 21')
+    expect(md).toContain('- Panel model vmp: -')
+    expect(md).toContain('- Panel model imp: -')
+    const fieldLines = md.split('\n').filter((line) => line.startsWith('- Panel'))
+    for (const line of fieldLines) {
+      expect(line).not.toMatch(/NaN|undefined|null|: 0$/)
+    }
+  })
+
   it('shows a missing linked curve without crashing', () => {
     const md = sessionToMarkdown(session(), [curve()], [runSummary()], { r1: runDetail() })
     expect(md).toContain('missing-curve: missing (deleted)')

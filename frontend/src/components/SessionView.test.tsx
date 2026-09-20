@@ -214,6 +214,50 @@ describe('SessionView - editing (online)', () => {
     expect(onPatch).toHaveBeenCalledWith({ steps: [{ id: 'panel-label-voc', value: 23.5 }] })
   })
 
+  it('keeps a snapshotted panel-model field read-only even while the session is otherwise editable', async () => {
+    const onPatch = vi.fn(async (patch: SessionPatch) => ({ ...session(), ...patch }) as SessionRecord)
+    const withSnapshot = session({
+      fields: {
+        panel: 'Luxen LN-10P, 10 W',
+        panel_model_voc: '23.5',
+        operator: 'bench operator',
+      },
+    })
+    renderView(
+      <SessionView session={withSnapshot} curves={[curve()]} runs={[runSummary()]} readOnly={false} onPatch={onPatch} />,
+    )
+
+    const snapshotInput = screen.getByDisplayValue('23.5') as HTMLInputElement
+    expect(snapshotInput.readOnly).toBe(true)
+    // A field the picker never touched (operator) stays editable.
+    const operatorInput = screen.getByDisplayValue('bench operator') as HTMLInputElement
+    expect(operatorInput.readOnly).toBe(false)
+  })
+
+  it('shows an unset panel model snapshot as an empty read-only box, never 0, NaN, null or undefined', () => {
+    const unset = session({
+      fields: {
+        panel: 'Acme A-1',
+        panel_model_voc: '21',
+        panel_model_vmp: '',
+        panel_model_imp: '',
+      },
+    })
+    renderView(
+      <SessionView session={unset} curves={[curve()]} runs={[runSummary()]} readOnly={false} onPatch={vi.fn()} />,
+    )
+
+    const fieldsList = screen.getByText('Panel model vmp').closest('dl') as HTMLElement
+    const inputs = Array.from(fieldsList.querySelectorAll('input'))
+    expect(inputs.map((i) => i.value)).toEqual(['Acme A-1', '21', '', ''])
+    for (const label of ['Panel model vmp', 'Panel model imp']) {
+      const input = screen.getByText(label).closest('div')?.querySelector('input') as HTMLInputElement
+      expect(input.value).toBe('')
+      expect(input.readOnly).toBe(true)
+    }
+    expect(fieldsList.textContent).not.toMatch(/NaN|undefined|null/)
+  })
+
   it('links a picked curve immediately, appending to the existing links', async () => {
     const onPatch = vi.fn(async (patch: SessionPatch) => ({ ...session(), ...patch }) as SessionRecord)
     const c2 = curve({ id: 'c2', label: 'Second sweep' })

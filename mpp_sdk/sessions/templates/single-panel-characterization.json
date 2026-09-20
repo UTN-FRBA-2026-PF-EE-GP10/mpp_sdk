@@ -1,15 +1,43 @@
 {
   "schema": 1,
   "template_id": "single-panel-characterization",
-  "version": 1,
+  "version": 3,
   "title": "Single panel characterization",
   "setup": "single",
   "field_defs": [
     {
       "key": "panel",
-      "label": "Panel",
-      "hint": "Panel model and rating, from its label.",
+      "label": "Panel model",
+      "hint": "Picked from the panel model library, or typed by hand.",
       "default": "Luxen LN-10P, 10 W, 12 V"
+    },
+    {
+      "key": "panel_model_voc",
+      "label": "Panel model Voc",
+      "hint": "Snapshotted from the picked panel model - read-only.",
+      "default": "",
+      "readonly": true
+    },
+    {
+      "key": "panel_model_isc",
+      "label": "Panel model Isc",
+      "hint": "Snapshotted from the picked panel model - read-only.",
+      "default": "",
+      "readonly": true
+    },
+    {
+      "key": "panel_model_vmp",
+      "label": "Panel model Vmp",
+      "hint": "Snapshotted from the picked panel model - read-only.",
+      "default": "",
+      "readonly": true
+    },
+    {
+      "key": "panel_model_imp",
+      "label": "Panel model Imp",
+      "hint": "Snapshotted from the picked panel model - read-only.",
+      "default": "",
+      "readonly": true
     },
     {
       "key": "light_source",
@@ -55,38 +83,6 @@
     }
   ],
   "steps": [
-    {
-      "id": "panel-label-voc",
-      "section": "Before energizing",
-      "title": "Panel label Voc",
-      "instructions": "Read Voc (open-circuit voltage) from the panel label. Record it here.",
-      "kind": "number",
-      "unit": "V"
-    },
-    {
-      "id": "panel-label-isc",
-      "section": "Before energizing",
-      "title": "Panel label Isc",
-      "instructions": "Read Isc (short-circuit current) from the panel label. Record it here.",
-      "kind": "number",
-      "unit": "A"
-    },
-    {
-      "id": "panel-label-vmp",
-      "section": "Before energizing",
-      "title": "Panel label Vmp",
-      "instructions": "Read Vmp (voltage at maximum power) from the panel label. Record it here.",
-      "kind": "number",
-      "unit": "V"
-    },
-    {
-      "id": "panel-label-imp",
-      "section": "Before energizing",
-      "title": "Panel label Imp",
-      "instructions": "Read Imp (current at maximum power) from the panel label. Record it here.",
-      "kind": "number",
-      "unit": "A"
-    },
     {
       "id": "firmware-config",
       "section": "Before energizing",

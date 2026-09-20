@@ -12,6 +12,7 @@ import pytest
 from mpp_sdk.sessions import (
     STEP_KINDS,
     STEP_STATUSES,
+    FieldDef,
     OpenQuestion,
     SessionRecord,
     SessionStep,
@@ -92,9 +93,11 @@ def test_single_panel_template_covers_the_appendix_checklist():
         "Runs (curve as reference, 10 s, starting duty 0.5)",
         "After",
     }
-    # The four panel-label readings from the appendix.
-    assert {"panel-label-voc", "panel-label-isc", "panel-label-vmp", "panel-label-imp"} <= {
-        s.id for s in template.steps
+    # The four panel-label readings are no longer steps - they're
+    # snapshotted from a picked panel model straight into these fields
+    # (mpp_sdk.panels), read-only in the workbench.
+    assert {"panel_model_voc", "panel_model_isc", "panel_model_vmp", "panel_model_imp"} <= {
+        f.key for f in template.field_defs
     }
     question_ids = {q.id for q in template.open_questions}
     assert "temperature" in question_ids
@@ -216,6 +219,34 @@ def test_full_setup_template_defaults_to_the_hissuma_panels():
     fields = {f.key: f.default for f in get_template("full-setup-characterization").field_defs}
     assert "Hissuma PSF10MONO" in fields["panel_a"]
     assert "Hissuma PSF10MONO" in fields["panel_b"]
+
+
+def test_full_setup_template_has_snapshot_fields_for_both_panels():
+    keys = {f.key for f in get_template("full-setup-characterization").field_defs}
+    for prefix in ("panel_a", "panel_b"):
+        assert {
+            f"{prefix}_model_voc",
+            f"{prefix}_model_isc",
+            f"{prefix}_model_vmp",
+            f"{prefix}_model_imp",
+        } <= keys
+
+
+def test_field_def_is_editable_unless_the_template_says_readonly():
+    assert FieldDef.from_dict({"key": "operator", "label": "Operator"}).readonly is False
+    locked = FieldDef.from_dict({"key": "x", "label": "X", "readonly": True})
+    assert locked.readonly is True
+    assert FieldDef.from_dict(locked.to_dict()) == locked
+
+
+def test_shipped_templates_declare_exactly_the_panel_model_numbers_readonly():
+    """`PATCH /api/sessions/{id}` locks whatever a template marks
+    `readonly` - so the snapshot fields must be marked there, and nothing
+    else (the free-text panel label stays editable)."""
+    single = {f.key for f in get_template("single-panel-characterization").field_defs if f.readonly}
+    assert single == {f"panel_model_{q}" for q in ("voc", "isc", "vmp", "imp")}
+    full = {f.key for f in get_template("full-setup-characterization").field_defs if f.readonly}
+    assert full == {f"panel_{p}_model_{q}" for p in "ab" for q in ("voc", "isc", "vmp", "imp")}
 
 
 # ------------------------------------------------------------------
