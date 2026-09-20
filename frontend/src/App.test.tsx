@@ -415,16 +415,16 @@ describe('App setup mode', () => {
     renderApp()
 
     // Full is the default - nothing was switched into, so no reminder yet.
-    expect(screen.queryByText(/switch the ADC range to Mid/)).toBeNull()
+    expect(screen.queryByText(/Move the ADC jumpers to Mid/)).toBeNull()
 
     fireEvent.click(screen.getByTitle(/Setup: Full/i)) // -> single
-    expect(screen.queryByText(/switch the ADC range to Mid/)).toBeNull()
+    expect(screen.queryByText(/Move the ADC jumpers to Mid/)).toBeNull()
 
     fireEvent.click(screen.getByTitle(/Setup: Single/i)) // -> full
-    expect(screen.getByText(/switch the ADC range to Mid/)).toBeTruthy()
+    expect(screen.getByText(/Move the ADC jumpers to Mid/)).toBeTruthy()
 
     fireEvent.click(screen.getByText('Dismiss'))
-    expect(screen.queryByText(/switch the ADC range to Mid/)).toBeNull()
+    expect(screen.queryByText(/Move the ADC jumpers to Mid/)).toBeNull()
   })
 
   it('keeps panel B when remeasuring a two-panel curve while Single setup is active', async () => {
