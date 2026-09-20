@@ -17,12 +17,25 @@ export function useDebouncedPatch(
 ) {
   const pendingRef = useRef<ReportPatch>({})
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Read by the unmount cleanup, which must not re-run every time a new
+  // onPatch identity arrives - that would flush on every render instead.
+  const onPatchRef = useRef(onPatch)
+  onPatchRef.current = onPatch
   const [state, setState] = useState<SaveState>('idle')
   const [error, setError] = useState<string | null>(null)
 
   useEffect(
     () => () => {
       if (timerRef.current) clearTimeout(timerRef.current)
+      // Typing and then leaving (another report, another view) inside the
+      // debounce window would otherwise lose the edit without a word. The
+      // request is fired and forgotten: there is no component left to show
+      // a saved or failed state on.
+      const pending = pendingRef.current
+      pendingRef.current = {}
+      if (onPatchRef.current && !isEmptyPatch(pending)) {
+        onPatchRef.current(pending).catch((e) => console.error('saving the report failed', e))
+      }
     },
     [],
   )

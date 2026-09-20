@@ -1,8 +1,7 @@
-// Statistics over a report step's repeats - Addendum (2026-09-19) of plan
-// 042: "the report view computes the statistics in the browser, over the
-// linked items of one step". Pure functions, no fetching - callers hand in
-// curves/run samples already in hand, the same "already-loaded" contract
-// ReportView itself follows.
+// Statistics over the repeats of one report step: the median and spread of
+// a result, rather than one sample of it. Pure functions, no fetching -
+// callers hand in curves and run samples already in hand, the same
+// "already-loaded" contract ReportView itself follows.
 
 import { mppPoint } from '@/lib/curveMath'
 import type { RunSample } from '@/lib/runs'
@@ -81,10 +80,13 @@ export function curveStepStats(records: CurveRecord[]): CurveStepStats {
 export interface RunMetrics {
   /** Power at the end of the run (last sample's V*I) - what the
    * controller was actually holding when it stopped. */
+  /** Mean power over the last fifth of the run - what the algorithm ended
+   * up holding. A single last sample is a poor answer: P&O dithers around
+   * the MPP for ever, so the final sample lands anywhere in that swing. */
   heldPower: number
   /** heldPower / P(MPP_th) - `null` with no reference curve to grade
-   * against (mirrors RunReadouts's own ratio, at the run's last sample
-   * instead of the playback cursor). */
+   * against (the same ratio RunReadouts shows, over the run's tail instead
+   * of at the playback cursor). */
   pOverMppTh: number | null
   /** Seconds (run-relative, like runPlayback.ts's runDuration) from the
    * start until power enters - and stays within - 5% of MPP_th, mirroring
@@ -95,13 +97,22 @@ export interface RunMetrics {
 
 const SETTLING_BAND = 0.05
 
+/** Share of the run averaged for the held power. A fifth is long enough to
+ * cover several P&O periods and short enough to exclude the approach. */
+const HELD_TAIL_FRACTION = 0.2
+
+function heldPowerOf(samples: RunSample[]): number {
+  const count = Math.max(1, Math.round(samples.length * HELD_TAIL_FRACTION))
+  const tail = samples.slice(samples.length - count)
+  return tail.reduce((sum, s) => sum + s.v * s.i, 0) / tail.length
+}
+
 /** `null` for an empty sample series. `mppTh` is the reference curve's
  * maximum-power point (curveMath.mppPoint over its points) - pass `null`
  * when the run has no reference curve (see runPlayback.findCurveForRun). */
 export function runMetrics(samples: RunSample[], mppTh: CurvePoint | null): RunMetrics | null {
   if (samples.length === 0) return null
-  const last = samples[samples.length - 1]
-  const heldPower = last.v * last.i
+  const heldPower = heldPowerOf(samples)
   const pTh = mppTh ? mppTh.v * mppTh.i : 0
   if (!mppTh || pTh <= 0) {
     return { heldPower, pOverMppTh: null, timeToConvergeS: null }

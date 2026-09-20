@@ -1,8 +1,8 @@
 // Builds a downloadable file from a report already in hand (GET
 // /api/reports/{id}, plus the curves/runs it links) - no server round
-// trip, same reasoning as curveExport.ts. Markdown, not HTML: "a readable
-// summary" (plan 042 Part C) that is also useful pasted into a lab
-// notebook or a PR description.
+// trip, same reasoning as curveExport.ts. Markdown, not HTML: a readable
+// summary that is also useful pasted into a lab notebook or a PR
+// description.
 
 import { sanitizeFilenamePart } from '@/lib/curveExport'
 import { curveMetrics, curveStepStats, runMetrics, runStepStats, type Stats } from '@/lib/reportStats'

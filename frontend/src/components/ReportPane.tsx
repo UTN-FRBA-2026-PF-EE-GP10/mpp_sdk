@@ -12,7 +12,8 @@ import type { CurveRecord } from '@/types'
  * linked run a step's statistics need, and turns edits from ReportView
  * back into PATCH requests. ReportView itself never talks to the API -
  * see its own doc comment on why - so this split is what keeps it
- * reusable for the session-file view mode plan 042 Part D adds later.
+ * reusable for the session-file view mode, which renders a report with no
+ * server at all.
  */
 export function ReportPane({
   id,

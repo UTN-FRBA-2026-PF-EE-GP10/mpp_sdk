@@ -36,8 +36,7 @@ import type { CurveRecord } from '@/types'
  * header to open questions. Takes the report plus every curve/run it might
  * need to render already loaded, and makes no fetch of its own (not even
  * for the template - see `humanizeKey`'s use as a field-label fallback):
- * a future session-file view mode (plan 042 Part D) renders this straight
- * from an imported file, with no server at all, by supplying the same
+ * a session-file view mode can render this straight from an imported file, with no server at all, by supplying the same
  * props from the file's own bundled records instead of a live fetch.
  *
  * Mutations go out through `onPatch` (debounced here - see

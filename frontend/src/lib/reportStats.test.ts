@@ -119,7 +119,25 @@ describe('runMetrics', () => {
     expect(m.timeToConvergeS).toBeNull()
   })
 
-  it('computes P / MPP_th off the last sample', () => {
+  it('averages the run tail instead of trusting one last sample', () => {
+    // Ten samples: a low approach, then a dither of 9 W and 11 W around
+    // 10 W. The last sample alone would read 11 W.
+    const dither: [number, number, number][] = [
+      [0, 1, 1],
+      [1, 2, 1],
+      [2, 9, 1],
+      [3, 11, 1],
+      [4, 9, 1],
+      [5, 11, 1],
+      [6, 9, 1],
+      [7, 11, 1],
+      [8, 9, 1],
+      [9, 11, 1],
+    ]
+    expect(runMetrics(samples(dither), null)!.heldPower).toBeCloseTo(10)
+  })
+
+  it('computes P / MPP_th off the run tail', () => {
     const mppTh = { v: 14, i: 0.5 } // P_th = 7
     const m = runMetrics(samples([[0, 14, 0.5]]), mppTh)!
     expect(m.heldPower).toBeCloseTo(7)
