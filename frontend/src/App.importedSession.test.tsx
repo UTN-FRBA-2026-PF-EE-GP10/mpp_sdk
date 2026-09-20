@@ -2,11 +2,11 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { CaptureModeProvider } from '@/components/CaptureModeProvider'
-import { SessionProvider } from '@/components/SessionProvider'
+import { ImportedSessionProvider } from '@/components/ImportedSessionProvider'
 import { SetupModeProvider } from '@/components/SetupModeProvider'
 import { ThemeProvider } from '@/components/ThemeProvider'
 import { UnitsProvider } from '@/components/UnitsProvider'
-import { buildSessionFile, readOnlyReasonText, type SessionFile } from '@/lib/session'
+import { buildSessionFile, readOnlyReasonText, type SessionFile } from '@/lib/sessionFile'
 import type { CurveRecord } from '@/types'
 
 // Same reasoning as App.test.tsx: this suite is about view mode's data
@@ -16,7 +16,7 @@ vi.mock('@/lib/api', () => ({
   fetchCurves: vi.fn(),
   fetchMeasurementKinds: vi.fn(() => Promise.resolve([])),
   fetchRuns: vi.fn(),
-  fetchReports: vi.fn(() => Promise.resolve([])),
+  fetchSessions: vi.fn(() => Promise.resolve([])),
   saveCurve: vi.fn(),
   startSweep: vi.fn(),
   startDemoSweep: vi.fn(),
@@ -66,7 +66,7 @@ function liveCurve(): CurveRecord {
   }
 }
 
-function testSession(): SessionFile {
+function testSessionFile(): SessionFile {
   return buildSessionFile({
     title: 'Imported test session',
     setup: 'single',
@@ -124,9 +124,9 @@ function renderApp() {
       <UnitsProvider>
         <SetupModeProvider>
           <CaptureModeProvider>
-            <SessionProvider>
+            <ImportedSessionProvider>
               <App />
-            </SessionProvider>
+            </ImportedSessionProvider>
           </CaptureModeProvider>
         </SetupModeProvider>
       </UnitsProvider>
@@ -138,11 +138,11 @@ function fileInput(): HTMLInputElement {
   return document.querySelector('input[type="file"]') as HTMLInputElement
 }
 
-async function importSession(session: SessionFile) {
-  const file = new File([JSON.stringify(session)], 'session.mppsession.json', {
+async function importSessionFile(file: SessionFile) {
+  const asFile = new File([JSON.stringify(file)], 'session.mppsession.json', {
     type: 'application/json',
   })
-  fireEvent.change(fileInput(), { target: { files: [file] } })
+  fireEvent.change(fileInput(), { target: { files: [asFile] } })
   await screen.findByText(/Viewing:/)
 }
 
@@ -153,7 +153,7 @@ describe('importing a session file (view mode)', () => {
     renderApp()
     await screen.findByText('Live bench curve')
 
-    await importSession(testSession())
+    await importSessionFile(testSessionFile())
 
     expect(screen.getByText(/Viewing: Imported test session/)).toBeTruthy()
     // Auto-navigated to the session's own curve, not left on the (now
@@ -172,12 +172,12 @@ describe('importing a session file (view mode)', () => {
     fireEvent.click(await screen.findByTitle('Capture a replacement, then remove this curve'))
     await screen.findByText(/Remeasure pending/)
 
-    await importSession(testSession())
+    await importSessionFile(testSessionFile())
 
     expect(screen.queryByText(/Remeasure pending/)).toBeNull()
   })
 
-  it('never fetches curves/runs again while a session is active', async () => {
+  it('never fetches curves/runs again while an imported session is active', async () => {
     vi.mocked(fetchCurves).mockResolvedValue([liveCurve()])
     vi.mocked(fetchRuns).mockResolvedValue([])
     renderApp()
@@ -185,7 +185,7 @@ describe('importing a session file (view mode)', () => {
     expect(fetchCurves).toHaveBeenCalledTimes(1)
     expect(fetchRuns).toHaveBeenCalledTimes(1)
 
-    await importSession(testSession())
+    await importSessionFile(testSessionFile())
     await new Promise((r) => setTimeout(r, 50))
 
     expect(fetchCurves).toHaveBeenCalledTimes(1)
@@ -196,7 +196,7 @@ describe('importing a session file (view mode)', () => {
     vi.mocked(fetchCurves).mockResolvedValue([])
     vi.mocked(fetchRuns).mockResolvedValue([])
     renderApp()
-    await importSession(testSession())
+    await importSessionFile(testSessionFile())
 
     const deleteTitle = readOnlyReasonText('view', 'Deleting')
     const deleteButton = await screen.findByTitle(deleteTitle)
@@ -216,7 +216,7 @@ describe('importing a session file (view mode)', () => {
     vi.mocked(fetchCurves).mockResolvedValue([])
     vi.mocked(fetchRuns).mockResolvedValue([])
     renderApp()
-    await importSession(testSession())
+    await importSessionFile(testSessionFile())
 
     // Runs starts expanded by default (Sidebar's own initial state).
     fireEvent.click(screen.getByText('2026-09-19').closest('button')!)
@@ -234,7 +234,7 @@ describe('importing a session file (view mode)', () => {
     renderApp()
     await screen.findByText('Live bench curve')
 
-    await importSession(testSession())
+    await importSessionFile(testSessionFile())
     expect(screen.getByText('Session curve')).toBeTruthy()
 
     fireEvent.click(screen.getByText('Close'))

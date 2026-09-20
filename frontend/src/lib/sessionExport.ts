@@ -1,23 +1,27 @@
-// Builds a downloadable file from a report already in hand (GET
-// /api/reports/{id}, plus the curves/runs it links) - no server round
-// trip, same reasoning as curveExport.ts. Markdown, not HTML: a readable
-// summary that is also useful pasted into a lab notebook or a PR
-// description.
+// Builds a downloadable file from a session already in hand (GET
+// /api/sessions/{id}, plus the curves/runs it links) - no server round
+// trip, same reasoning as curveExport.ts. Two different downloads live
+// here: a readable Markdown/JSON summary of the session record alone
+// (sessionToMarkdown/sessionToJson - useful pasted into a lab notebook or
+// a PR description), and a full session *file* bundle (sessionExportFile)
+// that also carries every curve/run the session's steps link, for someone
+// else to open read-only (see lib/sessionFile.ts).
 
 import { sanitizeFilenamePart } from '@/lib/curveExport'
-import { curveMetrics, curveStepStats, runMetrics, runStepStats, type Stats } from '@/lib/reportStats'
+import { buildSessionFile, downloadSessionFile, type SessionFile, type SessionMissing } from '@/lib/sessionFile'
+import { curveMetrics, curveStepStats, runMetrics, runStepStats, type Stats } from '@/lib/sessionStats'
 import { findCurveForRun } from '@/lib/runPlayback'
-import { groupStepsBySection, humanizeKey, type ReportRecord, type ReportStep } from '@/lib/reports'
+import { groupStepsBySection, humanizeKey, type SessionRecord, type SessionStep } from '@/lib/sessions'
 import type { RunDetail, RunSummary } from '@/lib/runs'
 import type { CurveRecord } from '@/types'
 
-export function reportFilenameBase(report: Pick<ReportRecord, 'title' | 'created_at'>): string {
-  const stamp = report.created_at.replace(/[:.]/g, '-')
-  return `${sanitizeFilenamePart(report.title)}_${stamp}`
+export function sessionFilenameBase(session: Pick<SessionRecord, 'title' | 'created_at'>): string {
+  const stamp = session.created_at.replace(/[:.]/g, '-')
+  return `${sanitizeFilenamePart(session.title)}_${stamp}`
 }
 
-export function reportToJson(report: ReportRecord): string {
-  return JSON.stringify(report, null, 2)
+export function sessionToJson(session: SessionRecord): string {
+  return JSON.stringify(session, null, 2)
 }
 
 function fmt(n: number): string {
@@ -60,7 +64,7 @@ function runLine(id: string, runs: RunSummary[], curves: CurveRecord[], detail: 
 }
 
 function stepMarkdown(
-  step: ReportStep,
+  step: SessionStep,
   curves: CurveRecord[],
   runs: RunSummary[],
   runDetails: Record<string, RunDetail>,
@@ -110,33 +114,32 @@ function stepMarkdown(
 }
 
 /**
- * A readable Markdown summary of the report: every step, its value/notes,
+ * A readable Markdown summary of the session: every step, its value/notes,
  * linked items' key numbers, and the per-step repeat statistics (same
- * numbers ReportView shows inline) - the Addendum's "same table in the
- * Markdown download".
+ * numbers SessionView shows inline).
  */
-export function reportToMarkdown(
-  report: ReportRecord,
+export function sessionToMarkdown(
+  session: SessionRecord,
   curves: CurveRecord[],
   runs: RunSummary[],
   runDetails: Record<string, RunDetail> = {},
 ): string {
   const lines: string[] = []
-  lines.push(`# ${report.title}`)
+  lines.push(`# ${session.title}`)
   lines.push('')
-  lines.push(`Template: ${report.template_id} (setup: ${report.setup})`)
-  lines.push(`Created: ${report.created_at}`)
-  lines.push(`Updated: ${report.updated_at}`)
-  lines.push(`Progress: ${report.steps.filter((s) => s.status === 'done').length} / ${report.steps.length}`)
+  lines.push(`Template: ${session.template_id} (setup: ${session.setup})`)
+  lines.push(`Created: ${session.created_at}`)
+  lines.push(`Updated: ${session.updated_at}`)
+  lines.push(`Progress: ${session.steps.filter((s) => s.status === 'done').length} / ${session.steps.length}`)
   lines.push('')
   lines.push('## Setup')
   lines.push('')
-  for (const [key, value] of Object.entries(report.fields)) {
+  for (const [key, value] of Object.entries(session.fields)) {
     lines.push(`- ${humanizeKey(key)}: ${value || '-'}`)
   }
   lines.push('')
 
-  for (const group of groupStepsBySection(report.steps)) {
+  for (const group of groupStepsBySection(session.steps)) {
     lines.push(`## ${group.section}`)
     lines.push('')
     for (const step of group.steps) {
@@ -145,10 +148,10 @@ export function reportToMarkdown(
     }
   }
 
-  if (report.open_questions.length > 0) {
+  if (session.open_questions.length > 0) {
     lines.push('## Open questions')
     lines.push('')
-    for (const q of report.open_questions) {
+    for (const q of session.open_questions) {
       lines.push(`- ${q.text}`)
       lines.push(`  Answer: ${q.answer || '-'}`)
     }
@@ -173,19 +176,78 @@ function triggerDownload(content: string, mime: string, filename: string): void 
   }
 }
 
-export function downloadReportJson(report: ReportRecord): void {
-  triggerDownload(reportToJson(report), 'application/json', `${reportFilenameBase(report)}.json`)
+export function downloadSessionJson(session: SessionRecord): void {
+  triggerDownload(sessionToJson(session), 'application/json', `${sessionFilenameBase(session)}.json`)
 }
 
-export function downloadReportMarkdown(
-  report: ReportRecord,
+export function downloadSessionMarkdown(
+  session: SessionRecord,
   curves: CurveRecord[],
   runs: RunSummary[],
   runDetails: Record<string, RunDetail> = {},
 ): void {
   triggerDownload(
-    reportToMarkdown(report, curves, runs, runDetails),
+    sessionToMarkdown(session, curves, runs, runDetails),
     'text/markdown',
-    `${reportFilenameBase(report)}.md`,
+    `${sessionFilenameBase(session)}.md`,
   )
+}
+
+/**
+ * Builds a session *file* (lib/sessionFile.ts) from a session already in
+ * hand: the session record itself, plus every curve and run its steps
+ * link, deduplicated by id. `curves` is the full, already-loaded curve
+ * library (always available in full - see SessionView's own doc comment),
+ * so a linked id resolves straight from it; `runDetails` is keyed by run
+ * id and expected to already carry full samples for every linked run
+ * SessionPane could fetch (see its own effect) - a linked id absent from
+ * both `curves` and `runDetails` is either deleted from the library or
+ * still loading, and either way is named in the file's `missing` rather
+ * than silently dropped.
+ */
+export function sessionExportFile(
+  session: SessionRecord,
+  curves: CurveRecord[],
+  runDetails: Record<string, RunDetail>,
+): SessionFile {
+  const curveIds = new Set<string>()
+  const runIds = new Set<string>()
+  for (const step of session.steps) {
+    for (const id of step.curve_ids) curveIds.add(id)
+    for (const id of step.run_ids) runIds.add(id)
+  }
+
+  const foundCurves: CurveRecord[] = []
+  const missingCurveIds: string[] = []
+  for (const id of curveIds) {
+    const record = curves.find((c) => c.id === id)
+    if (record) foundCurves.push(record)
+    else missingCurveIds.push(id)
+  }
+
+  const foundRuns: RunDetail[] = []
+  const missingRunIds: string[] = []
+  for (const id of runIds) {
+    const detail = runDetails[id]
+    if (detail) foundRuns.push(detail)
+    else missingRunIds.push(id)
+  }
+
+  const missing: SessionMissing = { curve_ids: missingCurveIds, run_ids: missingRunIds }
+  return buildSessionFile({
+    title: session.title,
+    setup: session.setup,
+    curves: foundCurves,
+    runs: foundRuns,
+    session,
+    missing,
+  })
+}
+
+export function downloadSessionExportFile(
+  session: SessionRecord,
+  curves: CurveRecord[],
+  runDetails: Record<string, RunDetail>,
+): void {
+  downloadSessionFile(sessionExportFile(session, curves, runDetails))
 }

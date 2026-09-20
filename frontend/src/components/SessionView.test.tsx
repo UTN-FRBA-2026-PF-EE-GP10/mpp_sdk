@@ -1,13 +1,13 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ReportView } from './ReportView'
+import { SessionView } from './SessionView'
 import { ThemeProvider } from '@/components/ThemeProvider'
 import { UnitsProvider } from '@/components/UnitsProvider'
-import type { ReportPatch, ReportRecord } from '@/lib/reports'
+import type { SessionPatch, SessionRecord } from '@/lib/sessions'
 import type { RunDetail, RunSummary } from '@/lib/runs'
 import type { CurveRecord } from '@/types'
 
-// ReportView renders CurveChart (react-chartjs-2/chart.js) for every
+// SessionView renders CurveChart (react-chartjs-2/chart.js) for every
 // linked curve - jsdom has no canvas backend, so this is stubbed the same
 // way App.test.tsx/CurveWorkbench.test.tsx already do for the same reason.
 vi.mock('react-chartjs-2', () => ({ Line: () => null }))
@@ -76,7 +76,7 @@ function runDetail(overrides: Partial<RunDetail> = {}): RunDetail {
   }
 }
 
-function report(overrides: Partial<ReportRecord> = {}): ReportRecord {
+function session(overrides: Partial<SessionRecord> = {}): SessionRecord {
   return {
     id: 'r-panel-a',
     title: 'Panel A alone under the lamp',
@@ -158,10 +158,10 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-describe('ReportView - document', () => {
+describe('SessionView - document', () => {
   it('renders the header, progress, setup fields, sections and open questions', () => {
     renderView(
-      <ReportView report={report()} curves={[curve()]} runs={[runSummary()]} readOnly onPatch={undefined} />,
+      <SessionView session={session()} curves={[curve()]} runs={[runSummary()]} readOnly onPatch={undefined} />,
     )
     expect(screen.getByText('Panel A alone under the lamp')).toBeTruthy()
     expect(screen.getByText(/single-panel-characterization/)).toBeTruthy()
@@ -174,18 +174,18 @@ describe('ReportView - document', () => {
 
   it('shows a missing linked curve without crashing, alongside the found one', () => {
     renderView(
-      <ReportView report={report()} curves={[curve()]} runs={[runSummary()]} readOnly onPatch={undefined} />,
+      <SessionView session={session()} curves={[curve()]} runs={[runSummary()]} readOnly onPatch={undefined} />,
     )
     expect(screen.getByText(/missing-curve.*missing/)).toBeTruthy()
     expect(screen.getByText('Baseline sweep')).toBeTruthy()
   })
 })
 
-describe('ReportView - editing (online)', () => {
+describe('SessionView - editing (online)', () => {
   it('sends a status change immediately, not debounced', async () => {
-    const onPatch = vi.fn(async (patch: ReportPatch) => ({ ...report(), ...patch }) as ReportRecord)
+    const onPatch = vi.fn(async (patch: SessionPatch) => ({ ...session(), ...patch }) as SessionRecord)
     renderView(
-      <ReportView report={report()} curves={[curve()]} runs={[runSummary()]} readOnly={false} onPatch={onPatch} />,
+      <SessionView session={session()} curves={[curve()]} runs={[runSummary()]} readOnly={false} onPatch={onPatch} />,
     )
     const select = within(stepCard('firmware-config')).getByLabelText('Step status')
     fireEvent.change(select, { target: { value: 'done' } })
@@ -197,9 +197,9 @@ describe('ReportView - editing (online)', () => {
 
   it('debounces a typed number value and sends the merged patch once', async () => {
     vi.useFakeTimers()
-    const onPatch = vi.fn(async (patch: ReportPatch) => ({ ...report(), ...patch }) as ReportRecord)
+    const onPatch = vi.fn(async (patch: SessionPatch) => ({ ...session(), ...patch }) as SessionRecord)
     renderView(
-      <ReportView report={report()} curves={[curve()]} runs={[runSummary()]} readOnly={false} onPatch={onPatch} />,
+      <SessionView session={session()} curves={[curve()]} runs={[runSummary()]} readOnly={false} onPatch={onPatch} />,
     )
     const input = within(stepCard('panel-label-voc')).getByLabelText(/Value/)
     fireEvent.change(input, { target: { value: '2' } })
@@ -215,11 +215,11 @@ describe('ReportView - editing (online)', () => {
   })
 
   it('links a picked curve immediately, appending to the existing links', async () => {
-    const onPatch = vi.fn(async (patch: ReportPatch) => ({ ...report(), ...patch }) as ReportRecord)
+    const onPatch = vi.fn(async (patch: SessionPatch) => ({ ...session(), ...patch }) as SessionRecord)
     const c2 = curve({ id: 'c2', label: 'Second sweep' })
     renderView(
-      <ReportView
-        report={report()}
+      <SessionView
+        session={session()}
         curves={[curve(), c2]}
         runs={[runSummary()]}
         readOnly={false}
@@ -240,9 +240,9 @@ describe('ReportView - editing (online)', () => {
   })
 
   it('unlinks a missing curve via its "Remove link" action', async () => {
-    const onPatch = vi.fn(async (patch: ReportPatch) => ({ ...report(), ...patch }) as ReportRecord)
+    const onPatch = vi.fn(async (patch: SessionPatch) => ({ ...session(), ...patch }) as SessionRecord)
     renderView(
-      <ReportView report={report()} curves={[curve()]} runs={[runSummary()]} readOnly={false} onPatch={onPatch} />,
+      <SessionView session={session()} curves={[curve()]} runs={[runSummary()]} readOnly={false} onPatch={onPatch} />,
     )
     const card = stepCard('baseline-curve')
     fireEvent.click(within(card).getByText('Remove link'))
@@ -255,12 +255,12 @@ describe('ReportView - editing (online)', () => {
   })
 
   it('"Link most recent run" links the newest run by captured_at', async () => {
-    const onPatch = vi.fn(async (patch: ReportPatch) => ({ ...report(), ...patch }) as ReportRecord)
+    const onPatch = vi.fn(async (patch: SessionPatch) => ({ ...session(), ...patch }) as SessionRecord)
     const older = runSummary({ id: 'r-old', captured_at: '2026-09-01T00:00:00Z' })
     const newer = runSummary({ id: 'r-new', captured_at: '2026-09-19T16:10:00Z' })
     renderView(
-      <ReportView
-        report={report()}
+      <SessionView
+        session={session()}
         curves={[curve()]}
         runs={[older, newer]}
         readOnly={false}
@@ -277,9 +277,9 @@ describe('ReportView - editing (online)', () => {
 
   it('debounces an open-question answer', async () => {
     vi.useFakeTimers()
-    const onPatch = vi.fn(async (patch: ReportPatch) => ({ ...report(), ...patch }) as ReportRecord)
+    const onPatch = vi.fn(async (patch: SessionPatch) => ({ ...session(), ...patch }) as SessionRecord)
     renderView(
-      <ReportView report={report()} curves={[curve()]} runs={[runSummary()]} readOnly={false} onPatch={onPatch} />,
+      <SessionView session={session()} curves={[curve()]} runs={[runSummary()]} readOnly={false} onPatch={onPatch} />,
     )
     const box = screen.getByLabelText('Answer: How to record temperature?')
     fireEvent.change(box, { target: { value: 'Contact thermometer.' } })
@@ -292,35 +292,35 @@ describe('ReportView - editing (online)', () => {
   })
 
   it('shows a saving/saved indicator around a patch', async () => {
-    let resolvePatch!: (r: ReportRecord) => void
+    let resolvePatch!: (r: SessionRecord) => void
     const onPatch = vi.fn(
-      () => new Promise<ReportRecord>((resolve) => { resolvePatch = resolve }),
+      () => new Promise<SessionRecord>((resolve) => { resolvePatch = resolve }),
     )
     renderView(
-      <ReportView report={report()} curves={[curve()]} runs={[runSummary()]} readOnly={false} onPatch={onPatch} />,
+      <SessionView session={session()} curves={[curve()]} runs={[runSummary()]} readOnly={false} onPatch={onPatch} />,
     )
     const select = within(stepCard('firmware-config')).getByLabelText('Step status')
     fireEvent.change(select, { target: { value: 'done' } })
 
     await waitFor(() => expect(screen.getByText('Saving...')).toBeTruthy())
-    resolvePatch(report())
+    resolvePatch(session())
     await waitFor(() => expect(screen.getByText('Saved')).toBeTruthy())
   })
 })
 
-describe('ReportView - statistics', () => {
+describe('SessionView - statistics', () => {
   it('shows per-step curve statistics over the found linked curves', () => {
-    const twoLinked = report({
+    const twoLinked = session({
       steps: [
         {
-          ...report().steps[2],
+          ...session().steps[2],
           curve_ids: ['c1', 'c2'],
         },
       ],
     })
     renderView(
-      <ReportView
-        report={twoLinked}
+      <SessionView
+        session={twoLinked}
         curves={[curve({ id: 'c1', voc: 19 }), curve({ id: 'c2', voc: 21 })]}
         runs={[]}
         readOnly
@@ -332,17 +332,17 @@ describe('ReportView - statistics', () => {
   })
 
   it('shows run statistics (held power, P/MPP_th) when run detail is supplied', () => {
-    const runStep = report({
+    const runStep = session({
       steps: [
         {
-          ...report().steps[3],
+          ...session().steps[3],
           run_ids: ['r1'],
         },
       ],
     })
     renderView(
-      <ReportView
-        report={runStep}
+      <SessionView
+        session={runStep}
         curves={[curve()]}
         runs={[runSummary()]}
         runDetails={{ r1: runDetail() }}
@@ -355,25 +355,25 @@ describe('ReportView - statistics', () => {
   })
 
   it('shows a missing linked run without crashing', () => {
-    const runStep = report({
+    const runStep = session({
       steps: [
         {
-          ...report().steps[3],
+          ...session().steps[3],
           run_ids: ['does-not-exist'],
         },
       ],
     })
     renderView(
-      <ReportView report={runStep} curves={[curve()]} runs={[]} readOnly onPatch={undefined} />,
+      <SessionView session={runStep} curves={[curve()]} runs={[]} readOnly onPatch={undefined} />,
     )
     expect(screen.getByText(/does-not-exist.*missing/)).toBeTruthy()
   })
 })
 
-describe('ReportView - read-only (demo)', () => {
+describe('SessionView - read-only (demo)', () => {
   it('shows a Read-only badge and disables every edit control', () => {
     renderView(
-      <ReportView report={report()} curves={[curve()]} runs={[runSummary()]} readOnly onPatch={undefined} />,
+      <SessionView session={session()} curves={[curve()]} runs={[runSummary()]} readOnly onPatch={undefined} />,
     )
     expect(screen.getByText('Read-only')).toBeTruthy()
     const select = within(stepCard('firmware-config')).getByLabelText('Step status') as HTMLSelectElement
@@ -388,11 +388,11 @@ describe('ReportView - read-only (demo)', () => {
   it('never calls onPatch even if a discrete action were somehow triggered (guarded by disabling in the DOM)', () => {
     const onPatch = vi.fn()
     renderView(
-      <ReportView report={report()} curves={[curve()]} runs={[runSummary()]} readOnly onPatch={onPatch} />,
+      <SessionView session={session()} curves={[curve()]} runs={[runSummary()]} readOnly onPatch={onPatch} />,
     )
     // onPatch is ignored entirely in read-only mode (useDebouncedPatch is
     // constructed with `undefined` whenever readOnly is true - see
-    // ReportView's own onPatch wiring).
+    // SessionView's own onPatch wiring).
     expect(onPatch).not.toHaveBeenCalled()
   })
 })
@@ -400,10 +400,10 @@ describe('ReportView - read-only (demo)', () => {
 // A linked curve/run used to render as an always-open ~190x96px chart -
 // too small to read at the bench. These cover the fix: each linked item
 // is now a one-line row that expands on click.
-describe('ReportView - expandable linked items', () => {
-  function reportWithLinkedItems(): ReportRecord {
-    const base = report()
-    return report({
+describe('SessionView - expandable linked items', () => {
+  function sessionWithLinkedItems(): SessionRecord {
+    const base = session()
+    return session({
       steps: [
         { ...base.steps[2], curve_ids: ['c1'] }, // baseline-curve
         { ...base.steps[3], run_ids: ['r1'] }, // po-run
@@ -412,13 +412,13 @@ describe('ReportView - expandable linked items', () => {
   }
 
   it('expands a row that was linked after Expand all, rather than leaving it alone collapsed', () => {
-    const base = report()
-    const oneCurve = report({ steps: [{ ...base.steps[2], curve_ids: ['c1'] }] })
-    const twoCurves = report({ steps: [{ ...base.steps[2], curve_ids: ['c1', 'c2'] }] })
+    const base = session()
+    const oneCurve = session({ steps: [{ ...base.steps[2], curve_ids: ['c1'] }] })
+    const twoCurves = session({ steps: [{ ...base.steps[2], curve_ids: ['c1', 'c2'] }] })
     const second = curve({ id: 'c2', label: 'Second sweep' })
     const view = renderView(
-      <ReportView
-        report={oneCurve}
+      <SessionView
+        session={oneCurve}
         curves={[curve(), second]}
         runs={[]}
         runDetails={{}}
@@ -430,8 +430,8 @@ describe('ReportView - expandable linked items', () => {
 
     view.rerender(
       wrapped(
-        <ReportView
-          report={twoCurves}
+        <SessionView
+          session={twoCurves}
           curves={[curve(), second]}
           runs={[]}
           runDetails={{}}
@@ -445,10 +445,10 @@ describe('ReportView - expandable linked items', () => {
     expect(fresh.getAttribute('aria-expanded')).toBe('true')
   })
 
-  it('expands every row before the browser prints, so a printed report has its charts', () => {
+  it('expands every row before the browser prints, so a printed session has its charts', () => {
     renderView(
-      <ReportView
-        report={reportWithLinkedItems()}
+      <SessionView
+        session={sessionWithLinkedItems()}
         curves={[curve()]}
         runs={[runSummary()]}
         runDetails={{ r1: runDetail() }}
@@ -469,8 +469,8 @@ describe('ReportView - expandable linked items', () => {
 
   it('a curve row starts collapsed, showing its key numbers, then expands and collapses on click', () => {
     renderView(
-      <ReportView
-        report={reportWithLinkedItems()}
+      <SessionView
+        session={sessionWithLinkedItems()}
         curves={[curve()]}
         runs={[runSummary()]}
         runDetails={{ r1: runDetail() }}
@@ -503,8 +503,8 @@ describe('ReportView - expandable linked items', () => {
 
   it('a run row starts collapsed, showing algorithm/duration/held power, then expands to its trace', () => {
     renderView(
-      <ReportView
-        report={reportWithLinkedItems()}
+      <SessionView
+        session={sessionWithLinkedItems()}
         curves={[curve()]}
         runs={[runSummary()]}
         runDetails={{ r1: runDetail() }}
@@ -534,8 +534,8 @@ describe('ReportView - expandable linked items', () => {
 
   it('"Expand all" opens every linked item and "Collapse all" closes them again', () => {
     renderView(
-      <ReportView
-        report={reportWithLinkedItems()}
+      <SessionView
+        session={sessionWithLinkedItems()}
         curves={[curve()]}
         runs={[runSummary()]}
         runDetails={{ r1: runDetail() }}
@@ -569,14 +569,14 @@ describe('ReportView - expandable linked items', () => {
   })
 
   it('a missing linked curve/run still shows its message and never crashes, with no expand row', () => {
-    const missingBoth = report({
+    const missingBoth = session({
       steps: [
-        { ...report().steps[2], curve_ids: ['missing-curve'] },
-        { ...report().steps[3], run_ids: ['missing-run'] },
+        { ...session().steps[2], curve_ids: ['missing-curve'] },
+        { ...session().steps[3], run_ids: ['missing-run'] },
       ],
     })
     renderView(
-      <ReportView report={missingBoth} curves={[]} runs={[]} readOnly onPatch={undefined} />,
+      <SessionView session={missingBoth} curves={[]} runs={[]} readOnly onPatch={undefined} />,
     )
     expect(screen.getByText(/missing-curve.*missing/)).toBeTruthy()
     expect(screen.getByText(/missing-run.*missing/)).toBeTruthy()
@@ -586,8 +586,8 @@ describe('ReportView - expandable linked items', () => {
 
   it('read-only mode shows no Unlink action on an expanded row', () => {
     renderView(
-      <ReportView
-        report={reportWithLinkedItems()}
+      <SessionView
+        session={sessionWithLinkedItems()}
         curves={[curve()]}
         runs={[runSummary()]}
         runDetails={{ r1: runDetail() }}

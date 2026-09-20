@@ -1,21 +1,21 @@
-// Batches ReportView's edits behind a short debounce so fast typing (a
+// Batches SessionView's edits behind a short debounce so fast typing (a
 // notes box, a number field) doesn't fire one PATCH per keystroke. A
 // discrete action (a status button, a link/unlink) can flush right away
 // with `sendNow` instead of waiting out the debounce. Edits landing inside
-// the same window merge into one request (mergeReportPatch) rather than
+// the same window merge into one request (mergeSessionPatch) rather than
 // racing each other or overwriting one another's change.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { isEmptyPatch, mergeReportPatch, type ReportPatch, type ReportRecord } from '@/lib/reports'
+import { isEmptyPatch, mergeSessionPatch, type SessionPatch, type SessionRecord } from '@/lib/sessions'
 
 export type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 
 const DEBOUNCE_MS = 600
 
 export function useDebouncedPatch(
-  onPatch: ((patch: ReportPatch) => Promise<ReportRecord>) | undefined,
+  onPatch: ((patch: SessionPatch) => Promise<SessionRecord>) | undefined,
 ) {
-  const pendingRef = useRef<ReportPatch>({})
+  const pendingRef = useRef<SessionPatch>({})
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Read by the unmount cleanup, which must not re-run every time a new
   // onPatch identity arrives - that would flush on every render instead.
@@ -27,14 +27,14 @@ export function useDebouncedPatch(
   useEffect(
     () => () => {
       if (timerRef.current) clearTimeout(timerRef.current)
-      // Typing and then leaving (another report, another view) inside the
+      // Typing and then leaving (another session, another view) inside the
       // debounce window would otherwise lose the edit without a word. The
       // request is fired and forgotten: there is no component left to show
       // a saved or failed state on.
       const pending = pendingRef.current
       pendingRef.current = {}
       if (onPatchRef.current && !isEmptyPatch(pending)) {
-        onPatchRef.current(pending).catch((e) => console.error('saving the report failed', e))
+        onPatchRef.current(pending).catch((e) => console.error('saving the session failed', e))
       }
     },
     [],
@@ -61,8 +61,8 @@ export function useDebouncedPatch(
   /** Queues `patch`, merging with anything already pending, and (re)starts
    * the debounce timer - for edits from typing. */
   const schedule = useCallback(
-    (patch: ReportPatch) => {
-      pendingRef.current = mergeReportPatch(pendingRef.current, patch)
+    (patch: SessionPatch) => {
+      pendingRef.current = mergeSessionPatch(pendingRef.current, patch)
       if (timerRef.current) clearTimeout(timerRef.current)
       timerRef.current = setTimeout(flush, DEBOUNCE_MS)
     },
@@ -72,8 +72,8 @@ export function useDebouncedPatch(
   /** Queues `patch` and sends immediately - for a discrete click (status,
    * link/unlink) that should not wait out the debounce. */
   const sendNow = useCallback(
-    (patch: ReportPatch) => {
-      pendingRef.current = mergeReportPatch(pendingRef.current, patch)
+    (patch: SessionPatch) => {
+      pendingRef.current = mergeSessionPatch(pendingRef.current, patch)
       flush()
     },
     [flush],

@@ -1,7 +1,7 @@
 import { ChevronDown, ChevronRight, ClipboardList, History, LineChart, Plus, X } from 'lucide-react'
 import { type ReactNode, useState } from 'react'
 import { Dialog, DialogBackdrop, DialogPanel, DialogPortal, DialogTitle } from '@/components/ui/dialog'
-import { progressLabel, type ReportSummary } from '@/lib/reports'
+import { progressLabel, type SessionSummary } from '@/lib/sessions'
 import { cn } from '@/lib/utils'
 import type { RunDateGroup } from '@/lib/runs'
 import { getMeasurementKindInfo } from '@/types'
@@ -10,8 +10,8 @@ export type Selection =
   | { root: 'measure' }
   | { root: 'curves'; kind: string }
   | { root: 'runs'; date: string }
-  | { root: 'new-report' }
-  | { root: 'report'; id: string }
+  | { root: 'new-session' }
+  | { root: 'session'; id: string }
 
 function NavRow({
   label,
@@ -93,30 +93,30 @@ function SidebarNav({
   kinds,
   countsByKind,
   runGroups,
-  reports,
-  canCreateReport,
+  sessions,
+  canCreateSession,
   curvesOpen,
   setCurvesOpen,
   runsOpen,
   setRunsOpen,
-  reportsOpen,
-  setReportsOpen,
+  sessionsOpen,
+  setSessionsOpen,
 }: {
   selection: Selection
   choose: (selection: Selection) => void
   kinds: string[]
   countsByKind: Map<string, number>
   runGroups: RunDateGroup[]
-  reports: ReportSummary[]
-  /** Hidden in demo mode - see App.tsx's note on why reports are never
+  sessions: SessionSummary[]
+  /** Hidden in demo mode - see App.tsx's note on why sessions are never
    * written there (the demo fixture is the only one shown, read-only). */
-  canCreateReport: boolean
+  canCreateSession: boolean
   curvesOpen: boolean
   setCurvesOpen: (updater: (v: boolean) => boolean) => void
   runsOpen: boolean
   setRunsOpen: (updater: (v: boolean) => boolean) => void
-  reportsOpen: boolean
-  setReportsOpen: (updater: (v: boolean) => boolean) => void
+  sessionsOpen: boolean
+  setSessionsOpen: (updater: (v: boolean) => boolean) => void
 }) {
   return (
     <>
@@ -177,34 +177,34 @@ function SidebarNav({
       )}
 
       <SectionHeader
-        label="Reports"
-        expanded={reportsOpen}
-        onToggle={() => setReportsOpen((v) => !v)}
+        label="Sessions"
+        expanded={sessionsOpen}
+        onToggle={() => setSessionsOpen((v) => !v)}
         icon={<ClipboardList className="size-4 shrink-0 text-muted-foreground" />}
       />
-      {reportsOpen && (
+      {sessionsOpen && (
         <div className="flex flex-col gap-1">
-          {canCreateReport && (
+          {canCreateSession && (
             <NavRow
-              label="New report"
+              label="New session"
               indent
-              selected={selection.root === 'new-report'}
-              onClick={() => choose({ root: 'new-report' })}
+              selected={selection.root === 'new-session'}
+              onClick={() => choose({ root: 'new-session' })}
               trailing={<Plus className="size-3.5 shrink-0 text-muted-foreground" />}
             />
           )}
-          {reports.length === 0 ? (
-            <p className="px-3 py-1.5 pl-8 text-xs text-muted-foreground">No reports yet.</p>
+          {sessions.length === 0 ? (
+            <p className="px-3 py-1.5 pl-8 text-xs text-muted-foreground">No sessions yet.</p>
           ) : (
-            reports.map((r) => (
+            sessions.map((s) => (
               <NavRow
-                key={r.id}
-                label={r.title || 'Untitled report'}
+                key={s.id}
+                label={s.title || 'Untitled session'}
                 indent
-                selected={selection.root === 'report' && selection.id === r.id}
-                onClick={() => choose({ root: 'report', id: r.id })}
+                selected={selection.root === 'session' && selection.id === s.id}
+                onClick={() => choose({ root: 'session', id: s.id })}
                 trailing={
-                  <span className="text-xs text-muted-foreground">{progressLabel(r)}</span>
+                  <span className="text-xs text-muted-foreground">{progressLabel(s)}</span>
                 }
               />
             ))
@@ -221,8 +221,8 @@ export function Sidebar({
   kinds,
   countsByKind,
   runGroups,
-  reports,
-  canCreateReport,
+  sessions,
+  canCreateSession,
   mobileOpen,
   onCloseMobile,
 }: {
@@ -231,14 +231,14 @@ export function Sidebar({
   kinds: string[]
   countsByKind: Map<string, number>
   runGroups: RunDateGroup[]
-  reports: ReportSummary[]
-  canCreateReport: boolean
+  sessions: SessionSummary[]
+  canCreateSession: boolean
   mobileOpen: boolean
   onCloseMobile: () => void
 }) {
   const [curvesOpen, setCurvesOpen] = useState(true)
   const [runsOpen, setRunsOpen] = useState(true)
-  const [reportsOpen, setReportsOpen] = useState(true)
+  const [sessionsOpen, setSessionsOpen] = useState(true)
 
   // Closing the drawer on every pick (desktop's onCloseMobile is a no-op
   // since it's already closed there) keeps mobile behaving like a normal
@@ -254,14 +254,14 @@ export function Sidebar({
     kinds,
     countsByKind,
     runGroups,
-    reports,
-    canCreateReport,
+    sessions,
+    canCreateSession,
     curvesOpen,
     setCurvesOpen,
     runsOpen,
     setRunsOpen,
-    reportsOpen,
-    setReportsOpen,
+    sessionsOpen,
+    setSessionsOpen,
   }
 
   return (

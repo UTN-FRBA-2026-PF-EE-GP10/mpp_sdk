@@ -1,20 +1,20 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
-import { SessionProvider } from './SessionProvider'
-import { buildSessionFile, useSession } from '@/lib/session'
+import { ImportedSessionProvider } from './ImportedSessionProvider'
+import { buildSessionFile, useImportedSession } from '@/lib/sessionFile'
 
 afterEach(cleanup)
 
 function Probe() {
-  const session = useSession()
+  const importedSession = useImportedSession()
   return (
     <div>
-      <span data-testid="active">{String(session.active)}</span>
-      <span data-testid="title">{session.title ?? ''}</span>
-      <span data-testid="curve-count">{session.curves.length}</span>
+      <span data-testid="active">{String(importedSession.active)}</span>
+      <span data-testid="title">{importedSession.title ?? ''}</span>
+      <span data-testid="curve-count">{importedSession.curves.length}</span>
       <button
         onClick={() =>
-          session.enter(
+          importedSession.enter(
             buildSessionFile({
               title: 'A test session',
               setup: 'single',
@@ -42,26 +42,26 @@ function Probe() {
       >
         enter
       </button>
-      <button onClick={session.close}>close</button>
+      <button onClick={importedSession.close}>close</button>
     </div>
   )
 }
 
-describe('SessionProvider', () => {
+describe('ImportedSessionProvider', () => {
   it('starts inactive', () => {
     render(
-      <SessionProvider>
+      <ImportedSessionProvider>
         <Probe />
-      </SessionProvider>,
+      </ImportedSessionProvider>,
     )
     expect(screen.getByTestId('active').textContent).toBe('false')
   })
 
-  it('activates on enter and exposes the session content', () => {
+  it('activates on enter and exposes the imported session content', () => {
     render(
-      <SessionProvider>
+      <ImportedSessionProvider>
         <Probe />
-      </SessionProvider>,
+      </ImportedSessionProvider>,
     )
     fireEvent.click(screen.getByText('enter'))
     expect(screen.getByTestId('active').textContent).toBe('true')
@@ -69,11 +69,11 @@ describe('SessionProvider', () => {
     expect(screen.getByTestId('curve-count').textContent).toBe('1')
   })
 
-  it('close clears the session back to inactive', () => {
+  it('close clears the imported session back to inactive', () => {
     render(
-      <SessionProvider>
+      <ImportedSessionProvider>
         <Probe />
-      </SessionProvider>,
+      </ImportedSessionProvider>,
     )
     fireEvent.click(screen.getByText('enter'))
     fireEvent.click(screen.getByText('close'))
@@ -81,7 +81,7 @@ describe('SessionProvider', () => {
     expect(screen.getByTestId('curve-count').textContent).toBe('0')
   })
 
-  it('useSession fails safe (inactive) outside a provider, rather than throwing', () => {
+  it('useImportedSession fails safe (inactive) outside a provider, rather than throwing', () => {
     render(<Probe />)
     expect(screen.getByTestId('active').textContent).toBe('false')
   })

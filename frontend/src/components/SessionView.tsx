@@ -9,31 +9,35 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useDebouncedPatch } from '@/hooks/useDebouncedPatch'
 import { formatCapturedAt } from '@/lib/format'
-import { downloadReportJson, downloadReportMarkdown } from '@/lib/reportExport'
+import {
+  downloadSessionExportFile,
+  downloadSessionJson,
+  downloadSessionMarkdown,
+} from '@/lib/sessionExport'
 import {
   curveMetrics,
   curveStepStats,
   runMetrics,
   runStepStats,
   type Stats,
-} from '@/lib/reportStats'
+} from '@/lib/sessionStats'
 import {
   groupStepsBySection,
   humanizeKey,
   progressLabel,
   STEP_STATUSES,
-  type ReportPatch,
-  type ReportRecord,
-  type ReportStep,
-  type ReportStepPatch,
+  type SessionPatch,
+  type SessionRecord,
+  type SessionStep,
+  type SessionStepPatch,
   type StepStatus,
-} from '@/lib/reports'
+} from '@/lib/sessions'
 import { findCurveForRun, referenceCurveMessage } from '@/lib/runPlayback'
 import { useUnits } from '@/lib/units'
 import type { RunDetail, RunSummary } from '@/lib/runs'
 import type { CurveRecord } from '@/types'
 
-/** A click on "Expand all"/"Collapse all" in the report header - each
+/** A click on "Expand all"/"Collapse all" in the session header - each
  * linked-item row is its own local expand/collapse state (per the design:
  * not persisted, not a store), but bumping `token` here is how one click
  * reaches every row at once. `token` changing is the signal; `expanded`
@@ -66,32 +70,33 @@ function useRowExpansion(signal: ExpandAllSignal): [boolean, () => void] {
 }
 
 /**
- * The main pane for one measurement report - a readable document from
- * header to open questions. Takes the report plus every curve/run it might
- * need to render already loaded, and makes no fetch of its own (not even
- * for the template - see `humanizeKey`'s use as a field-label fallback):
- * a session-file view mode can render this straight from an imported file, with no server at all, by supplying the same
- * props from the file's own bundled records instead of a live fetch.
+ * The main pane for one bench session - a readable document from header to
+ * open questions. Takes the session plus every curve/run it might need to
+ * render already loaded, and makes no fetch of its own (not even for the
+ * template - see `humanizeKey`'s use as a field-label fallback): an
+ * imported session file's view mode can render this straight from the
+ * file, with no server at all, by supplying the same props from the
+ * file's own bundled records instead of a live fetch.
  *
  * Mutations go out through `onPatch` (debounced here - see
- * hooks/useDebouncedPatch.ts) and `onDeleteReport`, never called directly
- * against the API: the container (ReportPane) owns the network, this
+ * hooks/useDebouncedPatch.ts) and `onDeleteSession`, never called directly
+ * against the API: the container (SessionPane) owns the network, this
  * component owns the document.
  */
-export interface ReportViewProps {
-  report: ReportRecord
+export interface SessionViewProps {
+  session: SessionRecord
   curves: CurveRecord[]
   runs: RunSummary[]
   /** Full run detail (with samples), keyed by run id - needed to compute
    * a run step's held power / P-over-MPP_th / time-to-converge. An id
    * with no entry here renders its per-run numbers as "-" rather than
    * blocking the rest of the step; the container fills this in
-   * progressively (see ReportPane) or, for an imported session file,
+   * progressively (see SessionPane) or, for an imported session file,
    * supplies it all up front with no fetch at all. */
   runDetails?: Record<string, RunDetail>
   readOnly: boolean
-  onPatch?: (patch: ReportPatch) => Promise<ReportRecord>
-  onDeleteReport?: () => Promise<void>
+  onPatch?: (patch: SessionPatch) => Promise<SessionRecord>
+  onDeleteSession?: () => Promise<void>
   /** Fires after a run is deleted from the embedded run player - lets the
    * container refresh its own curve/run lists. Never fires in read-only
    * mode (RunPlayerDialog's own delete button is disabled there). */
@@ -107,16 +112,16 @@ function SaveIndicator({ state, error }: { state: string; error: string | null }
   return <span className="text-xs text-muted-foreground">Saved</span>
 }
 
-export function ReportView({
-  report,
+export function SessionView({
+  session,
   curves,
   runs,
   runDetails = {},
   readOnly,
   onPatch,
-  onDeleteReport,
+  onDeleteSession,
   onLibraryChanged,
-}: ReportViewProps) {
+}: SessionViewProps) {
   const { schedule, sendNow, state, error } = useDebouncedPatch(readOnly ? undefined : onPatch)
   const [openCurve, setOpenCurve] = useState<CurveRecord | null>(null)
   const [openRun, setOpenRun] = useState<RunSummary | null>(null)
@@ -125,7 +130,7 @@ export function ReportView({
   const [expandAllSignal, setExpandAllSignal] = useState<ExpandAllSignal>(INITIAL_EXPAND_SIGNAL)
 
   // A collapsed row has no chart in the DOM at all, so Ctrl+P would print
-  // a report with no charts. Expanding on beforeprint keeps the printed
+  // a session with no charts. Expanding on beforeprint keeps the printed
   // document complete without asking the operator to remember a button.
   useEffect(() => {
     const expandForPrint = () =>
@@ -139,7 +144,7 @@ export function ReportView({
     }
   }, [])
 
-  const sections = useMemo(() => groupStepsBySection(report.steps), [report.steps])
+  const sections = useMemo(() => groupStepsBySection(session.steps), [session.steps])
   const mostRecentCurve = useMemo(
     () =>
       curves.length === 0
@@ -153,21 +158,25 @@ export function ReportView({
     [runs],
   )
 
-  function patchStep(id: string, changes: Omit<ReportStepPatch, 'id'>) {
+  function patchStep(id: string, changes: Omit<SessionStepPatch, 'id'>) {
     sendNow({ steps: [{ id, ...changes }] })
   }
 
   async function handleDelete() {
-    if (!onDeleteReport) return
-    if (!window.confirm(`Delete report "${report.title}"? This cannot be undone.`)) return
+    if (!onDeleteSession) return
+    if (!window.confirm(`Delete session "${session.title}"? This cannot be undone.`)) return
     setDeleting(true)
     setDeleteError(null)
     try {
-      await onDeleteReport()
+      await onDeleteSession()
     } catch (e) {
       setDeleteError(e instanceof Error ? e.message : String(e))
       setDeleting(false)
     }
+  }
+
+  function handleExportSessionFile() {
+    downloadSessionExportFile(session, curves, runDetails)
   }
 
   return (
@@ -176,9 +185,9 @@ export function ReportView({
         <CardHeader>
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div>
-              <CardTitle className="text-xl">{report.title}</CardTitle>
+              <CardTitle className="text-xl">{session.title}</CardTitle>
               <p className="text-sm text-muted-foreground">
-                {report.template_id} - setup: {report.setup}
+                {session.template_id} - setup: {session.setup}
               </p>
             </div>
             <div className="flex items-center gap-2 print:hidden">
@@ -187,15 +196,15 @@ export function ReportView({
             </div>
           </div>
           <p className="text-xs text-muted-foreground">
-            Created {formatCapturedAt(report.created_at)} - updated{' '}
-            {formatCapturedAt(report.updated_at)}
+            Created {formatCapturedAt(session.created_at)} - updated{' '}
+            {formatCapturedAt(session.updated_at)}
           </p>
-          <ProgressBar report={report} />
+          <ProgressBar session={session} />
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           <FieldsTable
-            key={report.id}
-            fields={report.fields}
+            key={session.id}
+            fields={session.fields}
             readOnly={readOnly}
             onChange={(key, value) => schedule({ fields: { [key]: value } })}
           />
@@ -218,19 +227,22 @@ export function ReportView({
             >
               Collapse all
             </Button>
-            <Button variant="outline" size="sm" onClick={() => downloadReportJson(report)}>
+            <Button variant="outline" size="sm" onClick={() => downloadSessionJson(session)}>
               Download JSON
             </Button>
             <Button
               variant="outline"
               size="sm"
-              onClick={() => downloadReportMarkdown(report, curves, runs, runDetails)}
+              onClick={() => downloadSessionMarkdown(session, curves, runs, runDetails)}
             >
               Download Markdown
             </Button>
-            {onDeleteReport && (
+            <Button variant="outline" size="sm" onClick={handleExportSessionFile}>
+              Export session file
+            </Button>
+            {onDeleteSession && (
               <Button variant="destructive" size="sm" onClick={handleDelete} disabled={deleting}>
-                {deleting ? 'Deleting...' : 'Delete report'}
+                {deleting ? 'Deleting...' : 'Delete session'}
               </Button>
             )}
           </div>
@@ -276,13 +288,13 @@ export function ReportView({
         </Card>
       ))}
 
-      {report.open_questions.length > 0 && (
+      {session.open_questions.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle>Open questions</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
-            {report.open_questions.map((q) => (
+            {session.open_questions.map((q) => (
               <OpenQuestionRow
                 key={q.id}
                 id={q.id}
@@ -307,10 +319,10 @@ export function ReportView({
   )
 }
 
-function ProgressBar({ report }: { report: ReportRecord }) {
-  const total = report.steps.length
-  const done = report.steps.filter((s) => s.status === 'done').length
-  const failed = report.steps.filter((s) => s.status === 'failed').length
+function ProgressBar({ session }: { session: SessionRecord }) {
+  const total = session.steps.length
+  const done = session.steps.filter((s) => s.status === 'done').length
+  const failed = session.steps.filter((s) => s.status === 'failed').length
   const pct = total === 0 ? 0 : (done / total) * 100
   return (
     <div className="flex items-center gap-2">
@@ -352,10 +364,10 @@ function FieldsTable({
 }
 
 // Local state seeded once at mount, not resynced from the `fields` prop on
-// every render - see ReportView's own doc comment on why typed inputs work
+// every render - see SessionView's own doc comment on why typed inputs work
 // this way (the same "prefill read once at mount" pattern MeasurePane
-// already uses). ReportView is remounted (key={report.id}) whenever a
-// different report is opened, which is the only time this should reset.
+// already uses). SessionView is remounted (key={session.id}) whenever a
+// different session is opened, which is the only time this should reset.
 function FieldRow({
   fieldKey,
   initialValue,
@@ -439,7 +451,7 @@ function StepCard({
   onOpenCurve,
   onOpenRun,
 }: {
-  step: ReportStep
+  step: SessionStep
   curves: CurveRecord[]
   runs: RunSummary[]
   runDetails: Record<string, RunDetail>
@@ -516,7 +528,7 @@ function StepValueInput({
   readOnly,
   onChange,
 }: {
-  step: ReportStep
+  step: SessionStep
   readOnly: boolean
   onChange: (value: number | string) => void
 }) {
@@ -644,7 +656,7 @@ function StatRow({ label, unit, stats }: { label: string; unit: string; stats: S
 /**
  * One curve linked to a step, collapsed to a single row by default (the
  * chart used to render at ~190x96px inline, too small to read at the
- * bench - see the report header's Expand all for the printing angle on
+ * bench - see the session header's Expand all for the printing angle on
  * why this stays a click instead of always-open). Expansion is local,
  * per-row state, except when overridden by `expandAllSignal`.
  */
@@ -720,7 +732,7 @@ function CurveStepBody({
   onUnlink,
   onOpen,
 }: {
-  step: ReportStep
+  step: SessionStep
   curves: CurveRecord[]
   readOnly: boolean
   mostRecentCurve: CurveRecord | null
@@ -933,7 +945,7 @@ function RunStepBody({
   onUnlink,
   onOpen,
 }: {
-  step: ReportStep
+  step: SessionStep
   curves: CurveRecord[]
   runs: RunSummary[]
   runDetails: Record<string, RunDetail>

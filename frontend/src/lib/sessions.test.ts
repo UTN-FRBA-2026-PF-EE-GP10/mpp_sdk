@@ -3,12 +3,12 @@ import {
   groupStepsBySection,
   humanizeKey,
   isEmptyPatch,
-  mergeReportPatch,
+  mergeSessionPatch,
   progressLabel,
-  type ReportStep,
-} from '@/lib/reports'
+  type SessionStep,
+} from '@/lib/sessions'
 
-function step(overrides: Partial<ReportStep> = {}): ReportStep {
+function step(overrides: Partial<SessionStep> = {}): SessionStep {
   return {
     id: 's1',
     section: 'Before energizing',
@@ -44,19 +44,19 @@ describe('groupStepsBySection', () => {
   })
 })
 
-describe('mergeReportPatch', () => {
+describe('mergeSessionPatch', () => {
   it('merges fields key by key', () => {
-    const merged = mergeReportPatch({ fields: { a: '1' } }, { fields: { b: '2' } })
+    const merged = mergeSessionPatch({ fields: { a: '1' } }, { fields: { b: '2' } })
     expect(merged.fields).toEqual({ a: '1', b: '2' })
   })
 
   it('later field values win', () => {
-    const merged = mergeReportPatch({ fields: { a: '1' } }, { fields: { a: '2' } })
+    const merged = mergeSessionPatch({ fields: { a: '1' } }, { fields: { a: '2' } })
     expect(merged.fields).toEqual({ a: '2' })
   })
 
   it('merges steps by id, keeping distinct steps and merging same-id partials', () => {
-    const merged = mergeReportPatch(
+    const merged = mergeSessionPatch(
       { steps: [{ id: 's1', notes: 'first note' }] },
       { steps: [{ id: 's1', status: 'done' }, { id: 's2', value: 3 }] },
     )
@@ -67,7 +67,7 @@ describe('mergeReportPatch', () => {
   })
 
   it('merges open questions by id, later answer winning', () => {
-    const merged = mergeReportPatch(
+    const merged = mergeSessionPatch(
       { open_questions: [{ id: 'q1', answer: 'first' }] },
       { open_questions: [{ id: 'q1', answer: 'second' }] },
     )
@@ -75,7 +75,7 @@ describe('mergeReportPatch', () => {
   })
 
   it('a later title replaces an earlier one', () => {
-    const merged = mergeReportPatch({ title: 'old' }, { title: 'new' })
+    const merged = mergeSessionPatch({ title: 'old' }, { title: 'new' })
     expect(merged.title).toBe('new')
   })
 })

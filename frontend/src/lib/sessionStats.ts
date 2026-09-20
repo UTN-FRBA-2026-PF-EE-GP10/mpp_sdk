@@ -1,7 +1,7 @@
-// Statistics over the repeats of one report step: the median and spread of
+// Statistics over the repeats of one session step: the median and spread of
 // a result, rather than one sample of it. Pure functions, no fetching -
 // callers hand in curves and run samples already in hand, the same
-// "already-loaded" contract ReportView itself follows.
+// "already-loaded" contract SessionView itself follows.
 
 import { mppPoint } from '@/lib/curveMath'
 import type { RunSample } from '@/lib/runs'

@@ -150,29 +150,94 @@ Other flags: `--v-max`/`--i-max` (override the 40 V/1 A default limits),
 hardware scripts). Run `mpp-sdk run-algorithm --help` /
 `mpp-sdk plot-run --help` for the full list.
 
+## Bench sessions
+
+A session is a checklist for one bench session: setup fields, a list of
+steps with a status, and curves and runs linked to those steps. A curve
+or run links into a step - it is never copied - so a session always shows
+the current state of your saved library.
+
+### Start a session
+
+1. In the sidebar, open **Sessions** and click **New session**.
+2. Pick a template. The workbench suggests the one that matches your
+   current setup mode (Single or Full).
+3. Type a title, e.g. "Panel A alone under the lamp". Fill in the setup
+   fields - panel model, light source, load, ADC range - where they
+   differ from the defaults.
+4. Click **Create session**. The workbench opens the new session.
+
+### Fill in steps
+
+Each step has a status: **todo**, **done**, **failed**, or **skipped**.
+Set it from the dropdown next to the step. Steps come in four kinds:
+
+- **Check**: mark it done once you have verified something, e.g. firmware
+  configuration.
+- **Number** or **text**: type a value, e.g. Voc read off the panel label.
+- **Curve**: link one or more saved curves. Pick one from the list, or
+  click **Link most recent curve** right after you save one.
+- **Run**: link one or more saved runs, the same way.
+
+Notes are free text under each step, for anything the checklist itself
+does not capture.
+
+### Repeats and statistics
+
+A curve or run step can ask for more than one repeat, e.g. "3 curves, one
+after the other" (the Appendix's procedure). The step shows how many are
+linked against how many are asked for, e.g. "2 / 3 repeats". Once two or
+more are linked, the workbench shows the median, mean, standard
+deviation, min, and max for each number that matters: Voc, Isc, and P at
+MPP for curves; held power, P over MPP_th, and time to converge for runs.
+With only one linked, it shows that value alone, with no spread.
+
+### Printing and downloads
+
+**Expand all** opens every linked curve's and run's chart at once - do
+this before printing (Ctrl+P/Cmd+P), though the workbench also expands
+them on its own when the print dialog opens, so nothing is missing from
+the printout. **Collapse all** puts them back.
+
+**Download JSON** saves the session record as-is. **Download Markdown**
+saves a readable summary: every step, its value and notes, and the
+statistics above, as plain text - paste it into a lab notebook or a PR
+description. Both downloads hold the session alone, without the curves
+and runs it links.
+
 ## Sharing a session file
 
-Send someone your curves and runs in one file, with no board and no saved
-library needed on their end.
+A session file bundles curves and runs (and, from a session, the session
+itself) into one file, so someone else can open the workbench with no
+board and no saved library and still see the whole picture.
 
-**Export**: in **Curves** or **Runs**, click **Select**, tick the items you
-want, then **Export N selected**. Type a title when asked - this becomes
-the file name. The browser downloads `<title>.mppsession.json`.
+**Export from a session**: open the session, click **Export session
+file**. The file holds the session record plus every curve and run its
+steps link. A linked curve or run since deleted from the library is
+listed as missing in the file, rather than silently left out.
+
+**Export loose curves or runs**: in **Curves** or **Runs**, click
+**Select**, tick the items you want, then **Export N selected**. Type a
+title when asked - this becomes the file name. This file holds no
+session; it is exactly the curves or runs you picked.
+
+Either way, the browser downloads `<title>.mppsession.json`.
 
 **Open**: start the workbench on any machine with
 `mpp-sdk curve-tracer-web --demo` (no board needed), open it in a browser,
 then click **Open session** in the header, or drag the file onto the
 page. The workbench switches to a read-only view of that file: a
 **Viewing: `<title>`** banner appears at the top, with a **Close** button
-that returns to the normal view. While viewing a session:
+that returns to the normal view. While viewing an imported session:
 
 - Capture, starting a run, deleting, and remeasuring are all off - nothing
   in the file can be changed, and nothing is sent to a server.
 - The curve and run views work the same as usual, including opening a run
   in the player - the player reads the run's samples straight from the
   file.
-- No board and no saved library are needed: everything comes from the
-  file.
+- If the file carries a session, **View session** opens it read-only, the
+  same document view as a live session, fed entirely from the file - no
+  board and no saved library needed.
 
 A bad file (wrong format, too large, or corrupted) shows an error message
 and leaves the current view untouched.

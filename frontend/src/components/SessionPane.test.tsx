@@ -1,22 +1,22 @@
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ReportPane } from './ReportPane'
+import { SessionPane } from './SessionPane'
 import { ThemeProvider } from '@/components/ThemeProvider'
 import { UnitsProvider } from '@/components/UnitsProvider'
-import { DEMO_REPORT, DEMO_RUN } from '@/lib/demoFixtures'
-import type { ReportRecord } from '@/lib/reports'
+import { DEMO_SESSION, DEMO_RUN } from '@/lib/demoFixtures'
+import type { SessionRecord } from '@/lib/sessions'
 import type { RunDetail, RunSummary } from '@/lib/runs'
 
 vi.mock('react-chartjs-2', () => ({ Line: () => null }))
 
 vi.mock('@/lib/api', () => ({
-  fetchReport: vi.fn(),
+  fetchSession: vi.fn(),
   fetchRun: vi.fn(),
-  patchReport: vi.fn(),
-  deleteReport: vi.fn(),
+  patchSession: vi.fn(),
+  deleteSession: vi.fn(),
 }))
 
-import { deleteReport, fetchReport, fetchRun, patchReport } from '@/lib/api'
+import { deleteSession, fetchRun, fetchSession, patchSession } from '@/lib/api'
 
 function renderPane(ui: Parameters<typeof render>[0]) {
   return render(
@@ -26,7 +26,7 @@ function renderPane(ui: Parameters<typeof render>[0]) {
   )
 }
 
-function report(overrides: Partial<ReportRecord> = {}): ReportRecord {
+function session(overrides: Partial<SessionRecord> = {}): SessionRecord {
   return {
     id: 'r1',
     title: 'Panel A alone',
@@ -87,30 +87,30 @@ afterEach(() => {
   vi.resetAllMocks()
 })
 
-describe('ReportPane - loading', () => {
-  it('shows a loading state, then the report once fetched', async () => {
-    vi.mocked(fetchReport).mockResolvedValue(report())
+describe('SessionPane - loading', () => {
+  it('shows a loading state, then the session once fetched', async () => {
+    vi.mocked(fetchSession).mockResolvedValue(session())
     vi.mocked(fetchRun).mockResolvedValue(runDetail())
     renderPane(
-      <ReportPane id="r1" curves={[]} runs={[runSummary()]} sandbox={false} onChanged={vi.fn()} onDeleted={vi.fn()} />,
+      <SessionPane id="r1" curves={[]} runs={[runSummary()]} sandbox={false} onChanged={vi.fn()} onDeleted={vi.fn()} />,
     )
-    expect(screen.getByText('Loading report...')).toBeTruthy()
+    expect(screen.getByText('Loading session...')).toBeTruthy()
     await waitFor(() => expect(screen.getByText('Panel A alone')).toBeTruthy())
   })
 
   it('surfaces a load error without crashing', async () => {
-    vi.mocked(fetchReport).mockRejectedValue(new Error('report not found'))
+    vi.mocked(fetchSession).mockRejectedValue(new Error('session not found'))
     renderPane(
-      <ReportPane id="r1" curves={[]} runs={[]} sandbox={false} onChanged={vi.fn()} onDeleted={vi.fn()} />,
+      <SessionPane id="r1" curves={[]} runs={[]} sandbox={false} onChanged={vi.fn()} onDeleted={vi.fn()} />,
     )
-    await waitFor(() => expect(screen.getByText(/Failed to load report: report not found/)).toBeTruthy())
+    await waitFor(() => expect(screen.getByText(/Failed to load session: session not found/)).toBeTruthy())
   })
 
   it('lazily fetches full detail for every run a step links, to compute statistics', async () => {
-    vi.mocked(fetchReport).mockResolvedValue(report())
+    vi.mocked(fetchSession).mockResolvedValue(session())
     vi.mocked(fetchRun).mockResolvedValue(runDetail())
     renderPane(
-      <ReportPane
+      <SessionPane
         id="r1"
         curves={[]}
         runs={[runSummary()]}
@@ -123,10 +123,10 @@ describe('ReportPane - loading', () => {
   })
 
   it('marks a run detail fetch that 404s as missing rather than retrying forever', async () => {
-    vi.mocked(fetchReport).mockResolvedValue(report())
+    vi.mocked(fetchSession).mockResolvedValue(session())
     vi.mocked(fetchRun).mockRejectedValue(new Error('run not found'))
     renderPane(
-      <ReportPane
+      <SessionPane
         id="r1"
         curves={[]}
         runs={[runSummary()]}
@@ -142,11 +142,11 @@ describe('ReportPane - loading', () => {
   })
 })
 
-describe('ReportPane - sandbox', () => {
-  it('shows the bundled demo report read-only, with no fetch at all', async () => {
+describe('SessionPane - sandbox', () => {
+  it('shows the bundled demo session read-only, with no fetch at all', async () => {
     renderPane(
-      <ReportPane
-        id={DEMO_REPORT.id}
+      <SessionPane
+        id={DEMO_SESSION.id}
         curves={[]}
         runs={[]}
         sandbox
@@ -154,28 +154,28 @@ describe('ReportPane - sandbox', () => {
         onDeleted={vi.fn()}
       />,
     )
-    expect(screen.getByText(DEMO_REPORT.title)).toBeTruthy()
+    expect(screen.getByText(DEMO_SESSION.title)).toBeTruthy()
     expect(screen.getByText('Read-only')).toBeTruthy()
-    expect(fetchReport).not.toHaveBeenCalled()
+    expect(fetchSession).not.toHaveBeenCalled()
     expect(fetchRun).not.toHaveBeenCalled()
   })
 
   it("shows the demo run's statistics with no fetch, from the bundled fixture", async () => {
     renderPane(
-      <ReportPane id={DEMO_REPORT.id} curves={[]} runs={[DEMO_RUN]} sandbox onChanged={vi.fn()} onDeleted={vi.fn()} />,
+      <SessionPane id={DEMO_SESSION.id} curves={[]} runs={[DEMO_RUN]} sandbox onChanged={vi.fn()} onDeleted={vi.fn()} />,
     )
     expect(screen.getAllByText(/Held/).length).toBeGreaterThan(0)
   })
 })
 
-describe('ReportPane - mutation wiring', () => {
-  it('calls PATCH and refreshes onChanged when ReportView edits a step', async () => {
-    vi.mocked(fetchReport).mockResolvedValue(report())
+describe('SessionPane - mutation wiring', () => {
+  it('calls PATCH and refreshes onChanged when SessionView edits a step', async () => {
+    vi.mocked(fetchSession).mockResolvedValue(session())
     vi.mocked(fetchRun).mockResolvedValue(runDetail())
-    vi.mocked(patchReport).mockResolvedValue({ ...report(), title: 'Panel A alone (updated)' })
+    vi.mocked(patchSession).mockResolvedValue({ ...session(), title: 'Panel A alone (updated)' })
     const onChanged = vi.fn()
     renderPane(
-      <ReportPane
+      <SessionPane
         id="r1"
         curves={[]}
         runs={[runSummary()]}
@@ -190,23 +190,23 @@ describe('ReportPane - mutation wiring', () => {
     select.value = 'done'
     select.dispatchEvent(new Event('change', { bubbles: true }))
 
-    await waitFor(() => expect(patchReport).toHaveBeenCalledWith('r1', { steps: [{ id: 'po-run', status: 'done' }] }))
+    await waitFor(() => expect(patchSession).toHaveBeenCalledWith('r1', { steps: [{ id: 'po-run', status: 'done' }] }))
     await waitFor(() => expect(onChanged).toHaveBeenCalled())
   })
 
-  it('calls deleteReport and onDeleted when the report is deleted', async () => {
-    vi.mocked(fetchReport).mockResolvedValue(report({ steps: [] }))
-    vi.mocked(deleteReport).mockResolvedValue(undefined)
+  it('calls deleteSession and onDeleted when the session is deleted', async () => {
+    vi.mocked(fetchSession).mockResolvedValue(session({ steps: [] }))
+    vi.mocked(deleteSession).mockResolvedValue(undefined)
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     const onDeleted = vi.fn()
     renderPane(
-      <ReportPane id="r1" curves={[]} runs={[]} sandbox={false} onChanged={vi.fn()} onDeleted={onDeleted} />,
+      <SessionPane id="r1" curves={[]} runs={[]} sandbox={false} onChanged={vi.fn()} onDeleted={onDeleted} />,
     )
     await waitFor(() => expect(screen.getByText('Panel A alone')).toBeTruthy())
 
-    screen.getByText('Delete report').click()
+    screen.getByText('Delete session').click()
 
-    await waitFor(() => expect(deleteReport).toHaveBeenCalledWith('r1'))
+    await waitFor(() => expect(deleteSession).toHaveBeenCalledWith('r1'))
     await waitFor(() => expect(onDeleted).toHaveBeenCalled())
   })
 })

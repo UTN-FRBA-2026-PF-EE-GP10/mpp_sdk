@@ -1,7 +1,7 @@
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { CaptureModeContext } from '@/lib/captureMode'
-import { SessionContext, type SessionValue, useReadOnly } from '@/lib/session'
+import { ImportedSessionContext, type ImportedSessionValue, useReadOnly } from '@/lib/sessionFile'
 
 afterEach(cleanup)
 
@@ -15,11 +15,11 @@ function Probe() {
   )
 }
 
-const INACTIVE_SESSION: SessionValue = {
+const INACTIVE_IMPORTED_SESSION: ImportedSessionValue = {
   active: false,
   title: null,
   setup: null,
-  report: null,
+  session: null,
   curves: [],
   runs: [],
   missing: { curve_ids: [], run_ids: [] },
@@ -27,10 +27,14 @@ const INACTIVE_SESSION: SessionValue = {
   close: () => {},
 }
 
-const ACTIVE_SESSION: SessionValue = { ...INACTIVE_SESSION, active: true, title: 'A session' }
+const ACTIVE_IMPORTED_SESSION: ImportedSessionValue = {
+  ...INACTIVE_IMPORTED_SESSION,
+  active: true,
+  title: 'A session',
+}
 
 describe('useReadOnly', () => {
-  it('is off with neither demo mode nor a session active', () => {
+  it('is off with neither demo mode nor an imported session active', () => {
     render(<Probe />)
     expect(screen.getByTestId('enabled').textContent).toBe('false')
   })
@@ -45,22 +49,22 @@ describe('useReadOnly', () => {
     expect(screen.getByTestId('reason').textContent).toBe('demo')
   })
 
-  it('is on with reason "view" while a session is active', () => {
+  it('is on with reason "view" while an imported session is active', () => {
     render(
-      <SessionContext.Provider value={ACTIVE_SESSION}>
+      <ImportedSessionContext.Provider value={ACTIVE_IMPORTED_SESSION}>
         <Probe />
-      </SessionContext.Provider>,
+      </ImportedSessionContext.Provider>,
     )
     expect(screen.getByTestId('enabled').textContent).toBe('true')
     expect(screen.getByTestId('reason').textContent).toBe('view')
   })
 
-  it('prefers "view" when both demo mode and a session are active', () => {
+  it('prefers "view" when both demo mode and an imported session are active', () => {
     render(
       <CaptureModeContext.Provider value={{ mode: 'simulated', setMode: vi.fn() }}>
-        <SessionContext.Provider value={ACTIVE_SESSION}>
+        <ImportedSessionContext.Provider value={ACTIVE_IMPORTED_SESSION}>
           <Probe />
-        </SessionContext.Provider>
+        </ImportedSessionContext.Provider>
       </CaptureModeContext.Provider>,
     )
     expect(screen.getByTestId('reason').textContent).toBe('view')

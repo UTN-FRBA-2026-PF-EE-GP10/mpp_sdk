@@ -1,27 +1,27 @@
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { createReport, fetchReportTemplate, fetchReportTemplates } from '@/lib/api'
-import type { ReportRecord, ReportTemplate, ReportTemplateSummary } from '@/lib/reports'
+import { createSession, fetchSessionTemplate, fetchSessionTemplates } from '@/lib/api'
+import type { SessionRecord, SessionTemplate, SessionTemplateSummary } from '@/lib/sessions'
 import type { SetupMode } from '@/lib/setupMode'
 
 /**
- * Picks a template, names the report, fills in its setup fields, and
- * creates it - the one place `POST /api/reports` is called. Preselects
+ * Picks a template, names the session, fills in its setup fields, and
+ * creates it - the one place `POST /api/sessions` is called. Preselects
  * the template matching the current setup mode (Single/Full), so an
  * operator on the panel-A bench doesn't have to hunt for the right one.
  */
-export function NewReportPane({
+export function NewSessionPane({
   setupMode,
   onCreated,
 }: {
   setupMode: SetupMode
-  onCreated: (report: ReportRecord) => void
+  onCreated: (session: SessionRecord) => void
 }) {
-  const [templates, setTemplates] = useState<ReportTemplateSummary[] | null>(null)
+  const [templates, setTemplates] = useState<SessionTemplateSummary[] | null>(null)
   const [templatesError, setTemplatesError] = useState<string | null>(null)
   const [templateId, setTemplateId] = useState('')
-  const [template, setTemplate] = useState<ReportTemplate | null>(null)
+  const [template, setTemplate] = useState<SessionTemplate | null>(null)
   const [templateError, setTemplateError] = useState<string | null>(null)
   const [title, setTitle] = useState('')
   const [fields, setFields] = useState<Record<string, string>>({})
@@ -29,7 +29,7 @@ export function NewReportPane({
   const [createError, setCreateError] = useState<string | null>(null)
 
   useEffect(() => {
-    fetchReportTemplates()
+    fetchSessionTemplates()
       .then(setTemplates)
       .catch((e) => setTemplatesError(e instanceof Error ? e.message : String(e)))
   }, [])
@@ -50,7 +50,7 @@ export function NewReportPane({
       return
     }
     setTemplateError(null)
-    fetchReportTemplate(templateId)
+    fetchSessionTemplate(templateId)
       .then((t) => {
         setTemplate(t)
         setFields(Object.fromEntries(t.field_defs.map((fd) => [fd.key, fd.default])))
@@ -63,8 +63,8 @@ export function NewReportPane({
     setCreating(true)
     setCreateError(null)
     try {
-      const report = await createReport({ template_id: templateId, title, fields })
-      onCreated(report)
+      const session = await createSession({ template_id: templateId, title, fields })
+      onCreated(session)
     } catch (e) {
       setCreateError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -75,7 +75,7 @@ export function NewReportPane({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>New report</CardTitle>
+        <CardTitle>New session</CardTitle>
         <p className="text-sm text-muted-foreground">
           A filled-in copy of a checklist template, tracked from setup to teardown.
         </p>
@@ -140,7 +140,7 @@ export function NewReportPane({
           disabled={creating || !title.trim() || templateId === ''}
           className="self-start"
         >
-          {creating ? 'Creating...' : 'Create report'}
+          {creating ? 'Creating...' : 'Create session'}
         </Button>
         {createError && <p className="text-sm text-destructive">Failed to create: {createError}</p>}
       </CardContent>

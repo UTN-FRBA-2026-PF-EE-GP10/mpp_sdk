@@ -1,25 +1,25 @@
 import { useState, type DragEvent } from 'react'
-import { readSessionFile, useSession, type SessionFile } from '@/lib/session'
+import { readSessionFile, useImportedSession, type SessionFile } from '@/lib/sessionFile'
 
 /**
  * One place that turns a `File` (from the Open-session control or a page
  * drop) into an imported session, or a clear error - shared so the two
  * entry points can never validate differently. A failed import leaves the
- * current view untouched: `session.enter` is only called once
+ * current view untouched: `importedSession.enter` is only called once
  * `readSessionFile` has already thrown or succeeded.
  */
-export function useSessionFileImport(onImported?: (session: SessionFile) => void) {
-  const session = useSession()
+export function useSessionFileImport(onImported?: (file: SessionFile) => void) {
+  const importedSession = useImportedSession()
   const [error, setError] = useState<string | null>(null)
 
   async function importFile(file: File) {
     setError(null)
     try {
       const parsed = await readSessionFile(file)
-      session.enter(parsed)
+      importedSession.enter(parsed)
       // Fired from the same event that caused the change, not derived
       // later in an effect - lets App.tsx pick a sensible first thing to
-      // show (the session's own content, not the now-inert Measure pane)
+      // show (the file's own content, not the now-inert Measure pane)
       // without re-deriving it from state on every render.
       onImported?.(parsed)
     } catch (e) {

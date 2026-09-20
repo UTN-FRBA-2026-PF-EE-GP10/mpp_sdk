@@ -12,7 +12,7 @@ vi.mock('@/lib/api', () => ({
   fetchCurves: vi.fn(),
   fetchMeasurementKinds: vi.fn(() => Promise.resolve([])),
   fetchRuns: vi.fn(),
-  fetchReports: vi.fn(() => Promise.resolve([])),
+  fetchSessions: vi.fn(() => Promise.resolve([])),
   saveCurve: vi.fn(),
   startSweep: vi.fn(),
   startDemoSweep: vi.fn(),
