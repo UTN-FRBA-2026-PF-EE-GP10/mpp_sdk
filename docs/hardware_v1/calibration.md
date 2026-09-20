@@ -115,9 +115,9 @@ ceiling; `Full` gives the highest ceiling but the least resolution per volt.
 
 | Range | Full scale | When to use it |
 |-------|-----------|-----------------|
-| `Low` | about 27.3 V | one panel |
+| `Low` | about 27.3 V | one panel (the firmware setting today) |
 | `Mid` | about 51.5 V | two panels in series (about 44 V open-circuit) |
-| `Full` (default) | about 75.6 V | highest input the board can see |
+| `Full` | about 75.6 V | highest input the board can see |
 
 This needs four steps: move the jumpers, set the constant, reflash, and
 check the result against a meter. It does **not** need a new gain/zero fit
@@ -136,9 +136,9 @@ the three resistors, on each divider, can be bridged out with a jumper:
   another. `JP10` is the equivalent fixed link on the output side. Leave
   `JP10` shorted too.
 
-(Found by tracing `hardware/untitled.kicad_sch`, the "AnalogConverters"
-sheet - neither this page nor the firmware README named the jumpers by
-designator before now.)
+With no jumper fitted, a divider is in its `Full` range: that is how the
+board is built. These designators come from the "AnalogConverters" sheet of
+the schematic under `hardware/`.
 
 Short 0, 1, or 2 of `{JP6, JP7}` (input) and the same count of `{JP8,
 JP13}` (output) to pick the range:
