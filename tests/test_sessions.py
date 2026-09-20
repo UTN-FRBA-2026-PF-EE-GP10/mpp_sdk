@@ -92,9 +92,11 @@ def test_single_panel_template_covers_the_appendix_checklist():
         "Runs (curve as reference, 10 s, starting duty 0.5)",
         "After",
     }
-    # The four panel-label readings from the appendix.
-    assert {"panel-label-voc", "panel-label-isc", "panel-label-vmp", "panel-label-imp"} <= {
-        s.id for s in template.steps
+    # The four panel-label readings are no longer steps - they're
+    # snapshotted from a picked panel model straight into these fields
+    # (mpp_sdk.panels), read-only in the workbench.
+    assert {"panel_model_voc", "panel_model_isc", "panel_model_vmp", "panel_model_imp"} <= {
+        f.key for f in template.field_defs
     }
     question_ids = {q.id for q in template.open_questions}
     assert "temperature" in question_ids
@@ -216,6 +218,28 @@ def test_full_setup_template_defaults_to_the_hissuma_panels():
     fields = {f.key: f.default for f in get_template("full-setup-characterization").field_defs}
     assert "Hissuma PSF10MONO" in fields["panel_a"]
     assert "Hissuma PSF10MONO" in fields["panel_b"]
+
+
+def test_full_setup_template_has_snapshot_fields_for_both_panels():
+    keys = {f.key for f in get_template("full-setup-characterization").field_defs}
+    for prefix in ("panel_a", "panel_b"):
+        assert {
+            f"{prefix}_model_voc",
+            f"{prefix}_model_isc",
+            f"{prefix}_model_vmp",
+            f"{prefix}_model_imp",
+        } <= keys
+
+
+def test_both_shipped_templates_bumped_their_version_for_the_panel_model_picker():
+    # The four panel-label-* steps (single) became snapshot fields, and
+    # both templates gained panel-model-snapshot fields - a session
+    # created from the old shape keeps its own steps/fields regardless
+    # (mpp_sdk.sessions.record.SessionRecord stores its own copy), so
+    # this is purely a marker for anyone reading template_version on an
+    # existing session.
+    for template_id in ("single-panel-characterization", "full-setup-characterization"):
+        assert get_template(template_id).version == 2
 
 
 # ------------------------------------------------------------------

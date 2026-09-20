@@ -1,21 +1,69 @@
 {
   "schema": 1,
   "template_id": "full-setup-characterization",
-  "version": 1,
+  "version": 2,
   "title": "Full setup characterization (two panels)",
   "setup": "full",
   "field_defs": [
     {
       "key": "panel_a",
-      "label": "Panel A",
-      "hint": "Panel model and rating, from its label. Fixed at 90 degrees.",
+      "label": "Panel A model",
+      "hint": "Picked from the panel model library, or typed by hand. Fixed at 90 degrees.",
       "default": "Hissuma PSF10MONO, 10 W"
     },
     {
+      "key": "panel_a_model_voc",
+      "label": "Panel A model Voc",
+      "hint": "Snapshotted from the picked panel model - read-only.",
+      "default": ""
+    },
+    {
+      "key": "panel_a_model_isc",
+      "label": "Panel A model Isc",
+      "hint": "Snapshotted from the picked panel model - read-only.",
+      "default": ""
+    },
+    {
+      "key": "panel_a_model_vmp",
+      "label": "Panel A model Vmp",
+      "hint": "Snapshotted from the picked panel model - read-only.",
+      "default": ""
+    },
+    {
+      "key": "panel_a_model_imp",
+      "label": "Panel A model Imp",
+      "hint": "Snapshotted from the picked panel model - read-only.",
+      "default": ""
+    },
+    {
       "key": "panel_b",
-      "label": "Panel B",
-      "hint": "Panel model and rating, from its label. Tilts to 90/70/60/45/30 degrees.",
+      "label": "Panel B model",
+      "hint": "Picked from the panel model library, or typed by hand. Tilts to 90/70/60/45/30 degrees.",
       "default": "Hissuma PSF10MONO, 10 W"
+    },
+    {
+      "key": "panel_b_model_voc",
+      "label": "Panel B model Voc",
+      "hint": "Snapshotted from the picked panel model - read-only.",
+      "default": ""
+    },
+    {
+      "key": "panel_b_model_isc",
+      "label": "Panel B model Isc",
+      "hint": "Snapshotted from the picked panel model - read-only.",
+      "default": ""
+    },
+    {
+      "key": "panel_b_model_vmp",
+      "label": "Panel B model Vmp",
+      "hint": "Snapshotted from the picked panel model - read-only.",
+      "default": ""
+    },
+    {
+      "key": "panel_b_model_imp",
+      "label": "Panel B model Imp",
+      "hint": "Snapshotted from the picked panel model - read-only.",
+      "default": ""
     },
     {
       "key": "light_source",

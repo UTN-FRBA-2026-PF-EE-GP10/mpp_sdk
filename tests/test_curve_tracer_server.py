@@ -35,6 +35,10 @@ from scripts.curve_tracer_server import (  # noqa: E402
     _DEFAULT_V_OUT_MAX,
     _MAX_BATCH_DELETE_IDS,
     _MAX_RUN_DURATION_S,
+    _PANEL_MANUFACTURER_MAX_LEN,
+    _PANEL_MODEL_MAX_LEN,
+    _PANEL_NAME_MAX_LEN,
+    _PANEL_NOTES_MAX_LEN,
     _SESSION_FIELD_VALUE_MAX_LEN,
     _SESSION_MAX_LINKED_IDS,
     _SESSION_NOTES_MAX_LEN,
@@ -43,6 +47,7 @@ from scripts.curve_tracer_server import (  # noqa: E402
     _downsample_samples,
     _LiveRunCache,
     _make_simulated_source,
+    _panel_path,
     _poll_loop,
     _run_live,
     _run_path,
@@ -67,6 +72,8 @@ def _make_client(monkeypatch, tmp_path, *, demo=False):
     monkeypatch.setenv("MPP_SDK_RUN_DIR", str(run_dir))
     session_dir = tmp_path / "sessions"
     monkeypatch.setenv("MPP_SDK_SESSION_DIR", str(session_dir))
+    panel_dir = tmp_path / "panels"
+    monkeypatch.setenv("MPP_SDK_PANEL_DIR", str(panel_dir))
     cache = _SweepCache()
     commands: queue.Queue[str] = queue.Queue()
     run_cache = _LiveRunCache()
@@ -85,6 +92,7 @@ def _make_client(monkeypatch, tmp_path, *, demo=False):
     test_client.commands = commands  # type: ignore[attr-defined]
     test_client.run_dir = run_dir  # type: ignore[attr-defined]
     test_client.session_dir = session_dir  # type: ignore[attr-defined]
+    test_client.panel_dir = panel_dir  # type: ignore[attr-defined]
     test_client.run_cache = run_cache  # type: ignore[attr-defined]
     test_client.run_requests = run_requests  # type: ignore[attr-defined]
     test_client.stop_event = stop_event  # type: ignore[attr-defined]
@@ -1696,6 +1704,256 @@ def test_poll_loop_exits_on_shutdown_event_but_not_on_a_run_stop():
 
 
 # ------------------------------------------------------------------
+# Panel models
+# ------------------------------------------------------------------
+
+
+def _create_panel(client, name="Test Panel", **kw):
+    body = {"name": name, **kw}
+    return client.post("/api/panels", json=body)
+
+
+def test_get_panels_seeds_and_lists_the_shipped_defaults(client):
+    r = client.get("/api/panels")
+    assert r.status_code == 200
+    ids = {p["id"] for p in r.json()}
+    assert ids == {"luxen-ln-10p", "hissuma-psf10mono"}
+
+
+def test_get_panels_reflects_the_seeded_files_on_disk(client):
+    client.get("/api/panels")
+    assert (client.panel_dir / "luxen-ln-10p.json").exists()
+    assert (client.panel_dir / "hissuma-psf10mono.json").exists()
+
+
+def test_luxen_default_leaves_vmp_and_imp_unset(client):
+    r = client.get("/api/panels")
+    luxen = next(p for p in r.json() if p["id"] == "luxen-ln-10p")
+    assert luxen["voc"] == 23.5
+    assert luxen["isc"] == 0.57
+    assert luxen["vmp"] is None
+    assert luxen["imp"] is None
+
+
+def test_hissuma_default_carries_vmp_and_imp(client):
+    r = client.get("/api/panels")
+    hissuma = next(p for p in r.json() if p["id"] == "hissuma-psf10mono")
+    assert hissuma["vmp"] == 14.0
+    assert hissuma["imp"] == 0.72
+
+
+def test_post_create_panel_returns_the_new_panel(client):
+    r = _create_panel(
+        client,
+        name="Acme A-1",
+        manufacturer="Acme",
+        model="A-1",
+        p_max_w=20.0,
+        voc=40.0,
+        isc=0.6,
+        vmp=32.0,
+        imp=0.55,
+        notes="bench spare",
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["id"] == "acme-a-1"
+    assert body["name"] == "Acme A-1"
+    assert body["p_max_w"] == 20.0
+    assert body["notes"] == "bench spare"
+
+
+def test_post_create_panel_writes_a_file_under_the_panel_dir(client):
+    r = _create_panel(client, name="Acme A-1")
+    panel_id = r.json()["id"]
+    assert (client.panel_dir / f"{panel_id}.json").exists()
+
+
+def test_post_create_panel_defaults_unset_numbers_to_none(client):
+    r = _create_panel(client, name="Bare panel")
+    body = r.json()
+    assert body["p_max_w"] is None
+    assert body["voc"] is None
+
+
+def test_post_create_panel_rejects_an_empty_name(client):
+    r = _create_panel(client, name="   ")
+    assert r.status_code == 400
+
+
+def test_post_create_panel_rejects_an_oversized_name(client):
+    r = _create_panel(client, name="x" * (_PANEL_NAME_MAX_LEN + 1))
+    assert r.status_code == 400
+
+
+def test_post_create_panel_rejects_an_oversized_manufacturer(client):
+    r = _create_panel(client, manufacturer="x" * (_PANEL_MANUFACTURER_MAX_LEN + 1))
+    assert r.status_code == 400
+
+
+def test_post_create_panel_rejects_an_oversized_model(client):
+    r = _create_panel(client, model="x" * (_PANEL_MODEL_MAX_LEN + 1))
+    assert r.status_code == 400
+
+
+def test_post_create_panel_rejects_an_oversized_notes(client):
+    r = _create_panel(client, notes="x" * (_PANEL_NOTES_MAX_LEN + 1))
+    assert r.status_code == 400
+
+
+@pytest.mark.parametrize("field", ["p_max_w", "voc", "isc", "vmp", "imp"])
+@pytest.mark.parametrize("bad_value", [0.0, -1.0])
+def test_post_create_panel_rejects_a_non_positive_number(client, field, bad_value):
+    r = _create_panel(client, **{field: bad_value})
+    assert r.status_code == 400
+
+
+@pytest.mark.parametrize("field", ["p_max_w", "voc", "isc", "vmp", "imp"])
+@pytest.mark.parametrize("value", ["NaN", "Infinity", "-Infinity"])
+def test_post_create_panel_rejects_a_non_finite_number(client, field, value):
+    # Bare (unquoted) so it round-trips as Python's float('nan')/inf, not a
+    # JSON string - same technique test_patch_session_rejects_a_non_finite_value
+    # uses; `json=` would serialize a Python NaN/inf the same way, this just
+    # skips the roundabout float("nan") construction.
+    r = client.post(
+        "/api/panels",
+        content=f'{{"name": "Bad panel", "{field}": {value}}}',
+        headers={"content-type": "application/json"},
+    )
+    assert r.status_code == 400
+
+
+def test_post_create_panel_on_collision_appends_a_suffix_to_the_id(client):
+    first = _create_panel(client, name="Acme A-1").json()
+    second = _create_panel(client, name="Acme A-1").json()
+    assert first["id"] != second["id"]
+    assert second["id"] == "acme-a-1-2"
+
+
+def test_get_panel_returns_the_full_record(client):
+    panel_id = _create_panel(client, name="Acme A-1").json()["id"]
+    r = client.get(f"/api/panels/{panel_id}")
+    assert r.status_code == 200
+    assert r.json()["id"] == panel_id
+
+
+def test_get_panel_unknown_id_is_404(client):
+    r = client.get("/api/panels/does-not-exist")
+    assert r.status_code == 404
+
+
+def test_get_panel_rejects_an_id_with_disallowed_characters(client):
+    r = client.get("/api/panels/weird id")
+    assert r.status_code == 400
+
+
+def test_panel_path_rejects_an_id_containing_a_slash(client):
+    with pytest.raises(fastapi.HTTPException) as exc_info:
+        _panel_path("../secret")
+    assert exc_info.value.status_code == 400
+
+
+def test_patch_panel_updates_given_fields_only(client):
+    panel_id = _create_panel(client, name="Acme A-1", voc=40.0, isc=0.6).json()["id"]
+    r = client.patch(f"/api/panels/{panel_id}", json={"voc": 40.5})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["voc"] == 40.5
+    assert body["isc"] == 0.6  # untouched
+    assert body["name"] == "Acme A-1"  # untouched
+
+
+def test_patch_panel_can_add_a_previously_unset_number(client):
+    panel_id = _create_panel(client, name="Acme A-1").json()["id"]
+    r = client.patch(f"/api/panels/{panel_id}", json={"vmp": 32.0})
+    assert r.status_code == 200
+    assert r.json()["vmp"] == 32.0
+
+
+def test_patch_panel_writes_atomically_no_temp_file_left_behind(client):
+    panel_id = _create_panel(client, name="Acme A-1").json()["id"]
+    client.patch(f"/api/panels/{panel_id}", json={"voc": 41.0})
+    names = {p.name for p in client.panel_dir.iterdir()}
+    assert names == {f"{p_id}.json" for p_id in [panel_id, "luxen-ln-10p", "hissuma-psf10mono"]}
+
+
+def test_patch_panel_persists_an_edit_to_a_shipped_default(client):
+    """The point of `ensure_defaults_seeded`: once seeded, a shipped
+    panel is an ordinary library entry - editing it must not be silently
+    reverted, here or on a later restart (covered at the library level
+    by test_panels.py)."""
+    client.get("/api/panels")  # trigger seeding (already done at app startup too)
+    r = client.patch("/api/panels/luxen-ln-10p", json={"voc": 23.9})
+    assert r.status_code == 200
+    assert r.json()["voc"] == 23.9
+    assert client.get("/api/panels/luxen-ln-10p").json()["voc"] == 23.9
+
+
+def test_patch_panel_rejects_an_empty_name(client):
+    panel_id = _create_panel(client, name="Acme A-1").json()["id"]
+    r = client.patch(f"/api/panels/{panel_id}", json={"name": "   "})
+    assert r.status_code == 400
+
+
+def test_patch_panel_rejects_an_oversized_field(client):
+    panel_id = _create_panel(client, name="Acme A-1").json()["id"]
+    r = client.patch(f"/api/panels/{panel_id}", json={"notes": "x" * (_PANEL_NOTES_MAX_LEN + 1)})
+    assert r.status_code == 400
+
+
+@pytest.mark.parametrize("field", ["p_max_w", "voc", "isc", "vmp", "imp"])
+def test_patch_panel_rejects_a_non_positive_number(client, field):
+    panel_id = _create_panel(client, name="Acme A-1").json()["id"]
+    r = client.patch(f"/api/panels/{panel_id}", json={field: -1.0})
+    assert r.status_code == 400
+
+
+def test_patch_panel_unknown_id_is_404(client):
+    r = client.patch("/api/panels/does-not-exist", json={"voc": 1.0})
+    assert r.status_code == 404
+
+
+def test_patch_panel_rejects_an_id_with_disallowed_characters(client):
+    r = client.patch("/api/panels/weird id", json={"voc": 1.0})
+    assert r.status_code == 400
+
+
+def test_delete_panel_removes_the_file(client):
+    panel_id = _create_panel(client, name="Acme A-1").json()["id"]
+    r = client.delete(f"/api/panels/{panel_id}")
+    assert r.status_code == 204
+    assert client.get(f"/api/panels/{panel_id}").status_code == 404
+
+
+def test_delete_panel_unknown_id_is_404(client):
+    r = client.delete("/api/panels/does-not-exist")
+    assert r.status_code == 404
+
+
+def test_delete_panel_rejects_an_id_with_disallowed_characters(client):
+    r = client.delete("/api/panels/weird id")
+    assert r.status_code == 400
+
+
+def test_get_panels_lists_a_malformed_file_without_failing_the_whole_list(client):
+    client.get("/api/panels")  # seed defaults first
+    client.panel_dir.mkdir(parents=True, exist_ok=True)
+    (client.panel_dir / "bad.json").write_text("not json")
+    r = client.get("/api/panels")
+    assert r.status_code == 200
+    entries = r.json()
+    assert any(e.get("id") == "luxen-ln-10p" for e in entries)
+    assert any("error" in e for e in entries)
+
+
+def test_panels_routes_are_unaffected_by_demo_mode(demo_client):
+    r = demo_client.get("/api/panels")
+    assert r.status_code == 200
+    ids = {p["id"] for p in r.json()}
+    assert ids == {"luxen-ln-10p", "hissuma-psf10mono"}
+
+
+# ------------------------------------------------------------------
 # GET /api/session-templates
 # ------------------------------------------------------------------
 
@@ -1843,8 +2101,8 @@ def test_get_sessions_progress_counts_reflect_step_status(client):
         f"/api/sessions/{session_id}",
         json={
             "steps": [
-                {"id": "panel-label-voc", "status": "done"},
-                {"id": "panel-label-isc", "status": "failed"},
+                {"id": "light-check-isc", "status": "done"},
+                {"id": "heatsink-and-power-cut", "status": "failed"},
             ]
         },
     )
@@ -1879,7 +2137,7 @@ def test_patch_session_updates_a_step_status_value_and_notes(client):
         json={
             "steps": [
                 {
-                    "id": "panel-label-voc",
+                    "id": "light-check-isc",
                     "status": "done",
                     "value": 12.5,
                     "notes": "read off the label",
@@ -1888,12 +2146,12 @@ def test_patch_session_updates_a_step_status_value_and_notes(client):
         },
     )
     assert r.status_code == 200
-    step = next(s for s in r.json()["steps"] if s["id"] == "panel-label-voc")
+    step = next(s for s in r.json()["steps"] if s["id"] == "light-check-isc")
     assert step["status"] == "done"
     assert step["value"] == 12.5
     assert step["notes"] == "read off the label"
     # Every other step is untouched.
-    other = next(s for s in r.json()["steps"] if s["id"] == "panel-label-isc")
+    other = next(s for s in r.json()["steps"] if s["id"] == "heatsink-and-power-cut")
     assert other["status"] == "todo"
 
 
@@ -1966,7 +2224,7 @@ def test_patch_session_rejects_an_unknown_open_question_id(client):
 def test_patch_session_rejects_an_invalid_status(client, status):
     session_id = _create_session(client).json()["id"]
     r = client.patch(
-        f"/api/sessions/{session_id}", json={"steps": [{"id": "panel-label-voc", "status": status}]}
+        f"/api/sessions/{session_id}", json={"steps": [{"id": "light-check-isc", "status": status}]}
     )
     assert r.status_code == 400
 
@@ -1975,7 +2233,7 @@ def test_patch_session_rejects_an_oversized_notes_field(client):
     session_id = _create_session(client).json()["id"]
     r = client.patch(
         f"/api/sessions/{session_id}",
-        json={"steps": [{"id": "panel-label-voc", "notes": "x" * (_SESSION_NOTES_MAX_LEN + 1)}]},
+        json={"steps": [{"id": "light-check-isc", "notes": "x" * (_SESSION_NOTES_MAX_LEN + 1)}]},
     )
     assert r.status_code == 400
 
@@ -2115,7 +2373,7 @@ def test_patch_session_rejects_a_non_finite_value(client, value):
     session_id = _create_session(client).json()["id"]
     r = client.patch(
         f"/api/sessions/{session_id}",
-        content=f'{{"steps": [{{"id": "panel-label-voc", "value": {value}}}]}}',
+        content=f'{{"steps": [{{"id": "light-check-isc", "value": {value}}}]}}',
         headers={"content-type": "application/json"},
     )
     assert r.status_code == 400

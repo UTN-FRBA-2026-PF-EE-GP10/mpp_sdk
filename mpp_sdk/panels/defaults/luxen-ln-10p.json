@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "id": "luxen-ln-10p",
+  "name": "Luxen LN-10P",
+  "manufacturer": "Luxen",
+  "model": "LN-10P",
+  "p_max_w": 10.0,
+  "voc": 23.5,
+  "isc": 0.57,
+  "notes": "Reads a little above its label values in strong sun. Vmp/Imp not on hand - left unset rather than guessed."
+}
