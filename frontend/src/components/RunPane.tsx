@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { ActiveSessionNotice } from '@/components/ActiveSessionNotice'
 import { ProvenanceBadge } from '@/components/ProvenanceBadge'
 import { Field } from '@/components/RunReadouts'
 import { RunChart } from '@/components/RunChart'
@@ -7,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useLiveRun } from '@/hooks/useLiveRun'
+import { useCaptureSession } from '@/lib/activeSession'
 import { fetchRunConfig, fetchRuns, type RunConfig } from '@/lib/api'
 import type { StartRunInput } from '@/lib/api'
 import { formatCapturedAt } from '@/lib/format'
@@ -214,6 +216,7 @@ function RunSetupForm({
   const [iMax, setIMax] = useState<number | null>(null)
   const [vOutMax, setVOutMax] = useState<number | null>(null)
   const { mode: setupMode } = useSetupMode()
+  const captureSession = useCaptureSession()
   const loadHint =
     setupMode === 'single'
       ? '10 Ohm, 10 W on the output (MPP near D = 0.37)'
@@ -280,6 +283,7 @@ function RunSetupForm({
       // StartRunInput's own doc comment on reference_label.
       reference_label: simulated && chosen ? chosen.id : null,
       simulated,
+      session_id: captureSession?.id ?? null,
     })
   }
 
@@ -401,6 +405,8 @@ function RunSetupForm({
           against on the chart below.
         </p>
       )}
+
+      <ActiveSessionNotice what="run" />
 
       <Button
         onClick={handleStart}

@@ -88,6 +88,12 @@ function requireBoolean(value: unknown, field: string): boolean {
   return value
 }
 
+/** Absent (a file exported before curves and runs were stamped) and null
+ * both mean "not filed into any session". */
+function optionalSessionId(value: unknown, field: string): string | null {
+  return value === undefined || value === null ? null : requireString(value, field)
+}
+
 function requireArray(value: unknown, field: string): unknown[] {
   if (!Array.isArray(value)) {
     throw new SessionParseError(`${field} must be an array`)
@@ -187,6 +193,7 @@ export function parseSessionCurveRecord(raw: unknown, context: string): CurveRec
     notes: requireString(raw.notes, `${context}.notes`),
     n_points: requireNumber(raw.n_points, `${context}.n_points`),
     source: requireString(raw.source, `${context}.source`),
+    session_id: optionalSessionId(raw.session_id, `${context}.session_id`),
     voc: requireNumber(raw.voc, `${context}.voc`),
     isc: requireNumber(raw.isc, `${context}.isc`),
     p_mpp: requireNumber(raw.p_mpp, `${context}.p_mpp`),
@@ -225,6 +232,7 @@ export function parseSessionRunDetail(raw: unknown, context: string): RunDetail 
     curve_ref: raw.curve_ref === null ? null : requireString(raw.curve_ref, `${context}.curve_ref`),
     notes: requireString(raw.notes, `${context}.notes`),
     source: requireString(raw.source, `${context}.source`),
+    session_id: optionalSessionId(raw.session_id, `${context}.session_id`),
     downsampled: requireBoolean(raw.downsampled, `${context}.downsampled`),
     samples,
   })

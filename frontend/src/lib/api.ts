@@ -134,15 +134,19 @@ export interface SaveCurveInput {
   measurement: string
   panels: PanelSetup[]
   notes: string
+  /** The workbench's "active session" (lib/activeSession.ts), if any -
+   * the server validates it and stamps it onto the saved CurveRecord.
+   * Omitted (or null) saves an unstamped curve, same as today. */
+  session_id?: string | null
 }
 
-export async function saveCurve(input: SaveCurveInput): Promise<{ path: string }> {
+export async function saveCurve(input: SaveCurveInput): Promise<{ path: string; id: string }> {
   const r = await fetch('/api/save-curve', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
   })
-  return (await parseJsonOrThrow(r, 'POST /api/save-curve')) as { path: string }
+  return (await parseJsonOrThrow(r, 'POST /api/save-curve')) as { path: string; id: string }
 }
 
 export async function startSweep(): Promise<void> {
@@ -276,6 +280,9 @@ export interface StartRunInput {
    * to the caller, so a forgotten flag can never silently drive the
    * converter when a simulated run was intended, or vice versa. */
   simulated?: boolean
+  /** The workbench's "active session" (lib/activeSession.ts), if any -
+   * validated by the server and stamped onto the saved RunRecord. */
+  session_id?: string | null
 }
 
 export interface StartRunResult {

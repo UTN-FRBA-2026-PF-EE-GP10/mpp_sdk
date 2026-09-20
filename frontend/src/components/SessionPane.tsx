@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { SessionView } from '@/components/SessionView'
-import { deleteSession, fetchRun, fetchSession, patchSession } from '@/lib/api'
+import { useActiveSession } from '@/lib/activeSession'
+import { deleteSession, fetchRun, fetchRunConfig, fetchSession, patchSession } from '@/lib/api'
 import { DEMO_RUN_DETAILS, DEMO_SESSION } from '@/lib/demoFixtures'
-import type { SessionPatch, SessionRecord } from '@/lib/sessions'
+import { captureIntoStep } from '@/lib/sessionCapture'
+import type { SessionPatch, SessionRecord, SessionStep } from '@/lib/sessions'
 import type { RunDetail, RunSummary } from '@/lib/runs'
 import type { CurveRecord } from '@/types'
 
@@ -20,6 +22,7 @@ export function SessionPane({
   curves,
   runs,
   sandbox,
+  captureUnavailable,
   onChanged,
   onDeleted,
 }: {
@@ -27,6 +30,10 @@ export function SessionPane({
   curves: CurveRecord[]
   runs: RunSummary[]
   sandbox: boolean
+  /** Why "Capture into this step" is off right now, per kind (no live link
+   * to the board), or null when it can run. Omitted means always available.
+   * Ignored in sandbox mode, where the action is not offered at all. */
+  captureUnavailable?: { curve: string | null; run: string | null }
   /** A field, step, or open-question edit was saved - refresh the
    * sidebar's progress counts. */
   onChanged: () => void
@@ -37,6 +44,9 @@ export function SessionPane({
   const [loadError, setLoadError] = useState<string | null>(null)
   const [fetchedRunDetails, setFetchedRunDetails] = useState<Record<string, RunDetail>>({})
   const [missingRunIds, setMissingRunIds] = useState<Set<string>>(new Set())
+  const [runAlgorithms, setRunAlgorithms] = useState<string[]>([])
+  const { active: activeSession, setActive: setActiveSession, clear: clearActiveSession } =
+    useActiveSession()
   // Sandbox mode never fetches - the one bundled fixture is derived
   // straight from props/constants, not synced into state via an effect
   // (a render-time value here is simpler than a setState-on-mount effect,
@@ -55,6 +65,37 @@ export function SessionPane({
       .catch((e) => setLoadError(e instanceof Error ? e.message : String(e)))
   }, [id, sandbox])
 
+  // Opening a session makes it the one new captures are filed into (see
+  // lib/activeSession.ts). Keyed on the id and title, not the record, so a
+  // later step edit does not re-activate a session the operator has just
+  // dismissed with "Stop filing". Never in demo mode: nothing is written.
+  const sessionId = session?.id ?? null
+  const sessionTitle = session?.title ?? ''
+  useEffect(() => {
+    if (sandbox || sessionId === null) return
+    setActiveSession(sessionId, sessionTitle)
+  }, [sandbox, sessionId, sessionTitle, setActiveSession])
+
+  // The run steps' algorithm picker. A failed fetch only leaves the picker
+  // empty - a capture then takes the server's own first algorithm.
+  const hasRunStep = session?.steps.some((s) => s.kind === 'run') ?? false
+  useEffect(() => {
+    if (sandbox || !hasRunStep) return
+    let cancelled = false
+    async function load() {
+      try {
+        const config = await fetchRunConfig()
+        if (!cancelled) setRunAlgorithms(config.algorithms)
+      } catch {
+        // See above.
+      }
+    }
+    load()
+    return () => {
+      cancelled = true
+    }
+  }, [sandbox, hasRunStep])
+
   // Fetches full detail (with samples) for every run a curve/run step
   // links, once per id - SessionView needs the samples to compute held
   // power / P-over-MPP_th / time-to-converge, but the session and the
@@ -65,6 +106,9 @@ export function SessionPane({
     if (sandbox || !session) return
     const needed = new Set<string>()
     for (const step of session.steps) for (const runId of step.run_ids) needed.add(runId)
+    // Runs filed into this session but linked to no step are exported too
+    // (see lib/sessionExport.ts), so their samples are needed as well.
+    for (const r of runs) if (r.session_id === session.id) needed.add(r.id)
     const toFetch = [...needed].filter((rid) => !(rid in runDetails) && !missingRunIds.has(rid))
     if (toFetch.length === 0) return
     let cancelled = false
@@ -82,7 +126,7 @@ export function SessionPane({
     return () => {
       cancelled = true
     }
-  }, [session, sandbox, runDetails, missingRunIds])
+  }, [session, sandbox, runs, runDetails, missingRunIds])
 
   // True while some run a step links is neither resolved nor confirmed
   // missing yet - i.e. its GET /api/runs/{id} is still in flight. Exported
@@ -96,11 +140,12 @@ export function SessionPane({
     if (sandbox || !session) return false
     const linkedRunIds = new Set<string>()
     for (const step of session.steps) for (const runId of step.run_ids) linkedRunIds.add(runId)
+    for (const r of runs) if (r.session_id === session.id) linkedRunIds.add(r.id)
     for (const runId of linkedRunIds) {
       if (!(runId in runDetails) && !missingRunIds.has(runId)) return true
     }
     return false
-  }, [sandbox, session, runDetails, missingRunIds])
+  }, [sandbox, session, runs, runDetails, missingRunIds])
 
   async function handlePatch(patch: SessionPatch): Promise<SessionRecord> {
     const updated = await patchSession(id, patch)
@@ -111,7 +156,40 @@ export function SessionPane({
 
   async function handleDeleteSession(): Promise<void> {
     await deleteSession(id)
+    // Curves and runs stamped with it are left alone (a stamp is not
+    // ownership) - only the "file new captures here" choice must go, or the
+    // next save would be rejected for naming a session that is gone.
+    if (activeSession?.id === id) clearActiveSession()
     onDeleted()
+  }
+
+  // Sweeps or runs, saves the result stamped with this session, then links
+  // it to the step - see lib/sessionCapture.ts for why that order leaves
+  // nothing half-linked on failure. The link reads the step from the latest
+  // fetched record so an earlier link on the same step is not overwritten.
+  async function handleCaptureIntoStep(step: SessionStep, algorithm?: string): Promise<void> {
+    if (sandbox || !session) return // defense in depth - the button is not offered either
+    try {
+      await captureIntoStep({
+        sessionId: session.id,
+        step,
+        algorithm,
+        link: async (kind, itemId) => {
+          const current = (fetchedSession ?? session).steps.find((s) => s.id === step.id) ?? step
+          await handlePatch({
+            steps: [
+              kind === 'curve'
+                ? { id: step.id, curve_ids: [...current.curve_ids, itemId] }
+                : { id: step.id, run_ids: [...current.run_ids, itemId] },
+            ],
+          })
+        },
+      })
+    } finally {
+      // Saved or not, the library may have changed (a curve saved but not
+      // linked is still new), so the lists reload either way.
+      onChanged()
+    }
   }
 
   if (loadError) {
@@ -138,6 +216,9 @@ export function SessionPane({
       onPatch={sandbox ? undefined : handlePatch}
       onDeleteSession={sandbox ? undefined : handleDeleteSession}
       onLibraryChanged={sandbox ? undefined : onChanged}
+      onCaptureIntoStep={sandbox ? undefined : handleCaptureIntoStep}
+      captureUnavailable={captureUnavailable}
+      runAlgorithms={runAlgorithms}
     />
   )
 }

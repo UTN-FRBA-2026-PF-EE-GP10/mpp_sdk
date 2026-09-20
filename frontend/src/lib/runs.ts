@@ -25,6 +25,10 @@ export interface RunSummary {
   curve_ref: string | null
   notes: string
   source: RunSource
+  /** The bench session this run was captured in, or null - same
+   * stamping and "not ownership" reasoning as CurveRecord['session_id']
+   * in types.ts. */
+  session_id?: string | null
 }
 
 // One control-loop sample, volts/amps/duty - see api.ts's note on why this

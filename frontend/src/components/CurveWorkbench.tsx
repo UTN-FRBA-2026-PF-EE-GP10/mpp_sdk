@@ -17,6 +17,7 @@ import {
 import { useDemoCapture } from '@/hooks/useDemoCapture'
 import { useLiveSweep } from '@/hooks/useLiveSweep'
 import { saveCurve } from '@/lib/api'
+import { useCaptureSession } from '@/lib/activeSession'
 import { formatCapturedAt } from '@/lib/format'
 import { useSetupMode } from '@/lib/setupMode'
 import { useUnits } from '@/lib/units'
@@ -61,6 +62,7 @@ function SaveCurveForm({
 }) {
   const { mode: setupMode } = useSetupMode()
   const single = setupMode === 'single'
+  const captureSession = useCaptureSession()
   // `initialPanels` is a "read once" remeasure prefill, same contract as
   // `initialLabel`/`initialNotes` (see their doc comments): MeasurePane
   // clears it from its parent shortly after mount (`onPrefillApplied`),
@@ -100,7 +102,13 @@ function SaveCurveForm({
     setSaving(true)
     setStatus('')
     try {
-      const result = await saveCurve({ label, measurement: kind, panels, notes })
+      const result = await saveCurve({
+        label,
+        measurement: kind,
+        panels,
+        notes,
+        session_id: captureSession?.id ?? null,
+      })
       setStatus(`saved: ${result.path}`)
       setLabel('')
       setNotes('')

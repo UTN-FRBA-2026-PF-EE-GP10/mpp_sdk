@@ -196,10 +196,21 @@ export function downloadSessionMarkdown(
 /**
  * Builds a session *file* (lib/sessionFile.ts) from a session already in
  * hand: the session record itself, plus every curve and run its steps
- * link, deduplicated by id. `curves` is the full, already-loaded curve
- * library (always available in full - see SessionView's own doc comment),
- * so a linked id resolves straight from it; `runDetails` is keyed by run
- * id and expected to already carry full samples for every linked run
+ * link, plus every curve and run *stamped* with this session (see
+ * `session_id` on CurveRecord/RunSummary) - deduplicated by id.
+ *
+ * The stamped items are included even when no step links them, because a
+ * capture filed into the session from Measure, or one whose link was
+ * removed later, is still part of what was measured for it. Exporting only
+ * the linked ones would drop that data with no trace in the file. `missing`
+ * keeps its meaning: only ids a step *links* that could not be found -
+ * stamped items come from `curves`/`runDetails` themselves, so they always
+ * exist.
+ *
+ * `curves` is the full, already-loaded curve library (always available in
+ * full - see SessionView's own doc comment), so a linked or stamped id
+ * resolves straight from it; `runDetails` is keyed by run id and expected
+ * to already carry full samples for every linked or stamped run
  * SessionPane could fetch (see its own effect) - a linked id absent from
  * both `curves` and `runDetails` is either deleted from the library or
  * still loading, and either way is named in the file's `missing` rather
@@ -210,11 +221,17 @@ export function sessionExportFile(
   curves: CurveRecord[],
   runDetails: Record<string, RunDetail>,
 ): SessionFile {
-  const curveIds = new Set<string>()
-  const runIds = new Set<string>()
+  const linkedCurveIds = new Set<string>()
+  const linkedRunIds = new Set<string>()
   for (const step of session.steps) {
-    for (const id of step.curve_ids) curveIds.add(id)
-    for (const id of step.run_ids) runIds.add(id)
+    for (const id of step.curve_ids) linkedCurveIds.add(id)
+    for (const id of step.run_ids) linkedRunIds.add(id)
+  }
+  const curveIds = new Set(linkedCurveIds)
+  for (const c of curves) if (c.session_id === session.id) curveIds.add(c.id)
+  const runIds = new Set(linkedRunIds)
+  for (const [id, detail] of Object.entries(runDetails)) {
+    if (detail.session_id === session.id) runIds.add(id)
   }
 
   const foundCurves: CurveRecord[] = []

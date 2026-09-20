@@ -24,8 +24,10 @@
   `mpp_sdk/curves/record.py`'s `MEASUREMENT_KINDS`), `panels` (id + tilt
   per panel in the array), `notes`, `source` (provenance: `hardware`,
   `firmware-replay`, `simulated`, or `unknown` - see `CURVE_SOURCES` in
-  the same file), and `points` (`v`/`i` pairs in volts/amps, ordered as
-  swept). See `mpp_sdk/curves/record.py` for the full schema and
+  the same file), `session_id` (the session it was captured in, or
+  `null`; a file written before it existed has no such key), and
+  `points` (`v`/`i` pairs in volts/amps, ordered as swept). See
+  `mpp_sdk/curves/record.py` for the full schema and
   `mpp_sdk/curves/library.py` for the file layout.
 - `data/runs/` - captured closed-loop MPPT runs, one JSON file per run,
   written by `mpp_sdk.runs.library.save` (via `mpp-sdk run-algorithm`).
@@ -33,8 +35,9 @@
   `captured_at`, `label`, `algorithm`, `curve_ref` (paired curve's
   filename under `data/curves/`, or `null`), `aborted`, `notes`, `source`
   (provenance: `hardware`, `simulated`, or `unknown` - see `RUN_SOURCES`
-  in the same file), and `samples` (`t`/`v`/`i`/`d` per control step). See
-  `mpp_sdk/runs/record.py` for the full schema.
+  in the same file), `session_id` (as for curves), and `samples`
+  (`t`/`v`/`i`/`d` per control step). See `mpp_sdk/runs/record.py` for the
+  full schema.
 - `data/sessions/` - bench sessions, one JSON file per session, written
   by `mpp_sdk.sessions.library`. Git-ignored, same reasoning as
   `data/curves/` and `data/runs/`. A session is a filled-in copy of a

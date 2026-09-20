@@ -243,4 +243,52 @@ describe('sessionExportFile', () => {
     expect(file.title).toBe(session().title)
     expect(file.setup).toBe(session().setup)
   })
+
+  describe('items stamped with the session but linked by no step', () => {
+    const id = session().id
+
+    it('are included, so a capture filed into the session is not silently lost', () => {
+      const stampedCurve = curve({ id: 'stamped-c', session_id: id })
+      const stampedRun = runDetail({ id: 'stamped-r', session_id: id })
+      const file = sessionExportFile(session(), [curve(), stampedCurve], {
+        r1: runDetail(),
+        'stamped-r': stampedRun,
+      })
+      expect(file.curves.map((e) => e.id)).toEqual(['c1', 'stamped-c'])
+      expect(file.runs.map((e) => e.id)).toEqual(['r1', 'stamped-r'])
+    })
+
+    it('are not duplicated when a step also links them', () => {
+      const file = sessionExportFile(session(), [curve({ session_id: id })], {
+        r1: runDetail({ session_id: id }),
+      })
+      expect(file.curves.map((e) => e.id)).toEqual(['c1'])
+      expect(file.runs.map((e) => e.id)).toEqual(['r1'])
+    })
+
+    it('leave out what is stamped with another session, or with none', () => {
+      const file = sessionExportFile(
+        session(),
+        [
+          curve(),
+          curve({ id: 'other', session_id: 'some-other-session' }),
+          curve({ id: 'none', session_id: null }),
+          curve({ id: 'older' }), // no stamp field at all
+        ],
+        {
+          r1: runDetail(),
+          'other-r': runDetail({ id: 'other-r', session_id: 'some-other-session' }),
+        },
+      )
+      expect(file.curves.map((e) => e.id)).toEqual(['c1'])
+      expect(file.runs.map((e) => e.id)).toEqual(['r1'])
+    })
+
+    it('never appear in missing, which stays about ids a step links', () => {
+      const file = sessionExportFile(session(), [curve(), curve({ id: 'stamped-c', session_id: id })], {
+        r1: runDetail(),
+      })
+      expect(file.missing.curve_ids).toEqual(['missing-curve'])
+    })
+  })
 })
