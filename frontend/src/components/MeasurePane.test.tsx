@@ -62,7 +62,7 @@ function button(text: string) {
   return el
 }
 
-// Start Measurement/Hand panel to SEPIC carry a `title` explaining a demo-mode
+// Start Measurement/Hand panel to converter carry a `title` explaining a demo-mode
 // disablement, so they use focusableWhenDisabled (aria-disabled, not the
 // native attribute) to keep that title reachable by hover/focus - see
 // button.tsx and CurveDashboardPane's note on the same fix. This checks
@@ -87,7 +87,7 @@ describe('MeasurePane', () => {
   it('disables the hardware-only controls in simulated mode and explains why', () => {
     renderPane('simulated')
     expect(isDisabled(button('Start Measurement'))).toBe(true)
-    expect(isDisabled(button('Hand panel to SEPIC'))).toBe(true)
+    expect(isDisabled(button('Hand panel to converter'))).toBe(true)
     expect(screen.getByText(/Demo:/)).toBeTruthy()
   })
 

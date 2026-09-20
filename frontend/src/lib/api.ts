@@ -35,7 +35,7 @@ export interface LiveSweepState {
   active: boolean
   link: string
   seq: number
-  // Set when the last Start Measurement/Hand panel to SEPIC click failed -
+  // Set when the last Start Measurement/Hand panel to converter click failed -
   // null otherwise.
   commandError: string | null
   // True when the curve on screen was replayed from the firmware's

@@ -205,7 +205,7 @@ export function CurveWorkbench({
   onSaved: (kind: string) => void
   /** CaptureMode 'simulated' (see lib/captureMode.ts): the two "Replay
    * curve" buttons replay a bundled fixture locally instead of over SPI;
-   * Start Measurement, Hand panel to SEPIC, and Save curve are
+   * Start Measurement, Hand panel to converter, and Save curve are
    * hardware/write actions with no local equivalent and stay disabled. */
   demo?: boolean
   /** CaptureMode 'firmware-replay' ("Replay on the board"): everything
@@ -240,7 +240,7 @@ export function CurveWorkbench({
   const hasCapture = !active && points.length > 0
   const [selected, setSelected] = useState<CurveRecord | null>(null)
   // Replay-curve buttons run regardless of `connected` (they're local),
-  // but Start Measurement/Hand panel to SEPIC never fire in demo mode
+  // but Start Measurement/Hand panel to converter never fire in demo mode
   // either way.
   const demoButtonsDisabled = active || (!demo && !connected)
 
@@ -295,11 +295,11 @@ export function CurveWorkbench({
               focusableWhenDisabled
               title={
                 demo
-                  ? 'Hand panel to SEPIC needs real hardware - unavailable in demo mode'
+                  ? 'Hand panel to converter needs real hardware - unavailable in demo mode'
                   : 'Disconnects the panel from the curve tracer and reconnects it to the SEPIC converter. It stays on the tracer across any number of sweeps until you do this.'
               }
             >
-              Hand panel to SEPIC
+              Hand panel to converter
             </Button>
           </div>
         </div>
@@ -308,7 +308,7 @@ export function CurveWorkbench({
         {demo && (
           <p className="rounded-md border border-violet-500/30 bg-violet-500/10 px-3 py-2 text-sm text-violet-700 dark:text-violet-300">
             Demo: the Replay curve buttons replay a bundled sample locally. Start Measurement,
-            Hand panel to SEPIC, and Save curve talk to real hardware or write to your library, so
+            Hand panel to converter, and Save curve talk to real hardware or write to your library, so
             they stay off.
           </p>
         )}

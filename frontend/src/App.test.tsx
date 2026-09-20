@@ -65,7 +65,7 @@ function baselineNavRow() {
   return screen.getAllByText('Baseline')[0].closest('button')!
 }
 
-// Some CurveWorkbench buttons (Start Measurement, Hand panel to SEPIC, Save
+// Some CurveWorkbench buttons (Start Measurement, Hand panel to converter, Save
 // curve) carry a `title` explaining a demo-mode disablement, so they use
 // focusableWhenDisabled (aria-disabled, not the native attribute) to keep
 // that title reachable by hover/focus - see button.tsx and
@@ -134,7 +134,7 @@ describe('App capture mode', () => {
     await pickCaptureMode('Demo')
 
     await waitFor(() => expect(isDisabled(screen.getByText('Start Measurement').closest('button')!)).toBe(true))
-    expect(isDisabled(screen.getByText('Hand panel to SEPIC').closest('button')!)).toBe(true)
+    expect(isDisabled(screen.getByText('Hand panel to converter').closest('button')!)).toBe(true)
     expect(isDisabled(screen.getByText('Replay curve (bright)').closest('button')!)).toBe(false)
   })
 

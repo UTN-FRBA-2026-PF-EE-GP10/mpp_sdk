@@ -72,7 +72,7 @@ function button(text: string) {
   return el
 }
 
-// Start Measurement/Hand panel to SEPIC/Save curve carry a `title` explaining a
+// Start Measurement/Hand panel to converter/Save curve carry a `title` explaining a
 // demo-mode disablement, so they use focusableWhenDisabled (aria-disabled,
 // not the native attribute) to keep that title reachable by hover/focus -
 // see button.tsx and CurveDashboardPane's note on the same fix. The
@@ -96,13 +96,13 @@ describe('CurveWorkbench outside demo mode', () => {
 })
 
 describe('CurveWorkbench in demo mode', () => {
-  it('disables Start Measurement and Hand panel to SEPIC, and never calls their hardware endpoints', () => {
+  it('disables Start Measurement and Hand panel to converter, and never calls their hardware endpoints', () => {
     renderWorkbench(true)
     expect(isDisabled(button('Start Measurement'))).toBe(true)
-    expect(isDisabled(button('Hand panel to SEPIC'))).toBe(true)
+    expect(isDisabled(button('Hand panel to converter'))).toBe(true)
 
     fireEvent.click(button('Start Measurement'))
-    fireEvent.click(button('Hand panel to SEPIC'))
+    fireEvent.click(button('Hand panel to converter'))
     expect(startSweep).not.toHaveBeenCalled()
     expect(releaseRelay).not.toHaveBeenCalled()
   })
@@ -324,7 +324,7 @@ describe('CurveWorkbench demo curve buttons', () => {
     expect(screen.queryByText('Replay curve (bright)')).toBeNull()
     // The real actions are still there.
     expect(screen.getByText('Start Measurement')).toBeTruthy()
-    expect(screen.getByText('Hand panel to SEPIC')).toBeTruthy()
+    expect(screen.getByText('Hand panel to converter')).toBeTruthy()
   })
 
   it('are shown in Replay on the board, where they are the primary action', () => {
