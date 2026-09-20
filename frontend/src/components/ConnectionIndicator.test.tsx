@@ -60,7 +60,7 @@ describe('ConnectionIndicator', () => {
 
   it('still tells the truth about a server-side --demo source in hardware mode', () => {
     renderIndicator('demo')
-    expect(screen.getByText('Demo mode - simulated')).toBeTruthy()
+    expect(screen.getByText('Simulated board')).toBeTruthy()
   })
 
   it('reports the real link status when nothing is connected yet', () => {
@@ -76,14 +76,14 @@ describe('ConnectionIndicator', () => {
   it('opens a menu naming all three modes on click', async () => {
     renderIndicator('connected')
     fireEvent.click(screen.getByRole('button'))
-    expect(await screen.findByText('Demo with PICO')).toBeTruthy()
+    expect(await screen.findByText('Replay on the board')).toBeTruthy()
     expect(screen.getByText('Demo')).toBeTruthy()
   })
 
-  it('makes "Demo with PICO" impossible to select when there is no live link', async () => {
+  it('makes "Replay on the board" impossible to select when there is no live link', async () => {
     renderIndicator('disconnected')
     fireEvent.click(screen.getByRole('button'))
-    const label = await screen.findByText('Demo with PICO')
+    const label = await screen.findByText('Replay on the board')
     const item = label.closest('[role="menuitemradio"]')
     expect(item?.getAttribute('aria-disabled')).toBe('true')
 
@@ -93,10 +93,10 @@ describe('ConnectionIndicator', () => {
     expect(screen.getByText('PICO not connected')).toBeTruthy()
   })
 
-  it('leaves "Demo with PICO" selectable once connected', async () => {
+  it('leaves "Replay on the board" selectable once connected', async () => {
     renderIndicator('connected')
     fireEvent.click(screen.getByRole('button'))
-    const label = await screen.findByText('Demo with PICO')
+    const label = await screen.findByText('Replay on the board')
     const item = label.closest('[role="menuitemradio"]')
     expect(item?.getAttribute('aria-disabled')).not.toBe('true')
   })
@@ -117,40 +117,63 @@ describe('ConnectionIndicator', () => {
   it('never touches the network outside demo mode - the passed-in status is trusted as-is', async () => {
     renderIndicator('connected')
     fireEvent.click(screen.getByRole('button'))
-    await screen.findByText('Demo with PICO')
+    await screen.findByText('Replay on the board')
     expect(fetchLiveSweep).not.toHaveBeenCalled()
   })
 })
 
+describe('ConnectionIndicator raw link readout', () => {
+  it('shows the raw link text in the menu as a debug readout', async () => {
+    render(
+      <CaptureModeProvider>
+        <ConnectionIndicator status="connected" link="waiting for sweep" />
+      </CaptureModeProvider>,
+    )
+    fireEvent.click(screen.getByRole('button'))
+    expect(await screen.findByText('waiting for sweep')).toBeTruthy()
+  })
+
+  it('shows nothing when no raw link is available yet', async () => {
+    render(
+      <CaptureModeProvider>
+        <ConnectionIndicator status="connecting" />
+      </CaptureModeProvider>,
+    )
+    fireEvent.click(screen.getByRole('button'))
+    await screen.findByText('Replay on the board')
+    expect(screen.queryByText(/Raw link:/)).toBeNull()
+  })
+})
+
 describe('ConnectionIndicator in demo (simulated) mode', () => {
-  it('has no live `status` to go on, so "Demo with PICO" starts unselectable until checked', async () => {
+  it('has no live `status` to go on, so "Replay on the board" starts unselectable until checked', async () => {
     vi.mocked(fetchLiveSweep).mockReturnValue(new Promise(() => {}))
     renderIndicatorInSimulatedMode('connected') // a stale/leftover status - must not be trusted
     fireEvent.click(screen.getByRole('button'))
 
-    const item = (await screen.findByText('Demo with PICO')).closest('[role="menuitemradio"]')
+    const item = (await screen.findByText('Replay on the board')).closest('[role="menuitemradio"]')
     expect(item?.getAttribute('aria-disabled')).toBe('true')
     expect(fetchLiveSweep).toHaveBeenCalledTimes(1)
   })
 
-  it('makes "Demo with PICO" selectable once a fresh one-shot check succeeds', async () => {
+  it('makes "Replay on the board" selectable once a fresh one-shot check succeeds', async () => {
     vi.mocked(fetchLiveSweep).mockResolvedValue(mockLiveSweep({ link: 'ok' }))
     renderIndicatorInSimulatedMode('disconnected')
     fireEvent.click(screen.getByRole('button'))
 
     await waitFor(async () => {
-      const item = (await screen.findByText('Demo with PICO')).closest('[role="menuitemradio"]')
+      const item = (await screen.findByText('Replay on the board')).closest('[role="menuitemradio"]')
       expect(item?.getAttribute('aria-disabled')).not.toBe('true')
     })
   })
 
-  it('keeps "Demo with PICO" unselectable when the one-shot check fails', async () => {
+  it('keeps "Replay on the board" unselectable when the one-shot check fails', async () => {
     vi.mocked(fetchLiveSweep).mockRejectedValue(new Error('no link'))
     renderIndicatorInSimulatedMode('connected')
     fireEvent.click(screen.getByRole('button'))
 
     await waitFor(() => expect(fetchLiveSweep).toHaveBeenCalled())
-    const item = (await screen.findByText('Demo with PICO')).closest('[role="menuitemradio"]')
+    const item = (await screen.findByText('Replay on the board')).closest('[role="menuitemradio"]')
     expect(item?.getAttribute('aria-disabled')).toBe('true')
   })
 

@@ -126,7 +126,7 @@
       "id": "link-waiting-for-sweep",
       "section": "Link and limits",
       "title": "Link status before a sweep",
-      "instructions": "With nothing running, check the link reads \"waiting for sweep\". Pass: the link shows that text.",
+      "instructions": "With nothing running, open the connection menu (top right of the workbench) and read the raw link line. Pass: it reads \"waiting for sweep\".",
       "kind": "check"
     },
     {

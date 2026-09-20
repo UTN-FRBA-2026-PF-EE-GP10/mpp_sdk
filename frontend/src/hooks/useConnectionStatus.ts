@@ -20,6 +20,12 @@ export interface LinkState {
    * reachability: the server can be up while the Pico link itself is
    * down. */
   status: ConnectionStatus
+  /** The raw `link` field itself, e.g. "ok" or "waiting for sweep" - both
+   * fold into `status: 'connected'` above, so this is the only place that
+   * still tells them apart. Not used for any decision in the app; it
+   * exists purely as an unobtrusive debug readout (see
+   * ConnectionIndicator's menu). Empty until the first poll lands. */
+  link: string
 }
 
 /** Polls the link once every `POLL_MS`. Shared by the header indicators;
@@ -31,14 +37,17 @@ export interface LinkState {
  * there is instead answered by ConnectionIndicator's one-shot check,
  * fired only when the capture-mode menu is opened. */
 export function useConnectionStatus(enabled = true): LinkState {
-  const [status, setStatus] = useState<ConnectionStatus>('connecting')
+  const [state, setState] = useState<LinkState>({ status: 'connecting', link: '' })
 
   const handleData = (data: LiveSweepState) => {
-    setStatus(statusFromLink(data.link))
+    setState({ status: statusFromLink(data.link), link: data.link })
   }
-  const handleError = (_error: unknown) => setStatus('disconnected')
+  // Keeps the last-seen raw link text on a failed poll rather than
+  // blanking it - it's a debug readout, and the most recent real value is
+  // more useful than nothing while a poll or two is failing.
+  const handleError = (_error: unknown) => setState((s) => ({ ...s, status: 'disconnected' }))
 
   usePolling(fetchLiveSweep, handleData, handleError, POLL_MS, enabled)
 
-  return { status }
+  return state
 }

@@ -83,7 +83,9 @@ export default function App() {
   // check, which takes over answering "is a link available" in that mode.
   // An imported session (view mode) is offline the same way - see
   // lib/session.ts.
-  const { status: connectionStatus } = useConnectionStatus(!sandboxEnabled && !session.active)
+  const { status: connectionStatus, link: connectionLink } = useConnectionStatus(
+    !sandboxEnabled && !session.active,
+  )
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   // Seeded with the known vocabulary so the sidebar renders before the
   // first fetch lands. GET /api/measurement-kinds and any kind already in
@@ -377,7 +379,7 @@ export default function App() {
           {/* Connection health is a link problem, not a per-pane one - it
               stays visible regardless of which sidebar item is selected.
               Also the capture-mode menu - see lib/captureMode.ts. */}
-          <ConnectionIndicator status={connectionStatus} />
+          <ConnectionIndicator status={connectionStatus} link={connectionLink} />
         </div>
       </header>
 
