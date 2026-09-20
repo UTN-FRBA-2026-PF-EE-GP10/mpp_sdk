@@ -524,6 +524,67 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#bench-sessions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bench sessions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Bench sessions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#start-a-session" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Start a session
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fill-in-steps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fill in steps
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#repeats-and-statistics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Repeats and statistics
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#printing-and-downloads" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Printing and downloads
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#sharing-a-session-file" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -995,6 +1056,67 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#bench-sessions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bench sessions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Bench sessions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#start-a-session" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Start a session
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fill-in-steps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fill in steps
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#repeats-and-statistics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Repeats and statistics
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#printing-and-downloads" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Printing and downloads
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#sharing-a-session-file" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1164,26 +1286,80 @@ panel). No board is touched, and the workbench marks the result
 <code>--bus</code>/<code>--device</code>/<code>--speed-hz</code> (SPI settings, same defaults as the other
 hardware scripts). Run <code>mpp-sdk run-algorithm --help</code> /
 <code>mpp-sdk plot-run --help</code> for the full list.</p>
+<h2 id="bench-sessions">Bench sessions<a class="headerlink" href="#bench-sessions" title="Permanent link">&para;</a></h2>
+<p>A session is a checklist for one bench session: setup fields, a list of
+steps with a status, and curves and runs linked to those steps. A curve
+or run links into a step - it is never copied - so a session always shows
+the current state of your saved library.</p>
+<h3 id="start-a-session">Start a session<a class="headerlink" href="#start-a-session" title="Permanent link">&para;</a></h3>
+<ol>
+<li>In the sidebar, open <strong>Sessions</strong> and click <strong>New session</strong>.</li>
+<li>Pick a template. The workbench suggests the one that matches your
+   current setup mode (Single or Full).</li>
+<li>Type a title, e.g. "Panel A alone under the lamp". Fill in the setup
+   fields - panel model, light source, load, ADC range - where they
+   differ from the defaults.</li>
+<li>Click <strong>Create session</strong>. The workbench opens the new session.</li>
+</ol>
+<h3 id="fill-in-steps">Fill in steps<a class="headerlink" href="#fill-in-steps" title="Permanent link">&para;</a></h3>
+<p>Each step has a status: <strong>todo</strong>, <strong>done</strong>, <strong>failed</strong>, or <strong>skipped</strong>.
+Set it from the dropdown next to the step. Steps come in four kinds:</p>
+<ul>
+<li><strong>Check</strong>: mark it done once you have verified something, e.g. firmware
+  configuration.</li>
+<li><strong>Number</strong> or <strong>text</strong>: type a value, e.g. Voc read off the panel label.</li>
+<li><strong>Curve</strong>: link one or more saved curves. Pick one from the list, or
+  click <strong>Link most recent curve</strong> right after you save one.</li>
+<li><strong>Run</strong>: link one or more saved runs, the same way.</li>
+</ul>
+<p>Notes are free text under each step, for anything the checklist itself
+does not capture.</p>
+<h3 id="repeats-and-statistics">Repeats and statistics<a class="headerlink" href="#repeats-and-statistics" title="Permanent link">&para;</a></h3>
+<p>A curve or run step can ask for more than one repeat, e.g. "3 curves, one
+after the other" (the Appendix's procedure). The step shows how many are
+linked against how many are asked for, e.g. "2 / 3 repeats". Once two or
+more are linked, the workbench shows the median, mean, standard
+deviation, min, and max for each number that matters: Voc, Isc, and P at
+MPP for curves; held power, P over MPP_th, and time to converge for runs.
+With only one linked, it shows that value alone, with no spread.</p>
+<h3 id="printing-and-downloads">Printing and downloads<a class="headerlink" href="#printing-and-downloads" title="Permanent link">&para;</a></h3>
+<p><strong>Expand all</strong> opens every linked curve's and run's chart at once - do
+this before printing (Ctrl+P/Cmd+P), though the workbench also expands
+them on its own when the print dialog opens, so nothing is missing from
+the printout. <strong>Collapse all</strong> puts them back.</p>
+<p><strong>Download JSON</strong> saves the session record as-is. <strong>Download Markdown</strong>
+saves a readable summary: every step, its value and notes, and the
+statistics above, as plain text - paste it into a lab notebook or a PR
+description. Both downloads hold the session alone, without the curves
+and runs it links.</p>
 <h2 id="sharing-a-session-file">Sharing a session file<a class="headerlink" href="#sharing-a-session-file" title="Permanent link">&para;</a></h2>
-<p>Send someone your curves and runs in one file, with no board and no saved
-library needed on their end.</p>
-<p><strong>Export</strong>: in <strong>Curves</strong> or <strong>Runs</strong>, click <strong>Select</strong>, tick the items you
-want, then <strong>Export N selected</strong>. Type a title when asked - this becomes
-the file name. The browser downloads <code>&lt;title&gt;.mppsession.json</code>.</p>
+<p>A session file bundles curves and runs (and, from a session, the session
+itself) into one file, so someone else can open the workbench with no
+board and no saved library and still see the whole picture.</p>
+<p><strong>Export from a session</strong>: open the session, click <strong>Export session
+file</strong>. The file holds the session record plus every curve and run its
+steps link. A linked curve or run since deleted from the library is
+listed as missing in the file, rather than silently left out.</p>
+<p><strong>Export loose curves or runs</strong>: in <strong>Curves</strong> or <strong>Runs</strong>, click
+<strong>Select</strong>, tick the items you want, then <strong>Export N selected</strong>. Type a
+title when asked - this becomes the file name. This file holds no
+session; it is exactly the curves or runs you picked.</p>
+<p>Either way, the browser downloads <code>&lt;title&gt;.mppsession.json</code>.</p>
 <p><strong>Open</strong>: start the workbench on any machine with
 <code>mpp-sdk curve-tracer-web --demo</code> (no board needed), open it in a browser,
 then click <strong>Open session</strong> in the header, or drag the file onto the
 page. The workbench switches to a read-only view of that file: a
 <strong>Viewing: <code>&lt;title&gt;</code></strong> banner appears at the top, with a <strong>Close</strong> button
-that returns to the normal view. While viewing a session:</p>
+that returns to the normal view. While viewing an imported session:</p>
 <ul>
 <li>Capture, starting a run, deleting, and remeasuring are all off - nothing
   in the file can be changed, and nothing is sent to a server.</li>
 <li>The curve and run views work the same as usual, including opening a run
   in the player - the player reads the run's samples straight from the
   file.</li>
-<li>No board and no saved library are needed: everything comes from the
-  file.</li>
+<li>If the file carries a session, <strong>View session</strong> opens it read-only, the
+  same document view as a live session, fed entirely from the file - no
+  board and no saved library needed.</li>
 </ul>
 <p>A bad file (wrong format, too large, or corrupted) shows an error message
 and leaves the current view untouched.</p>
