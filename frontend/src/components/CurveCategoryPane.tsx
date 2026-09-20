@@ -1,11 +1,12 @@
-import { Trash2 } from 'lucide-react'
+import { Download, Trash2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { CurveDashboardPane } from '@/components/CurveDashboardPane'
 import { CurveDetailDialog } from '@/components/CurveDetailDialog'
 import { Button } from '@/components/ui/button'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { deleteCurvesBatch } from '@/lib/api'
-import { useSandbox } from '@/lib/sandbox'
+import { buildSessionFile, downloadSessionFile, readOnlyReasonText, useReadOnly } from '@/lib/session'
+import { useSetupMode } from '@/lib/setupMode'
 import { getMeasurementKindInfo, type CurveRecord } from '@/types'
 
 /**
@@ -15,10 +16,11 @@ import { getMeasurementKindInfo, type CurveRecord } from '@/types'
  * CurveWorkbench opens - one place to inspect a curve, reachable from
  * both.
  *
- * Also owns this kind's batch delete: "Select" turns on a checkbox per
- * tile (CurveDashboardPane's own `selectable` prop) plus "Select all" and
- * "Delete N selected" here, one POST /api/curves/delete-batch request
- * instead of N separate DELETE calls (see lib/api.ts).
+ * Also owns this kind's select mode: "Select" turns on a checkbox per
+ * tile (CurveDashboardPane's own `selectable` prop) plus "Select all",
+ * "Export N selected" (a session file - see lib/session.ts) and
+ * "Delete N selected" (one POST /api/curves/delete-batch request instead
+ * of N separate DELETE calls - see lib/api.ts).
  */
 export function CurveCategoryPane({
   kind,
@@ -42,7 +44,8 @@ export function CurveCategoryPane({
 }) {
   const info = getMeasurementKindInfo(kind)
   const [selected, setSelected] = useState<CurveRecord | null>(null)
-  const sandbox = useSandbox()
+  const readOnly = useReadOnly()
+  const { mode: setupMode } = useSetupMode()
 
   const [selectMode, setSelectMode] = useState(false)
   const [rawSelectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -86,8 +89,23 @@ export function CurveCategoryPane({
     )
   }
 
+  /** Downloads the selected curves as a session file - see lib/session.ts.
+   * No fetch needed: `records` already carries every point (GET
+   * /api/curves serves full records), in either live or view mode. */
+  function handleExport() {
+    const ids = Array.from(selectedIds)
+    if (ids.length === 0) return
+    const chosen = records.filter((r) => ids.includes(r.id))
+    const defaultTitle = `${info.title} curves`
+    const title = window.prompt('Session title', defaultTitle)
+    if (title === null) return // cancelled
+    downloadSessionFile(
+      buildSessionFile({ title: title.trim() || defaultTitle, setup: setupMode, curves: chosen, runs: [] }),
+    )
+  }
+
   async function handleBatchDelete() {
-    if (sandbox.enabled || selectedIds.size === 0 || batchDeleting) return // defense in depth
+    if (readOnly.enabled || selectedIds.size === 0 || batchDeleting) return // defense in depth
     const ids = Array.from(selectedIds)
     if (
       !window.confirm(
@@ -143,14 +161,25 @@ export function CurveCategoryPane({
                 Select all
               </label>
               <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExport}
+                disabled={selectedIds.size === 0}
+                focusableWhenDisabled
+                title={selectedIds.size === 0 ? 'Select at least one curve first' : undefined}
+              >
+                <Download />
+                {`Export ${selectedIds.size} selected`}
+              </Button>
+              <Button
                 variant="destructive"
                 size="sm"
                 onClick={handleBatchDelete}
-                disabled={sandbox.enabled || selectedIds.size === 0 || batchDeleting}
+                disabled={readOnly.enabled || selectedIds.size === 0 || batchDeleting}
                 focusableWhenDisabled
                 title={
-                  sandbox.enabled
-                    ? 'Deleting is unavailable in demo mode'
+                  readOnly.enabled
+                    ? readOnlyReasonText(readOnly.reason ?? 'demo', 'Deleting')
                     : selectedIds.size === 0
                       ? 'Select at least one curve first'
                       : undefined

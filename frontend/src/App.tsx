@@ -4,18 +4,23 @@ import { ConnectionIndicator } from '@/components/ConnectionIndicator'
 import { CurveCategoryPane } from '@/components/CurveCategoryPane'
 import { MeasurePane } from '@/components/MeasurePane'
 import { NewReportPane } from '@/components/NewReportPane'
+import { OpenSessionButton } from '@/components/OpenSessionButton'
 import { ReportPane } from '@/components/ReportPane'
 import { RunDatePane } from '@/components/RunDatePane'
+import { SessionViewBar } from '@/components/SessionViewBar'
 import { SetupModeToggle } from '@/components/SetupModeToggle'
 import { Sidebar, type Selection } from '@/components/Sidebar'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { UnitToggle } from '@/components/UnitToggle'
+import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useConnectionStatus } from '@/hooks/useConnectionStatus'
+import { useSessionFileImport } from '@/hooks/useSessionFileImport'
 import { deleteCurve, fetchCurves, fetchMeasurementKinds, fetchReports, fetchRuns } from '@/lib/api'
 import { useCaptureMode } from '@/lib/captureMode'
 import { DEMO_CURVES, DEMO_REPORTS, DEMO_RUNS } from '@/lib/demoFixtures'
 import type { ReportSummary } from '@/lib/reports'
 import { groupRunsByDate, type RunSummary } from '@/lib/runs'
+import { useSession } from '@/lib/session'
 import { useSetupMode } from '@/lib/setupMode'
 import {
   isLiveConnection,
@@ -41,6 +46,24 @@ interface PendingRemeasure {
 export default function App() {
   const { mode: captureMode, setMode: setCaptureMode } = useCaptureMode()
   const sandboxEnabled = captureMode === 'simulated'
+  const session = useSession()
+  const [selection, setSelection] = useState<Selection>({ root: 'measure' })
+  // Jumps to the imported session's own content once it lands - Measure
+  // (capture, run start) isn't a view-mode destination (see the
+  // placeholder below), so landing there right after an import would show
+  // nothing useful. Only ever fires from the import event itself, never
+  // fights a later pick of Measure once the operator is looking at it.
+  const sessionImport = useSessionFileImport((parsed) => {
+    // A remeasure can only be finished by capturing, which view mode turns
+    // off - leaving its banner up would be a pending state with no way to
+    // resolve it. The old curve is untouched either way.
+    setPendingRemeasure(null)
+    if (parsed.curves.length > 0) {
+      setSelection({ root: 'curves', kind: parsed.curves[0].record.measurement })
+    } else if (parsed.runs.length > 0) {
+      setSelection({ root: 'runs', date: parsed.runs[0].record.captured_at.slice(0, 10) })
+    }
+  })
   const { mode: setupMode } = useSetupMode()
   const [showFullReminder, setShowFullReminder] = useState(false)
   // Fires only on the actual single -> full transition, not on mount (Full
@@ -58,8 +81,9 @@ export default function App() {
   // The link poll has nothing to do while fully offline - see
   // useConnectionStatus's docstring and ConnectionIndicator's one-shot
   // check, which takes over answering "is a link available" in that mode.
-  const { status: connectionStatus } = useConnectionStatus(!sandboxEnabled)
-  const [selection, setSelection] = useState<Selection>({ root: 'measure' })
+  // An imported session (view mode) is offline the same way - see
+  // lib/session.ts.
+  const { status: connectionStatus } = useConnectionStatus(!sandboxEnabled && !session.active)
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   // Seeded with the known vocabulary so the sidebar renders before the
   // first fetch lands. GET /api/measurement-kinds and any kind already in
@@ -75,13 +99,16 @@ export default function App() {
   const [fetchedRuns, setFetchedRuns] = useState<RunSummary[]>([])
   const [fetchedReports, setFetchedReports] = useState<ReportSummary[]>([])
   const [reloadToken, setReloadToken] = useState(0)
-  const records = sandboxEnabled ? DEMO_CURVES : fetchedRecords
-  const runs = sandboxEnabled ? DEMO_RUNS : fetchedRuns
+  // An imported session takes priority over demo fixtures - both are
+  // offline data sources, but a session is something the operator chose to
+  // look at, not a fallback default. See lib/session.ts.
+  const records = session.active ? session.curves : sandboxEnabled ? DEMO_CURVES : fetchedRecords
+  const runs = session.active ? session.runs : sandboxEnabled ? DEMO_RUNS : fetchedRuns
   // Reports are never written in demo mode (see NewReportPane/ReportPane's
   // sandbox gating) - the sidebar shows only the one bundled read-only
   // fixture there, the same "swap the whole list" pattern as records/runs
   // above, not a filtered view of whatever a real backend happens to have.
-  const reports = sandboxEnabled ? DEMO_REPORTS : fetchedReports
+  const reports = session.active ? [] : sandboxEnabled ? DEMO_REPORTS : fetchedReports
 
   // Neither of these is persisted (no localStorage/sessionStorage) on
   // purpose: a reload must drop a pending remeasure and leave the old
@@ -148,14 +175,15 @@ export default function App() {
     // The demo fixtures' kinds ('baseline', 'dimmed') are already in the
     // seeded vocabulary - no server round trip needed, and none should
     // happen while showing someone the workbench with no backend at all.
-    if (sandboxEnabled) return
+    // An imported session (view mode) is offline the same way.
+    if (sandboxEnabled || session.active) return
     fetchMeasurementKinds()
       .then((fetched) => setSeedKinds((prev) => Array.from(new Set([...prev, ...fetched]))))
       .catch((e) => console.error('fetching measurement kinds failed', e))
-  }, [sandboxEnabled])
+  }, [sandboxEnabled, session.active])
 
   useEffect(() => {
-    if (sandboxEnabled) return
+    if (sandboxEnabled || session.active) return
     // A retry or reload can start while an older request is still out.
     // Only the newest one may set the list or the error, or a slow stale
     // answer would overwrite the current state.
@@ -173,10 +201,10 @@ export default function App() {
     return () => {
       current = false
     }
-  }, [reloadToken, sandboxEnabled])
+  }, [reloadToken, sandboxEnabled, session.active])
 
   useEffect(() => {
-    if (sandboxEnabled) return
+    if (sandboxEnabled || session.active) return
     let current = true
     fetchRuns()
       .then((data) => {
@@ -191,14 +219,14 @@ export default function App() {
     return () => {
       current = false
     }
-  }, [reloadToken, sandboxEnabled])
+  }, [reloadToken, sandboxEnabled, session.active])
 
   useEffect(() => {
-    if (sandboxEnabled) return
+    if (sandboxEnabled || session.active) return
     fetchReports()
       .then(setFetchedReports)
       .catch((e) => console.error('fetching reports failed', e))
-  }, [reloadToken, sandboxEnabled])
+  }, [reloadToken, sandboxEnabled, session.active])
 
   // 'firmware-replay' ("Demo with PICO") needs a real board on the other
   // end of a real link - ConnectionIndicator already refuses to let
@@ -239,7 +267,19 @@ export default function App() {
   const runGroups = useMemo(() => groupRunsByDate(runs), [runs])
 
   let content
-  if (selection.root === 'measure') {
+  if (selection.root === 'measure' && session.active) {
+    content = (
+      <Card>
+        <CardHeader>
+          <CardTitle>Measure is unavailable</CardTitle>
+          <CardDescription>
+            Capture and run start need a real board and a saved library - both are off while
+            viewing an imported session. Close the session (top of the page) to measure.
+          </CardDescription>
+        </CardHeader>
+      </Card>
+    )
+  } else if (selection.root === 'measure') {
     content = (
       <MeasurePane
         kinds={kinds}
@@ -304,7 +344,14 @@ export default function App() {
   }
 
   return (
-    <div className="flex min-h-svh flex-col">
+    <div
+      className="flex min-h-svh flex-col"
+      // Page-wide, not just a drop zone rendered somewhere in the layout -
+      // an operator dragging a session file in shouldn't need to hit a
+      // specific target for it to land. See useSessionFileImport.
+      onDragOver={sessionImport.handleDragOver}
+      onDrop={sessionImport.handleDrop}
+    >
       <header className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3 border-b bg-background px-4 py-4 print:hidden">
         <div className="flex items-center gap-3">
           <button
@@ -323,6 +370,7 @@ export default function App() {
             simulated" - wrapping beats clipping the one control here that
             also doubles as the capture-mode trigger. */}
         <div className="flex flex-wrap items-center gap-2">
+          <OpenSessionButton onFile={sessionImport.importFile} />
           <SetupModeToggle />
           <UnitToggle />
           <ThemeToggle />
@@ -332,6 +380,21 @@ export default function App() {
           <ConnectionIndicator status={connectionStatus} />
         </div>
       </header>
+
+      <SessionViewBar />
+
+      {sessionImport.error && (
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-destructive/40 bg-destructive/10 px-4 py-1.5 text-xs font-medium text-destructive">
+          <span>Couldn&apos;t open that session file: {sessionImport.error}</span>
+          <button
+            type="button"
+            onClick={sessionImport.dismissError}
+            className="shrink-0 rounded-md border border-destructive/40 px-2 py-0.5 hover:bg-destructive/20"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {sandboxEnabled && (
         <div className="border-b border-violet-500/30 bg-violet-500/10 px-4 py-1.5 text-center text-xs font-medium text-violet-700 dark:text-violet-300">

@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { CurveCategoryPane } from './CurveCategoryPane'
+import { SetupModeProvider } from '@/components/SetupModeProvider'
 import { ThemeProvider } from '@/components/ThemeProvider'
 import { UnitsProvider } from '@/components/UnitsProvider'
 import { CaptureModeContext } from '@/lib/captureMode'
@@ -19,10 +20,14 @@ afterEach(() => {
 
 // The chart and metadata read the page's unit and theme settings, so
 // anything rendering them needs the providers the app root supplies.
+// SetupModeProvider is needed too - the pane's Export button reads the
+// current setup mode for the session file it builds.
 function renderPane(ui: Parameters<typeof render>[0]) {
   return render(
     <ThemeProvider>
-      <UnitsProvider>{ui}</UnitsProvider>
+      <UnitsProvider>
+        <SetupModeProvider>{ui}</SetupModeProvider>
+      </UnitsProvider>
     </ThemeProvider>,
   )
 }
@@ -31,9 +36,11 @@ function renderPaneInSandbox(ui: Parameters<typeof render>[0]) {
   return render(
     <ThemeProvider>
       <UnitsProvider>
-        <CaptureModeContext.Provider value={{ mode: 'simulated', setMode: vi.fn() }}>
-          {ui}
-        </CaptureModeContext.Provider>
+        <SetupModeProvider>
+          <CaptureModeContext.Provider value={{ mode: 'simulated', setMode: vi.fn() }}>
+            {ui}
+          </CaptureModeContext.Provider>
+        </SetupModeProvider>
       </UnitsProvider>
     </ThemeProvider>,
   )

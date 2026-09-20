@@ -1,0 +1,364 @@
+// A session file bundles a report (Part C, not built here yet) and every
+// curve and run linked to it - or a set of curves/runs chosen by hand in
+// select mode - into one JSON file, so someone else can open the workbench
+// with no board and no saved library and still see the whole picture.
+// Import replaces the data source the same way demo (sandbox) mode does
+// (see lib/sandbox.ts): everything read-only, nothing fetched from or
+// written to a server. See CurveCategoryPane.tsx/RunDatePane.tsx for where
+// a file is built, and components/SessionProvider.tsx for where an
+// imported one is held.
+
+import { createContext, useContext } from 'react'
+import { useSandbox } from '@/lib/sandbox'
+import type { RunDetail, RunSample } from '@/lib/runs'
+import type { CurvePoint, CurveRecord, PanelSetup } from '@/types'
+
+export const SESSION_FORMAT = 'mpp-sdk-session'
+export const SESSION_SCHEMA = 1
+
+/** Matches the Addendum's 50 MB limit - checked against `File.size` before
+ * the file is even read, so an oversize drop fails fast instead of
+ * stringifying tens of megabytes into memory first. */
+export const MAX_SESSION_BYTES = 50 * 1024 * 1024
+
+export interface SessionCurveEntry {
+  id: string
+  record: CurveRecord
+}
+
+export interface SessionRunEntry {
+  id: string
+  record: RunDetail
+}
+
+export interface SessionMissing {
+  curve_ids: string[]
+  run_ids: string[]
+}
+
+/** The `mpp-sdk-session` file format, schema 1. `report` stays opaque here
+ * - Part C owns its shape. This module only carries it through import and
+ * export unchanged. */
+export interface SessionFile {
+  format: typeof SESSION_FORMAT
+  schema: number
+  exported_at: string
+  title: string
+  setup: string
+  report: unknown | null
+  curves: SessionCurveEntry[]
+  runs: SessionRunEntry[]
+  missing: SessionMissing
+}
+
+/** Thrown by every parse/read function below, with a message meant to be
+ * shown to the operator as-is - "a bad file gives a clear message". */
+export class SessionParseError extends Error {}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function requireString(value: unknown, field: string): string {
+  if (typeof value !== 'string') {
+    throw new SessionParseError(`${field} must be a string`)
+  }
+  return value
+}
+
+function requireNumber(value: unknown, field: string): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new SessionParseError(`${field} must be a number`)
+  }
+  return value
+}
+
+function requireBoolean(value: unknown, field: string): boolean {
+  if (typeof value !== 'boolean') {
+    throw new SessionParseError(`${field} must be a boolean`)
+  }
+  return value
+}
+
+function requireArray(value: unknown, field: string): unknown[] {
+  if (!Array.isArray(value)) {
+    throw new SessionParseError(`${field} must be an array`)
+  }
+  return value
+}
+
+function parsePanels(value: unknown, field: string): PanelSetup[] {
+  return requireArray(value, field).map((p, i) => {
+    if (!isPlainObject(p)) throw new SessionParseError(`${field}[${i}] must be an object`)
+    return {
+      id: requireString(p.id, `${field}[${i}].id`),
+      tilt_deg: requireNumber(p.tilt_deg, `${field}[${i}].tilt_deg`),
+    }
+  })
+}
+
+function parseCurvePoints(value: unknown, field: string): CurvePoint[] {
+  return requireArray(value, field).map((p, i) => {
+    if (!isPlainObject(p)) throw new SessionParseError(`${field}[${i}] must be an object`)
+    return {
+      v: requireNumber(p.v, `${field}[${i}].v`),
+      i: requireNumber(p.i, `${field}[${i}].i`),
+    }
+  })
+}
+
+function parseRunSamples(value: unknown, field: string): RunSample[] {
+  return requireArray(value, field).map((s, i) => {
+    if (!isPlainObject(s)) throw new SessionParseError(`${field}[${i}] must be an object`)
+    return {
+      t: requireNumber(s.t, `${field}[${i}].t`),
+      v: requireNumber(s.v, `${field}[${i}].v`),
+      i: requireNumber(s.i, `${field}[${i}].i`),
+      d: requireNumber(s.d, `${field}[${i}].d`),
+    }
+  })
+}
+
+/** Validates a curve record the same shape GET /api/curves serves, so a
+ * hand-edited or corrupted session file fails clearly instead of crashing
+ * a chart or a metadata table deep in the app later. The live API path
+ * (lib/api.ts) trusts the server's own JSON outright - this extra check
+ * only exists here because a session file is not the server's own JSON,
+ * it is whatever the operator was handed. */
+export function parseSessionCurveRecord(raw: unknown, context: string): CurveRecord {
+  if (!isPlainObject(raw)) {
+    throw new SessionParseError(`${context}: curve record must be an object`)
+  }
+  return {
+    id: requireString(raw.id, `${context}.id`),
+    path: requireString(raw.path, `${context}.path`),
+    captured_at: requireString(raw.captured_at, `${context}.captured_at`),
+    label: requireString(raw.label, `${context}.label`),
+    measurement: requireString(raw.measurement, `${context}.measurement`),
+    panels: parsePanels(raw.panels, `${context}.panels`),
+    notes: requireString(raw.notes, `${context}.notes`),
+    n_points: requireNumber(raw.n_points, `${context}.n_points`),
+    source: requireString(raw.source, `${context}.source`),
+    voc: requireNumber(raw.voc, `${context}.voc`),
+    isc: requireNumber(raw.isc, `${context}.isc`),
+    p_mpp: requireNumber(raw.p_mpp, `${context}.p_mpp`),
+    points: parseCurvePoints(raw.points, `${context}.points`),
+  }
+}
+
+/** Same reasoning as parseSessionCurveRecord above, for GET /api/runs/{id}'s
+ * shape - a session run always carries its full samples (the export side
+ * always fetches with max_samples=0), so `downsampled` is expected false,
+ * but a stray true is accepted rather than rejected: it says something
+ * about how the file was produced, not something that makes it unusable. */
+export function parseSessionRunDetail(raw: unknown, context: string): RunDetail {
+  if (!isPlainObject(raw)) {
+    throw new SessionParseError(`${context}: run record must be an object`)
+  }
+  return {
+    id: requireString(raw.id, `${context}.id`),
+    path: requireString(raw.path, `${context}.path`),
+    captured_at: requireString(raw.captured_at, `${context}.captured_at`),
+    label: requireString(raw.label, `${context}.label`),
+    algorithm: requireString(raw.algorithm, `${context}.algorithm`),
+    n_samples: requireNumber(raw.n_samples, `${context}.n_samples`),
+    duration_s: requireNumber(raw.duration_s, `${context}.duration_s`),
+    aborted: requireBoolean(raw.aborted, `${context}.aborted`),
+    curve_ref: raw.curve_ref === null ? null : requireString(raw.curve_ref, `${context}.curve_ref`),
+    notes: requireString(raw.notes, `${context}.notes`),
+    source: requireString(raw.source, `${context}.source`),
+    downsampled: requireBoolean(raw.downsampled, `${context}.downsampled`),
+    samples: parseRunSamples(raw.samples, `${context}.samples`),
+  }
+}
+
+function parseMissing(value: unknown): SessionMissing {
+  if (value === undefined) return { curve_ids: [], run_ids: [] }
+  if (!isPlainObject(value)) throw new SessionParseError('missing must be an object')
+  const curveIds = value.curve_ids === undefined ? [] : requireArray(value.curve_ids, 'missing.curve_ids')
+  const runIds = value.run_ids === undefined ? [] : requireArray(value.run_ids, 'missing.run_ids')
+  return {
+    curve_ids: curveIds.map((v, i) => requireString(v, `missing.curve_ids[${i}]`)),
+    run_ids: runIds.map((v, i) => requireString(v, `missing.run_ids[${i}]`)),
+  }
+}
+
+/** Checks `format`/`schema` first, before parsing a single record - a file
+ * that is simply not a session file (the wrong format, or a schema this
+ * workbench doesn't know) should say so plainly, not fail on whatever
+ * record happens to be first. */
+export function parseSessionFile(raw: unknown): SessionFile {
+  if (!isPlainObject(raw)) {
+    throw new SessionParseError('Not a session file - expected a JSON object')
+  }
+  if (raw.format !== SESSION_FORMAT) {
+    throw new SessionParseError(
+      `Not a session file - expected "format": "${SESSION_FORMAT}", got ${JSON.stringify(raw.format)}`,
+    )
+  }
+  if (raw.schema !== SESSION_SCHEMA) {
+    throw new SessionParseError(
+      `Unsupported session schema ${JSON.stringify(raw.schema)} - this workbench reads schema ${SESSION_SCHEMA}`,
+    )
+  }
+
+  const title = requireString(raw.title, 'title')
+  const setup = requireString(raw.setup, 'setup')
+  const exportedAt = requireString(raw.exported_at, 'exported_at')
+
+  const curveEntries = requireArray(raw.curves, 'curves').map((entry, i) => {
+    if (!isPlainObject(entry)) throw new SessionParseError(`curves[${i}] must be an object`)
+    const id = requireString(entry.id, `curves[${i}].id`)
+    return { id, record: parseSessionCurveRecord(entry.record, `curves[${i}] ("${id}")`) }
+  })
+
+  const runEntries = requireArray(raw.runs, 'runs').map((entry, i) => {
+    if (!isPlainObject(entry)) throw new SessionParseError(`runs[${i}] must be an object`)
+    const id = requireString(entry.id, `runs[${i}].id`)
+    return { id, record: parseSessionRunDetail(entry.record, `runs[${i}] ("${id}")`) }
+  })
+
+  return {
+    format: SESSION_FORMAT,
+    schema: SESSION_SCHEMA,
+    exported_at: exportedAt,
+    title,
+    setup,
+    report: raw.report ?? null,
+    curves: curveEntries,
+    runs: runEntries,
+    missing: parseMissing(raw.missing),
+  }
+}
+
+/** Reads and validates a dropped/opened file, in that order: size first (no
+ * point reading 200 MB just to reject it), then JSON syntax, then the
+ * format/schema/record checks above. */
+export async function readSessionFile(file: File): Promise<SessionFile> {
+  if (file.size > MAX_SESSION_BYTES) {
+    const mb = (file.size / (1024 * 1024)).toFixed(1)
+    throw new SessionParseError(`Session file is too large (${mb} MB) - the limit is 50 MB`)
+  }
+  const text = await file.text()
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(text)
+  } catch {
+    throw new SessionParseError('Not a valid JSON file')
+  }
+  return parseSessionFile(parsed)
+}
+
+/** Builds a session file from records already in hand - curves are always
+ * full records by the time they reach this app (GET /api/curves serves
+ * points inline), and runs are expected to already carry every sample
+ * (max_samples=0), so nothing here re-fetches or truncates anything. */
+export function buildSessionFile(options: {
+  title: string
+  setup: string
+  curves: CurveRecord[]
+  runs: RunDetail[]
+  report?: unknown | null
+}): SessionFile {
+  return {
+    format: SESSION_FORMAT,
+    schema: SESSION_SCHEMA,
+    exported_at: new Date().toISOString(),
+    title: options.title,
+    setup: options.setup,
+    report: options.report ?? null,
+    curves: options.curves.map((record) => ({ id: record.id, record })),
+    runs: options.runs.map((record) => ({ id: record.id, record })),
+    missing: { curve_ids: [], run_ids: [] },
+  }
+}
+
+/** `<title>.mppsession.json`, with filesystem-illegal characters swapped
+ * for a hyphen - unlike curveExport.ts's sanitizeFilenamePart, the title's
+ * spacing and casing are kept, since it is meant to be read back by a
+ * person, not matched against anything. */
+export function sessionFileName(title: string): string {
+  const cleaned = title.trim().replace(/[/\\?%*:|"<>]/g, '-')
+  return `${cleaned || 'session'}.mppsession.json`
+}
+
+/** Same Blob-object-URL download as curveExport.ts's downloadCurve - no
+ * server involvement, so no download endpoint to add. */
+export function downloadSessionFile(session: SessionFile): void {
+  const blob = new Blob([JSON.stringify(session, null, 2)], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  try {
+    const a = document.createElement('a')
+    a.href = url
+    a.download = sessionFileName(session.title)
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+  } finally {
+    URL.revokeObjectURL(url)
+  }
+}
+
+export interface SessionValue {
+  /** True once a session file has been imported - view mode. */
+  active: boolean
+  title: string | null
+  setup: string | null
+  report: unknown | null
+  curves: CurveRecord[]
+  runs: RunDetail[]
+  missing: SessionMissing
+  enter: (session: SessionFile) => void
+  close: () => void
+}
+
+// Fails safe the same way CaptureModeContext does (lib/captureMode.ts): a
+// component rendered without SessionProvider (most tests) gets "no session
+// active" rather than a throw.
+const DEFAULT_SESSION_VALUE: SessionValue = {
+  active: false,
+  title: null,
+  setup: null,
+  report: null,
+  curves: [],
+  runs: [],
+  missing: { curve_ids: [], run_ids: [] },
+  enter: () => {},
+  close: () => {},
+}
+
+export const SessionContext = createContext<SessionValue>(DEFAULT_SESSION_VALUE)
+
+export function useSession(): SessionValue {
+  return useContext(SessionContext)
+}
+
+export type ReadOnlyReason = 'demo' | 'view'
+
+export interface ReadOnlyValue {
+  enabled: boolean
+  reason: ReadOnlyReason | null
+}
+
+/** The one place "is this control allowed to write" is decided, folding
+ * together demo (sandbox) mode and an imported session's view mode - both
+ * mean the same thing to a delete/remeasure/batch-delete button, and the
+ * Addendum asks view mode to work "the same way demo (sandbox) mode does".
+ * `reason` is kept apart from `enabled` only so a tooltip can say which of
+ * the two is actually active, rather than always blaming demo mode. */
+export function useReadOnly(): ReadOnlyValue {
+  const sandbox = useSandbox()
+  const session = useSession()
+  if (session.active) return { enabled: true, reason: 'view' }
+  if (sandbox.enabled) return { enabled: true, reason: 'demo' }
+  return { enabled: false, reason: null }
+}
+
+/** Picks the tooltip/explanation text for a control useReadOnly disabled -
+ * one place so "unavailable while viewing an imported session" and
+ * "unavailable in demo mode" can't drift apart between components. */
+export function readOnlyReasonText(reason: ReadOnlyReason, action: string): string {
+  return reason === 'view'
+    ? `${action} is unavailable while viewing an imported session`
+    : `${action} is unavailable in demo mode`
+}

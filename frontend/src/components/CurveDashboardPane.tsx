@@ -14,7 +14,7 @@ import {
 import { deleteCurve } from '@/lib/api'
 import { downloadCurve } from '@/lib/curveExport'
 import { formatCapturedAt } from '@/lib/format'
-import { useSandbox } from '@/lib/sandbox'
+import { readOnlyReasonText, useReadOnly } from '@/lib/session'
 import type { CurveRecord } from '@/types'
 
 /**
@@ -57,7 +57,7 @@ export function CurveDashboardPane({
   selected?: boolean
   onToggleSelected?: () => void
 }) {
-  const sandbox = useSandbox()
+  const readOnly = useReadOnly()
   const [deleting, setDeleting] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
 
@@ -65,8 +65,8 @@ export function CurveDashboardPane({
   // Labels repeat (every unnamed curve is "Untitled curve"), so the
   // capture time keeps each tile's button names apart.
   const capturedAt = formatCapturedAt(record.captured_at)
-  const deleteDisabled = sandbox.enabled || remeasurePending || deleting
-  const remeasureDisabled = sandbox.enabled || remeasurePending
+  const deleteDisabled = readOnly.enabled || remeasurePending || deleting
+  const remeasureDisabled = readOnly.enabled || remeasurePending
 
   async function handleDelete() {
     if (deleteDisabled) return // defense in depth - the button is disabled anyway
@@ -207,8 +207,10 @@ export function CurveDashboardPane({
           focusableWhenDisabled
           aria-label={`Remeasure "${label}", captured ${capturedAt}`}
           title={
-            sandbox.enabled
-              ? 'Remeasure needs real hardware - unavailable in demo mode'
+            readOnly.enabled
+              ? readOnly.reason === 'view'
+                ? readOnlyReasonText(readOnly.reason, 'Remeasure')
+                : 'Remeasure needs real hardware - unavailable in demo mode'
               : remeasurePending
                 ? 'A replacement capture is already pending for this curve'
                 : 'Capture a replacement, then remove this curve'
@@ -225,8 +227,8 @@ export function CurveDashboardPane({
           focusableWhenDisabled
           aria-label={`Delete "${label}", captured ${capturedAt}`}
           title={
-            sandbox.enabled
-              ? 'Deleting is unavailable in demo mode'
+            readOnly.enabled
+              ? readOnlyReasonText(readOnly.reason ?? 'demo', 'Deleting')
               : remeasurePending
                 ? 'A replacement capture is already pending for this curve'
                 : deleting

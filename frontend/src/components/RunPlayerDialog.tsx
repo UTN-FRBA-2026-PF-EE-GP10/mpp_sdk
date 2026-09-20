@@ -11,7 +11,7 @@ import { deleteRun, fetchRun } from '@/lib/api'
 import { DEMO_RUNS } from '@/lib/demoFixtures'
 import { formatCapturedAt, formatSeconds } from '@/lib/format'
 import { findCurveForRun, referenceCurveMessage, trailUpTo } from '@/lib/runPlayback'
-import { useSandbox } from '@/lib/sandbox'
+import { readOnlyReasonText, useReadOnly, useSession } from '@/lib/session'
 import type { RunDetail, RunSummary } from '@/lib/runs'
 import { mppPoint } from '@/lib/curveMath'
 import type { CurvePoint, CurveRecord } from '@/types'
@@ -86,7 +86,8 @@ function RunPlayerContent({
   onDeleted: () => void
   fallbackReferencePoints?: CurvePoint[]
 }) {
-  const sandbox = useSandbox()
+  const readOnly = useReadOnly()
+  const session = useSession()
 
   // Most runs opened in demo mode are one of DEMO_RUNS (RunDatePane's list
   // comes straight from the bundled fixtures, see App.tsx), so the detail
@@ -94,15 +95,19 @@ function RunPlayerContent({
   // against a real backend that was never there to begin with. This is
   // resolved synchronously, during the initial render, rather than in the
   // effect below - it's derived from props already in hand, not fetched.
+  // An imported session's runs (view mode) work the same way, for the same
+  // reason: session.runs already carries every sample, and there is no
+  // server to fetch from at all - see lib/session.ts.
   //
-  // Gated on fixture membership, not `sandbox.enabled` alone: a simulated
-  // run started from RunPane while in demo mode genuinely lives on the
-  // real server (see frontend/README.md's demo-mode note - starting a run
-  // is the one write demo mode still makes), so its id is never one of
-  // the bundled fixtures and must still be fetched normally, even here.
+  // Gated on fixture/session membership, not `readOnly.enabled` alone: a
+  // simulated run started from RunPane while in demo mode genuinely lives
+  // on the real server (see frontend/README.md's demo-mode note - starting
+  // a run is the one write demo mode still makes), so its id is never one
+  // of the bundled fixtures and must still be fetched normally, even here.
   const isBundledFixture = DEMO_RUNS.some((r) => r.id === run.id)
+  const sessionRun = session.active ? (session.runs.find((r) => r.id === run.id) ?? null) : null
   const [detail, setDetail] = useState<RunDetail | null>(() =>
-    isBundledFixture ? (DEMO_RUNS.find((r) => r.id === run.id) ?? null) : null,
+    sessionRun ?? (isBundledFixture ? (DEMO_RUNS.find((r) => r.id === run.id) ?? null) : null),
   )
   const [loadError, setLoadError] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
@@ -111,17 +116,18 @@ function RunPlayerContent({
   // `run.id` only ever changes by remounting this component (the dialog
   // keys RunPlayerContent by it), so `detail`/`loadError` already start
   // fresh from their initial state - no reset needed here, just the
-  // fetch itself. A bundled fixture's initial state is already the answer
-  // (see above), so there is nothing left for this effect to do there.
+  // fetch itself. A bundled fixture's or a session's initial state is
+  // already the answer (see above), so there is nothing left for this
+  // effect to do there.
   useEffect(() => {
-    if (isBundledFixture) return
+    if (isBundledFixture || sessionRun) return
     fetchRun(run.id)
       .then(setDetail)
       .catch((e) => setLoadError(e instanceof Error ? e.message : String(e)))
-  }, [run.id, isBundledFixture])
+  }, [run.id, isBundledFixture, sessionRun])
 
   async function handleDelete() {
-    if (sandbox.enabled) return // defense in depth - the button is disabled anyway
+    if (readOnly.enabled) return // defense in depth - the button is disabled anyway
     if (!window.confirm(`Delete run "${run.label || run.id}"? This cannot be undone.`)) return
     setDeleting(true)
     setDeleteError(null)
@@ -186,15 +192,17 @@ function RunPlayerContent({
           variant="destructive"
           size="sm"
           onClick={handleDelete}
-          disabled={deleting || sandbox.enabled}
+          disabled={deleting || readOnly.enabled}
           focusableWhenDisabled
-          title={sandbox.enabled ? 'Deleting is unavailable in demo mode' : undefined}
+          title={readOnly.enabled ? readOnlyReasonText(readOnly.reason ?? 'demo', 'Deleting') : undefined}
         >
           <Trash2 />
           {deleting ? 'Deleting...' : 'Delete run'}
         </Button>
-        {sandbox.enabled && (
-          <p className="text-xs text-muted-foreground">Delete is unavailable in demo mode.</p>
+        {readOnly.enabled && (
+          <p className="text-xs text-muted-foreground">
+            {readOnlyReasonText(readOnly.reason ?? 'demo', 'Delete')}.
+          </p>
         )}
       </div>
     </div>
