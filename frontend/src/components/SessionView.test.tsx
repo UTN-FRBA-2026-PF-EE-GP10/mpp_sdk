@@ -214,6 +214,26 @@ describe('SessionView - editing (online)', () => {
     expect(onPatch).toHaveBeenCalledWith({ steps: [{ id: 'panel-label-voc', value: 23.5 }] })
   })
 
+  it('keeps a snapshotted panel-model field read-only even while the session is otherwise editable', async () => {
+    const onPatch = vi.fn(async (patch: SessionPatch) => ({ ...session(), ...patch }) as SessionRecord)
+    const withSnapshot = session({
+      fields: {
+        panel: 'Luxen LN-10P, 10 W',
+        panel_model_voc: '23.5',
+        operator: 'bench operator',
+      },
+    })
+    renderView(
+      <SessionView session={withSnapshot} curves={[curve()]} runs={[runSummary()]} readOnly={false} onPatch={onPatch} />,
+    )
+
+    const snapshotInput = screen.getByDisplayValue('23.5') as HTMLInputElement
+    expect(snapshotInput.readOnly).toBe(true)
+    // A field the picker never touched (operator) stays editable.
+    const operatorInput = screen.getByDisplayValue('bench operator') as HTMLInputElement
+    expect(operatorInput.readOnly).toBe(false)
+  })
+
   it('links a picked curve immediately, appending to the existing links', async () => {
     const onPatch = vi.fn(async (patch: SessionPatch) => ({ ...session(), ...patch }) as SessionRecord)
     const c2 = curve({ id: 'c2', label: 'Second sweep' })

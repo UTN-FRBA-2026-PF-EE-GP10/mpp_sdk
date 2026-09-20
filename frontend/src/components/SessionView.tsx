@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useDebouncedPatch } from '@/hooks/useDebouncedPatch'
 import { formatCapturedAt } from '@/lib/format'
+import { isPanelModelSnapshotField } from '@/lib/panels'
 import {
   downloadSessionExportFile,
   downloadSessionJson,
@@ -399,6 +400,12 @@ function FieldRow({
   onChange: (value: string) => void
 }) {
   const [value, setValue] = useState(initialValue)
+  // A snapshotted panel-model number (e.g. "panel_model_voc") is
+  // read-only regardless of the session's own edit/view mode - it was
+  // copied from a panel model at creation, and hand-editing it here
+  // would silently disagree with what that panel model says (see
+  // lib/panels.ts's isPanelModelSnapshotField).
+  const fieldReadOnly = readOnly || isPanelModelSnapshotField(fieldKey)
   return (
     <div className="flex flex-col gap-1">
       <dt className="text-xs text-muted-foreground">{humanizeKey(fieldKey)}</dt>
@@ -406,7 +413,7 @@ function FieldRow({
         <input
           type="text"
           value={value}
-          readOnly={readOnly}
+          readOnly={fieldReadOnly}
           onChange={(e) => {
             setValue(e.target.value)
             onChange(e.target.value)

@@ -1,10 +1,38 @@
 import { useEffect, useState } from 'react'
+import { PanelModelPicker } from '@/components/PanelModelPicker'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { createSession, fetchSessionTemplate, fetchSessionTemplates } from '@/lib/api'
+import { panelModelFieldKeys, panelModelSnapshotFields, type PanelModelRecord } from '@/lib/panels'
 import { readOnlyReasonText, useReadOnly } from '@/lib/sessionFile'
 import type { SessionRecord, SessionTemplate, SessionTemplateSummary } from '@/lib/sessions'
 import type { SetupMode } from '@/lib/setupMode'
+
+// Which panel-model picker(s) a template's setup gets, and the field keys
+// each one owns (see lib/panels.ts's panelModelFieldKeys) - one picker in
+// Single, two (A and B, matching the bench position convention) in Full.
+// "panel A"/"panel B" here means the bench position, unrelated to which
+// picker instance renders first.
+const SINGLE_PANEL_SLOTS = [{ label: 'Panel model', labelKey: 'panel', prefix: 'panel_model' }]
+const FULL_PANEL_SLOTS = [
+  { label: 'Panel A model', labelKey: 'panel_a', prefix: 'panel_a_model' },
+  { label: 'Panel B model', labelKey: 'panel_b', prefix: 'panel_b_model' },
+]
+
+function panelSlotsFor(setup: string): typeof SINGLE_PANEL_SLOTS {
+  return setup === 'full' ? FULL_PANEL_SLOTS : SINGLE_PANEL_SLOTS
+}
+
+// The generic field_defs table below renders every setup field except the
+// ones a PanelModelPicker above it already owns (see panelSlotsFor) - a
+// picked panel model's label and Voc/Isc/Vmp/Imp are set by picking, not
+// by typing into this table.
+function visibleFieldDefs(template: SessionTemplate) {
+  const hidden = new Set(
+    panelSlotsFor(template.setup).flatMap((slot) => panelModelFieldKeys(slot.labelKey, slot.prefix)),
+  )
+  return template.field_defs.filter((fd) => !hidden.has(fd.key))
+}
 
 /**
  * Picks a template, names the session, fills in its setup fields, and
@@ -142,9 +170,26 @@ export function NewSessionPane({
           <p className="text-sm text-destructive">Failed to load template: {templateError}</p>
         )}
 
-        {template && template.field_defs.length > 0 && (
+        {template && (
+          <div className="flex flex-col gap-2">
+            {panelSlotsFor(template.setup).map((slot) => (
+              <PanelModelPicker
+                key={slot.labelKey}
+                label={slot.label}
+                onPick={(panel: PanelModelRecord) =>
+                  setFields((prev) => ({
+                    ...prev,
+                    ...panelModelSnapshotFields(slot.labelKey, slot.prefix, panel),
+                  }))
+                }
+              />
+            ))}
+          </div>
+        )}
+
+        {template && visibleFieldDefs(template).length > 0 && (
           <div className="grid gap-3 sm:grid-cols-2">
-            {template.field_defs.map((fd) => (
+            {visibleFieldDefs(template).map((fd) => (
               <label key={fd.key} className="flex flex-col gap-1 text-sm text-muted-foreground">
                 {fd.label}
                 <input

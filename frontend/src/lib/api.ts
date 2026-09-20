@@ -12,6 +12,7 @@ import type {
   SessionTemplateSummary,
 } from '@/lib/sessions'
 import type { LiveRunState, RunDetail, RunSummary } from '@/lib/runs'
+import type { CreatePanelModelInput, PanelModelRecord, PatchPanelModelInput } from '@/lib/panels'
 import type { CurvePoint, CurveRecord, PanelSetup } from '@/types'
 
 interface WireDataPoint {
@@ -365,4 +366,43 @@ export async function patchSession(id: string, patch: SessionPatch): Promise<Ses
 export async function deleteSession(id: string): Promise<void> {
   const r = await fetch(`/api/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' })
   await parseJsonOrThrow(r, 'DELETE /api/sessions/{id}')
+}
+
+// --- Panel models ------------------------------------------------------
+
+export async function fetchPanelModels(): Promise<PanelModelRecord[]> {
+  const r = await fetch('/api/panels')
+  const payload = (await parseJsonOrThrow(r, 'GET /api/panels')) as (
+    | PanelModelRecord
+    | { id: string; path: string; error: string }
+  )[]
+  // Same "a malformed file reports {id, path, error}" pattern as
+  // fetchCurves/fetchRuns/fetchSessions above.
+  return payload.filter((entry): entry is PanelModelRecord => !('error' in entry))
+}
+
+export async function createPanelModel(input: CreatePanelModelInput): Promise<PanelModelRecord> {
+  const r = await fetch('/api/panels', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  })
+  return (await parseJsonOrThrow(r, 'POST /api/panels')) as PanelModelRecord
+}
+
+export async function patchPanelModel(
+  id: string,
+  patch: PatchPanelModelInput,
+): Promise<PanelModelRecord> {
+  const r = await fetch(`/api/panels/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  })
+  return (await parseJsonOrThrow(r, 'PATCH /api/panels/{id}')) as PanelModelRecord
+}
+
+export async function deletePanelModel(id: string): Promise<void> {
+  const r = await fetch(`/api/panels/${encodeURIComponent(id)}`, { method: 'DELETE' })
+  await parseJsonOrThrow(r, 'DELETE /api/panels/{id}')
 }
