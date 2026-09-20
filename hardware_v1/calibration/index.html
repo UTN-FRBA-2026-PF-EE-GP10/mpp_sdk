@@ -565,6 +565,67 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#changing-the-adc-range" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changing the ADC range
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Changing the ADC range">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-move-the-jumpers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Move the jumpers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-set-the-constant" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Set the constant
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-reflash" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Reflash
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-check-the-result" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Check the result
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -907,6 +968,67 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#changing-the-adc-range" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changing the ADC range
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Changing the ADC range">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-move-the-jumpers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Move the jumpers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-set-the-constant" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Set the constant
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-reflash" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Reflash
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-check-the-result" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Check the result
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -992,10 +1114,11 @@ there. For better accuracy, use the INA229 (V in only).</p>
 </div>
 <h2 id="when-to-redo-it">When to redo it<a class="headerlink" href="#when-to-redo-it" title="Permanent link">&para;</a></h2>
 <ul>
-<li>After you change the ADC range (<code>ADC_DIVIDER_RANGE</code> and its jumpers).
-  For example, <code>Mid</code> for two panels in series.</li>
 <li>On a different board, or after you change the Pico.</li>
 </ul>
+<p>Changing the ADC range does <strong>not</strong> need a redo. The gain and zero
+describe the RP2040's own ADC, not the divider ahead of it. See "Changing
+the ADC range" below for what a range change does need.</p>
 <h2 id="how-to-redo-it-about-15-minutes">How to redo it (about 15 minutes)<a class="headerlink" href="#how-to-redo-it-about-15-minutes" title="Permanent link">&para;</a></h2>
 <p>You need a bench power supply and a multimeter.</p>
 <ol>
@@ -1047,6 +1170,102 @@ about 50 V at 10 % duty with 18 V in. To check V out while the converter
 switches, put a load resistor on the output (10 Ohm, 10 W) and use
 <code>scripts/duty_sweep.py</code>.</p>
 </div>
+<h2 id="changing-the-adc-range">Changing the ADC range<a class="headerlink" href="#changing-the-adc-range" title="Permanent link">&para;</a></h2>
+<p>The board has three ranges: <code>Low</code>, <code>Mid</code>, <code>Full</code>. Each range trades full-scale
+voltage for ADC resolution. <code>Low</code> gives the most resolution but the lowest
+ceiling; <code>Full</code> gives the highest ceiling but the least resolution per volt.</p>
+<table>
+<thead>
+<tr>
+<th>Range</th>
+<th>Full scale</th>
+<th>When to use it</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Low</code></td>
+<td>about 27.3 V</td>
+<td>one panel (the firmware setting today)</td>
+</tr>
+<tr>
+<td><code>Mid</code></td>
+<td>about 51.5 V</td>
+<td>two panels in series (about 44 V open-circuit)</td>
+</tr>
+<tr>
+<td><code>Full</code></td>
+<td>about 75.6 V</td>
+<td>highest input the board can see</td>
+</tr>
+</tbody>
+</table>
+<p>This needs four steps: move the jumpers, set the constant, reflash, and
+check the result against a meter. It does <strong>not</strong> need a new gain/zero fit
+(see "When to redo it" above).</p>
+<h3 id="1-move-the-jumpers">1. Move the jumpers<a class="headerlink" href="#1-move-the-jumpers" title="Permanent link">&para;</a></h3>
+<p>Both the input divider (feeds <code>ADC_PWR</code>) and the output divider (feeds
+<code>ADC_VOUT</code>) have three 75k resistors in series ahead of a 10k leg. Two of
+the three resistors, on each divider, can be bridged out with a jumper:</p>
+<ul>
+<li><strong>Input</strong>: <code>JP6</code> bridges out one 75k resistor, <code>JP7</code> bridges out another.
+  <code>JP9</code> is a fixed link between the input terminal and the rest of the
+  divider. Leave <code>JP9</code> shorted; it is not part of the range choice.</li>
+<li><strong>Output</strong>: <code>JP8</code> bridges out one 75k resistor, <code>JP13</code> bridges out
+  another. <code>JP10</code> is the equivalent fixed link on the output side. Leave
+  <code>JP10</code> shorted too.</li>
+</ul>
+<p>With no jumper fitted, a divider is in its <code>Full</code> range: that is how the
+board is built. These designators come from the "AnalogConverters" sheet of
+the schematic under <code>hardware/</code>.</p>
+<p>Short 0, 1, or 2 of <code>{JP6, JP7}</code> (input) and the same count of <code>{JP8,
+JP13}</code> (output) to pick the range:</p>
+<table>
+<thead>
+<tr>
+<th>Range</th>
+<th>Input jumpers shorted</th>
+<th>Output jumpers shorted</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Full</code></td>
+<td>none</td>
+<td>none</td>
+</tr>
+<tr>
+<td><code>Mid</code></td>
+<td>one of <code>JP6</code>/<code>JP7</code> (either)</td>
+<td>one of <code>JP8</code>/<code>JP13</code> (either)</td>
+</tr>
+<tr>
+<td><code>Low</code></td>
+<td>both <code>JP6</code> and <code>JP7</code></td>
+<td>both <code>JP8</code> and <code>JP13</code></td>
+</tr>
+</tbody>
+</table>
+<p>The two resistors on each side are the same value (75k, 1%), so it does not
+matter which one you bridge for <code>Mid</code>.</p>
+<h3 id="2-set-the-constant">2. Set the constant<a class="headerlink" href="#2-set-the-constant" title="Permanent link">&para;</a></h3>
+<p>In <code>firmware/pipico_board/src/main.rs</code>, set <code>ADC_DIVIDER_RANGE</code> to match
+the jumpers you just set. This is not auto-sensed. The firmware logs the
+selected range once at boot as a cross-check.</p>
+<h3 id="3-reflash">3. Reflash<a class="headerlink" href="#3-reflash" title="Permanent link">&para;</a></h3>
+<p>Build and flash (<code>cargo run --release</code> in <code>firmware/pipico_board</code>, see its
+README).</p>
+<h3 id="4-check-the-result">4. Check the result<a class="headerlink" href="#4-check-the-result" title="Permanent link">&para;</a></h3>
+<p>Put a supply on the input, about 2 V, and read the <code>ADC cal:</code> log line
+against a meter. Then move the supply near the top of the new range (for
+example, about 25 V on <code>Low</code>) and check again. Expect agreement within
+about 1 %.</p>
+<p>If it is off by more than that, the range's divider ratio is slightly off
+(the 75k/10k resistors are 1% parts, and three of them stack). Adjust that
+range's ratio in <code>firmware/pipico_board/src/adc_cal.rs</code>
+(<code>RATIO_LOW_X100</code>/<code>RATIO_MID_X100</code>/<code>RATIO_FULL_X100</code>) to the measured
+value. Do not touch the gain or zero: those describe the RP2040's ADC, not
+the divider, and a range change does not affect them.</p>
 
 
 
