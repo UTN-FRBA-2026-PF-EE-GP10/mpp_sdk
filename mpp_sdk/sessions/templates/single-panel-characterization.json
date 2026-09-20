@@ -141,7 +141,7 @@
       "id": "baseline-curve",
       "section": "Light and curve",
       "title": "Baseline curve",
-      "instructions": "Save 3 sweeps, one after the other, as the baseline curves. The report shows the median and spread of Voc, Isc and P at the MPP. Pass: the 3 curves are saved and linked here.",
+      "instructions": "Save 3 sweeps, one after the other, as the baseline curves. The session shows the median and spread of Voc, Isc and P at the MPP. Pass: the 3 curves are saved and linked here.",
       "kind": "curve",
       "repeats": 3
     },
@@ -156,7 +156,7 @@
       "id": "po-run",
       "section": "Runs (curve as reference, 10 s, starting duty 0.5)",
       "title": "P&O run",
-      "instructions": "Start a Perturb & Observe run with the baseline curve as reference, 10 s duration, starting duty 0.5. Pass: the run converges near the MPP. Do it 3 times and link every run: the report shows the median and spread of the results.",
+      "instructions": "Start a Perturb & Observe run with the baseline curve as reference, 10 s duration, starting duty 0.5. Pass: the run converges near the MPP. Do it 3 times and link every run: the session shows the median and spread of the results.",
       "kind": "run",
       "repeats": 3
     },
@@ -196,7 +196,7 @@
       "id": "incond-run",
       "section": "Runs (curve as reference, 10 s, starting duty 0.5)",
       "title": "IncCond run",
-      "instructions": "Start an Incremental Conductance run with the same settings (baseline curve, 10 s, starting duty 0.5). Pass: the run completes and is linked here. Do it 3 times and link every run: the report shows the median and spread of the results.",
+      "instructions": "Start an Incremental Conductance run with the same settings (baseline curve, 10 s, starting duty 0.5). Pass: the run completes and is linked here. Do it 3 times and link every run: the session shows the median and spread of the results.",
       "kind": "run",
       "repeats": 3
     },
@@ -204,7 +204,7 @@
       "id": "fuzzy-run",
       "section": "Runs (curve as reference, 10 s, starting duty 0.5)",
       "title": "Fuzzy Logic run",
-      "instructions": "Start a Fuzzy Logic run with the same settings (baseline curve, 10 s, starting duty 0.5). Pass: the run completes and is linked here. Do it 3 times and link every run: the report shows the median and spread of the results.",
+      "instructions": "Start a Fuzzy Logic run with the same settings (baseline curve, 10 s, starting duty 0.5). Pass: the run completes and is linked here. Do it 3 times and link every run: the session shows the median and spread of the results.",
       "kind": "run",
       "repeats": 3
     },
@@ -212,7 +212,7 @@
       "id": "scan-and-track-run",
       "section": "Runs (curve as reference, 10 s, starting duty 0.5)",
       "title": "Scan & Track run",
-      "instructions": "Start a Scan & Track run with the same settings (baseline curve, 10 s, starting duty 0.5). Pass: the run completes and is linked here. Do it 3 times and link every run: the report shows the median and spread of the results.",
+      "instructions": "Start a Scan & Track run with the same settings (baseline curve, 10 s, starting duty 0.5). Pass: the run completes and is linked here. Do it 3 times and link every run: the session shows the median and spread of the results.",
       "kind": "run",
       "repeats": 3
     },
@@ -220,7 +220,7 @@
       "id": "pso-run",
       "section": "Runs (curve as reference, 10 s, starting duty 0.5)",
       "title": "Particle Swarm run",
-      "instructions": "Start a Particle Swarm run with the same settings (baseline curve, 10 s, starting duty 0.5). Pass: the run completes and is linked here. Do it 3 times and link every run: the report shows the median and spread of the results.",
+      "instructions": "Start a Particle Swarm run with the same settings (baseline curve, 10 s, starting duty 0.5). Pass: the run completes and is linked here. Do it 3 times and link every run: the session shows the median and spread of the results.",
       "kind": "run",
       "repeats": 3
     },
@@ -228,7 +228,7 @@
       "id": "seed-test",
       "section": "Runs (curve as reference, 10 s, starting duty 0.5)",
       "title": "Seed test",
-      "instructions": "Start a P&O run from starting duty 0.85 instead of 0.5. Pass: it still converges on the one peak. Do it 3 times and link every run: the report shows the median and spread of the results.",
+      "instructions": "Start a P&O run from starting duty 0.85 instead of 0.5. Pass: it still converges on the one peak. Do it 3 times and link every run: the session shows the median and spread of the results.",
       "kind": "run",
       "repeats": 3
     },
@@ -257,7 +257,7 @@
       "id": "downloads",
       "section": "After",
       "title": "Downloads",
-      "instructions": "Check that every curve and run used in this report is downloaded, and that this report is downloaded as Markdown. Pass: all files are saved.",
+      "instructions": "Check that every curve and run used in this session is downloaded, and that this session is downloaded as Markdown. Pass: all files are saved.",
       "kind": "check"
     }
   ],

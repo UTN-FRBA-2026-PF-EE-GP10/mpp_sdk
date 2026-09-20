@@ -1,7 +1,7 @@
-"""Report templates: the checklist shape a new report starts from.
+"""Session templates: the checklist shape a new session starts from.
 
-Templates ship as JSON files under `mpp_sdk/reports/templates/` -
-**package data**, not user data (that's `mpp_sdk.reports.library`'s
+Templates ship as JSON files under `mpp_sdk/sessions/templates/` -
+**package data**, not user data (that's `mpp_sdk.sessions.library`'s
 job). Read via `importlib.resources` rather than a repo-relative path:
 the latter only works from a checkout, and a template has to be
 readable from an installed (non-editable) wheel too - see
@@ -23,9 +23,9 @@ _SCHEMA = 1
 @dataclass(frozen=True)
 class FieldDef:
     """One setup field a template asks for - the workbench renders these
-    as a small editable table (Part C). `default` seeds a new report's
+    as a small editable table (Part C). `default` seeds a new session's
     `fields[key]` (e.g. the panel model on this bench doesn't change
-    often, so a new report should not start with it blank)."""
+    often, so a new session should not start with it blank)."""
 
     key: str
     label: str
@@ -45,10 +45,10 @@ class FieldDef:
 @dataclass(frozen=True)
 class TemplateStep:
     """One step definition inside a template - becomes one
-    `mpp_sdk.reports.record.ReportStep` per report created from it. Pass
-    criteria live inside `instructions` as plain text, not as a separate
-    structured field: a checklist item is read and judged by a person at
-    the bench, not evaluated by code."""
+    `mpp_sdk.sessions.record.SessionStep` per session created from it.
+    Pass criteria live inside `instructions` as plain text, not as a
+    separate structured field: a checklist item is read and judged by a
+    person at the bench, not evaluated by code."""
 
     id: str
     section: str
@@ -86,8 +86,8 @@ class TemplateStep:
 
 @dataclass(frozen=True)
 class TemplateQuestion:
-    """One open question a template starts every report with, e.g. how
-    panel temperature should be recorded - answered per report, not
+    """One open question a template starts every session with, e.g. how
+    panel temperature should be recorded - answered per session, not
     resolved once and dropped from the template."""
 
     id: str
@@ -102,9 +102,9 @@ class TemplateQuestion:
 
 
 @dataclass(frozen=True)
-class ReportTemplate:
-    """A report without values: the shape `mpp_sdk.reports.library.create`
-    fills in to produce a new `ReportRecord`."""
+class SessionTemplate:
+    """A session without values: the shape `mpp_sdk.sessions.library.create`
+    fills in to produce a new `SessionRecord`."""
 
     template_id: str
     version: int
@@ -131,10 +131,10 @@ class ReportTemplate:
         }
 
     @classmethod
-    def from_dict(cls, d: dict) -> ReportTemplate:
+    def from_dict(cls, d: dict) -> SessionTemplate:
         schema = d.get("schema")
         if schema != _SCHEMA:
-            raise ValueError(f"unsupported report template schema {schema!r}, expected {_SCHEMA}")
+            raise ValueError(f"unsupported session template schema {schema!r}, expected {_SCHEMA}")
         try:
             steps = tuple(TemplateStep.from_dict(s) for s in d["steps"])
             template = cls(
@@ -149,14 +149,14 @@ class ReportTemplate:
                 ),
             )
         except KeyError as exc:
-            raise ValueError(f"report template missing field {exc.args[0]!r}") from exc
+            raise ValueError(f"session template missing field {exc.args[0]!r}") from exc
         except (TypeError, ValueError) as exc:
-            raise ValueError(f"report template has an invalid field: {exc}") from exc
+            raise ValueError(f"session template has an invalid field: {exc}") from exc
         template._validate()
         return template
 
     def _validate(self) -> None:
-        """A malformed template silently breaks every report created
+        """A malformed template silently breaks every session created
         from it, so these are checked once here rather than left for a
         client to discover: step ids must be unique (a PATCH addresses a
         step by id) and every kind must be one this SDK understands."""
@@ -164,22 +164,22 @@ class ReportTemplate:
         for s in self.steps:
             if s.id in seen:
                 raise ValueError(
-                    f"report template {self.template_id!r}: duplicate step id {s.id!r}"
+                    f"session template {self.template_id!r}: duplicate step id {s.id!r}"
                 )
             seen.add(s.id)
             if s.kind not in STEP_KINDS:
                 raise ValueError(
-                    f"report template {self.template_id!r}: step {s.id!r} has unknown "
+                    f"session template {self.template_id!r}: step {s.id!r} has unknown "
                     f"kind {s.kind!r}, expected one of {STEP_KINDS}"
                 )
             if type(s.repeats) is not int or not 1 <= s.repeats <= MAX_REPEATS:
                 raise ValueError(
-                    f"report template {self.template_id!r}: step {s.id!r} has repeats "
+                    f"session template {self.template_id!r}: step {s.id!r} has repeats "
                     f"{s.repeats!r}, expected an integer from 1 to {MAX_REPEATS}"
                 )
             if s.repeats > 1 and s.kind not in ("curve", "run"):
                 raise ValueError(
-                    f"report template {self.template_id!r}: step {s.id!r} has repeats "
+                    f"session template {self.template_id!r}: step {s.id!r} has repeats "
                     f"{s.repeats} but only curve and run steps can repeat"
                 )
 
@@ -188,18 +188,18 @@ def _template_dir():
     return resources.files(__package__) / "templates"
 
 
-def list_templates() -> list[ReportTemplate]:
+def list_templates() -> list[SessionTemplate]:
     """Every template shipped with the SDK, sorted by `template_id` for a
     deterministic listing."""
     templates = []
     for entry in _template_dir().iterdir():
         if entry.name.endswith(".json"):
             data = json.loads(entry.read_text(encoding="utf-8"))
-            templates.append(ReportTemplate.from_dict(data))
+            templates.append(SessionTemplate.from_dict(data))
     return sorted(templates, key=lambda t: t.template_id)
 
 
-def get_template(template_id: str) -> ReportTemplate:
+def get_template(template_id: str) -> SessionTemplate:
     """Look up one template by id. Raises `KeyError` (not `ValueError`)
     on a miss, so callers can tell "no such template" apart from "a
     template file on disk is malformed", which `list_templates` already
@@ -211,7 +211,7 @@ def get_template(template_id: str) -> ReportTemplate:
 
 
 __all__ = [
-    "ReportTemplate",
+    "SessionTemplate",
     "FieldDef",
     "TemplateStep",
     "TemplateQuestion",

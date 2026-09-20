@@ -66,15 +66,15 @@ from mpp_sdk import IdealSingleDiode, MeasuredPanel, SEPICConverter, SimulatedSo
 from mpp_sdk.curves import MEASUREMENT_KINDS, CurveRecord, PanelSetup
 from mpp_sdk.curves import library as curve_library
 from mpp_sdk.curves.record import now_utc
-from mpp_sdk.reports import STEP_STATUSES
-from mpp_sdk.reports import library as report_library
-from mpp_sdk.reports import list_templates as list_report_templates
-from mpp_sdk.reports.record import now_utc as reports_now_utc
-from mpp_sdk.reports.templates import get_template as get_report_template
 from mpp_sdk.runs import RunRecord
 from mpp_sdk.runs import library as run_library
 from mpp_sdk.runs.record import RunSample
 from mpp_sdk.runs.record import now_utc as runs_now_utc
+from mpp_sdk.sessions import STEP_STATUSES
+from mpp_sdk.sessions import library as session_library
+from mpp_sdk.sessions import list_templates as list_session_templates
+from mpp_sdk.sessions.record import now_utc as sessions_now_utc
+from mpp_sdk.sessions.templates import get_template as get_session_template
 
 # run_control_loop is the one control loop and abort path shared by the
 # CLI (scripts/run_algorithm.py) and this server - a live run started from
@@ -805,8 +805,8 @@ class _SaveCurveRequest(BaseModel):
     notes: str = ""
 
 
-class _CreateReportRequest(BaseModel):
-    """Body of `POST /api/reports`. `fields` overrides the template's
+class _CreateSessionRequest(BaseModel):
+    """Body of `POST /api/sessions`. `fields` overrides the template's
     per-field defaults (e.g. the panel model) for keys given; any field
     the template defines and this omits keeps its default."""
 
@@ -815,8 +815,8 @@ class _CreateReportRequest(BaseModel):
     fields: dict[str, str] | None = None
 
 
-class _PatchReportStepRequest(BaseModel):
-    """One step's partial update inside `PATCH /api/reports/{id}`. `id`
+class _PatchSessionStepRequest(BaseModel):
+    """One step's partial update inside `PATCH /api/sessions/{id}`. `id`
     picks which step; every other field is left as it was when omitted
     (`None`) - there is no way to explicitly clear `value` back to null
     through this route, the same simplification `_StartRunRequest.curve_ref`
@@ -835,14 +835,14 @@ class _PatchOpenQuestionRequest(BaseModel):
     answer: str
 
 
-class _PatchReportRequest(BaseModel):
-    """Body of `PATCH /api/reports/{id}`. Every field is optional -
+class _PatchSessionRequest(BaseModel):
+    """Body of `PATCH /api/sessions/{id}`. Every field is optional -
     only what's given is changed. `updated_at` is never accepted here:
     the server stamps it on every successful PATCH."""
 
     title: str | None = None
     fields: dict[str, str] | None = None
-    steps: list[_PatchReportStepRequest] | None = None
+    steps: list[_PatchSessionStepRequest] | None = None
     open_questions: list[_PatchOpenQuestionRequest] | None = None
 
 
@@ -893,20 +893,20 @@ _RUN_ID_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
 # save() names files identically to the run library's.
 _CURVE_ID_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
 
-# Same scheme, same reasoning, for reports - mpp_sdk/reports/library.py's
-# save() names files identically (a report's id is also its filename
-# stem, see ReportRecord's docstring for why it's stored in the body too).
-_REPORT_ID_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
+# Same scheme, same reasoning, for sessions - mpp_sdk/sessions/library.py's
+# save() names files identically (a session's id is also its filename
+# stem, see SessionRecord's docstring for why it's stored in the body too).
+_SESSION_ID_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
 
-# String/list size bounds for POST/PATCH /api/reports - an operator types
+# String/list size bounds for POST/PATCH /api/sessions - an operator types
 # these by hand, so a mistaken paste or a runaway client script must not
-# be able to grow a report file without limit.
-_REPORT_TITLE_MAX_LEN = 200
-_REPORT_NOTES_MAX_LEN = 5000
-_REPORT_FIELD_VALUE_MAX_LEN = 500
-_REPORT_MAX_LINKED_IDS = 100
+# be able to grow a session file without limit.
+_SESSION_TITLE_MAX_LEN = 200
+_SESSION_NOTES_MAX_LEN = 5000
+_SESSION_FIELD_VALUE_MAX_LEN = 500
+_SESSION_MAX_LINKED_IDS = 100
 # Longer than any id the curve and run libraries create.
-_REPORT_LINKED_ID_MAX_LEN = 200
+_SESSION_LINKED_ID_MAX_LEN = 200
 
 # Ceiling on how many ids one POST /api/{curves,runs}/delete-batch request
 # may name. The workbench only ever offers "select all" over one already-
@@ -961,20 +961,20 @@ def _curve_path(curve_id: str) -> Path:
     return path
 
 
-def _report_path(report_id: str) -> Path:
-    """Resolve a URL-supplied report id to a file inside the report
+def _session_path(session_id: str) -> Path:
+    """Resolve a URL-supplied session id to a file inside the session
     library directory, or raise the appropriate HTTPException - same
     validated-id, directory-containment pattern as `_curve_path`/
     `_run_path` above (never a filesystem path taken directly from the
     URL)."""
-    if not _REPORT_ID_RE.fullmatch(report_id):
-        raise HTTPException(status_code=400, detail="invalid report id")
-    directory = report_library.default_dir()
-    path = (directory / f"{report_id}.json").resolve()
+    if not _SESSION_ID_RE.fullmatch(session_id):
+        raise HTTPException(status_code=400, detail="invalid session id")
+    directory = session_library.default_dir()
+    path = (directory / f"{session_id}.json").resolve()
     if directory.resolve() not in path.parents:
-        raise HTTPException(status_code=400, detail="invalid report id")
+        raise HTTPException(status_code=400, detail="invalid session id")
     if not path.exists():
-        raise HTTPException(status_code=404, detail="report not found")
+        raise HTTPException(status_code=404, detail="session not found")
     return path
 
 
@@ -1185,8 +1185,8 @@ def create_app(
         path = curve_library.save(record)
         return {"path": str(path)}
 
-    @app.get("/api/report-templates")
-    def get_report_templates() -> list[dict]:
+    @app.get("/api/session-templates")
+    def get_session_templates() -> list[dict]:
         return [
             {
                 "template_id": t.template_id,
@@ -1195,31 +1195,31 @@ def create_app(
                 "setup": t.setup,
                 "n_steps": t.n_steps,
             }
-            for t in list_report_templates()
+            for t in list_session_templates()
         ]
 
-    @app.get("/api/report-templates/{template_id}")
-    def get_report_template_route(template_id: str) -> dict:
+    @app.get("/api/session-templates/{template_id}")
+    def get_session_template_route(template_id: str) -> dict:
         try:
-            template = get_report_template(template_id)
+            template = get_session_template(template_id)
         except KeyError:
             raise HTTPException(status_code=404, detail="template not found") from None
         return template.to_dict()
 
-    @app.get("/api/reports")
-    def get_reports() -> list[dict]:
-        """List saved reports, summary only, newest first - a report's
-        filename is timestamp-prefixed (see mpp_sdk.reports.library.save),
+    @app.get("/api/sessions")
+    def get_sessions() -> list[dict]:
+        """List saved sessions, summary only, newest first - a session's
+        filename is timestamp-prefixed (see mpp_sdk.sessions.library.save),
         so a reverse filename sort is a reverse chronological sort."""
-        directory = report_library.default_dir()
+        directory = session_library.default_dir()
         paths = sorted(directory.glob("*.json"), reverse=True) if directory.exists() else []
         entries = []
         for path in paths:
-            # Report files, like curve and run files, are hand-editable
+            # Session files, like curve and run files, are hand-editable
             # JSON - a single malformed one must not take the whole
             # listing down (see get_curves above for the same pattern).
             try:
-                r = report_library.load(path)
+                r = session_library.load(path)
                 entries.append(
                     {
                         "id": r.id,
@@ -1239,16 +1239,16 @@ def create_app(
 
     def _check_field_lengths(fields: dict[str, str]) -> None:
         for key, value in fields.items():
-            if len(value) > _REPORT_FIELD_VALUE_MAX_LEN:
+            if len(value) > _SESSION_FIELD_VALUE_MAX_LEN:
                 raise HTTPException(
                     status_code=400,
                     detail=(
-                        f"field {key!r} must be at most {_REPORT_FIELD_VALUE_MAX_LEN} characters"
+                        f"field {key!r} must be at most {_SESSION_FIELD_VALUE_MAX_LEN} characters"
                     ),
                 )
 
     def _check_field_keys(fields: dict[str, str], known: set[str]) -> None:
-        # The template decides which setup fields exist, so the report
+        # The template decides which setup fields exist, so the session
         # view can show them all as one fixed table.
         unknown = sorted(set(fields) - known)
         if unknown:
@@ -1256,21 +1256,22 @@ def create_app(
 
     def _check_linked_ids(ids: list[str], pattern: re.Pattern[str], kind: str) -> None:
         # Linked ids are stored, never opened as paths, but they must look
-        # like real library ids so a report cannot grow without limit.
+        # like real library ids so a session cannot grow without limit.
         for linked in ids:
-            if len(linked) > _REPORT_LINKED_ID_MAX_LEN or not pattern.fullmatch(linked):
+            if len(linked) > _SESSION_LINKED_ID_MAX_LEN or not pattern.fullmatch(linked):
                 raise HTTPException(status_code=400, detail=f"invalid {kind} id {linked!r:.80}")
 
-    @app.post("/api/reports")
-    def post_create_report(body: _CreateReportRequest) -> dict:
+    @app.post("/api/sessions")
+    def post_create_session(body: _CreateSessionRequest) -> dict:
         if not body.title.strip():
             raise HTTPException(status_code=400, detail="title must not be empty")
-        if len(body.title) > _REPORT_TITLE_MAX_LEN:
+        if len(body.title) > _SESSION_TITLE_MAX_LEN:
             raise HTTPException(
-                status_code=400, detail=f"title must be at most {_REPORT_TITLE_MAX_LEN} characters"
+                status_code=400,
+                detail=f"title must be at most {_SESSION_TITLE_MAX_LEN} characters",
             )
         try:
-            template = get_report_template(body.template_id)
+            template = get_session_template(body.template_id)
         except KeyError:
             raise HTTPException(
                 status_code=400, detail=f"unknown template {body.template_id!r}"
@@ -1278,28 +1279,28 @@ def create_app(
         fields = body.fields or {}
         _check_field_lengths(fields)
         _check_field_keys(fields, {fd.key for fd in template.field_defs})
-        record = report_library.create(template, body.title, fields=fields)
+        record = session_library.create(template, body.title, fields=fields)
         return record.to_dict()
 
-    @app.get("/api/reports/{report_id}")
-    def get_report(report_id: str) -> dict:
-        path = _report_path(report_id)
+    @app.get("/api/sessions/{session_id}")
+    def get_session(session_id: str) -> dict:
+        path = _session_path(session_id)
         try:
-            r = report_library.load(path)
+            r = session_library.load(path)
         except ValueError as exc:
             raise HTTPException(status_code=500, detail=str(exc)) from exc
         return r.to_dict()
 
-    @app.patch("/api/reports/{report_id}")
-    def patch_report(report_id: str, body: _PatchReportRequest) -> dict:
+    @app.patch("/api/sessions/{session_id}")
+    def patch_session(session_id: str, body: _PatchSessionRequest) -> dict:
         """Partial update: only the fields given in the body change.
         `updated_at` is always stamped here, server-side - never taken
         from the request, so a client can't backdate or freeze it.
-        Written through `report_library.update`, which replaces the file
+        Written through `session_library.update`, which replaces the file
         atomically (temp file + `os.replace`)."""
-        path = _report_path(report_id)
+        path = _session_path(session_id)
         try:
-            r = report_library.load(path)
+            r = session_library.load(path)
         except ValueError as exc:
             raise HTTPException(status_code=500, detail=str(exc)) from exc
 
@@ -1307,10 +1308,10 @@ def create_app(
         if body.title is not None:
             if not body.title.strip():
                 raise HTTPException(status_code=400, detail="title must not be empty")
-            if len(body.title) > _REPORT_TITLE_MAX_LEN:
+            if len(body.title) > _SESSION_TITLE_MAX_LEN:
                 raise HTTPException(
                     status_code=400,
-                    detail=f"title must be at most {_REPORT_TITLE_MAX_LEN} characters",
+                    detail=f"title must be at most {_SESSION_TITLE_MAX_LEN} characters",
                 )
             title = body.title
 
@@ -1349,25 +1350,25 @@ def create_app(
                         raise HTTPException(status_code=400, detail="value must be finite")
                     changes["value"] = step_patch.value
                 if step_patch.notes is not None:
-                    if len(step_patch.notes) > _REPORT_NOTES_MAX_LEN:
+                    if len(step_patch.notes) > _SESSION_NOTES_MAX_LEN:
                         raise HTTPException(
                             status_code=400,
-                            detail=f"notes must be at most {_REPORT_NOTES_MAX_LEN} characters",
+                            detail=f"notes must be at most {_SESSION_NOTES_MAX_LEN} characters",
                         )
                     changes["notes"] = step_patch.notes
                 if step_patch.curve_ids is not None:
-                    if len(step_patch.curve_ids) > _REPORT_MAX_LINKED_IDS:
+                    if len(step_patch.curve_ids) > _SESSION_MAX_LINKED_IDS:
                         raise HTTPException(
                             status_code=400,
-                            detail=f"at most {_REPORT_MAX_LINKED_IDS} linked curve ids per step",
+                            detail=f"at most {_SESSION_MAX_LINKED_IDS} linked curve ids per step",
                         )
                     _check_linked_ids(step_patch.curve_ids, _CURVE_ID_RE, "curve")
                     changes["curve_ids"] = tuple(step_patch.curve_ids)
                 if step_patch.run_ids is not None:
-                    if len(step_patch.run_ids) > _REPORT_MAX_LINKED_IDS:
+                    if len(step_patch.run_ids) > _SESSION_MAX_LINKED_IDS:
                         raise HTTPException(
                             status_code=400,
-                            detail=f"at most {_REPORT_MAX_LINKED_IDS} linked run ids per step",
+                            detail=f"at most {_SESSION_MAX_LINKED_IDS} linked run ids per step",
                         )
                     _check_linked_ids(step_patch.run_ids, _RUN_ID_RE, "run")
                     changes["run_ids"] = tuple(step_patch.run_ids)
@@ -1388,10 +1389,10 @@ def create_app(
                     raise HTTPException(
                         status_code=400, detail=f"unknown open question id {q_patch.id!r}"
                     )
-                if len(q_patch.answer) > _REPORT_NOTES_MAX_LEN:
+                if len(q_patch.answer) > _SESSION_NOTES_MAX_LEN:
                     raise HTTPException(
                         status_code=400,
-                        detail=f"answer must be at most {_REPORT_NOTES_MAX_LEN} characters",
+                        detail=f"answer must be at most {_SESSION_NOTES_MAX_LEN} characters",
                     )
                 open_questions[idx] = replace(open_questions[idx], answer=q_patch.answer)
 
@@ -1401,14 +1402,14 @@ def create_app(
             fields=fields,
             steps=tuple(steps),
             open_questions=tuple(open_questions),
-            updated_at=reports_now_utc(),
+            updated_at=sessions_now_utc(),
         )
-        report_library.update(updated)
+        session_library.update(updated)
         return updated.to_dict()
 
-    @app.delete("/api/reports/{report_id}", status_code=204)
-    def delete_report(report_id: str) -> None:
-        report_library.delete(_report_path(report_id))
+    @app.delete("/api/sessions/{session_id}", status_code=204)
+    def delete_session(session_id: str) -> None:
+        session_library.delete(_session_path(session_id))
 
     @app.get("/api/runs")
     def get_runs() -> list[dict]:
