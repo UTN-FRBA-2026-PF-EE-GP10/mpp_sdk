@@ -70,7 +70,7 @@ export const DEMO_CURVE_BRIGHT: CurveRecord = {
   id: 'demo-fixture-psf10-bright',
   path: 'demo-fixture/psf10-bright.json',
   captured_at: '2026-06-01T12:00:00Z',
-  label: 'Demo curve - full brightness (bundled sample)',
+  label: 'Replay curve - full brightness (bundled sample)',
   measurement: 'baseline',
   panels: [
     { id: 'A', tilt_deg: 90 },
@@ -90,7 +90,7 @@ export const DEMO_CURVE_DIM: CurveRecord = {
   id: 'demo-fixture-psf10-dim',
   path: 'demo-fixture/psf10-dim.json',
   captured_at: '2026-06-01T12:10:00Z',
-  label: 'Demo curve - dimmed (bundled sample)',
+  label: 'Replay curve - dimmed (bundled sample)',
   measurement: 'dimmed',
   panels: [
     { id: 'A', tilt_deg: 90 },

@@ -36,28 +36,31 @@ No board and no Pi at hand? `uv run mpp-sdk curve-tracer-web --demo` swaps
 in a simulated sweep source (`scripts/curve_tracer_demo_source.py`) - only
 needs `uv sync --extra web`, runs on any machine, and behaves like the
 real thing from the frontend's perspective (`link` reports `"demo"`,
-shown as a distinct status in the connection indicator).
+shown as "Simulated board" in the connection indicator).
 
 The connection indicator is also a three-way capture-mode menu
 (`src/lib/captureMode.ts`), named to match `mpp_sdk/curves/record.py`'s
-`CURVE_SOURCES` exactly:
+`CURVE_SOURCES` exactly. "Demo" is overloaded elsewhere in this codebase
+(the server's own `--demo` status above is a fourth, unrelated meaning),
+so each mode's on-screen label is written to be told apart from the
+others at a glance:
 
 - **PICO connected** (`hardware`) - the default. Start Measurement live,
   saving allowed.
-- **Demo with PICO** (`firmware-replay`) - real board, but the "Demo curve"
-  buttons are the point: real SPI, a curve already stored in the
-  firmware, not measured this session. Saving is still allowed - the
-  result is real data off the wire. Only selectable with a live link;
+- **Replay on the board** (`firmware-replay`) - real board, but the
+  "Replay curve" buttons are the point: real SPI, a curve already stored
+  in the firmware, not measured this session. Saving is still allowed -
+  the result is real data off the wire. Only selectable with a live link;
   the app falls back to `hardware` on its own if the link drops.
 - **Demo** (`simulated`) - no board and no hardware commands. Swaps the
   curve/run libraries for bundled fixtures (`src/lib/demoFixtures.ts`),
   disables every write (save/delete) and every genuinely hardware-only
-  action (Start Measurement, Release Relay), while still letting the two
-  "Demo curve" buttons replay a bundled sweep locally into the capture
-  pane. Called "sandbox" in code (`src/lib/sandbox.ts`) to avoid a third
-  overload of the word "demo" alongside `ConnectionStatus`'s own `'demo'`
-  value above - `useSandbox()` is the one place to read "are we fully
-  offline" - reuse it rather than adding another check.
+  action (Start Measurement, Hand panel to converter), while still letting the
+  two "Replay curve" buttons replay a bundled sweep locally into the
+  capture pane. Called "sandbox" in code (`src/lib/sandbox.ts`) to avoid a
+  third overload of the word "demo" alongside `ConnectionStatus`'s own
+  `'demo'` value above - `useSandbox()` is the one place to read "are we
+  fully offline" - reuse it rather than adding another check.
 
   One exception: starting a run (`RunPane`) still reaches the backend even
   here, against a `SimulatedSource` (`POST /api/runs/start` with

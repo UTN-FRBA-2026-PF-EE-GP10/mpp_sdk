@@ -65,7 +65,7 @@ function baselineNavRow() {
   return screen.getAllByText('Baseline')[0].closest('button')!
 }
 
-// Some CurveWorkbench buttons (Start Measurement, Release Relay, Save
+// Some CurveWorkbench buttons (Start Measurement, Hand panel to converter, Save
 // curve) carry a `title` explaining a demo-mode disablement, so they use
 // focusableWhenDisabled (aria-disabled, not the native attribute) to keep
 // that title reachable by hover/focus - see button.tsx and
@@ -90,7 +90,7 @@ function renderApp() {
 
 /** Opens the connection indicator's menu and picks the named mode -
  * mirrors how an operator actually switches capture mode. */
-async function pickCaptureMode(name: 'PICO connected' | 'Demo with PICO' | 'Demo') {
+async function pickCaptureMode(name: 'PICO connected' | 'Replay on the board' | 'Demo') {
   fireEvent.click(screen.getByRole('button', { name: /capture mode/i }))
   const label = await screen.findByText(name)
   fireEvent.click(label)
@@ -134,11 +134,11 @@ describe('App capture mode', () => {
     await pickCaptureMode('Demo')
 
     await waitFor(() => expect(isDisabled(screen.getByText('Start Measurement').closest('button')!)).toBe(true))
-    expect(isDisabled(screen.getByText('Release Relay').closest('button')!)).toBe(true)
-    expect(isDisabled(screen.getByText('Demo curve (bright)').closest('button')!)).toBe(false)
+    expect(isDisabled(screen.getByText('Hand panel to converter').closest('button')!)).toBe(true)
+    expect(isDisabled(screen.getByText('Replay curve (bright)').closest('button')!)).toBe(false)
   })
 
-  it('cannot select Demo with PICO while disconnected - the option is unavailable, not silently broken', async () => {
+  it('cannot select Replay on the board while disconnected - the option is unavailable, not silently broken', async () => {
     vi.mocked(fetchCurves).mockResolvedValue([])
     vi.mocked(fetchRuns).mockResolvedValue([])
     renderApp()
@@ -146,7 +146,7 @@ describe('App capture mode', () => {
     // fetchLiveSweep never resolves (mocked above), so the link stays
     // 'connecting' - not 'connected' - for the life of this test.
     fireEvent.click(screen.getByRole('button', { name: /capture mode/i }))
-    const item = (await screen.findByText('Demo with PICO')).closest('[role="menuitemradio"]')
+    const item = (await screen.findByText('Replay on the board')).closest('[role="menuitemradio"]')
     expect(item?.getAttribute('aria-disabled')).toBe('true')
   })
 
@@ -415,16 +415,16 @@ describe('App setup mode', () => {
     renderApp()
 
     // Full is the default - nothing was switched into, so no reminder yet.
-    expect(screen.queryByText(/switch the ADC range to Mid/)).toBeNull()
+    expect(screen.queryByText(/Move the ADC jumpers to Mid/)).toBeNull()
 
     fireEvent.click(screen.getByTitle(/Setup: Full/i)) // -> single
-    expect(screen.queryByText(/switch the ADC range to Mid/)).toBeNull()
+    expect(screen.queryByText(/Move the ADC jumpers to Mid/)).toBeNull()
 
     fireEvent.click(screen.getByTitle(/Setup: Single/i)) // -> full
-    expect(screen.getByText(/switch the ADC range to Mid/)).toBeTruthy()
+    expect(screen.getByText(/Move the ADC jumpers to Mid/)).toBeTruthy()
 
     fireEvent.click(screen.getByText('Dismiss'))
-    expect(screen.queryByText(/switch the ADC range to Mid/)).toBeNull()
+    expect(screen.queryByText(/Move the ADC jumpers to Mid/)).toBeNull()
   })
 
   it('keeps panel B when remeasuring a two-panel curve while Single setup is active', async () => {

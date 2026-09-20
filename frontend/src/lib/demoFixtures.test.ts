@@ -14,9 +14,13 @@ describe('DEMO_CURVE_BRIGHT / DEMO_CURVE_DIM', () => {
     expect(DEMO_CURVE_DIM.source).toBe('firmware-replay')
   })
 
-  it('are labeled as bundled demo fixtures, not confusable with the real library', () => {
-    expect(DEMO_CURVE_BRIGHT.label.toLowerCase()).toContain('demo')
-    expect(DEMO_CURVE_DIM.label.toLowerCase()).toContain('demo')
+  it('are labeled as bundled samples, not confusable with the real library', () => {
+    // "Replay curve", matching the buttons that produce them - the word
+    // "demo" is reserved for the fully offline mode now.
+    expect(DEMO_CURVE_BRIGHT.label.toLowerCase()).toContain('bundled sample')
+    expect(DEMO_CURVE_DIM.label.toLowerCase()).toContain('bundled sample')
+    expect(DEMO_CURVE_BRIGHT.label).toContain('Replay curve')
+    expect(DEMO_CURVE_DIM.label).toContain('Replay curve')
   })
 
   it('carry the real bench headline numbers for the bright sweep', () => {

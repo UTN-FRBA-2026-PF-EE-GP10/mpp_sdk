@@ -10,12 +10,13 @@ const STATUS_LABEL: Record<ConnectionStatus, string> = {
   connecting: 'Checking PICO...',
   connected: 'PICO connected',
   disconnected: 'PICO not connected',
-  demo: 'Demo mode - simulated', // curve_tracer_server.py --demo, a server-side status - distinct from CaptureMode's client-side 'simulated', see lib/captureMode.ts
+  demo: 'Simulated board', // curve_tracer_server.py --demo, a server-side status - distinct from CaptureMode's client-side 'simulated', see lib/captureMode.ts
 }
 
-// 'firmware-replay' ("Demo with PICO") needs a real board on the other end
-// of a real link - the server's own --demo status is itself a simulated
-// stand-in with nothing to replay from, so it doesn't count.
+// 'firmware-replay' ("Replay on the board") needs a real board on the
+// other end of a real link - the server's own --demo status ("Simulated
+// board") is itself a simulated stand-in with nothing to replay from, so
+// it doesn't count.
 function firmwareReplayAvailable(status: ConnectionStatus): boolean {
   return status === 'connected'
 }
@@ -41,12 +42,23 @@ const itemClass =
 /**
  * The connection status pill - and, by clicking it, the three-way capture
  * mode menu (lib/captureMode.ts): 'hardware' ("PICO connected"),
- * 'firmware-replay' ("Demo with PICO", needs a live link), 'simulated'
+ * 'firmware-replay' ("Replay on the board", needs a live link), 'simulated'
  * ("Demo", fully offline). Only one of the three is ever shown, and the
  * label always matches whichever `source` a curve captured right now
  * would be stamped with - see captureMode.ts's docstring.
  */
-export function ConnectionIndicator({ status }: { status: ConnectionStatus }) {
+export function ConnectionIndicator({
+  status,
+  link,
+}: {
+  status: ConnectionStatus
+  /** Raw `link` field from the last poll (useConnectionStatus), for the
+   * debug readout at the bottom of the menu. Optional so existing
+   * callers/tests that only care about `status` still compile - falls
+   * back to the one-shot demo-mode check below, or is left out entirely
+   * when neither is available. */
+  link?: string
+}) {
   const { mode, setMode } = useCaptureMode()
   const label = displayLabel(status, mode)
   const dot = dotClass(status, mode)
@@ -60,20 +72,28 @@ export function ConnectionIndicator({ status }: { status: ConnectionStatus }) {
   // entered, not the truth. A one-shot check, fired only when this menu
   // is actually opened, is demo mode's only source of truth for this;
   // `null` (never opened, or still in flight) reads as unavailable, same
-  // as a failed check - "Demo with PICO" must never be selectable on stale
-  // or missing information.
-  const [demoLinkStatus, setDemoLinkStatus] = useState<ConnectionStatus | null>(null)
+  // as a failed check - "Replay on the board" must never be selectable on
+  // stale or missing information.
+  const [demoLink, setDemoLink] = useState<{ status: ConnectionStatus; link: string } | null>(
+    null,
+  )
   const replayAvailable =
     mode === 'simulated'
-      ? demoLinkStatus !== null && firmwareReplayAvailable(demoLinkStatus)
+      ? demoLink !== null && firmwareReplayAvailable(demoLink.status)
       : firmwareReplayAvailable(status)
 
   function handleOpenChange(open: boolean) {
     if (!open || mode !== 'simulated') return
     fetchLiveSweep()
-      .then((data) => setDemoLinkStatus(statusFromLink(data.link)))
-      .catch(() => setDemoLinkStatus('disconnected'))
+      .then((data) => setDemoLink({ status: statusFromLink(data.link), link: data.link }))
+      .catch(() => setDemoLink({ status: 'disconnected', link: '' }))
   }
+
+  // The raw link text for the debug readout at the bottom of the menu:
+  // the one-shot check's answer in 'simulated' mode (see handleOpenChange
+  // above - the background poll is stopped there), otherwise whatever the
+  // caller's own poll last saw. Never shown when there is nothing to show.
+  const rawLink = mode === 'simulated' ? (demoLink?.link ?? '') : (link ?? '')
 
   return (
     <Menu.Root onOpenChange={handleOpenChange}>
@@ -143,6 +163,16 @@ export function ConnectionIndicator({ status }: { status: ConnectionStatus }) {
                 </div>
               </Menu.RadioItem>
             </Menu.RadioGroup>
+            {rawLink && (
+              // Unobtrusive debug readout, not a status: the raw `link`
+              // field folds "ok" and "waiting for sweep" into the same
+              // "PICO connected" label above (see useConnectionStatus),
+              // so this is the only place either can still be told apart
+              // from the other - e.g. to confirm a sweep really is idle.
+              <div className="mt-1 border-t px-2.5 pt-1.5 text-xs text-muted-foreground">
+                Raw link: <span className="font-mono">{rawLink}</span>
+              </div>
+            )}
           </Menu.Popup>
         </Menu.Positioner>
       </Menu.Portal>

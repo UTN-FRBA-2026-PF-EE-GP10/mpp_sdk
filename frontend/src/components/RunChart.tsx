@@ -42,6 +42,12 @@ export function RunChart({
 }) {
   const { factor, currentLabel, powerLabel } = useUnits()
   const { resolvedDark } = useTheme()
+  // Also drives the caption below the chart - the legend labels
+  // ("MPP_th (I)"/"MPP_th (P)") are the first place a newcomer meets the
+  // symbol, in both the live run view and the player, so this is where it
+  // gets explained rather than in RunReadouts, which not every screen
+  // showing this chart renders.
+  const mppThPoint = referencePoints.length > 0 ? mppPoint(referencePoints) : null
 
   const data = useMemo(() => {
     const datasets = []
@@ -74,7 +80,7 @@ export function RunChart({
           order: REFERENCE_DRAW_ORDER,
         },
       )
-      const mppTh = mppPoint(referencePoints)
+      const mppTh = mppThPoint
       if (mppTh) {
         const marker = {
           showLine: false,
@@ -142,7 +148,7 @@ export function RunChart({
       },
     )
     return { datasets }
-  }, [referencePoints, trail, current, factor, resolvedDark])
+  }, [referencePoints, trail, current, factor, resolvedDark, mppThPoint])
 
   const options = useMemo(
     () => ivChartOptions(currentLabel, powerLabel, resolvedDark),
@@ -150,8 +156,15 @@ export function RunChart({
   )
 
   return (
-    <div className="h-80 w-full">
-      <Line data={data} options={options} />
+    <div>
+      <div className="h-80 w-full">
+        <Line data={data} options={options} />
+      </div>
+      {mppThPoint && (
+        <p className="mt-1 text-center text-xs text-muted-foreground">
+          MPP_th: the peak of the reference curve, the most power it can give.
+        </p>
+      )}
     </div>
   )
 }
