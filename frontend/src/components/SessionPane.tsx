@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { SessionView } from '@/components/SessionView'
 import { deleteSession, fetchRun, fetchSession, patchSession } from '@/lib/api'
 import { DEMO_RUN_DETAILS, DEMO_SESSION } from '@/lib/demoFixtures'
@@ -84,6 +84,24 @@ export function SessionPane({
     }
   }, [session, sandbox, runDetails, missingRunIds])
 
+  // True while some run a step links is neither resolved nor confirmed
+  // missing yet - i.e. its GET /api/runs/{id} is still in flight. Exported
+  // to SessionView so "Export session file" can refuse to run while this
+  // is true: sessionExportFile treats an id absent from runDetails as
+  // deleted (see its own doc comment), so exporting mid-fetch would write
+  // a live, in-flight run into the file's `missing` list and understate
+  // its statistics. Always false in sandbox mode - DEMO_RUN_DETAILS is a
+  // fixed fixture, never fetched, so nothing there is ever "in flight".
+  const runDetailsPending = useMemo(() => {
+    if (sandbox || !session) return false
+    const linkedRunIds = new Set<string>()
+    for (const step of session.steps) for (const runId of step.run_ids) linkedRunIds.add(runId)
+    for (const runId of linkedRunIds) {
+      if (!(runId in runDetails) && !missingRunIds.has(runId)) return true
+    }
+    return false
+  }, [sandbox, session, runDetails, missingRunIds])
+
   async function handlePatch(patch: SessionPatch): Promise<SessionRecord> {
     const updated = await patchSession(id, patch)
     setFetchedSession(updated)
@@ -115,6 +133,7 @@ export function SessionPane({
       curves={curves}
       runs={runs}
       runDetails={runDetails}
+      runDetailsPending={runDetailsPending}
       readOnly={sandbox}
       onPatch={sandbox ? undefined : handlePatch}
       onDeleteSession={sandbox ? undefined : handleDeleteSession}

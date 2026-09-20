@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { createSession, fetchSessionTemplate, fetchSessionTemplates } from '@/lib/api'
+import { readOnlyReasonText, useReadOnly } from '@/lib/sessionFile'
 import type { SessionRecord, SessionTemplate, SessionTemplateSummary } from '@/lib/sessions'
 import type { SetupMode } from '@/lib/setupMode'
 
@@ -10,6 +11,15 @@ import type { SetupMode } from '@/lib/setupMode'
  * creates it - the one place `POST /api/sessions` is called. Preselects
  * the template matching the current setup mode (Single/Full), so an
  * operator on the panel-A bench doesn't have to hunt for the right one.
+ *
+ * Gated on `useReadOnly()` itself, not just by the caller hiding the
+ * sidebar's "New session" row (App.tsx's `canCreateSession`) or the
+ * content switch skipping this pane while an imported session is active:
+ * the same defense-in-depth every other mutating pane in this app
+ * applies (see CurveCategoryPane/RunDatePane's own `readOnly.enabled`
+ * checks) - a control that only ever exists because of an outer branch
+ * being correct is one bug away from a live write happening under a
+ * banner that promises otherwise.
  */
 export function NewSessionPane({
   setupMode,
@@ -18,6 +28,7 @@ export function NewSessionPane({
   setupMode: SetupMode
   onCreated: (session: SessionRecord) => void
 }) {
+  const readOnly = useReadOnly()
   const [templates, setTemplates] = useState<SessionTemplateSummary[] | null>(null)
   const [templatesError, setTemplatesError] = useState<string | null>(null)
   const [templateId, setTemplateId] = useState('')
@@ -29,10 +40,11 @@ export function NewSessionPane({
   const [createError, setCreateError] = useState<string | null>(null)
 
   useEffect(() => {
+    if (readOnly.enabled) return
     fetchSessionTemplates()
       .then(setTemplates)
       .catch((e) => setTemplatesError(e instanceof Error ? e.message : String(e)))
-  }, [])
+  }, [readOnly.enabled])
 
   // Preselect the template matching the current bench setup, once the
   // list arrives - never fights a later, manual pick (only runs when the
@@ -45,7 +57,7 @@ export function NewSessionPane({
   }, [templates])
 
   useEffect(() => {
-    if (templateId === '') {
+    if (readOnly.enabled || templateId === '') {
       setTemplate(null)
       return
     }
@@ -56,10 +68,10 @@ export function NewSessionPane({
         setFields(Object.fromEntries(t.field_defs.map((fd) => [fd.key, fd.default])))
       })
       .catch((e) => setTemplateError(e instanceof Error ? e.message : String(e)))
-  }, [templateId])
+  }, [readOnly.enabled, templateId])
 
   async function handleCreate() {
-    if (!title.trim() || templateId === '' || creating) return
+    if (readOnly.enabled || !title.trim() || templateId === '' || creating) return // defense in depth
     setCreating(true)
     setCreateError(null)
     try {
@@ -70,6 +82,19 @@ export function NewSessionPane({
     } finally {
       setCreating(false)
     }
+  }
+
+  if (readOnly.enabled) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>New session is unavailable</CardTitle>
+          <CardDescription>
+            {readOnlyReasonText(readOnly.reason ?? 'demo', 'Creating a session')}
+          </CardDescription>
+        </CardHeader>
+      </Card>
+    )
   }
 
   return (

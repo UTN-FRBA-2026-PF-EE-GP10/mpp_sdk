@@ -283,6 +283,28 @@ export default function App() {
         </CardHeader>
       </Card>
     )
+  } else if (
+    (selection.root === 'new-session' || selection.root === 'session') &&
+    importedSession.active
+  ) {
+    // Guards against two write paths: the sidebar already hides "New
+    // session" while an imported session is active (canCreateSession
+    // below), but a session file with no curves/runs never redirects the
+    // selection away from an already-open 'session' (see
+    // useSessionFileImport's onImported above) - so without this branch,
+    // SessionPane/NewSessionPane would stay mounted, live, and writable
+    // right under the read-only "Viewing" banner.
+    content = (
+      <Card>
+        <CardHeader>
+          <CardTitle>Sessions are unavailable</CardTitle>
+          <CardDescription>
+            Creating or editing a session needs a saved library - that's off while viewing an
+            imported session. Close the session (top of the page) first.
+          </CardDescription>
+        </CardHeader>
+      </Card>
+    )
   } else if (selection.root === 'measure') {
     content = (
       <MeasurePane
@@ -486,7 +508,7 @@ export default function App() {
           countsByKind={countsByKind}
           runGroups={runGroups}
           sessions={sessions}
-          canCreateSession={!sandboxEnabled}
+          canCreateSession={!sandboxEnabled && !importedSession.active}
           mobileOpen={mobileNavOpen}
           onCloseMobile={() => setMobileNavOpen(false)}
         />

@@ -7,6 +7,7 @@ import { SetupModeProvider } from '@/components/SetupModeProvider'
 import { ThemeProvider } from '@/components/ThemeProvider'
 import { UnitsProvider } from '@/components/UnitsProvider'
 import { buildSessionFile, readOnlyReasonText, type SessionFile } from '@/lib/sessionFile'
+import type { SessionRecord } from '@/lib/sessions'
 import type { CurveRecord } from '@/types'
 
 // Same reasoning as App.test.tsx: this suite is about view mode's data
@@ -17,6 +18,10 @@ vi.mock('@/lib/api', () => ({
   fetchMeasurementKinds: vi.fn(() => Promise.resolve([])),
   fetchRuns: vi.fn(),
   fetchSessions: vi.fn(() => Promise.resolve([])),
+  fetchSession: vi.fn(),
+  createSession: vi.fn(),
+  patchSession: vi.fn(),
+  deleteSession: vi.fn(),
   saveCurve: vi.fn(),
   startSweep: vi.fn(),
   startDemoSweep: vi.fn(),
@@ -35,13 +40,18 @@ vi.mock('@/lib/api', () => ({
 vi.mock('react-chartjs-2', () => ({ Line: () => null }))
 
 import {
+  createSession,
   deleteCurve,
   deleteCurvesBatch,
   deleteRun,
   deleteRunsBatch,
+  deleteSession,
   fetchCurves,
   fetchRun,
   fetchRuns,
+  fetchSession,
+  fetchSessions,
+  patchSession,
   saveCurve,
 } from '@/lib/api'
 
@@ -66,10 +76,55 @@ function liveCurve(): CurveRecord {
   }
 }
 
+function testSessionRecord(): SessionRecord {
+  return {
+    id: '20260919T160000Z-imported',
+    title: 'Imported test session',
+    template_id: 'single-panel-characterization',
+    template_version: 1,
+    setup: 'single',
+    created_at: '2026-09-19T16:00:00+00:00',
+    updated_at: '2026-09-19T16:05:00+00:00',
+    fields: { panel: 'Luxen LN-10P, 10 W, 12 V' },
+    steps: [
+      {
+        id: 'firmware-config',
+        section: 'Before energizing',
+        title: 'Firmware configuration',
+        instructions: 'Check the firmware build.',
+        kind: 'check',
+        status: 'done',
+        value: null,
+        unit: null,
+        notes: '',
+        curve_ids: [],
+        run_ids: [],
+        repeats: 1,
+      },
+      {
+        id: 'po-run',
+        section: 'Runs',
+        title: 'P&O run',
+        instructions: 'Run P&O for 10 s.',
+        kind: 'run',
+        status: 'done',
+        value: null,
+        unit: null,
+        notes: '',
+        curve_ids: [],
+        run_ids: ['session-r1'],
+        repeats: 1,
+      },
+    ],
+    open_questions: [],
+  }
+}
+
 function testSessionFile(): SessionFile {
   return buildSessionFile({
     title: 'Imported test session',
     setup: 'single',
+    session: testSessionRecord(),
     curves: [
       {
         id: 'session-c1',
@@ -258,5 +313,134 @@ describe('importing a session file (view mode)', () => {
     await screen.findByText(/Couldn't open that session file/)
     expect(screen.queryByText(/Viewing:/)).toBeNull()
     expect(screen.getByText('Live bench curve')).toBeTruthy()
+  })
+
+  // The stub this replaced only said "report view coming soon" - this is
+  // the real wiring: SessionView fed straight from the file's own bundled
+  // records, no fetch, no PATCH.
+  it('"View session" renders the file\'s own session - real steps and statistics, no fetch at all', async () => {
+    vi.mocked(fetchCurves).mockResolvedValue([])
+    vi.mocked(fetchRuns).mockResolvedValue([])
+    renderApp()
+    await importSessionFile(testSessionFile())
+
+    fireEvent.click(screen.getByText('View session'))
+
+    await screen.findByText('Imported test session')
+    expect(screen.getByText('Firmware configuration')).toBeTruthy()
+    expect(screen.getByText('P&O run')).toBeTruthy()
+    expect(screen.getByText('2 / 2')).toBeTruthy() // n_done / n_steps - both steps 'done'
+    // The linked run's own held power, computed from its bundled samples -
+    // proof the statistics come from the file, not a fetch.
+    expect(screen.getAllByText(/Held/).length).toBeGreaterThan(0)
+    expect(fetchSession).not.toHaveBeenCalled()
+    expect(fetchRun).not.toHaveBeenCalled()
+  })
+
+  it('"View session" is read-only: no Delete session button, no edit calls possible', async () => {
+    vi.mocked(fetchCurves).mockResolvedValue([])
+    vi.mocked(fetchRuns).mockResolvedValue([])
+    renderApp()
+    await importSessionFile(testSessionFile())
+
+    fireEvent.click(screen.getByText('View session'))
+
+    await screen.findByText('Imported test session')
+    expect(screen.getByText('Read-only')).toBeTruthy()
+    expect(screen.queryByText('Delete session')).toBeNull()
+    expect(patchSession).not.toHaveBeenCalled()
+    expect(deleteSession).not.toHaveBeenCalled()
+  })
+})
+
+// Two write paths an adversarial review found reachable while the banner
+// says "read-only - nothing here is saved or sent to a server": the
+// sidebar's "New session" row, and a live SessionPane left mounted when a
+// session-only import (no curves/runs) never redirects the selection away
+// from it. Both must be closed off.
+describe('write paths stay closed while an imported session is active', () => {
+  function liveSessionSummary() {
+    return {
+      id: 'live-1',
+      title: 'Live editable session',
+      template_id: 'single-panel-characterization',
+      setup: 'single',
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+      n_steps: 1,
+      n_done: 0,
+      n_failed: 0,
+    }
+  }
+
+  function liveSessionRecord(): SessionRecord {
+    return {
+      id: 'live-1',
+      title: 'Live editable session',
+      template_id: 'single-panel-characterization',
+      template_version: 1,
+      setup: 'single',
+      created_at: '2026-01-01T00:00:00+00:00',
+      updated_at: '2026-01-01T00:00:00+00:00',
+      fields: {},
+      steps: [
+        {
+          id: 'firmware-config',
+          section: 'Before energizing',
+          title: 'Firmware configuration',
+          instructions: '',
+          kind: 'check',
+          status: 'todo',
+          value: null,
+          unit: null,
+          notes: '',
+          curve_ids: [],
+          run_ids: [],
+          repeats: 1,
+        },
+      ],
+      open_questions: [],
+    }
+  }
+
+  it('hides the sidebar\'s "New session" row while viewing an imported session', async () => {
+    vi.mocked(fetchCurves).mockResolvedValue([])
+    vi.mocked(fetchRuns).mockResolvedValue([])
+    renderApp()
+    await screen.findByText('New session')
+
+    await importSessionFile(testSessionFile())
+
+    expect(screen.queryByText('New session')).toBeNull()
+    expect(createSession).not.toHaveBeenCalled()
+  })
+
+  it('a session-only import over an open live session closes it off instead of leaving it writable', async () => {
+    vi.mocked(fetchCurves).mockResolvedValue([])
+    vi.mocked(fetchRuns).mockResolvedValue([])
+    vi.mocked(fetchSessions).mockResolvedValue([liveSessionSummary()])
+    vi.mocked(fetchSession).mockResolvedValue(liveSessionRecord())
+    renderApp()
+
+    // Open the live, writable session first.
+    fireEvent.click(await screen.findByText('Live editable session'))
+    await screen.findByText('Delete session')
+
+    // A session-only bundle (no curves, no runs) never redirects the
+    // selection (see useSessionFileImport's onImported in App.tsx), so it
+    // stays on this same session id - the exact scenario the review found.
+    const sessionOnlyFile = buildSessionFile({
+      title: 'Session-only file',
+      setup: 'single',
+      curves: [],
+      runs: [],
+      session: testSessionRecord(),
+    })
+    await importSessionFile(sessionOnlyFile)
+
+    expect(screen.getByText('Sessions are unavailable')).toBeTruthy()
+    expect(screen.queryByText('Delete session')).toBeNull()
+    expect(patchSession).not.toHaveBeenCalled()
+    expect(deleteSession).not.toHaveBeenCalled()
   })
 })

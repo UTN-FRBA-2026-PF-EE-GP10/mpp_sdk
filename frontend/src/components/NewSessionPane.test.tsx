@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { NewSessionPane } from './NewSessionPane'
+import { ImportedSessionContext, type ImportedSessionValue } from '@/lib/sessionFile'
 import type { SessionRecord, SessionTemplate, SessionTemplateSummary } from '@/lib/sessions'
 
 vi.mock('@/lib/api', () => ({
@@ -135,5 +136,52 @@ describe('NewSessionPane', () => {
     await waitFor(() =>
       expect(screen.getByText(/Failed to create: title must not be empty/)).toBeTruthy(),
     )
+  })
+})
+
+// Regression coverage for the write path an adversarial review found: the
+// sidebar already hides "New session" while an imported session file is
+// active (App.tsx's canCreateSession), and App.tsx's content switch skips
+// this pane too - but NewSessionPane must refuse on its own as well, the
+// same defense-in-depth every other mutating pane applies, so no future
+// bug in either of those outer gates can reopen this write path.
+describe('NewSessionPane - read-only gating', () => {
+  const ACTIVE_IMPORTED_SESSION: ImportedSessionValue = {
+    active: true,
+    title: 'An imported session',
+    setup: 'single',
+    session: null,
+    curves: [],
+    runs: [],
+    missing: { curve_ids: [], run_ids: [] },
+    enter: () => {},
+    close: () => {},
+  }
+
+  it('refuses to render the form, and never fetches templates, while an imported session is active', async () => {
+    render(
+      <ImportedSessionContext.Provider value={ACTIVE_IMPORTED_SESSION}>
+        <NewSessionPane setupMode="single" onCreated={vi.fn()} />
+      </ImportedSessionContext.Provider>,
+    )
+
+    expect(screen.getByText('New session is unavailable')).toBeTruthy()
+    expect(screen.getByText(/unavailable while viewing an imported session/)).toBeTruthy()
+    expect(screen.queryByText('Create session')).toBeNull()
+    // Give a wrongly-unguarded effect a chance to fire, then confirm it didn't.
+    await new Promise((r) => setTimeout(r, 20))
+    expect(fetchSessionTemplates).not.toHaveBeenCalled()
+  })
+
+  it('never calls createSession even if handleCreate were somehow triggered', () => {
+    render(
+      <ImportedSessionContext.Provider value={ACTIVE_IMPORTED_SESSION}>
+        <NewSessionPane setupMode="single" onCreated={vi.fn()} />
+      </ImportedSessionContext.Provider>,
+    )
+    // No Create session button exists to click in this state at all - the
+    // form isn't rendered (see the test above). This only pins that
+    // createSession stays uncalled through render.
+    expect(createSession).not.toHaveBeenCalled()
   })
 })

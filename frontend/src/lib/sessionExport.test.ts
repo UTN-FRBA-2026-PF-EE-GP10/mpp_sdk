@@ -209,7 +209,12 @@ describe('sessionExportFile', () => {
     expect(file.missing.run_ids).toEqual([])
   })
 
-  it('treats a linked run with no fetched detail as missing too', () => {
+  it('is a pure function of runDetails: an id absent from it is always missing, in flight or not', () => {
+    // sessionExportFile itself cannot tell "deleted from the library" apart
+    // from "not fetched yet" - that distinction lives in the caller (see
+    // SessionPane's runDetailsPending / SessionView's disabled Export
+    // button, which exist precisely so this function is never called
+    // while a linked run's detail fetch is still in flight).
     const file = sessionExportFile(session(), [curve()], {})
     expect(file.missing.run_ids).toEqual(['r1'])
   })

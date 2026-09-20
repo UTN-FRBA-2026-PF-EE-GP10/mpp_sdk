@@ -94,6 +94,12 @@ export interface SessionViewProps {
    * progressively (see SessionPane) or, for an imported session file,
    * supplies it all up front with no fetch at all. */
   runDetails?: Record<string, RunDetail>
+  /** True while some linked run's detail fetch is still in flight (see
+   * SessionPane's own doc comment on why) - disables "Export session
+   * file" so a click mid-fetch can never write a live run into the
+   * file's `missing` list. Always false for an already-complete,
+   * no-fetch-at-all source (sandbox mode, an imported session file). */
+  runDetailsPending?: boolean
   readOnly: boolean
   onPatch?: (patch: SessionPatch) => Promise<SessionRecord>
   onDeleteSession?: () => Promise<void>
@@ -117,6 +123,7 @@ export function SessionView({
   curves,
   runs,
   runDetails = {},
+  runDetailsPending = false,
   readOnly,
   onPatch,
   onDeleteSession,
@@ -176,6 +183,7 @@ export function SessionView({
   }
 
   function handleExportSessionFile() {
+    if (runDetailsPending) return // defense in depth - the button is disabled anyway
     downloadSessionExportFile(session, curves, runDetails)
   }
 
@@ -237,7 +245,18 @@ export function SessionView({
             >
               Download Markdown
             </Button>
-            <Button variant="outline" size="sm" onClick={handleExportSessionFile}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExportSessionFile}
+              disabled={runDetailsPending}
+              focusableWhenDisabled
+              title={
+                runDetailsPending
+                  ? 'Waiting on linked run details to finish loading'
+                  : undefined
+              }
+            >
               Export session file
             </Button>
             {onDeleteSession && (

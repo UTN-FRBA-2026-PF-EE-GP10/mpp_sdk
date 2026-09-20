@@ -168,6 +168,66 @@ describe('SessionPane - sandbox', () => {
   })
 })
 
+// Regression coverage for a race an adversarial review found: exporting
+// mid-fetch would silently write a live run into the file's `missing`
+// list (sessionExportFile treats an id absent from runDetails as
+// deleted - see its own test). SessionPane now derives runDetailsPending
+// from the same in-flight/missing bookkeeping the lazy-fetch effect above
+// already keeps, and SessionView disables Export session file on it.
+describe('SessionPane - export gating', () => {
+  function isDisabled(button: HTMLButtonElement): boolean {
+    return button.hasAttribute('disabled') || button.getAttribute('aria-disabled') === 'true'
+  }
+
+  it('disables Export session file while a linked run detail fetch is in flight, enables it once resolved', async () => {
+    vi.mocked(fetchSession).mockResolvedValue(session())
+    let resolveRun!: (detail: RunDetail) => void
+    vi.mocked(fetchRun).mockReturnValue(
+      new Promise((resolve) => {
+        resolveRun = resolve
+      }),
+    )
+    renderPane(
+      <SessionPane
+        id="r1"
+        curves={[]}
+        runs={[runSummary()]}
+        sandbox={false}
+        onChanged={vi.fn()}
+        onDeleted={vi.fn()}
+      />,
+    )
+    await waitFor(() => expect(screen.getByText('Panel A alone')).toBeTruthy())
+    await waitFor(() => expect(fetchRun).toHaveBeenCalledWith('r-linked'))
+
+    const exportButton = screen.getByText('Export session file').closest('button') as HTMLButtonElement
+    expect(isDisabled(exportButton)).toBe(true)
+
+    resolveRun(runDetail())
+
+    await waitFor(() => expect(isDisabled(exportButton)).toBe(false))
+  })
+
+  it('leaves Export session file enabled once a linked run 404s (confirmed missing, not pending)', async () => {
+    vi.mocked(fetchSession).mockResolvedValue(session())
+    vi.mocked(fetchRun).mockRejectedValue(new Error('run not found'))
+    renderPane(
+      <SessionPane
+        id="r1"
+        curves={[]}
+        runs={[runSummary()]}
+        sandbox={false}
+        onChanged={vi.fn()}
+        onDeleted={vi.fn()}
+      />,
+    )
+    await waitFor(() => expect(fetchRun).toHaveBeenCalledTimes(1))
+
+    const exportButton = screen.getByText('Export session file').closest('button') as HTMLButtonElement
+    await waitFor(() => expect(isDisabled(exportButton)).toBe(false))
+  })
+})
+
 describe('SessionPane - mutation wiring', () => {
   it('calls PATCH and refreshes onChanged when SessionView edits a step', async () => {
     vi.mocked(fetchSession).mockResolvedValue(session())
