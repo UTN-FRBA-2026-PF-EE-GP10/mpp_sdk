@@ -78,6 +78,15 @@ class CurveRecord:
     # to say where its points came from must not thereby claim they were
     # measured. See CURVE_SOURCES.
     source: str = field(default="unknown")
+    # The bench session this curve was captured in, if any - stamped by
+    # the server from the client's "active session" at save time (see
+    # scripts/curve_tracer_server.py's post_save_curve), never inferred
+    # here. A stamp is not ownership: curves stay a flat, shared library,
+    # and a session step links to one by id rather than owning it - this
+    # field only lets the workbench filter "captured in this session" and
+    # is left untouched if that session is later deleted (a dangling
+    # stamp, not a broken record - see mpp_sdk.sessions.library.delete).
+    session_id: str | None = field(default=None)
 
     @property
     def open_circuit_voltage(self) -> float:
@@ -106,6 +115,7 @@ class CurveRecord:
             "panels": [p.to_dict() for p in self.panels],
             "notes": self.notes,
             "source": self.source,
+            "session_id": self.session_id,
             "points": [{"v": v, "i": i} for v, i in self.points],
         }
 
@@ -128,6 +138,10 @@ class CurveRecord:
                 # Absent in files written before this field existed - those
                 # genuinely have no recorded provenance, so say so.
                 source=d.get("source", "unknown"),
+                # Absent in files written before this field existed - those
+                # were captured before sessions could stamp anything, so
+                # they simply have no session, same as a hand-edited file.
+                session_id=d.get("session_id"),
             )
         except KeyError as exc:
             raise ValueError(f"curve record missing field {exc.args[0]!r}") from exc

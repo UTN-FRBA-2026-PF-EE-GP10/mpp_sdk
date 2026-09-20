@@ -329,6 +329,10 @@ class _RunRequest:
     # mode's bundled curves are not in the server's library, so they come
     # inline instead of by `curve_ref`.
     curve_points: tuple[tuple[float, float], ...] | None = None
+    # The client's "active session" at the moment the run was started -
+    # see _SaveCurveRequest.session_id's own doc comment. Stamped onto the
+    # saved RunRecord in save_and_finish below.
+    session_id: str | None = None
 
 
 class _LiveRunCache:
@@ -506,6 +510,7 @@ def _execute_run(
             aborted=aborted,
             notes=reason or "",
             source=source,
+            session_id=request.session_id,
         )
         try:
             path = run_library.save(record)
@@ -804,6 +809,12 @@ class _SaveCurveRequest(BaseModel):
     measurement: str = "other"
     panels: list[_PanelSetupIn] = []
     notes: str = ""
+    # The client's "active session" (see frontend/src/lib/activeSession.ts),
+    # sent per-request rather than held as server state - two browsers must
+    # not fight over one "current session". Validated like any other id and
+    # stamped onto the saved CurveRecord verbatim - see
+    # _validate_active_session_id.
+    session_id: str | None = None
 
 
 class _CreatePanelRequest(BaseModel):
@@ -914,6 +925,10 @@ class _StartRunRequest(BaseModel):
     reference_label: str | None = None
     label: str = ""
     simulated: bool = False
+    # The client's "active session" - see _SaveCurveRequest.session_id's
+    # own doc comment. Validated the same way, stamped onto the saved
+    # RunRecord the same way, by post_start_run/_execute_run below.
+    session_id: str | None = None
 
 
 # A run's URL id is its filename stem (library.save's naming scheme), never
@@ -1025,6 +1040,17 @@ def _session_path(session_id: str) -> Path:
     if not path.exists():
         raise HTTPException(status_code=404, detail="session not found")
     return path
+
+
+def _validate_active_session_id(session_id: str | None) -> None:
+    """Validates a client-supplied "active session" id (POST /api/save-curve,
+    POST /api/runs/start) the same way `_session_path` validates a URL id -
+    same regex, same directory-containment check, same existence check -
+    and raises the same HTTPException on failure. `None` (no active session
+    on the client) is always fine. Never returns a path: the id is only
+    ever stamped verbatim onto the saved record, never used to build one."""
+    if session_id is not None:
+        _session_path(session_id)
 
 
 def _panel_path(panel_id: str) -> Path:
@@ -1258,6 +1284,7 @@ def create_app(
                         "notes": r.notes,
                         "n_points": len(r.points),
                         "source": r.source,
+                        "session_id": r.session_id,
                         "voc": r.open_circuit_voltage,
                         "isc": r.short_circuit_current,
                         "p_mpp": r.mpp()[2],
@@ -1294,6 +1321,7 @@ def create_app(
         snap = cache.snapshot()
         if not snap.points:
             raise HTTPException(status_code=409, detail="no sweep captured yet")
+        _validate_active_session_id(body.session_id)
         record = CurveRecord(
             captured_at=now_utc(),
             label=body.label,
@@ -1305,9 +1333,10 @@ def create_app(
             # page cannot be trusted to know (or to admit) that the curve
             # on screen was replayed rather than measured.
             source=snap.source,
+            session_id=body.session_id,
         )
         path = curve_library.save(record)
-        return {"path": str(path)}
+        return {"path": str(path), "id": path.stem}
 
     @app.get("/api/panels")
     def get_panels() -> list[dict]:
@@ -1708,6 +1737,7 @@ def create_app(
                         "curve_ref": r.curve_ref,
                         "notes": r.notes,
                         "source": r.source,
+                        "session_id": r.session_id,
                     }
                 )
             except ValueError as exc:
@@ -1746,6 +1776,7 @@ def create_app(
                 detail="no board attached in --demo mode: a live run needs real hardware "
                 "(pass simulated=true to run against a simulated source instead)",
             )
+        _validate_active_session_id(body.session_id)
         # A hardware run and curve-tracer sweep polling cannot share the
         # one SPI link (see the module docstring) - refuse up front rather
         # than let a run queue behind a sweep and appear to "complete"
@@ -1892,6 +1923,7 @@ def create_app(
             curve_ref=curve_ref,
             label=label,
             curve_points=curve_points,
+            session_id=body.session_id,
         )
         if body.simulated:
             # Never touches spidev, so it does not need to wait for the
@@ -1963,6 +1995,7 @@ def create_app(
             "aborted": r.aborted,
             "notes": r.notes,
             "source": r.source,
+            "session_id": r.session_id,
             "n_samples": len(r.samples),
             "duration_s": _run_duration_s(r.samples),
             "downsampled": downsampled,
