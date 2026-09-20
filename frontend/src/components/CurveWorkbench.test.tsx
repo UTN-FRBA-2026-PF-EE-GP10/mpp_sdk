@@ -72,7 +72,7 @@ function button(text: string) {
   return el
 }
 
-// Start Measurement/Release Relay/Save curve carry a `title` explaining a
+// Start Measurement/Hand panel to SEPIC/Save curve carry a `title` explaining a
 // demo-mode disablement, so they use focusableWhenDisabled (aria-disabled,
 // not the native attribute) to keep that title reachable by hover/focus -
 // see button.tsx and CurveDashboardPane's note on the same fix. The
@@ -91,27 +91,27 @@ describe('CurveWorkbench outside demo mode', () => {
 
   it('shows no demo-mode callout', () => {
     renderWorkbench(false)
-    expect(screen.queryByText(/Demo mode:/)).toBeNull()
+    expect(screen.queryByText(/Demo:/)).toBeNull()
   })
 })
 
 describe('CurveWorkbench in demo mode', () => {
-  it('disables Start Measurement and Release Relay, and never calls their hardware endpoints', () => {
+  it('disables Start Measurement and Hand panel to SEPIC, and never calls their hardware endpoints', () => {
     renderWorkbench(true)
     expect(isDisabled(button('Start Measurement'))).toBe(true)
-    expect(isDisabled(button('Release Relay'))).toBe(true)
+    expect(isDisabled(button('Hand panel to SEPIC'))).toBe(true)
 
     fireEvent.click(button('Start Measurement'))
-    fireEvent.click(button('Release Relay'))
+    fireEvent.click(button('Hand panel to SEPIC'))
     expect(startSweep).not.toHaveBeenCalled()
     expect(releaseRelay).not.toHaveBeenCalled()
   })
 
   it('leaves the demo-curve buttons enabled, replaying locally instead of over SPI', async () => {
     renderWorkbench(true)
-    expect(isDisabled(button('Demo curve (bright)'))).toBe(false)
+    expect(isDisabled(button('Replay curve (bright)'))).toBe(false)
 
-    fireEvent.click(button('Demo curve (bright)'))
+    fireEvent.click(button('Replay curve (bright)'))
     await waitFor(() => expect(screen.getByText(/capturing/)).toBeTruthy())
     expect(startDemoSweep).not.toHaveBeenCalled()
   })
@@ -129,21 +129,21 @@ describe('CurveWorkbench in demo mode', () => {
     const start = button('Start Measurement')
     expect(start.getAttribute('title')).toMatch(/unavailable in demo mode/i)
     // Also true independent of hover - a persistent callout on screen.
-    expect(screen.getByText(/Demo mode:/)).toBeTruthy()
+    expect(screen.getByText(/Demo:/)).toBeTruthy()
   })
 
   it('explains itself with a visible demo-mode callout', () => {
     renderWorkbench(true)
-    expect(screen.getByText(/Demo mode:/)).toBeTruthy()
+    expect(screen.getByText(/Demo:/)).toBeTruthy()
   })
 })
 
-describe('CurveWorkbench in Demo with PICO mode (emphasizeReplay, not demo)', () => {
+describe('CurveWorkbench in Replay on the board mode (emphasizeReplay, not demo)', () => {
   it('sends the real SPI command - this is not a local replay', () => {
     renderWorkbench(false, { emphasizeReplay: true })
-    expect(isDisabled(button('Demo curve (bright)'))).toBe(false)
+    expect(isDisabled(button('Replay curve (bright)'))).toBe(false)
 
-    fireEvent.click(button('Demo curve (bright)'))
+    fireEvent.click(button('Replay curve (bright)'))
     expect(startDemoSweep).toHaveBeenCalledWith(true)
   })
 
@@ -157,8 +157,8 @@ describe('CurveWorkbench in Demo with PICO mode (emphasizeReplay, not demo)', ()
 
   it('explains itself with a distinct callout from the fully-offline Demo mode', () => {
     renderWorkbench(false, { emphasizeReplay: true })
-    expect(screen.getByText(/Demo with PICO:/)).toBeTruthy()
-    expect(screen.queryByText(/^Demo mode:/)).toBeNull()
+    expect(screen.getByText(/Replay on the board:/)).toBeTruthy()
+    expect(screen.queryByText(/^Demo:/)).toBeNull()
   })
 })
 
@@ -320,22 +320,22 @@ describe('CurveWorkbench saved-curves table', () => {
 describe('CurveWorkbench demo curve buttons', () => {
   it('are absent in hardware mode, where the point is measuring a real panel', () => {
     renderWorkbench(false)
-    expect(screen.queryByText('Demo curve (dim)')).toBeNull()
-    expect(screen.queryByText('Demo curve (bright)')).toBeNull()
+    expect(screen.queryByText('Replay curve (dim)')).toBeNull()
+    expect(screen.queryByText('Replay curve (bright)')).toBeNull()
     // The real actions are still there.
     expect(screen.getByText('Start Measurement')).toBeTruthy()
-    expect(screen.getByText('Release Relay')).toBeTruthy()
+    expect(screen.getByText('Hand panel to SEPIC')).toBeTruthy()
   })
 
-  it('are shown in Demo with PICO, where they are the primary action', () => {
+  it('are shown in Replay on the board, where they are the primary action', () => {
     renderWorkbench(false, { emphasizeReplay: true })
-    expect(screen.getByText('Demo curve (dim)')).toBeTruthy()
-    expect(screen.getByText('Demo curve (bright)')).toBeTruthy()
+    expect(screen.getByText('Replay curve (dim)')).toBeTruthy()
+    expect(screen.getByText('Replay curve (bright)')).toBeTruthy()
   })
 
   it('are shown in Demo, where they replay a bundled fixture locally', () => {
     renderWorkbench(true)
-    expect(screen.getByText('Demo curve (dim)')).toBeTruthy()
-    expect(screen.getByText('Demo curve (bright)')).toBeTruthy()
+    expect(screen.getByText('Replay curve (dim)')).toBeTruthy()
+    expect(screen.getByText('Replay curve (bright)')).toBeTruthy()
   })
 })

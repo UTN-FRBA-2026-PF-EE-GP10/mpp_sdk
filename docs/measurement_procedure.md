@@ -45,7 +45,7 @@ Quickstart to install the `web` extra first.
    mode menu:
    - **PICO connected**: a real board, live sweeps. Use this for an
      actual measurement.
-   - **Demo with PICO**: a real board, but the "Demo curve" buttons
+   - **Replay on the board**: a real board, but the "Replay curve" buttons
      replay a curve already stored in the firmware instead of measuring
      one. Only selectable while a board is linked.
    - **Demo**: no board at all, bundled sample data, nothing saved.

@@ -230,8 +230,8 @@ export default function App() {
       .catch((e) => console.error('fetching reports failed', e))
   }, [reloadToken, sandboxEnabled, session.active])
 
-  // 'firmware-replay' ("Demo with PICO") needs a real board on the other
-  // end of a real link - ConnectionIndicator already refuses to let
+  // 'firmware-replay' ("Replay on the board") needs a real board on the
+  // other end of a real link - ConnectionIndicator already refuses to let
   // someone select it without one, but the link can also drop out from
   // under an already-selected mode. This is the other half of that rule:
   // fall back the moment it's no longer true, rather than leaving the
@@ -368,8 +368,8 @@ export default function App() {
         </div>
         {/* flex-wrap here and on the header itself: none of these three
             controls can shrink (buttonVariants is whitespace-nowrap), and
-            the connection pill's label runs as long as "Demo mode -
-            simulated" - wrapping beats clipping the one control here that
+            the connection pill's label runs as long as "Replay on the
+            board" - wrapping beats clipping the one control here that
             also doubles as the capture-mode trigger. */}
         <div className="flex flex-wrap items-center gap-2">
           <OpenSessionButton onFile={sessionImport.importFile} />
@@ -400,7 +400,7 @@ export default function App() {
 
       {sandboxEnabled && (
         <div className="border-b border-violet-500/30 bg-violet-500/10 px-4 py-1.5 text-center text-xs font-medium text-violet-700 dark:text-violet-300">
-          Demo mode - showing bundled sample data, not your library. No live board, no writes.
+          Demo: showing bundled sample data, not your library. No live board, no writes.
         </div>
       )}
 

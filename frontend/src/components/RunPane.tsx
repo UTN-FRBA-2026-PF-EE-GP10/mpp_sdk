@@ -112,7 +112,7 @@ export function RunPane({
       <CardContent className="flex flex-col gap-4">
         {sandbox.enabled && (
           <p className="rounded-md border border-violet-500/30 bg-violet-500/10 px-3 py-2 text-sm text-violet-700 dark:text-violet-300">
-            Demo mode: starting a run here drives a simulated converter, not the real one - the
+            Demo: starting a run here drives a simulated converter, not the real one. The
             algorithm hunts the maximum power point of the chosen demo curve, or a built-in
             reference panel. Nothing physical happens.
           </p>
@@ -192,7 +192,7 @@ function RunSetupForm({
   curves: CurveRecord[]
   canStart: boolean
   disabledReason: string | null
-  /** Demo mode: the run this form starts drives a `SimulatedSource`, not
+  /** Demo (CaptureMode 'simulated'): the run this form starts drives a `SimulatedSource`, not
    * the real converter - see RunPane. Skips the hardware-run confirmation.
    * `curves` in demo mode is the bundled fixture list (App.tsx's
    * DEMO_CURVES), which the server's curve library does not have, so the

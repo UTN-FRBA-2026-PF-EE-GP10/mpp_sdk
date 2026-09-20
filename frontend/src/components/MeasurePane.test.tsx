@@ -62,7 +62,7 @@ function button(text: string) {
   return el
 }
 
-// Start Measurement/Release Relay carry a `title` explaining a demo-mode
+// Start Measurement/Hand panel to SEPIC carry a `title` explaining a demo-mode
 // disablement, so they use focusableWhenDisabled (aria-disabled, not the
 // native attribute) to keep that title reachable by hover/focus - see
 // button.tsx and CurveDashboardPane's note on the same fix. This checks
@@ -80,21 +80,21 @@ describe('MeasurePane', () => {
   it('leaves everything live in firmware-replay mode too - only simulated is offline', () => {
     renderPane('firmware-replay')
     expect(isDisabled(button('Start Measurement'))).toBe(false)
-    expect(isDisabled(button('Demo curve (bright)'))).toBe(false)
-    expect(screen.getByText(/Demo with PICO:/)).toBeTruthy()
+    expect(isDisabled(button('Replay curve (bright)'))).toBe(false)
+    expect(screen.getByText(/Replay on the board:/)).toBeTruthy()
   })
 
   it('disables the hardware-only controls in simulated mode and explains why', () => {
     renderPane('simulated')
     expect(isDisabled(button('Start Measurement'))).toBe(true)
-    expect(isDisabled(button('Release Relay'))).toBe(true)
-    expect(screen.getByText(/Demo mode:/)).toBeTruthy()
+    expect(isDisabled(button('Hand panel to SEPIC'))).toBe(true)
+    expect(screen.getByText(/Demo:/)).toBeTruthy()
   })
 
   it('still lets the demo-curve buttons work in simulated mode', () => {
     renderPane('simulated')
-    expect(isDisabled(button('Demo curve (bright)'))).toBe(false)
-    expect(isDisabled(button('Demo curve (dim)'))).toBe(false)
+    expect(isDisabled(button('Replay curve (bright)'))).toBe(false)
+    expect(isDisabled(button('Replay curve (dim)'))).toBe(false)
   })
 
   it('defaults to the curve tab, with Run an algorithm reachable alongside it', () => {

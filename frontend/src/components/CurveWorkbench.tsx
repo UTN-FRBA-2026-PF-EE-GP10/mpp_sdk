@@ -203,15 +203,15 @@ export function CurveWorkbench({
   connected: boolean
   /** Forwarded to SaveCurveForm - see its own doc comment. */
   onSaved: (kind: string) => void
-  /** CaptureMode 'simulated' (see lib/captureMode.ts): the two "Demo
+  /** CaptureMode 'simulated' (see lib/captureMode.ts): the two "Replay
    * curve" buttons replay a bundled fixture locally instead of over SPI;
-   * Start Measurement, Release Relay, and Save curve are hardware/write
-   * actions with no local equivalent and stay disabled. */
+   * Start Measurement, Hand panel to SEPIC, and Save curve are
+   * hardware/write actions with no local equivalent and stay disabled. */
   demo?: boolean
-  /** CaptureMode 'firmware-replay' ("Demo with PICO"): everything still
-   * works exactly as it does in 'hardware' mode (both need `connected`),
-   * this only swaps which button row reads as the primary action - real
-   * SPI either way, never set alongside `demo`. */
+  /** CaptureMode 'firmware-replay' ("Replay on the board"): everything
+   * still works exactly as it does in 'hardware' mode (both need
+   * `connected`), this only swaps which button row reads as the primary
+   * action - real SPI either way, never set alongside `demo`. */
   emphasizeReplay?: boolean
   /** Remeasure's prefill for the Save form - forwarded straight through
    * to SaveCurveForm. See MeasurePane, which only supplies these when
@@ -239,8 +239,9 @@ export function CurveWorkbench({
   // points under the label meant for the one still in progress.
   const hasCapture = !active && points.length > 0
   const [selected, setSelected] = useState<CurveRecord | null>(null)
-  // Demo-curve replays run regardless of `connected` (they're local), but
-  // Start Measurement/Release Relay never fire in demo mode either way.
+  // Replay-curve buttons run regardless of `connected` (they're local),
+  // but Start Measurement/Hand panel to SEPIC never fire in demo mode
+  // either way.
   const demoButtonsDisabled = active || (!demo && !connected)
 
   return (
@@ -276,14 +277,14 @@ export function CurveWorkbench({
                   onClick={() => startDemo(false)}
                   disabled={demoButtonsDisabled}
                 >
-                  Demo curve (dim)
+                  Replay curve (dim)
                 </Button>
                 <Button
                   variant={emphasizeReplay ? 'default' : 'secondary'}
                   onClick={() => startDemo(true)}
                   disabled={demoButtonsDisabled}
                 >
-                  Demo curve (bright)
+                  Replay curve (bright)
                 </Button>
               </>
             )}
@@ -292,9 +293,13 @@ export function CurveWorkbench({
               onClick={releaseRelay}
               disabled={demo || !connected}
               focusableWhenDisabled
-              title={demo ? 'Release Relay needs real hardware - unavailable in demo mode' : undefined}
+              title={
+                demo
+                  ? 'Hand panel to SEPIC needs real hardware - unavailable in demo mode'
+                  : 'Disconnects the panel from the curve tracer and reconnects it to the SEPIC converter. It stays on the tracer across any number of sweeps until you do this.'
+              }
             >
-              Release Relay
+              Hand panel to SEPIC
             </Button>
           </div>
         </div>
@@ -302,16 +307,16 @@ export function CurveWorkbench({
       <CardContent className="flex flex-col gap-6">
         {demo && (
           <p className="rounded-md border border-violet-500/30 bg-violet-500/10 px-3 py-2 text-sm text-violet-700 dark:text-violet-300">
-            Demo mode: the Demo curve buttons replay a bundled sample locally. Start Measurement,
-            Release Relay, and Save curve talk to real hardware or write to your library, so they
-            stay off.
+            Demo: the Replay curve buttons replay a bundled sample locally. Start Measurement,
+            Hand panel to SEPIC, and Save curve talk to real hardware or write to your library, so
+            they stay off.
           </p>
         )}
         {emphasizeReplay && (
           <p className="rounded-md border border-indigo-500/30 bg-indigo-500/10 px-3 py-2 text-sm text-indigo-700 dark:text-indigo-300">
-            Demo with PICO: the Demo curve buttons are the point here - real SPI, a curve already
-            stored in the firmware, not measured this session. Start Measurement and Save curve
-            still work normally.
+            Replay on the board: the Replay curve buttons are the point here. Real SPI sends a
+            curve already stored in the firmware, not measured this session. Start Measurement
+            and Save curve still work normally.
           </p>
         )}
         {commandError && (
