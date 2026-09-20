@@ -162,6 +162,21 @@ describe('importing a session file (view mode)', () => {
     expect(screen.queryByText('Live bench curve')).toBeNull()
   })
 
+  it('drops a pending remeasure, which view mode could never finish', async () => {
+    vi.mocked(fetchCurves).mockResolvedValue([liveCurve()])
+    vi.mocked(fetchRuns).mockResolvedValue([])
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    renderApp()
+    await screen.findByText('Live bench curve')
+    fireEvent.click(screen.getAllByText('Baseline')[0].closest('button')!)
+    fireEvent.click(await screen.findByTitle('Capture a replacement, then remove this curve'))
+    await screen.findByText(/Remeasure pending/)
+
+    await importSession(testSession())
+
+    expect(screen.queryByText(/Remeasure pending/)).toBeNull()
+  })
+
   it('never fetches curves/runs again while a session is active', async () => {
     vi.mocked(fetchCurves).mockResolvedValue([liveCurve()])
     vi.mocked(fetchRuns).mockResolvedValue([])

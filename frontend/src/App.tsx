@@ -54,6 +54,10 @@ export default function App() {
   // nothing useful. Only ever fires from the import event itself, never
   // fights a later pick of Measure once the operator is looking at it.
   const sessionImport = useSessionFileImport((parsed) => {
+    // A remeasure can only be finished by capturing, which view mode turns
+    // off - leaving its banner up would be a pending state with no way to
+    // resolve it. The old curve is untouched either way.
+    setPendingRemeasure(null)
     if (parsed.curves.length > 0) {
       setSelection({ root: 'curves', kind: parsed.curves[0].record.measurement })
     } else if (parsed.runs.length > 0) {
