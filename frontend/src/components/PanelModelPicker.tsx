@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { createPanelModel, fetchPanelModels, patchPanelModel } from '@/lib/api'
 import type { PanelModelRecord } from '@/lib/panels'
+import { readOnlyReasonText, useReadOnly } from '@/lib/sessionFile'
 
 interface FormState {
   name: string
@@ -56,6 +57,13 @@ function numberOrNull(text: string): number | null {
  * to add a new panel model or edit the picked one; a save re-fetches the
  * list and re-picks the saved record, so the caller's snapshot always
  * reflects what's now on disk.
+ *
+ * Gated on `useReadOnly()` itself, not just left to the fact that
+ * `NewSessionPane` (its only caller today) already refuses to mount this
+ * component while read-only - same defense-in-depth reasoning as
+ * `NewSessionPane`'s own doc comment: a control that only exists because
+ * an outer branch is correct is one bug away from a live fetch or write
+ * happening under a banner that promises otherwise.
  */
 export function PanelModelPicker({
   label,
@@ -64,6 +72,7 @@ export function PanelModelPicker({
   label: string
   onPick: (panel: PanelModelRecord) => void
 }) {
+  const readOnly = useReadOnly()
   const [panels, setPanels] = useState<PanelModelRecord[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState('')
@@ -73,16 +82,15 @@ export function PanelModelPicker({
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
-  function load() {
+  useEffect(() => {
+    if (readOnly.enabled) return
     fetchPanelModels()
       .then((fetched) => {
         setPanels(fetched)
         setLoadError(null)
       })
       .catch((e) => setLoadError(e instanceof Error ? e.message : String(e)))
-  }
-
-  useEffect(load, [])
+  }, [readOnly.enabled])
 
   // Preselect the first panel model once the list arrives - never fights
   // a later, manual pick (only runs when the fetched list itself changes,
@@ -96,12 +104,14 @@ export function PanelModelPicker({
   }, [panels])
 
   function pick(id: string) {
+    if (readOnly.enabled) return // defense in depth
     setSelectedId(id)
     const panel = panels?.find((p) => p.id === id)
     if (panel) onPick(panel)
   }
 
   function openAddForm() {
+    if (readOnly.enabled) return // defense in depth
     setEditingId(null)
     setForm(BLANK_FORM)
     setSaveError(null)
@@ -109,6 +119,7 @@ export function PanelModelPicker({
   }
 
   function openEditForm() {
+    if (readOnly.enabled) return // defense in depth
     const panel = panels?.find((p) => p.id === selectedId)
     if (!panel) return
     setEditingId(panel.id)
@@ -118,7 +129,7 @@ export function PanelModelPicker({
   }
 
   async function handleSave() {
-    if (!form.name.trim() || saving) return
+    if (readOnly.enabled || !form.name.trim() || saving) return // defense in depth
     setSaving(true)
     setSaveError(null)
     const input = {
@@ -148,6 +159,10 @@ export function PanelModelPicker({
     }
   }
 
+  const readOnlyTitle = readOnly.enabled
+    ? readOnlyReasonText(readOnly.reason ?? 'demo', 'Picking a panel model')
+    : undefined
+
   return (
     <div className="flex flex-col gap-2 rounded-md border p-3">
       <div className="flex items-end gap-2">
@@ -156,7 +171,8 @@ export function PanelModelPicker({
           <select
             value={selectedId}
             onChange={(e) => pick(e.target.value)}
-            disabled={!panels || panels.length === 0}
+            disabled={readOnly.enabled || !panels || panels.length === 0}
+            title={readOnlyTitle}
             className="rounded-md border bg-transparent px-2 py-1.5 text-sm text-foreground"
           >
             {(!panels || panels.length === 0) && <option value="">Loading...</option>}
@@ -168,10 +184,24 @@ export function PanelModelPicker({
             ))}
           </select>
         </label>
-        <Button type="button" variant="outline" size="sm" onClick={openEditForm} disabled={!selectedId}>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={openEditForm}
+          disabled={readOnly.enabled || !selectedId}
+          title={readOnlyTitle}
+        >
           Edit
         </Button>
-        <Button type="button" variant="outline" size="sm" onClick={openAddForm}>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={openAddForm}
+          disabled={readOnly.enabled}
+          title={readOnlyTitle}
+        >
           Add panel model
         </Button>
       </div>
@@ -180,7 +210,7 @@ export function PanelModelPicker({
         <p className="text-sm text-destructive">Failed to load panel models: {loadError}</p>
       )}
 
-      {formOpen && (
+      {formOpen && !readOnly.enabled && (
         <div className="flex flex-col gap-2 rounded-md border bg-muted/30 p-2">
           <p className="text-xs font-medium text-muted-foreground">
             {editingId ? 'Edit panel model' : 'New panel model'}

@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { PanelModelPicker } from './PanelModelPicker'
 import type { PanelModelRecord } from '@/lib/panels'
+import { ImportedSessionContext, type ImportedSessionValue } from '@/lib/sessionFile'
 
 vi.mock('@/lib/api', () => ({
   fetchPanelModels: vi.fn(),
@@ -145,5 +146,55 @@ describe('PanelModelPicker', () => {
     await waitFor(() =>
       expect(screen.getByText(/Failed to save: name must not be empty/)).toBeTruthy(),
     )
+  })
+})
+
+// Same defense-in-depth story as NewSessionPane's own "read-only gating"
+// tests: this component's only caller (NewSessionPane) already refuses to
+// mount it at all while an imported session is active, but PanelModelPicker
+// must refuse on its own too, so a future bug in that outer gate can't
+// reopen this fetch/write path.
+describe('PanelModelPicker - read-only gating', () => {
+  const ACTIVE_IMPORTED_SESSION: ImportedSessionValue = {
+    active: true,
+    title: 'An imported session',
+    setup: 'single',
+    session: null,
+    curves: [],
+    runs: [],
+    missing: { curve_ids: [], run_ids: [] },
+    enter: () => {},
+    close: () => {},
+  }
+
+  function renderReadOnly(onPick = vi.fn()) {
+    return render(
+      <ImportedSessionContext.Provider value={ACTIVE_IMPORTED_SESSION}>
+        <PanelModelPicker label="Panel model" onPick={onPick} />
+      </ImportedSessionContext.Provider>,
+    )
+  }
+
+  it('never fetches the panel model list while viewing an imported session', async () => {
+    renderReadOnly()
+    // Give a wrongly-unguarded effect a chance to fire, then confirm it didn't.
+    await new Promise((r) => setTimeout(r, 20))
+    expect(fetchPanelModels).not.toHaveBeenCalled()
+  })
+
+  it('disables the picker, Edit and Add panel model controls', () => {
+    renderReadOnly()
+    expect((screen.getByLabelText('Panel model') as HTMLSelectElement).disabled).toBe(true)
+    expect((screen.getByText('Edit').closest('button') as HTMLButtonElement).disabled).toBe(true)
+    expect(
+      (screen.getByText('Add panel model').closest('button') as HTMLButtonElement).disabled,
+    ).toBe(true)
+  })
+
+  it('never opens the inline add/edit form even if a click somehow reached it', () => {
+    renderReadOnly()
+    fireEvent.click(screen.getByText('Add panel model'))
+    expect(screen.queryByText('New panel model')).toBeNull()
+    expect(screen.queryByLabelText('Name')).toBeNull()
   })
 })
