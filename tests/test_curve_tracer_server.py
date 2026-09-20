@@ -12,6 +12,7 @@ import queue
 import sys
 import threading
 import time
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -20,6 +21,7 @@ fastapi = pytest.importorskip("fastapi")
 
 from fastapi.testclient import TestClient  # noqa: E402
 
+import scripts.curve_tracer_server as server_module  # noqa: E402
 from harness.common import AlgorithmSpec, algorithm_specs  # noqa: E402
 from mpp_sdk import IdealSingleDiode  # noqa: E402
 from mpp_sdk.curves import CurveRecord, PanelSetup, save  # noqa: E402
@@ -28,6 +30,7 @@ from mpp_sdk.curves.record import now_utc  # noqa: E402
 from mpp_sdk.runs import RunRecord, RunSample  # noqa: E402
 from mpp_sdk.runs import load as load_run  # noqa: E402
 from mpp_sdk.runs import save as save_run  # noqa: E402
+from mpp_sdk.sessions import FieldDef, get_template  # noqa: E402
 from scripts.curve_tracer_server import (  # noqa: E402
     _DEFAULT_I_MAX,
     _DEFAULT_RUN_DURATION_S,
@@ -2414,6 +2417,114 @@ def test_patch_session_rejects_a_field_the_session_does_not_have(client):
     session_id = _create_session(client).json()["id"]
     r = client.patch(f"/api/sessions/{session_id}", json={"fields": {"not-a-field": "x"}})
     assert r.status_code == 400
+
+
+# ------------------------------------------------------------------
+# Sessions: panel model snapshot fields are read-only server-side
+# ------------------------------------------------------------------
+
+
+def _session_file_text(client, session_id):
+    return (client.session_dir / f"{session_id}.json").read_text()
+
+
+@pytest.mark.parametrize(
+    "key", ["panel_model_voc", "panel_model_isc", "panel_model_vmp", "panel_model_imp"]
+)
+def test_patch_session_rejects_a_change_to_a_snapshot_field(client, key):
+    created = _create_session(client, fields={key: "1.5"}).json()
+    before = _session_file_text(client, created["id"])
+    r = client.patch(f"/api/sessions/{created['id']}", json={"fields": {key: "999999"}})
+    assert r.status_code == 400
+    assert key in r.json()["detail"]
+    # Refused outright: nothing was written.
+    assert _session_file_text(client, created["id"]) == before
+    assert client.get(f"/api/sessions/{created['id']}").json()["fields"][key] == "1.5"
+
+
+@pytest.mark.parametrize("prefix", ["panel_a_model", "panel_b_model"])
+def test_patch_session_rejects_a_change_to_a_full_setup_snapshot_field(client, prefix):
+    created = _create_session(client, template_id="full-setup-characterization").json()
+    r = client.patch(f"/api/sessions/{created['id']}", json={"fields": {f"{prefix}_voc": "9"}})
+    assert r.status_code == 400
+
+
+def test_patch_session_rejects_a_mixed_patch_without_applying_the_editable_part(client):
+    created = _create_session(client).json()
+    r = client.patch(
+        f"/api/sessions/{created['id']}",
+        json={"fields": {"operator": "bench operator", "panel_model_voc": "999999"}},
+    )
+    assert r.status_code == 400
+    assert client.get(f"/api/sessions/{created['id']}").json()["fields"]["operator"] == ""
+
+
+def test_patch_session_still_allows_editing_a_non_snapshot_field(client):
+    created = _create_session(client, fields={"panel_model_voc": "23.5"}).json()
+    r = client.patch(
+        f"/api/sessions/{created['id']}",
+        json={"fields": {"operator": "bench operator", "panel": "Luxen LN-10P, 10 W"}},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["fields"]["operator"] == "bench operator"
+    assert body["fields"]["panel"] == "Luxen LN-10P, 10 W"
+    # The snapshot the session was created with is untouched.
+    assert body["fields"]["panel_model_voc"] == "23.5"
+
+
+def test_post_create_session_still_accepts_the_snapshot_values(client):
+    # Creation is the one moment a snapshot field is written: the picker
+    # sends the panel model's values here, so only PATCH is locked.
+    r = _create_session(client, fields={"panel_model_voc": "23.5", "panel_model_isc": "0.57"})
+    assert r.status_code == 200
+    assert r.json()["fields"]["panel_model_voc"] == "23.5"
+
+
+def test_patch_session_read_only_fields_come_from_the_template_not_a_key_pattern(
+    client, monkeypatch
+):
+    """A snapshot field the server has never heard of is protected the
+    moment a template declares it `readonly` - and a field whose name
+    merely looks like a snapshot key is not, unless declared. The check
+    reads the template's field_defs, not the key's shape."""
+    real = get_template("single-panel-characterization")
+    fake = replace(
+        real,
+        field_defs=real.field_defs
+        + (
+            FieldDef(key="irradiance_snapshot", label="Irradiance", readonly=True),
+            FieldDef(key="notes_model_voc", label="Looks like a snapshot key, is not"),
+        ),
+    )
+    monkeypatch.setattr(server_module, "get_session_template", lambda _id: fake)
+    created = _create_session(client).json()
+
+    locked = client.patch(
+        f"/api/sessions/{created['id']}", json={"fields": {"irradiance_snapshot": "1"}}
+    )
+    assert locked.status_code == 400
+
+    free = client.patch(f"/api/sessions/{created['id']}", json={"fields": {"notes_model_voc": "x"}})
+    assert free.status_code == 200
+    assert free.json()["fields"]["notes_model_voc"] == "x"
+
+
+def test_patch_session_of_a_session_whose_template_is_gone_still_works(client, monkeypatch):
+    created = _create_session(client).json()
+
+    def gone(template_id):
+        raise KeyError(template_id)
+
+    monkeypatch.setattr(server_module, "get_session_template", gone)
+    r = client.patch(f"/api/sessions/{created['id']}", json={"fields": {"operator": "someone"}})
+    assert r.status_code == 200
+
+
+def test_session_template_route_exposes_which_fields_are_read_only(client):
+    body = client.get("/api/session-templates/single-panel-characterization").json()
+    readonly = {fd["key"] for fd in body["field_defs"] if fd["readonly"]}
+    assert readonly == {"panel_model_voc", "panel_model_isc", "panel_model_vmp", "panel_model_imp"}
 
 
 def test_patch_session_rejects_a_duplicate_step_id(client):

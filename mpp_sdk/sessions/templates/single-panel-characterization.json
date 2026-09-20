@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "template_id": "single-panel-characterization",
-  "version": 2,
+  "version": 3,
   "title": "Single panel characterization",
   "setup": "single",
   "field_defs": [
@@ -15,25 +15,29 @@
       "key": "panel_model_voc",
       "label": "Panel model Voc",
       "hint": "Snapshotted from the picked panel model - read-only.",
-      "default": ""
+      "default": "",
+      "readonly": true
     },
     {
       "key": "panel_model_isc",
       "label": "Panel model Isc",
       "hint": "Snapshotted from the picked panel model - read-only.",
-      "default": ""
+      "default": "",
+      "readonly": true
     },
     {
       "key": "panel_model_vmp",
       "label": "Panel model Vmp",
       "hint": "Snapshotted from the picked panel model - read-only.",
-      "default": ""
+      "default": "",
+      "readonly": true
     },
     {
       "key": "panel_model_imp",
       "label": "Panel model Imp",
       "hint": "Snapshotted from the picked panel model - read-only.",
-      "default": ""
+      "default": "",
+      "readonly": true
     },
     {
       "key": "light_source",

@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "template_id": "full-setup-characterization",
-  "version": 2,
+  "version": 3,
   "title": "Full setup characterization (two panels)",
   "setup": "full",
   "field_defs": [
@@ -15,25 +15,29 @@
       "key": "panel_a_model_voc",
       "label": "Panel A model Voc",
       "hint": "Snapshotted from the picked panel model - read-only.",
-      "default": ""
+      "default": "",
+      "readonly": true
     },
     {
       "key": "panel_a_model_isc",
       "label": "Panel A model Isc",
       "hint": "Snapshotted from the picked panel model - read-only.",
-      "default": ""
+      "default": "",
+      "readonly": true
     },
     {
       "key": "panel_a_model_vmp",
       "label": "Panel A model Vmp",
       "hint": "Snapshotted from the picked panel model - read-only.",
-      "default": ""
+      "default": "",
+      "readonly": true
     },
     {
       "key": "panel_a_model_imp",
       "label": "Panel A model Imp",
       "hint": "Snapshotted from the picked panel model - read-only.",
-      "default": ""
+      "default": "",
+      "readonly": true
     },
     {
       "key": "panel_b",
@@ -45,25 +49,29 @@
       "key": "panel_b_model_voc",
       "label": "Panel B model Voc",
       "hint": "Snapshotted from the picked panel model - read-only.",
-      "default": ""
+      "default": "",
+      "readonly": true
     },
     {
       "key": "panel_b_model_isc",
       "label": "Panel B model Isc",
       "hint": "Snapshotted from the picked panel model - read-only.",
-      "default": ""
+      "default": "",
+      "readonly": true
     },
     {
       "key": "panel_b_model_vmp",
       "label": "Panel B model Vmp",
       "hint": "Snapshotted from the picked panel model - read-only.",
-      "default": ""
+      "default": "",
+      "readonly": true
     },
     {
       "key": "panel_b_model_imp",
       "label": "Panel B model Imp",
       "hint": "Snapshotted from the picked panel model - read-only.",
-      "default": ""
+      "default": "",
+      "readonly": true
     },
     {
       "key": "light_source",

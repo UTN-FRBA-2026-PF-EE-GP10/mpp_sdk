@@ -1488,6 +1488,31 @@ def create_app(
         if unknown:
             raise HTTPException(status_code=400, detail=f"unknown field {unknown[0]!r}")
 
+    def _readonly_field_keys(template_id: str) -> set[str]:
+        # Data-driven, not a regex on the key name: a template's own
+        # FieldDef.readonly says which fields it snapshots (panel model
+        # Voc/Isc/Vmp/Imp today), so a future snapshot field is protected
+        # by declaring it there, not by a pattern match here that could
+        # miss it. Falls back to "nothing is read-only" for a session
+        # whose template was since removed - the field-existence check
+        # above already covers that session, this one is only extra
+        # protection on top for a template that still exists.
+        try:
+            template = get_session_template(template_id)
+        except KeyError:
+            return set()
+        return {fd.key for fd in template.field_defs if fd.readonly}
+
+    def _check_no_readonly_fields(fields: dict[str, str], readonly_keys: set[str]) -> None:
+        # This is what actually enforces "a session snapshots a panel
+        # model's values, it does not track them live" - the frontend
+        # only disables the input; without this check here, any other
+        # client could still PATCH a snapshotted field back to life (see
+        # patch_panel's docstring for the guarantee this backs).
+        locked = sorted(set(fields) & readonly_keys)
+        if locked:
+            raise HTTPException(status_code=400, detail=f"field {locked[0]!r} is read-only")
+
     def _check_linked_ids(ids: list[str], pattern: re.Pattern[str], kind: str) -> None:
         # Linked ids are stored, never opened as paths, but they must look
         # like real library ids so a session cannot grow without limit.
@@ -1553,6 +1578,7 @@ def create_app(
         if body.fields is not None:
             _check_field_lengths(body.fields)
             _check_field_keys(body.fields, set(r.fields))
+            _check_no_readonly_fields(body.fields, _readonly_field_keys(r.template_id))
             fields.update(body.fields)
 
         steps = list(r.steps)

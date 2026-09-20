@@ -12,6 +12,7 @@ import pytest
 from mpp_sdk.sessions import (
     STEP_KINDS,
     STEP_STATUSES,
+    FieldDef,
     OpenQuestion,
     SessionRecord,
     SessionStep,
@@ -231,15 +232,21 @@ def test_full_setup_template_has_snapshot_fields_for_both_panels():
         } <= keys
 
 
-def test_both_shipped_templates_bumped_their_version_for_the_panel_model_picker():
-    # The four panel-label-* steps (single) became snapshot fields, and
-    # both templates gained panel-model-snapshot fields - a session
-    # created from the old shape keeps its own steps/fields regardless
-    # (mpp_sdk.sessions.record.SessionRecord stores its own copy), so
-    # this is purely a marker for anyone reading template_version on an
-    # existing session.
-    for template_id in ("single-panel-characterization", "full-setup-characterization"):
-        assert get_template(template_id).version == 2
+def test_field_def_is_editable_unless_the_template_says_readonly():
+    assert FieldDef.from_dict({"key": "operator", "label": "Operator"}).readonly is False
+    locked = FieldDef.from_dict({"key": "x", "label": "X", "readonly": True})
+    assert locked.readonly is True
+    assert FieldDef.from_dict(locked.to_dict()) == locked
+
+
+def test_shipped_templates_declare_exactly_the_panel_model_numbers_readonly():
+    """`PATCH /api/sessions/{id}` locks whatever a template marks
+    `readonly` - so the snapshot fields must be marked there, and nothing
+    else (the free-text panel label stays editable)."""
+    single = {f.key for f in get_template("single-panel-characterization").field_defs if f.readonly}
+    assert single == {f"panel_model_{q}" for q in ("voc", "isc", "vmp", "imp")}
+    full = {f.key for f in get_template("full-setup-characterization").field_defs if f.readonly}
+    assert full == {f"panel_{p}_model_{q}" for p in "ab" for q in ("voc", "isc", "vmp", "imp")}
 
 
 # ------------------------------------------------------------------
