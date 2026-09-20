@@ -25,6 +25,21 @@ const LUXEN: PanelModelRecord = {
   p_max_w: 10,
   voc: 23.5,
   isc: 0.57,
+  vmp: 18.6,
+  imp: 0.54,
+  notes: '',
+}
+
+// No shipped panel model has an unset number any more, so "unknown stays
+// unknown" is covered with a synthetic one.
+const UNSET: PanelModelRecord = {
+  id: 'acme-a-1',
+  name: 'Acme A-1',
+  manufacturer: '',
+  model: '',
+  p_max_w: null,
+  voc: 21,
+  isc: null,
   vmp: null,
   imp: null,
   notes: '',
@@ -131,6 +146,37 @@ describe('PanelModelPicker', () => {
       ),
     )
     await waitFor(() => expect(onPick).toHaveBeenLastCalledWith(edited))
+  })
+
+  it('lists a panel model with an unset wattage by name alone, never "null W"', async () => {
+    vi.mocked(fetchPanelModels).mockResolvedValue([UNSET])
+    const onPick = vi.fn()
+    render(<PanelModelPicker label="Panel model" onPick={onPick} />)
+
+    await waitFor(() => expect(onPick).toHaveBeenCalledWith(UNSET))
+    const select = screen.getByLabelText('Panel model') as HTMLSelectElement
+    expect(select.options[0].textContent).toBe('Acme A-1')
+  })
+
+  it('edits a panel model with unset numbers: blank boxes, and saving untouched keeps them unset', async () => {
+    vi.mocked(fetchPanelModels).mockResolvedValue([UNSET])
+    vi.mocked(patchPanelModel).mockResolvedValue(UNSET)
+    const onPick = vi.fn()
+    render(<PanelModelPicker label="Panel model" onPick={onPick} />)
+
+    await waitFor(() => expect(onPick).toHaveBeenCalledWith(UNSET))
+    fireEvent.click(screen.getByText('Edit'))
+    for (const label of ['Pmax (W)', 'Isc (A)', 'Vmp (V)', 'Imp (A)']) {
+      expect((screen.getByLabelText(label) as HTMLInputElement).value).toBe('')
+    }
+    fireEvent.click(screen.getByText('Save panel model'))
+
+    await waitFor(() =>
+      expect(patchPanelModel).toHaveBeenCalledWith(
+        'acme-a-1',
+        expect.objectContaining({ p_max_w: null, isc: null, vmp: null, imp: null, voc: 21 }),
+      ),
+    )
   })
 
   it('surfaces a save error without crashing', async () => {

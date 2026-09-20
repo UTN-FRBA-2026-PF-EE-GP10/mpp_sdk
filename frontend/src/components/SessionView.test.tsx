@@ -234,6 +234,30 @@ describe('SessionView - editing (online)', () => {
     expect(operatorInput.readOnly).toBe(false)
   })
 
+  it('shows an unset panel model snapshot as an empty read-only box, never 0, NaN, null or undefined', () => {
+    const unset = session({
+      fields: {
+        panel: 'Acme A-1',
+        panel_model_voc: '21',
+        panel_model_vmp: '',
+        panel_model_imp: '',
+      },
+    })
+    renderView(
+      <SessionView session={unset} curves={[curve()]} runs={[runSummary()]} readOnly={false} onPatch={vi.fn()} />,
+    )
+
+    const fieldsList = screen.getByText('Panel model vmp').closest('dl') as HTMLElement
+    const inputs = Array.from(fieldsList.querySelectorAll('input'))
+    expect(inputs.map((i) => i.value)).toEqual(['Acme A-1', '21', '', ''])
+    for (const label of ['Panel model vmp', 'Panel model imp']) {
+      const input = screen.getByText(label).closest('div')?.querySelector('input') as HTMLInputElement
+      expect(input.value).toBe('')
+      expect(input.readOnly).toBe(true)
+    }
+    expect(fieldsList.textContent).not.toMatch(/NaN|undefined|null/)
+  })
+
   it('links a picked curve immediately, appending to the existing links', async () => {
     const onPatch = vi.fn(async (patch: SessionPatch) => ({ ...session(), ...patch }) as SessionRecord)
     const c2 = curve({ id: 'c2', label: 'Second sweep' })

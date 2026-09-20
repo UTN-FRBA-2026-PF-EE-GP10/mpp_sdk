@@ -34,6 +34,21 @@ const LUXEN: PanelModelRecord = {
   p_max_w: 10,
   voc: 23.5,
   isc: 0.57,
+  vmp: 18.6,
+  imp: 0.54,
+  notes: '',
+}
+
+// No shipped panel model has an unset number any more, so "unknown stays
+// unknown" is covered with a synthetic one.
+const UNSET: PanelModelRecord = {
+  id: 'acme-a-1',
+  name: 'Acme A-1',
+  manufacturer: '',
+  model: '',
+  p_max_w: null,
+  voc: 21,
+  isc: null,
   vmp: null,
   imp: null,
   notes: '',
@@ -186,12 +201,41 @@ describe('NewSessionPane', () => {
             panel: 'Luxen LN-10P, 10 W',
             panel_model_voc: '23.5',
             panel_model_isc: '0.57',
-            panel_model_vmp: '',
-            panel_model_imp: '',
+            panel_model_vmp: '18.6',
+            panel_model_imp: '0.54',
           }),
         }),
       ),
     )
+  })
+
+  it('snapshots an unset number as an empty string, never 0, NaN, null or undefined', async () => {
+    vi.mocked(fetchSessionTemplates).mockResolvedValue([SINGLE_SUMMARY])
+    vi.mocked(fetchSessionTemplate).mockResolvedValue(SINGLE_TEMPLATE)
+    vi.mocked(fetchPanelModels).mockResolvedValue([UNSET])
+    vi.mocked(createSession).mockResolvedValue(newSession())
+    render(<NewSessionPane setupMode="single" onCreated={vi.fn()} />)
+
+    await waitFor(() =>
+      expect((screen.getByLabelText('Panel model') as HTMLSelectElement).value).toBe('acme-a-1'),
+    )
+    fireEvent.change(screen.getByPlaceholderText(/e.g. Panel A alone/), {
+      target: { value: 'Unknown label values' },
+    })
+    fireEvent.click(screen.getByText('Create session'))
+
+    await waitFor(() => expect(createSession).toHaveBeenCalled())
+    const sent = vi.mocked(createSession).mock.calls[0][0].fields ?? {}
+    expect(sent).toMatchObject({
+      panel: 'Acme A-1',
+      panel_model_voc: '21',
+      panel_model_isc: '',
+      panel_model_vmp: '',
+      panel_model_imp: '',
+    })
+    for (const value of Object.values(sent)) {
+      expect(value).not.toMatch(/NaN|undefined|null/)
+    }
   })
 
   it('snapshots both panel model pickers into fields on create (Full)', async () => {
