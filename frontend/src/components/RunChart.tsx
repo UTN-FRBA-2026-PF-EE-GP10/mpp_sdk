@@ -162,7 +162,7 @@ export function RunChart({
       </div>
       {mppThPoint && (
         <p className="mt-1 text-center text-xs text-muted-foreground">
-          MPP_th: the theoretical maximum power, the peak of the reference curve.
+          MPP_th: the peak of the reference curve, the most power it can give.
         </p>
       )}
     </div>

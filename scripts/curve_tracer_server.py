@@ -1755,7 +1755,7 @@ def main() -> None:
         type=float,
         default=0.05,
         help="delay between poll-loop iterations - sets how finely the live sweep is "
-        "sampled, and bounds how long a queued Start Sweep/Release Relay command waits. "
+        "sampled, and bounds how long a queued sweep or relay command waits. "
         "Keep it BELOW the firmware's 100 ms frame timeout. A gap longer than that "
         "times the Pico's exchange out, and the recovery it runs (aborting the TX DMA, "
         "then resyncing the PIO state machine) leaves the slave unable to serve the "

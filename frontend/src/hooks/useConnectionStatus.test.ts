@@ -52,6 +52,19 @@ describe('useConnectionStatus', () => {
     await waitFor(() => expect(result.current.status).toBe('connected'))
   })
 
+  it('keeps the same state object while the link does not change', async () => {
+    vi.mocked(fetchLiveSweep).mockResolvedValue(mockData({ link: 'ok' }))
+    const { result } = renderHook(() => useConnectionStatus())
+    await waitFor(() => expect(result.current.status).toBe('connected'))
+    const first = result.current
+
+    // A new object every poll would re-render the whole page twice a
+    // second, for a link that has not moved.
+    await new Promise((r) => setTimeout(r, 2200))
+
+    expect(result.current).toBe(first)
+  })
+
   it('reports demo for link === "demo"', async () => {
     vi.mocked(fetchLiveSweep).mockResolvedValue(mockData({ link: 'demo' }))
     const { result } = renderHook(() => useConnectionStatus())

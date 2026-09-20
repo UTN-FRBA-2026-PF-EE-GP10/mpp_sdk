@@ -296,7 +296,7 @@ export function CurveWorkbench({
               title={
                 demo
                   ? 'Hand panel to converter needs real hardware - unavailable in demo mode'
-                  : 'Disconnects the panel from the curve tracer and reconnects it to the SEPIC converter. It stays on the tracer across any number of sweeps until you do this.'
+                  : 'Disconnects the panel from the curve tracer and reconnects it to the SEPIC converter. It stays on the tracer across any number of sweeps, until you do this or a run starts: the server hands it over before every run.'
               }
             >
               Hand panel to converter

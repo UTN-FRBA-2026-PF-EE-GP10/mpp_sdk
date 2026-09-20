@@ -40,12 +40,19 @@ export function useConnectionStatus(enabled = true): LinkState {
   const [state, setState] = useState<LinkState>({ status: 'connecting', link: '' })
 
   const handleData = (data: LiveSweepState) => {
-    setState({ status: statusFromLink(data.link), link: data.link })
+    // A fresh object every poll would re-render the whole page twice a
+    // second, because React compares by identity. Keep the old one when
+    // nothing moved.
+    setState((s) => {
+      const status = statusFromLink(data.link)
+      return s.status === status && s.link === data.link ? s : { status, link: data.link }
+    })
   }
   // Keeps the last-seen raw link text on a failed poll rather than
   // blanking it - it's a debug readout, and the most recent real value is
   // more useful than nothing while a poll or two is failing.
-  const handleError = (_error: unknown) => setState((s) => ({ ...s, status: 'disconnected' }))
+  const handleError = (_error: unknown) =>
+    setState((s) => (s.status === 'disconnected' ? s : { ...s, status: 'disconnected' }))
 
   usePolling(fetchLiveSweep, handleData, handleError, POLL_MS, enabled)
 

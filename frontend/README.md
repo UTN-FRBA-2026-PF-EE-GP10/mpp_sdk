@@ -55,7 +55,7 @@ others at a glance:
 - **Demo** (`simulated`) - no board and no hardware commands. Swaps the
   curve/run libraries for bundled fixtures (`src/lib/demoFixtures.ts`),
   disables every write (save/delete) and every genuinely hardware-only
-  action (Start Measurement, Hand panel to SEPIC), while still letting the
+  action (Start Measurement, Hand panel to converter), while still letting the
   two "Replay curve" buttons replay a bundled sweep locally into the
   capture pane. Called "sandbox" in code (`src/lib/sandbox.ts`) to avoid a
   third overload of the word "demo" alongside `ConnectionStatus`'s own

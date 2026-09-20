@@ -56,12 +56,12 @@ describe('RunChart MPP_th', () => {
 
   it('explains MPP_th under the chart, where a newcomer meets the symbol first', () => {
     renderInApp(<RunChart referencePoints={REFERENCE} trail={[]} current={null} />)
-    expect(screen.getByText(/MPP_th: the theoretical maximum power/)).toBeTruthy()
+    expect(screen.getByText(/MPP_th: the peak of the reference curve/)).toBeTruthy()
   })
 
   it('leaves out the MPP_th explanation when there is no reference curve to peak', () => {
     renderInApp(<RunChart referencePoints={[]} trail={[]} current={null} />)
-    expect(screen.queryByText(/MPP_th: the theoretical maximum power/)).toBeNull()
+    expect(screen.queryByText(/MPP_th: the peak of the reference curve/)).toBeNull()
   })
 })
 
