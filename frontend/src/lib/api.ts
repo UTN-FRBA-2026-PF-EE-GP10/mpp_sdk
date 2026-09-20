@@ -4,6 +4,13 @@
 // /api/curves, and the run library, /api/runs) stores volts and amps -
 // see CurvePoint's convention in types.ts and RunSample's in runs.ts.
 
+import type {
+  ReportPatch,
+  ReportRecord,
+  ReportSummary,
+  ReportTemplate,
+  ReportTemplateSummary,
+} from '@/lib/reports'
 import type { LiveRunState, RunDetail, RunSummary } from '@/lib/runs'
 import type { CurvePoint, CurveRecord, PanelSetup } from '@/types'
 
@@ -301,4 +308,61 @@ export async function fetchLiveRun(maxSamples?: number): Promise<LiveRunState> {
   const query = maxSamples === undefined ? '' : `?max_samples=${maxSamples}`
   const r = await fetch(`/api/runs/live${query}`, { cache: 'no-store' })
   return (await parseJsonOrThrow(r, 'GET /api/runs/live')) as LiveRunState
+}
+
+// --- Measurement reports (plan 042 Part B/C) ------------------------------
+
+export async function fetchReportTemplates(): Promise<ReportTemplateSummary[]> {
+  const r = await fetch('/api/report-templates')
+  return (await parseJsonOrThrow(r, 'GET /api/report-templates')) as ReportTemplateSummary[]
+}
+
+export async function fetchReportTemplate(templateId: string): Promise<ReportTemplate> {
+  const r = await fetch(`/api/report-templates/${encodeURIComponent(templateId)}`)
+  return (await parseJsonOrThrow(r, 'GET /api/report-templates/{id}')) as ReportTemplate
+}
+
+export async function fetchReports(): Promise<ReportSummary[]> {
+  const r = await fetch('/api/reports')
+  const payload = (await parseJsonOrThrow(r, 'GET /api/reports')) as (
+    | ReportSummary
+    | { id: string; path: string; error: string }
+  )[]
+  // Same "a malformed file reports {id, path, error}" pattern as
+  // fetchCurves/fetchRuns above (curve_tracer_server.py's get_reports).
+  return payload.filter((entry): entry is ReportSummary => !('error' in entry))
+}
+
+export interface CreateReportInput {
+  template_id: string
+  title: string
+  fields?: Record<string, string>
+}
+
+export async function createReport(input: CreateReportInput): Promise<ReportRecord> {
+  const r = await fetch('/api/reports', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  })
+  return (await parseJsonOrThrow(r, 'POST /api/reports')) as ReportRecord
+}
+
+export async function fetchReport(id: string): Promise<ReportRecord> {
+  const r = await fetch(`/api/reports/${encodeURIComponent(id)}`)
+  return (await parseJsonOrThrow(r, 'GET /api/reports/{id}')) as ReportRecord
+}
+
+export async function patchReport(id: string, patch: ReportPatch): Promise<ReportRecord> {
+  const r = await fetch(`/api/reports/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  })
+  return (await parseJsonOrThrow(r, 'PATCH /api/reports/{id}')) as ReportRecord
+}
+
+export async function deleteReport(id: string): Promise<void> {
+  const r = await fetch(`/api/reports/${encodeURIComponent(id)}`, { method: 'DELETE' })
+  await parseJsonOrThrow(r, 'DELETE /api/reports/{id}')
 }

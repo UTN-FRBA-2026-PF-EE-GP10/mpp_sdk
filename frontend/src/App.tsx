@@ -3,15 +3,18 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { ConnectionIndicator } from '@/components/ConnectionIndicator'
 import { CurveCategoryPane } from '@/components/CurveCategoryPane'
 import { MeasurePane } from '@/components/MeasurePane'
+import { NewReportPane } from '@/components/NewReportPane'
+import { ReportPane } from '@/components/ReportPane'
 import { RunDatePane } from '@/components/RunDatePane'
 import { SetupModeToggle } from '@/components/SetupModeToggle'
 import { Sidebar, type Selection } from '@/components/Sidebar'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { UnitToggle } from '@/components/UnitToggle'
 import { useConnectionStatus } from '@/hooks/useConnectionStatus'
-import { deleteCurve, fetchCurves, fetchMeasurementKinds, fetchRuns } from '@/lib/api'
+import { deleteCurve, fetchCurves, fetchMeasurementKinds, fetchReports, fetchRuns } from '@/lib/api'
 import { useCaptureMode } from '@/lib/captureMode'
-import { DEMO_CURVES, DEMO_RUNS } from '@/lib/demoFixtures'
+import { DEMO_CURVES, DEMO_REPORTS, DEMO_RUNS } from '@/lib/demoFixtures'
+import type { ReportSummary } from '@/lib/reports'
 import { groupRunsByDate, type RunSummary } from '@/lib/runs'
 import { useSetupMode } from '@/lib/setupMode'
 import {
@@ -70,9 +73,15 @@ export default function App() {
   // fixtures on screen.
   const [fetchedRecords, setFetchedRecords] = useState<CurveRecord[]>([])
   const [fetchedRuns, setFetchedRuns] = useState<RunSummary[]>([])
+  const [fetchedReports, setFetchedReports] = useState<ReportSummary[]>([])
   const [reloadToken, setReloadToken] = useState(0)
   const records = sandboxEnabled ? DEMO_CURVES : fetchedRecords
   const runs = sandboxEnabled ? DEMO_RUNS : fetchedRuns
+  // Reports are never written in demo mode (see NewReportPane/ReportPane's
+  // sandbox gating) - the sidebar shows only the one bundled read-only
+  // fixture there, the same "swap the whole list" pattern as records/runs
+  // above, not a filtered view of whatever a real backend happens to have.
+  const reports = sandboxEnabled ? DEMO_REPORTS : fetchedReports
 
   // Neither of these is persisted (no localStorage/sessionStorage) on
   // purpose: a reload must drop a pending remeasure and leave the old
@@ -184,6 +193,13 @@ export default function App() {
     }
   }, [reloadToken, sandboxEnabled])
 
+  useEffect(() => {
+    if (sandboxEnabled) return
+    fetchReports()
+      .then(setFetchedReports)
+      .catch((e) => console.error('fetching reports failed', e))
+  }, [reloadToken, sandboxEnabled])
+
   // 'firmware-replay' ("Demo with PICO") needs a real board on the other
   // end of a real link - ConnectionIndicator already refuses to let
   // someone select it without one, but the link can also drop out from
@@ -249,7 +265,7 @@ export default function App() {
         remeasurePendingId={pendingRemeasure?.curveId ?? null}
       />
     )
-  } else {
+  } else if (selection.root === 'runs') {
     const group = runGroups.find((g) => g.date === selection.date)
     content = (
       <RunDatePane
@@ -260,11 +276,36 @@ export default function App() {
         onRunsChanged={() => setReloadToken((t) => t + 1)}
       />
     )
+  } else if (selection.root === 'new-report') {
+    content = (
+      <NewReportPane
+        setupMode={setupMode}
+        onCreated={(report) => {
+          setReloadToken((t) => t + 1)
+          setSelection({ root: 'report', id: report.id })
+        }}
+      />
+    )
+  } else {
+    content = (
+      <ReportPane
+        key={selection.id}
+        id={selection.id}
+        curves={records}
+        runs={runs}
+        sandbox={sandboxEnabled}
+        onChanged={() => setReloadToken((t) => t + 1)}
+        onDeleted={() => {
+          setReloadToken((t) => t + 1)
+          setSelection({ root: 'measure' })
+        }}
+      />
+    )
   }
 
   return (
     <div className="flex min-h-svh flex-col">
-      <header className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3 border-b bg-background px-4 py-4">
+      <header className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3 border-b bg-background px-4 py-4 print:hidden">
         <div className="flex items-center gap-3">
           <button
             type="button"
@@ -377,6 +418,8 @@ export default function App() {
           kinds={kinds}
           countsByKind={countsByKind}
           runGroups={runGroups}
+          reports={reports}
+          canCreateReport={!sandboxEnabled}
           mobileOpen={mobileNavOpen}
           onCloseMobile={() => setMobileNavOpen(false)}
         />

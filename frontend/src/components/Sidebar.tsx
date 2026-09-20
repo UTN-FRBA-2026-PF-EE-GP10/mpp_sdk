@@ -1,6 +1,7 @@
-import { ChevronDown, ChevronRight, History, LineChart, X } from 'lucide-react'
+import { ChevronDown, ChevronRight, ClipboardList, History, LineChart, Plus, X } from 'lucide-react'
 import { type ReactNode, useState } from 'react'
 import { Dialog, DialogBackdrop, DialogPanel, DialogPortal, DialogTitle } from '@/components/ui/dialog'
+import { progressLabel, type ReportSummary } from '@/lib/reports'
 import { cn } from '@/lib/utils'
 import type { RunDateGroup } from '@/lib/runs'
 import { getMeasurementKindInfo } from '@/types'
@@ -9,6 +10,8 @@ export type Selection =
   | { root: 'measure' }
   | { root: 'curves'; kind: string }
   | { root: 'runs'; date: string }
+  | { root: 'new-report' }
+  | { root: 'report'; id: string }
 
 function NavRow({
   label,
@@ -90,20 +93,30 @@ function SidebarNav({
   kinds,
   countsByKind,
   runGroups,
+  reports,
+  canCreateReport,
   curvesOpen,
   setCurvesOpen,
   runsOpen,
   setRunsOpen,
+  reportsOpen,
+  setReportsOpen,
 }: {
   selection: Selection
   choose: (selection: Selection) => void
   kinds: string[]
   countsByKind: Map<string, number>
   runGroups: RunDateGroup[]
+  reports: ReportSummary[]
+  /** Hidden in demo mode - see App.tsx's note on why reports are never
+   * written there (the demo fixture is the only one shown, read-only). */
+  canCreateReport: boolean
   curvesOpen: boolean
   setCurvesOpen: (updater: (v: boolean) => boolean) => void
   runsOpen: boolean
   setRunsOpen: (updater: (v: boolean) => boolean) => void
+  reportsOpen: boolean
+  setReportsOpen: (updater: (v: boolean) => boolean) => void
 }) {
   return (
     <>
@@ -162,6 +175,42 @@ function SidebarNav({
           )}
         </div>
       )}
+
+      <SectionHeader
+        label="Reports"
+        expanded={reportsOpen}
+        onToggle={() => setReportsOpen((v) => !v)}
+        icon={<ClipboardList className="size-4 shrink-0 text-muted-foreground" />}
+      />
+      {reportsOpen && (
+        <div className="flex flex-col gap-1">
+          {canCreateReport && (
+            <NavRow
+              label="New report"
+              indent
+              selected={selection.root === 'new-report'}
+              onClick={() => choose({ root: 'new-report' })}
+              trailing={<Plus className="size-3.5 shrink-0 text-muted-foreground" />}
+            />
+          )}
+          {reports.length === 0 ? (
+            <p className="px-3 py-1.5 pl-8 text-xs text-muted-foreground">No reports yet.</p>
+          ) : (
+            reports.map((r) => (
+              <NavRow
+                key={r.id}
+                label={r.title || 'Untitled report'}
+                indent
+                selected={selection.root === 'report' && selection.id === r.id}
+                onClick={() => choose({ root: 'report', id: r.id })}
+                trailing={
+                  <span className="text-xs text-muted-foreground">{progressLabel(r)}</span>
+                }
+              />
+            ))
+          )}
+        </div>
+      )}
     </>
   )
 }
@@ -172,6 +221,8 @@ export function Sidebar({
   kinds,
   countsByKind,
   runGroups,
+  reports,
+  canCreateReport,
   mobileOpen,
   onCloseMobile,
 }: {
@@ -180,11 +231,14 @@ export function Sidebar({
   kinds: string[]
   countsByKind: Map<string, number>
   runGroups: RunDateGroup[]
+  reports: ReportSummary[]
+  canCreateReport: boolean
   mobileOpen: boolean
   onCloseMobile: () => void
 }) {
   const [curvesOpen, setCurvesOpen] = useState(true)
   const [runsOpen, setRunsOpen] = useState(true)
+  const [reportsOpen, setReportsOpen] = useState(true)
 
   // Closing the drawer on every pick (desktop's onCloseMobile is a no-op
   // since it's already closed there) keeps mobile behaving like a normal
@@ -200,10 +254,14 @@ export function Sidebar({
     kinds,
     countsByKind,
     runGroups,
+    reports,
+    canCreateReport,
     curvesOpen,
     setCurvesOpen,
     runsOpen,
     setRunsOpen,
+    reportsOpen,
+    setReportsOpen,
   }
 
   return (
@@ -212,7 +270,7 @@ export function Sidebar({
           in the layout and the tab order at md and up. This must keep
           working exactly as before; only the mobile rendering below
           changes. */}
-      <aside className="hidden w-64 flex-col gap-1 overflow-y-auto border-r bg-sidebar p-3 text-sidebar-foreground md:flex">
+      <aside className="hidden w-64 flex-col gap-1 overflow-y-auto border-r bg-sidebar p-3 text-sidebar-foreground md:flex print:hidden">
         <SidebarNav {...navProps} />
       </aside>
 
