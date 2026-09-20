@@ -523,6 +523,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#sharing-a-session-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sharing a session file
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -983,6 +994,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#sharing-a-session-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sharing a session file
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1142,6 +1164,29 @@ panel). No board is touched, and the workbench marks the result
 <code>--bus</code>/<code>--device</code>/<code>--speed-hz</code> (SPI settings, same defaults as the other
 hardware scripts). Run <code>mpp-sdk run-algorithm --help</code> /
 <code>mpp-sdk plot-run --help</code> for the full list.</p>
+<h2 id="sharing-a-session-file">Sharing a session file<a class="headerlink" href="#sharing-a-session-file" title="Permanent link">&para;</a></h2>
+<p>Send someone your curves and runs in one file, with no board and no saved
+library needed on their end.</p>
+<p><strong>Export</strong>: in <strong>Curves</strong> or <strong>Runs</strong>, click <strong>Select</strong>, tick the items you
+want, then <strong>Export N selected</strong>. Type a title when asked - this becomes
+the file name. The browser downloads <code>&lt;title&gt;.mppsession.json</code>.</p>
+<p><strong>Open</strong>: start the workbench on any machine with
+<code>mpp-sdk curve-tracer-web --demo</code> (no board needed), open it in a browser,
+then click <strong>Open session</strong> in the header, or drag the file onto the
+page. The workbench switches to a read-only view of that file: a
+<strong>Viewing: <code>&lt;title&gt;</code></strong> banner appears at the top, with a <strong>Close</strong> button
+that returns to the normal view. While viewing a session:</p>
+<ul>
+<li>Capture, starting a run, deleting, and remeasuring are all off - nothing
+  in the file can be changed, and nothing is sent to a server.</li>
+<li>The curve and run views work the same as usual, including opening a run
+  in the player - the player reads the run's samples straight from the
+  file.</li>
+<li>No board and no saved library are needed: everything comes from the
+  file.</li>
+</ul>
+<p>A bad file (wrong format, too large, or corrupted) shows an error message
+and leaves the current view untouched.</p>
 
 
 
