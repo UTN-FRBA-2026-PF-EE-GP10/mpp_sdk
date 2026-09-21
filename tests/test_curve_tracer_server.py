@@ -737,6 +737,27 @@ def test_get_run_downsamples_over_the_cap_but_keeps_first_and_last(client):
     assert entry["samples"][-1] == samples[-1].to_dict()
 
 
+def test_get_run_reports_the_duration_of_the_full_trace_even_when_downsampled(client):
+    samples = tuple(
+        RunSample(t=float(i) * 0.5, voltage=20.0, current=0.05, duty=0.5) for i in range(11)
+    )
+    path = _save_run(client.run_dir, samples=samples)
+
+    detail = client.get(f"/api/runs/{path.stem}", params={"max_samples": 3}).json()
+    listed = client.get("/api/runs").json()[0]
+
+    assert detail["downsampled"] is True
+    assert detail["duration_s"] == pytest.approx(5.0)
+    assert detail["duration_s"] == listed["duration_s"]
+
+
+def test_get_run_duration_is_zero_with_fewer_than_two_samples(client):
+    path = _save_run(
+        client.run_dir, samples=(RunSample(t=3.0, voltage=20.0, current=0.05, duty=0.5),)
+    )
+    assert client.get(f"/api/runs/{path.stem}").json()["duration_s"] == 0.0
+
+
 def test_get_run_max_samples_zero_returns_everything(client):
     samples = tuple(RunSample(t=float(i), voltage=20.0, current=0.05, duty=0.5) for i in range(10))
     path = _save_run(client.run_dir, samples=samples)

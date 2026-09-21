@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { curveFilenameBase, curveToCsv, sanitizeFilenamePart } from './curveExport'
+import type { CurveRecord } from '@/types'
+import { curveFilenameBase, curveToCsv, curveToJson, sanitizeFilenamePart } from './curveExport'
 
 describe('sanitizeFilenamePart', () => {
   it('lowercases and hyphenates punctuation and spaces', () => {
@@ -32,5 +33,34 @@ describe('curveToCsv', () => {
 
   it('produces just the header for an empty sweep', () => {
     expect(curveToCsv({ points: [] })).toBe('voltage (V),current (A)')
+  })
+})
+
+describe('curveToJson', () => {
+  const record: CurveRecord = {
+    id: 'c1',
+    path: '/home/someone/project/data/curves/c1.json',
+    captured_at: '2026-09-19T16:00:00Z',
+    label: 'Curve c1',
+    measurement: 'baseline',
+    panels: [],
+    notes: '',
+    n_points: 1,
+    source: 'hardware',
+    voc: 20,
+    isc: 0.5,
+    p_mpp: 7,
+    points: [{ v: 0, i: 0.5 }],
+  }
+
+  it('keeps only the file name in path, so the download has no server directory', () => {
+    const text = curveToJson(record)
+    expect(text).not.toContain('/home/')
+    expect(JSON.parse(text)).toEqual({ ...record, path: 'c1.json' })
+  })
+
+  it('cuts a Windows-style path down to the file name too', () => {
+    const text = curveToJson({ ...record, path: 'C:\\Users\\someone\\data\\c1.json' })
+    expect(JSON.parse(text).path).toBe('c1.json')
   })
 })

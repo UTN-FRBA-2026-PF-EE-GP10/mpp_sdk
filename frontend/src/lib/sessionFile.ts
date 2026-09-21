@@ -136,6 +136,37 @@ function parseRunSamples(value: unknown, field: string): RunSample[] {
   })
 }
 
+/** The file name without its directory. A record's `path` is the server's
+ * absolute path, which would put a home directory and user name into a file
+ * meant to be shared. Nothing reads the directory part (findCurveForRun
+ * matches the base name only), so it is dropped when a file is built and
+ * again when an older file that still has it is read. `fallback` stands in
+ * when nothing follows the last separator, so the directory never survives. */
+export function bareFileName(path: string, fallback: string): string {
+  const name = path.split(/[\\/]/).pop() ?? ''
+  return name === '' ? fallback : name
+}
+
+/** A run's notes hold its abort reason, and an `error: ...` reason is raw
+ * exception text that can name a device node or a file under a home
+ * directory. Only the last segment of each absolute path is kept. */
+function scrubAbsolutePaths(text: string): string {
+  return text.replace(/(?<![\w.:/-])\/(?:[^\s/'"()]+\/)+([^\s/'"()]*)/g, '$1')
+}
+
+export function withoutCurveDirectories(record: CurveRecord): CurveRecord {
+  return { ...record, path: bareFileName(record.path, `${record.id}.json`) }
+}
+
+export function withoutRunDirectories(record: RunDetail): RunDetail {
+  return {
+    ...record,
+    path: bareFileName(record.path, `${record.id}.json`),
+    curve_ref: record.curve_ref === null ? null : bareFileName(record.curve_ref, ''),
+    notes: scrubAbsolutePaths(record.notes),
+  }
+}
+
 /** Validates a curve record the same shape GET /api/curves serves, so a
  * hand-edited or corrupted session file fails clearly instead of crashing
  * a chart or a metadata table deep in the app later. The live API path
@@ -146,7 +177,7 @@ export function parseSessionCurveRecord(raw: unknown, context: string): CurveRec
   if (!isPlainObject(raw)) {
     throw new SessionParseError(`${context}: curve record must be an object`)
   }
-  return {
+  return withoutCurveDirectories({
     id: requireString(raw.id, `${context}.id`),
     path: requireString(raw.path, `${context}.path`),
     captured_at: requireString(raw.captured_at, `${context}.captured_at`),
@@ -160,7 +191,7 @@ export function parseSessionCurveRecord(raw: unknown, context: string): CurveRec
     isc: requireNumber(raw.isc, `${context}.isc`),
     p_mpp: requireNumber(raw.p_mpp, `${context}.p_mpp`),
     points: parseCurvePoints(raw.points, `${context}.points`),
-  }
+  })
 }
 
 /** Same reasoning as parseSessionCurveRecord above, for GET /api/runs/{id}'s
@@ -172,21 +203,31 @@ export function parseSessionRunDetail(raw: unknown, context: string): RunDetail 
   if (!isPlainObject(raw)) {
     throw new SessionParseError(`${context}: run record must be an object`)
   }
-  return {
+  const samples = parseRunSamples(raw.samples, `${context}.samples`)
+  // Files exported before the run detail carried `duration_s` lack it, so
+  // an absent value is derived from the samples, while a present one must
+  // still be a number.
+  const duration_s =
+    raw.duration_s === undefined
+      ? samples.length >= 2
+        ? samples[samples.length - 1].t - samples[0].t
+        : 0
+      : requireNumber(raw.duration_s, `${context}.duration_s`)
+  return withoutRunDirectories({
     id: requireString(raw.id, `${context}.id`),
     path: requireString(raw.path, `${context}.path`),
     captured_at: requireString(raw.captured_at, `${context}.captured_at`),
     label: requireString(raw.label, `${context}.label`),
     algorithm: requireString(raw.algorithm, `${context}.algorithm`),
     n_samples: requireNumber(raw.n_samples, `${context}.n_samples`),
-    duration_s: requireNumber(raw.duration_s, `${context}.duration_s`),
+    duration_s,
     aborted: requireBoolean(raw.aborted, `${context}.aborted`),
     curve_ref: raw.curve_ref === null ? null : requireString(raw.curve_ref, `${context}.curve_ref`),
     notes: requireString(raw.notes, `${context}.notes`),
     source: requireString(raw.source, `${context}.source`),
     downsampled: requireBoolean(raw.downsampled, `${context}.downsampled`),
-    samples: parseRunSamples(raw.samples, `${context}.samples`),
-  }
+    samples,
+  })
 }
 
 function parseOpenQuestion(raw: unknown, context: string): OpenQuestion {
@@ -357,8 +398,8 @@ export function buildSessionFile(options: {
     title: options.title,
     setup: options.setup,
     session: options.session ?? null,
-    curves: options.curves.map((record) => ({ id: record.id, record })),
-    runs: options.runs.map((record) => ({ id: record.id, record })),
+    curves: options.curves.map((record) => ({ id: record.id, record: withoutCurveDirectories(record) })),
+    runs: options.runs.map((record) => ({ id: record.id, record: withoutRunDirectories(record) })),
     missing: options.missing ?? { curve_ids: [], run_ids: [] },
   }
 }
