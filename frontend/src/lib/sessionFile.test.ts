@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { findCurveForRun } from '@/lib/runPlayback'
+import { findCurveForRun, referenceCurveMessage } from '@/lib/runPlayback'
 import type { RunDetail } from '@/lib/runs'
 import type { SessionRecord } from '@/lib/sessions'
 import {
@@ -11,6 +11,8 @@ import {
   parseSessionFile,
   readSessionFile,
   sessionFileName,
+  withoutCurveDirectories,
+  withoutRunDirectories,
 } from './sessionFile'
 import type { CurveRecord } from '@/types'
 
@@ -287,6 +289,64 @@ describe('server directories in a session file', () => {
     expect(JSON.stringify(parsed)).not.toContain('/home/')
   })
 
+  it('cuts a Windows path with backslashes down to the file name', () => {
+    const c = withoutCurveDirectories({ ...curve('c1'), path: 'C:\\Users\\someone\\data\\curves\\c1.json' })
+    const r = withoutRunDirectories({ ...run('x'), path: 'C:\\Users\\someone\\data\\runs\\x.json' })
+    expect(c.path).toBe('c1.json')
+    expect(r.path).toBe('x.json')
+  })
+
+  it('falls back to <id>.json for a path that ends in a separator, never keeping the directory', () => {
+    expect(withoutCurveDirectories({ ...curve('c1'), path: '/home/someone/curves/' }).path).toBe('c1.json')
+    expect(withoutRunDirectories({ ...run('x'), path: 'C:\\Users\\someone\\' }).path).toBe('x.json')
+    expect(withoutRunDirectories({ ...run('x'), path: '' }).path).toBe('x.json')
+  })
+
+  it('keeps an empty or null curve_ref empty or null, and drops the directory of a trailing-slash one', () => {
+    expect(withoutRunDirectories({ ...run('x'), curve_ref: null }).curve_ref).toBeNull()
+    expect(withoutRunDirectories({ ...run('x'), curve_ref: '' }).curve_ref).toBe('')
+    expect(withoutRunDirectories({ ...run('x'), curve_ref: '/home/someone/runs/' }).curve_ref).toBe('')
+    expect(withoutRunDirectories({ ...run('x'), curve_ref: 'C:\\Users\\someone\\' }).curve_ref).toBe('')
+    expect(withoutRunDirectories({ ...run('x'), curve_ref: 'C:\\Users\\someone\\c1.json' }).curve_ref).toBe(
+      'c1.json',
+    )
+  })
+
+  it('resolves an empty curve_ref to no reference curve without matching anything', () => {
+    const cleaned = withoutRunDirectories({ ...run('x'), curve_ref: '/home/someone/runs/' })
+    expect(findCurveForRun([curve('c1')], cleaned.curve_ref)).toBeNull()
+    expect(referenceCurveMessage(cleaned.curve_ref, null)).toBe(
+      'Reference curve "" was not found - it may have been deleted.',
+    )
+  })
+
+  it('keeps only the last segment of any absolute path in a run note', () => {
+    const scrub = (notes: string) => withoutRunDirectories({ ...run('x'), notes }).notes
+    expect(scrub('/dev/x/y')).toBe('y')
+    expect(scrub("error: [Errno 2] No such file or directory: '/dev/spidev0.0'")).toBe(
+      "error: [Errno 2] No such file or directory: 'spidev0.0'",
+    )
+    expect(scrub('error: /home/someone/project/data/runs/x.json failed')).toBe('error: x.json failed')
+    expect(scrub('open(/var/lib/mpp/x.json) failed')).toBe('open(x.json) failed')
+  })
+
+  it('leaves note text that only contains slashes unchanged', () => {
+    const scrub = (notes: string) => withoutRunDirectories({ ...run('x'), notes }).notes
+    for (const text of [
+      'V/I',
+      'dv/dt',
+      '50/60 Hz',
+      'a/b',
+      '0.5/0.6',
+      'https://example.org/a/b',
+      '2026/09/21',
+      'overvoltage',
+      '',
+    ]) {
+      expect(scrub(text)).toBe(text)
+    }
+  })
+
   it('leaves a bare curve id and plain abort reasons alone', () => {
     const plain = { ...run('r1'), curve_ref: 'c1', notes: 'overvoltage' }
     const built = buildSessionFile({ title: 't', setup: 'single', curves: [], runs: [plain] })
@@ -354,6 +414,14 @@ describe('rejecting bad session files', () => {
     const built = buildSessionFile({ title: 't', setup: 'single', curves: [], runs: [run('r1')] })
     const broken = JSON.parse(JSON.stringify(built))
     broken.runs[0].record.duration_s = '1'
+    const file = toFile(JSON.stringify(broken))
+    await expect(readSessionFile(file)).rejects.toThrow('duration_s must be a number')
+  })
+
+  it('rejects a null duration_s instead of treating it as absent', async () => {
+    const built = buildSessionFile({ title: 't', setup: 'single', curves: [], runs: [run('r1')] })
+    const broken = JSON.parse(JSON.stringify(built))
+    broken.runs[0].record.duration_s = null
     const file = toFile(JSON.stringify(broken))
     await expect(readSessionFile(file)).rejects.toThrow('duration_s must be a number')
   })

@@ -140,10 +140,11 @@ function parseRunSamples(value: unknown, field: string): RunSample[] {
  * absolute path, which would put a home directory and user name into a file
  * meant to be shared. Nothing reads the directory part (findCurveForRun
  * matches the base name only), so it is dropped when a file is built and
- * again when an older file that still has it is read. */
-export function bareFileName(path: string, id: string): string {
+ * again when an older file that still has it is read. `fallback` stands in
+ * when nothing follows the last separator, so the directory never survives. */
+export function bareFileName(path: string, fallback: string): string {
   const name = path.split(/[\\/]/).pop() ?? ''
-  return name === '' ? `${id}.json` : name
+  return name === '' ? fallback : name
 }
 
 /** A run's notes hold its abort reason, and an `error: ...` reason is raw
@@ -154,14 +155,14 @@ function scrubAbsolutePaths(text: string): string {
 }
 
 export function withoutCurveDirectories(record: CurveRecord): CurveRecord {
-  return { ...record, path: bareFileName(record.path, record.id) }
+  return { ...record, path: bareFileName(record.path, `${record.id}.json`) }
 }
 
 export function withoutRunDirectories(record: RunDetail): RunDetail {
   return {
     ...record,
-    path: bareFileName(record.path, record.id),
-    curve_ref: record.curve_ref === null ? null : bareFileName(record.curve_ref, record.curve_ref),
+    path: bareFileName(record.path, `${record.id}.json`),
+    curve_ref: record.curve_ref === null ? null : bareFileName(record.curve_ref, ''),
     notes: scrubAbsolutePaths(record.notes),
   }
 }

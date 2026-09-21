@@ -2,6 +2,7 @@
 // via GET /api/curves) - no server round trip, so no download endpoint
 // and no file-path input to validate against traversal.
 
+import { withoutCurveDirectories } from '@/lib/sessionFile'
 import type { CurveRecord } from '@/types'
 
 /** Collapses anything that isn't a-z/0-9 into a single hyphen and trims
@@ -32,10 +33,10 @@ export function curveToCsv(record: Pick<CurveRecord, 'points'>): string {
   return [header, ...rows].join('\n')
 }
 
-/** The record exactly as GET /api/curves served it, so the download
- * round-trips. */
+/** The record as GET /api/curves served it, except `path` is cut down to
+ * the file name so the download does not carry the server's directories. */
 export function curveToJson(record: CurveRecord): string {
-  return JSON.stringify(record, null, 2)
+  return JSON.stringify(withoutCurveDirectories(record), null, 2)
 }
 
 /** Triggers a browser download of `record` with no server involvement:
