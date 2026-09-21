@@ -172,6 +172,16 @@ export function parseSessionRunDetail(raw: unknown, context: string): RunDetail 
   if (!isPlainObject(raw)) {
     throw new SessionParseError(`${context}: run record must be an object`)
   }
+  const samples = parseRunSamples(raw.samples, `${context}.samples`)
+  // Files exported before the run detail carried `duration_s` lack it, so
+  // an absent value is derived from the samples, while a present one must
+  // still be a number.
+  const duration_s =
+    raw.duration_s === undefined
+      ? samples.length >= 2
+        ? samples[samples.length - 1].t - samples[0].t
+        : 0
+      : requireNumber(raw.duration_s, `${context}.duration_s`)
   return {
     id: requireString(raw.id, `${context}.id`),
     path: requireString(raw.path, `${context}.path`),
@@ -179,13 +189,13 @@ export function parseSessionRunDetail(raw: unknown, context: string): RunDetail 
     label: requireString(raw.label, `${context}.label`),
     algorithm: requireString(raw.algorithm, `${context}.algorithm`),
     n_samples: requireNumber(raw.n_samples, `${context}.n_samples`),
-    duration_s: requireNumber(raw.duration_s, `${context}.duration_s`),
+    duration_s,
     aborted: requireBoolean(raw.aborted, `${context}.aborted`),
     curve_ref: raw.curve_ref === null ? null : requireString(raw.curve_ref, `${context}.curve_ref`),
     notes: requireString(raw.notes, `${context}.notes`),
     source: requireString(raw.source, `${context}.source`),
     downsampled: requireBoolean(raw.downsampled, `${context}.downsampled`),
-    samples: parseRunSamples(raw.samples, `${context}.samples`),
+    samples,
   }
 }
 

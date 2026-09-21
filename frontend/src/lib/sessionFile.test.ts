@@ -157,6 +157,56 @@ describe('buildSessionFile / parseSessionFile round trip', () => {
     }
   })
 
+  it('imports a run exported without duration_s, exactly as the server used to serve it', async () => {
+    // The run detail route did not send duration_s, so JSON.stringify
+    // dropped the key from every file exported before the server fix.
+    const { duration_s: _omitted, ...serverShaped } = run('r1')
+    const built = buildSessionFile({
+      title: 't',
+      setup: 'single',
+      curves: [],
+      runs: [serverShaped as unknown as RunDetail],
+    })
+    const file = toFile(JSON.stringify(built))
+    expect(JSON.parse(await file.text()).runs[0].record).not.toHaveProperty('duration_s')
+
+    const parsed = await readSessionFile(file)
+
+    expect(parsed.runs[0].record.duration_s).toBe(1)
+    expect(parsed.runs[0].record.samples).toEqual(run('r1').samples)
+  })
+
+  it('derives an absent duration_s from the first and last sample', () => {
+    const built = buildSessionFile({ title: 't', setup: 'single', curves: [], runs: [run('r1')] })
+    const raw = JSON.parse(JSON.stringify(built))
+    delete raw.runs[0].record.duration_s
+    raw.runs[0].record.samples = [
+      { t: 2, v: 20, i: 0, d: 0.2 },
+      { t: 3.5, v: 18, i: 0.2, d: 0.3 },
+      { t: 7.25, v: 14, i: 0.4, d: 0.4 },
+    ]
+    expect(parseSessionFile(raw).runs[0].record.duration_s).toBeCloseTo(5.25)
+  })
+
+  it('gives a run with fewer than two samples a duration of 0 when duration_s is absent', () => {
+    const built = buildSessionFile({ title: 't', setup: 'single', curves: [], runs: [run('r1'), run('r2')] })
+    const raw = JSON.parse(JSON.stringify(built))
+    delete raw.runs[0].record.duration_s
+    delete raw.runs[1].record.duration_s
+    raw.runs[0].record.samples = [{ t: 4, v: 20, i: 0, d: 0.2 }]
+    raw.runs[1].record.samples = []
+    const parsed = parseSessionFile(raw)
+    expect(parsed.runs[0].record.duration_s).toBe(0)
+    expect(parsed.runs[1].record.duration_s).toBe(0)
+  })
+
+  it('keeps a present duration_s as written', () => {
+    const built = buildSessionFile({ title: 't', setup: 'single', curves: [], runs: [run('r1')] })
+    const raw = JSON.parse(JSON.stringify(built))
+    raw.runs[0].record.duration_s = 42
+    expect(parseSessionFile(raw).runs[0].record.duration_s).toBe(42)
+  })
+
   it('carries missing ids through the round trip', () => {
     const built = buildSessionFile({
       title: 't',
@@ -223,6 +273,14 @@ describe('rejecting bad session files', () => {
     broken.runs[0].record.samples[0] = { t: 0, v: 20 } // missing i, d
     const file = toFile(JSON.stringify(broken))
     await expect(readSessionFile(file)).rejects.toThrow(SessionParseError)
+  })
+
+  it('rejects a present duration_s that is not a number', async () => {
+    const built = buildSessionFile({ title: 't', setup: 'single', curves: [], runs: [run('r1')] })
+    const broken = JSON.parse(JSON.stringify(built))
+    broken.runs[0].record.duration_s = '1'
+    const file = toFile(JSON.stringify(broken))
+    await expect(readSessionFile(file)).rejects.toThrow('duration_s must be a number')
   })
 
   it('rejects a malformed session record (a step missing a field)', async () => {

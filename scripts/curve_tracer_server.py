@@ -1152,6 +1152,14 @@ def _downsample_samples(
     return picked, True
 
 
+def _run_duration_s(samples: tuple[RunSample, ...]) -> float:
+    """Span between the first and last sample, 0.0 for a run with fewer
+    than two. Shared by the list and detail routes so their numbers cannot
+    drift, and always taken from the full on-disk trace, never a
+    downsampled one."""
+    return samples[-1].t - samples[0].t if len(samples) >= 2 else 0.0
+
+
 def create_app(
     cache: _SweepCache,
     commands: queue.Queue[str],
@@ -1687,7 +1695,6 @@ def create_app(
             # (see get_curves above for the same pattern).
             try:
                 r = run_library.load(path)
-                duration_s = r.samples[-1].t - r.samples[0].t if len(r.samples) >= 2 else 0.0
                 entries.append(
                     {
                         "id": path.stem,
@@ -1696,7 +1703,7 @@ def create_app(
                         "label": r.label,
                         "algorithm": r.algorithm,
                         "n_samples": len(r.samples),
-                        "duration_s": duration_s,
+                        "duration_s": _run_duration_s(r.samples),
                         "aborted": r.aborted,
                         "curve_ref": r.curve_ref,
                         "notes": r.notes,
@@ -1957,6 +1964,7 @@ def create_app(
             "notes": r.notes,
             "source": r.source,
             "n_samples": len(r.samples),
+            "duration_s": _run_duration_s(r.samples),
             "downsampled": downsampled,
             "samples": [s.to_dict() for s in samples],
         }
