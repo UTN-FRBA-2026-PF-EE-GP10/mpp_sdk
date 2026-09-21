@@ -243,3 +243,16 @@ def test_a_file_written_before_session_id_existed_loads_with_none(tmp_path):
     path.write_text(json.dumps(payload))
 
     assert load(path).session_id is None
+
+
+@pytest.mark.parametrize("bad", [42, 1.5, True, ["a"], {"id": "a"}])
+def test_a_session_id_that_is_not_a_string_or_null_is_rejected(tmp_path, bad):
+    """A hand-edited number must not load as a stamp that later code would
+    treat as an id."""
+    path = save(_record(), directory=tmp_path)
+    payload = json.loads(path.read_text())
+    payload["session_id"] = bad
+    path.write_text(json.dumps(payload))
+
+    with pytest.raises(ValueError, match="session_id"):
+        load(path)

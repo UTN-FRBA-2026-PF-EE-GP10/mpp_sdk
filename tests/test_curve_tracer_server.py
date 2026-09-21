@@ -562,6 +562,18 @@ def test_save_curve_rejects_an_active_session_id_with_disallowed_characters(clie
     assert client.get("/api/curves").json() == []
 
 
+def test_save_curve_rejects_an_empty_active_session_id_rather_than_stamping_it(client):
+    """ "" is not "no session" (that is null/omitted): stamping it would
+    file the curve under an id no session can ever have."""
+    client.cache.set([(21.3, 0.006), (18.0, 0.195)], "ok")
+    r = client.post(
+        "/api/save-curve",
+        json={"label": "x", "measurement": "baseline", "session_id": ""},
+    )
+    assert r.status_code == 400
+    assert client.get("/api/curves").json() == []
+
+
 # ------------------------------------------------------------------
 # POST /api/start-sweep, /api/release-relay
 # ------------------------------------------------------------------
@@ -1238,6 +1250,12 @@ def test_start_run_rejects_an_unknown_active_session_id(client):
 
 def test_start_run_rejects_an_active_session_id_with_disallowed_characters(client):
     r = client.post("/api/runs/start", json={"algorithm": "P&O", "session_id": "../../etc/passwd"})
+    assert r.status_code == 400
+    assert client.run_requests.empty()
+
+
+def test_start_run_rejects_an_empty_active_session_id_rather_than_stamping_it(client):
+    r = client.post("/api/runs/start", json={"algorithm": "P&O", "session_id": ""})
     assert r.status_code == 400
     assert client.run_requests.empty()
 

@@ -83,9 +83,9 @@ class CurveRecord:
     # scripts/curve_tracer_server.py's post_save_curve), never inferred
     # here. A stamp is not ownership: curves stay a flat, shared library,
     # and a session step links to one by id rather than owning it - this
-    # field only lets the workbench filter "captured in this session" and
-    # is left untouched if that session is later deleted (a dangling
-    # stamp, not a broken record - see mpp_sdk.sessions.library.delete).
+    # field only lets the workbench filter "captured in this session".
+    # Deleting a session removes only its own file, so a stamp can name a
+    # session that no longer exists - a dangling stamp, not a broken record.
     session_id: str | None = field(default=None)
 
     @property
@@ -141,12 +141,20 @@ class CurveRecord:
                 # Absent in files written before this field existed - those
                 # were captured before sessions could stamp anything, so
                 # they simply have no session, same as a hand-edited file.
-                session_id=d.get("session_id"),
+                session_id=_optional_session_id(d.get("session_id")),
             )
         except KeyError as exc:
             raise ValueError(f"curve record missing field {exc.args[0]!r}") from exc
         except (TypeError, ValueError) as exc:
             raise ValueError(f"curve record has an invalid field: {exc}") from exc
+
+
+def _optional_session_id(value: object) -> str | None:
+    """A string or None; anything else in a hand-edited file is an error
+    rather than a stamp that later code would treat as an id."""
+    if value is not None and not isinstance(value, str):
+        raise ValueError(f"session_id must be a string or null, got {type(value).__name__}")
+    return value
 
 
 def now_utc() -> datetime:

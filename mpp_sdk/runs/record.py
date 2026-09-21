@@ -12,7 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from ..curves.record import now_utc  # re-exported below, not duplicated
+from ..curves.record import _optional_session_id, now_utc  # now_utc re-exported below
 
 _SCHEMA = 1
 
@@ -108,7 +108,7 @@ class RunRecord:
                 # genuinely have no recorded provenance, so say so.
                 source=d.get("source", "unknown"),
                 # Absent in files written before this field existed.
-                session_id=d.get("session_id"),
+                session_id=_optional_session_id(d.get("session_id")),
             )
         except KeyError as exc:
             raise ValueError(f"run record missing field {exc.args[0]!r}") from exc
