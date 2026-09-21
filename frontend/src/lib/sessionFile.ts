@@ -136,6 +136,36 @@ function parseRunSamples(value: unknown, field: string): RunSample[] {
   })
 }
 
+/** The file name without its directory. A record's `path` is the server's
+ * absolute path, which would put a home directory and user name into a file
+ * meant to be shared. Nothing reads the directory part (findCurveForRun
+ * matches the base name only), so it is dropped when a file is built and
+ * again when an older file that still has it is read. */
+export function bareFileName(path: string, id: string): string {
+  const name = path.split(/[\\/]/).pop() ?? ''
+  return name === '' ? `${id}.json` : name
+}
+
+/** A run's notes hold its abort reason, and an `error: ...` reason is raw
+ * exception text that can name a device node or a file under a home
+ * directory. Only the last segment of each absolute path is kept. */
+function scrubAbsolutePaths(text: string): string {
+  return text.replace(/(?<![\w.:/-])\/(?:[^\s/'"()]+\/)+([^\s/'"()]*)/g, '$1')
+}
+
+export function withoutCurveDirectories(record: CurveRecord): CurveRecord {
+  return { ...record, path: bareFileName(record.path, record.id) }
+}
+
+export function withoutRunDirectories(record: RunDetail): RunDetail {
+  return {
+    ...record,
+    path: bareFileName(record.path, record.id),
+    curve_ref: record.curve_ref === null ? null : bareFileName(record.curve_ref, record.curve_ref),
+    notes: scrubAbsolutePaths(record.notes),
+  }
+}
+
 /** Validates a curve record the same shape GET /api/curves serves, so a
  * hand-edited or corrupted session file fails clearly instead of crashing
  * a chart or a metadata table deep in the app later. The live API path
@@ -146,7 +176,7 @@ export function parseSessionCurveRecord(raw: unknown, context: string): CurveRec
   if (!isPlainObject(raw)) {
     throw new SessionParseError(`${context}: curve record must be an object`)
   }
-  return {
+  return withoutCurveDirectories({
     id: requireString(raw.id, `${context}.id`),
     path: requireString(raw.path, `${context}.path`),
     captured_at: requireString(raw.captured_at, `${context}.captured_at`),
@@ -160,7 +190,7 @@ export function parseSessionCurveRecord(raw: unknown, context: string): CurveRec
     isc: requireNumber(raw.isc, `${context}.isc`),
     p_mpp: requireNumber(raw.p_mpp, `${context}.p_mpp`),
     points: parseCurvePoints(raw.points, `${context}.points`),
-  }
+  })
 }
 
 /** Same reasoning as parseSessionCurveRecord above, for GET /api/runs/{id}'s
@@ -182,7 +212,7 @@ export function parseSessionRunDetail(raw: unknown, context: string): RunDetail 
         ? samples[samples.length - 1].t - samples[0].t
         : 0
       : requireNumber(raw.duration_s, `${context}.duration_s`)
-  return {
+  return withoutRunDirectories({
     id: requireString(raw.id, `${context}.id`),
     path: requireString(raw.path, `${context}.path`),
     captured_at: requireString(raw.captured_at, `${context}.captured_at`),
@@ -196,7 +226,7 @@ export function parseSessionRunDetail(raw: unknown, context: string): RunDetail 
     source: requireString(raw.source, `${context}.source`),
     downsampled: requireBoolean(raw.downsampled, `${context}.downsampled`),
     samples,
-  }
+  })
 }
 
 function parseOpenQuestion(raw: unknown, context: string): OpenQuestion {
@@ -367,8 +397,8 @@ export function buildSessionFile(options: {
     title: options.title,
     setup: options.setup,
     session: options.session ?? null,
-    curves: options.curves.map((record) => ({ id: record.id, record })),
-    runs: options.runs.map((record) => ({ id: record.id, record })),
+    curves: options.curves.map((record) => ({ id: record.id, record: withoutCurveDirectories(record) })),
+    runs: options.runs.map((record) => ({ id: record.id, record: withoutRunDirectories(record) })),
     missing: options.missing ?? { curve_ids: [], run_ids: [] },
   }
 }

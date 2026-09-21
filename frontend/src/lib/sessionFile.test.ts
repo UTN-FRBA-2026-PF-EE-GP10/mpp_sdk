@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { findCurveForRun } from '@/lib/runPlayback'
 import type { RunDetail } from '@/lib/runs'
 import type { SessionRecord } from '@/lib/sessions'
 import {
@@ -106,7 +107,7 @@ describe('buildSessionFile / parseSessionFile round trip', () => {
     expect(parsed.setup).toBe('single')
     expect(parsed.session).toBeNull()
     expect(parsed.curves.map((e) => e.id)).toEqual(['c1', 'c2'])
-    expect(parsed.curves[0].record).toEqual(curve('c1'))
+    expect(parsed.curves[0].record).toEqual({ ...curve('c1'), path: 'c1.json' })
     expect(parsed.runs.map((e) => e.id)).toEqual(['r1'])
     expect(parsed.runs[0].record.samples).toEqual(run('r1').samples)
     expect(parsed.missing).toEqual({ curve_ids: [], run_ids: [] })
@@ -217,6 +218,80 @@ describe('buildSessionFile / parseSessionFile round trip', () => {
     })
     const parsed = parseSessionFile(JSON.parse(JSON.stringify(built)))
     expect(parsed.missing).toEqual({ curve_ids: ['gone-curve'], run_ids: ['gone-run'] })
+  })
+})
+
+describe('server directories in a session file', () => {
+  const homeDir = '/home/someone/project/data'
+
+  function absoluteCurve(id: string): CurveRecord {
+    return { ...curve(id), path: `${homeDir}/curves/${id}.json` }
+  }
+
+  function absoluteRun(id: string): RunDetail {
+    return {
+      ...run(id),
+      path: `${homeDir}/runs/${id}.json`,
+      curve_ref: `${homeDir}/curves/c1.json`,
+      notes: `error: [Errno 2] No such file or directory: '${homeDir}/runs/${id}.json'`,
+    }
+  }
+
+  function exported() {
+    return buildSessionFile({
+      title: 'Panel A alone under the lamp',
+      setup: 'single',
+      curves: [absoluteCurve('c1')],
+      runs: [absoluteRun('x')],
+      session: session(),
+    })
+  }
+
+  it('writes only bare file names, with no directory anywhere in the file text', () => {
+    const text = JSON.stringify(exported(), null, 2)
+
+    expect(text).not.toContain('/home/')
+    expect(text).not.toContain(homeDir)
+    const paths = [...text.matchAll(/"path":\s*"([^"]*)"/g)].map((m) => m[1])
+    expect(paths).toEqual(['c1.json', 'x.json'])
+    for (const p of paths) expect(p).not.toMatch(/[/\\]/)
+    // No string value anywhere may look like an absolute path or an IPv4 address.
+    expect(text).not.toMatch(/"\/[^"]*\/[^"]*"/)
+    expect(text).not.toMatch(/\b\d{1,3}(\.\d{1,3}){3}\b/)
+  })
+
+  it('imports back what it exported', async () => {
+    const parsed = await readSessionFile(toFile(JSON.stringify(exported())))
+
+    expect(parsed.curves[0].record.path).toBe('c1.json')
+    expect(parsed.runs[0].record.path).toBe('x.json')
+    expect(parsed.runs[0].record.curve_ref).toBe('c1.json')
+    expect(parsed.runs[0].record.notes).toBe("error: [Errno 2] No such file or directory: 'x.json'")
+    expect(findCurveForRun([parsed.curves[0].record], parsed.runs[0].record.curve_ref)).toBe(
+      parsed.curves[0].record,
+    )
+  })
+
+  it('still imports an older file that carries absolute paths, without keeping them', async () => {
+    const raw = JSON.parse(JSON.stringify(exported()))
+    raw.curves[0].record.path = `${homeDir}/curves/c1.json`
+    raw.runs[0].record.path = `${homeDir}/runs/x.json`
+    raw.runs[0].record.curve_ref = `${homeDir}/curves/c1.json`
+    raw.runs[0].record.notes = `error: ${homeDir}/runs/x.json`
+
+    const parsed = await readSessionFile(toFile(JSON.stringify(raw)))
+
+    expect(parsed.curves[0].record.path).toBe('c1.json')
+    expect(parsed.runs[0].record.path).toBe('x.json')
+    expect(parsed.runs[0].record.notes).toBe('error: x.json')
+    expect(JSON.stringify(parsed)).not.toContain('/home/')
+  })
+
+  it('leaves a bare curve id and plain abort reasons alone', () => {
+    const plain = { ...run('r1'), curve_ref: 'c1', notes: 'overvoltage' }
+    const built = buildSessionFile({ title: 't', setup: 'single', curves: [], runs: [plain] })
+    expect(built.runs[0].record.curve_ref).toBe('c1')
+    expect(built.runs[0].record.notes).toBe('overvoltage')
   })
 })
 
