@@ -4,6 +4,7 @@
 // /api/curves, and the run library, /api/runs) stores volts and amps -
 // see CurvePoint's convention in types.ts and RunSample's in runs.ts.
 
+import { ApiError } from '@/lib/apiError'
 import type {
   SessionPatch,
   SessionRecord,
@@ -70,7 +71,7 @@ async function parseJsonOrThrow(r: Response, what: string): Promise<unknown> {
       payload && typeof payload === 'object' && 'detail' in payload
         ? formatDetail((payload as { detail: unknown }).detail)
         : `HTTP ${r.status}`
-    throw new Error(`${what}: ${detail}`)
+    throw new ApiError(`${what}: ${detail}`, r.status, detail)
   }
   return payload
 }

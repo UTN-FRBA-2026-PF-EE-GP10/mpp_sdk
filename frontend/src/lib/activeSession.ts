@@ -76,6 +76,21 @@ export function parseStoredActiveSession(raw: string | null): ActiveSession | nu
   }
 }
 
+/** What to tell the operator when the server refused a capture because the
+ * active session no longer exists (deleted in another tab). The active
+ * session is cleared at the same time, so the next attempt is not refused
+ * the same way - which is why the wording says what happens to this one. */
+export function sessionGoneMessage(what: 'curve' | 'run'): string {
+  const next =
+    what === 'curve'
+      ? 'Nothing was saved - save again to keep it, unfiled.'
+      : 'Nothing was started - start again to run it unfiled.'
+  return (
+    `The session this ${what} was to be filed into no longer exists (it may have been deleted ` +
+    `in another tab), so filing was turned off. ${next}`
+  )
+}
+
 export type SessionScope = 'session' | 'all'
 
 /** What a Curves or Runs list shows: everything, or only what was stamped

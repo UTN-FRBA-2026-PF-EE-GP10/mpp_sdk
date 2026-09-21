@@ -171,9 +171,8 @@ describe('SessionPane - sandbox', () => {
 // Regression coverage for a race an adversarial review found: exporting
 // mid-fetch would silently write a live run into the file's `missing`
 // list (sessionExportFile treats an id absent from runDetails as
-// deleted - see its own test). SessionPane now derives runDetailsPending
-// from the same in-flight/missing bookkeeping the lazy-fetch effect above
-// already keeps, and SessionView disables Export session file on it.
+// deleted - see its own test). SessionPane takes runDetailsPending from
+// useRunDetails, and SessionView disables Export session file on it.
 describe('SessionPane - export gating', () => {
   function isDisabled(button: HTMLButtonElement): boolean {
     return button.hasAttribute('disabled') || button.getAttribute('aria-disabled') === 'true'

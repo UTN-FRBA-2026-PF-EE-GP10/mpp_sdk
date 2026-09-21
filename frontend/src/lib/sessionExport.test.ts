@@ -215,7 +215,7 @@ describe('sessionToMarkdown', () => {
 
 describe('sessionExportFile', () => {
   it('bundles the session with every found curve and run its steps link', () => {
-    const file = sessionExportFile(session(), [curve()], { r1: runDetail() })
+    const file = sessionExportFile(session(), [curve()], { r1: runDetail() }, [runSummary()])
     expect(file.session).toEqual(session())
     expect(file.curves.map((e) => e.id)).toEqual(['c1'])
     expect(file.runs.map((e) => e.id)).toEqual(['r1'])
@@ -223,7 +223,7 @@ describe('sessionExportFile', () => {
 
   it('names a linked curve or run the library does not have in missing', () => {
     // baseline-curve links c1 and missing-curve; po-run links r1 only.
-    const file = sessionExportFile(session(), [curve()], { r1: runDetail() })
+    const file = sessionExportFile(session(), [curve()], { r1: runDetail() }, [runSummary()])
     expect(file.missing.curve_ids).toEqual(['missing-curve'])
     expect(file.missing.run_ids).toEqual([])
   })
@@ -234,12 +234,12 @@ describe('sessionExportFile', () => {
     // SessionPane's runDetailsPending / SessionView's disabled Export
     // button, which exist precisely so this function is never called
     // while a linked run's detail fetch is still in flight).
-    const file = sessionExportFile(session(), [curve()], {})
+    const file = sessionExportFile(session(), [curve()], {}, [runSummary()])
     expect(file.missing.run_ids).toEqual(['r1'])
   })
 
   it('titles and sets up the file from the session, not from a prompt', () => {
-    const file = sessionExportFile(session(), [curve()], { r1: runDetail() })
+    const file = sessionExportFile(session(), [curve()], { r1: runDetail() }, [runSummary()])
     expect(file.title).toBe(session().title)
     expect(file.setup).toBe(session().setup)
   })
@@ -250,18 +250,23 @@ describe('sessionExportFile', () => {
     it('are included, so a capture filed into the session is not silently lost', () => {
       const stampedCurve = curve({ id: 'stamped-c', session_id: id })
       const stampedRun = runDetail({ id: 'stamped-r', session_id: id })
-      const file = sessionExportFile(session(), [curve(), stampedCurve], {
-        r1: runDetail(),
-        'stamped-r': stampedRun,
-      })
+      const file = sessionExportFile(
+        session(),
+        [curve(), stampedCurve],
+        { r1: runDetail(), 'stamped-r': stampedRun },
+        [runSummary(), runSummary({ id: 'stamped-r', session_id: id })],
+      )
       expect(file.curves.map((e) => e.id)).toEqual(['c1', 'stamped-c'])
       expect(file.runs.map((e) => e.id)).toEqual(['r1', 'stamped-r'])
     })
 
     it('are not duplicated when a step also links them', () => {
-      const file = sessionExportFile(session(), [curve({ session_id: id })], {
-        r1: runDetail({ session_id: id }),
-      })
+      const file = sessionExportFile(
+        session(),
+        [curve({ session_id: id })],
+        { r1: runDetail({ session_id: id }) },
+        [runSummary({ session_id: id })],
+      )
       expect(file.curves.map((e) => e.id)).toEqual(['c1'])
       expect(file.runs.map((e) => e.id)).toEqual(['r1'])
     })
@@ -279,16 +284,48 @@ describe('sessionExportFile', () => {
           r1: runDetail(),
           'other-r': runDetail({ id: 'other-r', session_id: 'some-other-session' }),
         },
+        [runSummary(), runSummary({ id: 'other-r', session_id: 'some-other-session' })],
       )
       expect(file.curves.map((e) => e.id)).toEqual(['c1'])
       expect(file.runs.map((e) => e.id)).toEqual(['r1'])
     })
 
     it('never appear in missing, which stays about ids a step links', () => {
-      const file = sessionExportFile(session(), [curve(), curve({ id: 'stamped-c', session_id: id })], {
-        r1: runDetail(),
-      })
+      const file = sessionExportFile(
+        session(),
+        [curve(), curve({ id: 'stamped-c', session_id: id })],
+        { r1: runDetail() },
+        [runSummary()],
+      )
       expect(file.missing.curve_ids).toEqual(['missing-curve'])
+    })
+
+    it('a stamped run whose detail could not be loaded is named in missing, not dropped', () => {
+      const file = sessionExportFile(session(), [curve()], { r1: runDetail() }, [
+        runSummary(),
+        runSummary({ id: 'stamped-r', session_id: id }),
+      ])
+      expect(file.runs.map((e) => e.id)).toEqual(['r1'])
+      expect(file.missing.run_ids).toEqual(['stamped-r'])
+    })
+
+    it('a stamped run deleted since it was fetched is not exported: the live list decides', () => {
+      // Its detail is still cached (details are never evicted), but the run
+      // list no longer has it.
+      const file = sessionExportFile(
+        session(),
+        [curve()],
+        { r1: runDetail(), gone: runDetail({ id: 'gone', session_id: id }) },
+        [runSummary()],
+      )
+      expect(file.runs.map((e) => e.id)).toEqual(['r1'])
+      expect(file.missing.run_ids).toEqual([])
+    })
+
+    it('a linked run deleted since it was fetched is named in missing rather than exported', () => {
+      const file = sessionExportFile(session(), [curve()], { r1: runDetail() }, [])
+      expect(file.runs).toEqual([])
+      expect(file.missing.run_ids).toEqual(['r1'])
     })
   })
 })

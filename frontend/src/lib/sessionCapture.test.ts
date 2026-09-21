@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { LiveSweepState } from '@/lib/api'
 import type { LiveRunState } from '@/lib/runs'
 import type { SessionStep } from '@/lib/sessions'
-import { CaptureError, captureIntoStep } from './sessionCapture'
+import { ApiError } from '@/lib/apiError'
+import { CaptureError, SessionGoneError, captureIntoStep } from './sessionCapture'
 
 vi.mock('@/lib/api', () => ({
   fetchLiveSweep: vi.fn(),
@@ -78,6 +79,8 @@ function liveRun(overrides: Partial<LiveRunState> = {}): LiveRunState {
 }
 
 beforeEach(() => {
+  // Nothing is running on the board unless a test says so.
+  vi.mocked(fetchLiveRun).mockResolvedValue(liveRun({ status: 'idle', saved_run_id: null }))
   vi.mocked(fetchRunConfig).mockResolvedValue({
     algorithms: ['P&O', 'InCond'],
     maxDurationS: 600,
@@ -301,7 +304,97 @@ describe('captureIntoStep - run step', () => {
 
     await expect(
       captureIntoStep({ sessionId: 's', step: step('run'), link, timings: TIMINGS }),
-    ).rejects.toThrow(/did not finish in time/)
+    ).rejects.toThrow(/still going.*saved under this session but not linked/)
     expect(link).not.toHaveBeenCalled()
+  })
+})
+
+describe('captureIntoStep - a run already on the board', () => {
+  it('refuses to sweep while a run is in progress: the command would queue and fire unattended later', async () => {
+    vi.mocked(fetchLiveRun).mockResolvedValue(liveRun({ status: 'running', saved_run_id: null }))
+    vi.mocked(fetchLiveSweep).mockResolvedValue(sweep())
+    const link = vi.fn()
+
+    await expect(
+      captureIntoStep({ sessionId: 's', step: step('curve'), link, timings: TIMINGS }),
+    ).rejects.toThrow(/run is in progress/)
+    expect(startSweep).not.toHaveBeenCalled()
+    expect(saveCurve).not.toHaveBeenCalled()
+    expect(link).not.toHaveBeenCalled()
+  })
+
+  it('sweeps normally once the last run is done', async () => {
+    vi.mocked(fetchLiveRun).mockResolvedValue(liveRun({ status: 'done' }))
+    vi.mocked(fetchLiveSweep).mockResolvedValueOnce(sweep()).mockResolvedValue(FINISHED_SWEEP)
+    vi.mocked(saveCurve).mockResolvedValue({ path: 'p', id: 'new' })
+    const link = vi.fn().mockResolvedValue(undefined)
+
+    await captureIntoStep({ sessionId: 's', step: step('curve'), link, timings: TIMINGS })
+
+    expect(startSweep).toHaveBeenCalledTimes(1)
+    expect(link).toHaveBeenCalledWith('curve', 'new')
+  })
+})
+
+describe('captureIntoStep - the session no longer exists', () => {
+  const gone = () => new ApiError('POST /x: session not found', 404, 'session not found')
+
+  it('a sweep whose save is refused for a missing session says so and links nothing', async () => {
+    vi.mocked(fetchLiveSweep).mockResolvedValueOnce(sweep()).mockResolvedValue(FINISHED_SWEEP)
+    vi.mocked(saveCurve).mockRejectedValue(gone())
+    const link = vi.fn()
+
+    const error = await captureIntoStep({
+      sessionId: 's',
+      step: step('curve'),
+      link,
+      timings: TIMINGS,
+    }).catch((e: unknown) => e)
+
+    expect(error).toBeInstanceOf(SessionGoneError)
+    expect((error as Error).message).toMatch(/no longer exists.*nothing was saved or linked/)
+    expect(link).not.toHaveBeenCalled()
+  })
+
+  it('a run start refused for a missing session is the same', async () => {
+    vi.mocked(startRun).mockRejectedValue(gone())
+    const link = vi.fn()
+
+    await expect(
+      captureIntoStep({ sessionId: 's', step: step('run'), link, timings: TIMINGS }),
+    ).rejects.toBeInstanceOf(SessionGoneError)
+    expect(link).not.toHaveBeenCalled()
+  })
+
+  it('a link refused for a missing session says the item is saved but unlinked', async () => {
+    vi.mocked(fetchLiveSweep).mockResolvedValueOnce(sweep()).mockResolvedValue(FINISHED_SWEEP)
+    vi.mocked(saveCurve).mockResolvedValue({ path: 'p', id: 'new' })
+    const link = vi.fn().mockRejectedValue(gone())
+
+    const error = await captureIntoStep({
+      sessionId: 's',
+      step: step('curve'),
+      link,
+      timings: TIMINGS,
+    }).catch((e: unknown) => e)
+
+    expect(error).toBeInstanceOf(SessionGoneError)
+    expect((error as Error).message).toMatch(/saved the curve, but the session no longer exists/)
+  })
+
+  it('a missing reference curve (also a 404) is not mistaken for a missing session', async () => {
+    vi.mocked(startRun).mockRejectedValue(
+      new ApiError('POST /api/runs/start: curve not found', 404, 'curve not found'),
+    )
+
+    const error = await captureIntoStep({
+      sessionId: 's',
+      step: step('run'),
+      link: vi.fn(),
+      timings: TIMINGS,
+    }).catch((e: unknown) => e)
+
+    expect(error).not.toBeInstanceOf(SessionGoneError)
+    expect((error as Error).message).toMatch(/Capture failed.*curve not found/)
   })
 })

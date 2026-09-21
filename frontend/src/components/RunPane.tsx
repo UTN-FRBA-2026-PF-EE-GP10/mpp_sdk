@@ -8,7 +8,8 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useLiveRun } from '@/hooks/useLiveRun'
-import { useCaptureSession } from '@/lib/activeSession'
+import { sessionGoneMessage, useActiveSession, useCaptureSession } from '@/lib/activeSession'
+import { isSessionNotFound } from '@/lib/apiError'
 import { fetchRunConfig, fetchRuns, type RunConfig } from '@/lib/api'
 import type { StartRunInput } from '@/lib/api'
 import { formatCapturedAt } from '@/lib/format'
@@ -44,8 +45,16 @@ export function RunPane({
   const sandbox = useSandbox()
   const [runConfig, setRunConfig] = useState<RunConfig | null>(null)
   const [algorithmsError, setAlgorithmsError] = useState<string | null>(null)
-  const { phase, live, starting, startError, stopping, stopError, start, stop, reset } =
-    useLiveRun()
+  const { clear: clearActiveSession } = useActiveSession()
+  const { phase, live, starting, startError, stopping, stopError, start, stop, reset } = useLiveRun({
+    // The session this run was to be filed into is gone (deleted in another
+    // tab): turn filing off, or every later start is refused the same way.
+    onStartError: (e) => {
+      if (!isSessionNotFound(e)) return undefined
+      clearActiveSession()
+      return sessionGoneMessage('run')
+    },
+  })
   const [openRun, setOpenRun] = useState<RunSummary | null>(null)
   const [openRunError, setOpenRunError] = useState<string | null>(null)
   const lastSavedIdRef = useRef<string | null>(null)

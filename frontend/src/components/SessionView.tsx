@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronRight } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { CurveChart } from '@/components/CurveChart'
 import { CurveDetailDialog } from '@/components/CurveDetailDialog'
 import { RunChart } from '@/components/RunChart'
@@ -117,6 +117,14 @@ export interface SessionViewProps {
   captureUnavailable?: { curve: string | null; run: string | null }
   /** Algorithms a run step can pick from; empty leaves the server's first. */
   runAlgorithms?: string[]
+  /** Seconds a captured run lasts, for the confirmation; unknown until the
+   * server's run config has loaded. */
+  runDurationS?: number
+  /** Run ids whose full detail could not be loaded (not a 404): they will
+   * be named as missing in an exported file. */
+  failedRunIds?: string[]
+  /** Asks for the failed run details again. */
+  onRetryRunDetails?: () => void
 }
 
 /** What one step's body needs to offer "Capture into this step". */
@@ -152,6 +160,9 @@ export function SessionView({
   onCaptureIntoStep,
   captureUnavailable,
   runAlgorithms = [],
+  runDurationS,
+  failedRunIds = [],
+  onRetryRunDetails,
 }: SessionViewProps) {
   const { schedule, sendNow, state, error } = useDebouncedPatch(readOnly ? undefined : onPatch)
   const [openCurve, setOpenCurve] = useState<CurveRecord | null>(null)
@@ -160,6 +171,10 @@ export function SessionView({
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [expandAllSignal, setExpandAllSignal] = useState<ExpandAllSignal>(INITIAL_EXPAND_SIGNAL)
   const [capturingStepId, setCapturingStepId] = useState<string | null>(null)
+  // The guard against a second capture, in a ref because state is only
+  // seen after the next render: two clicks in one tick would both pass a
+  // state check. The state above is for what is drawn.
+  const capturingRef = useRef<string | null>(null)
   const [captureErrors, setCaptureErrors] = useState<Record<string, string>>({})
 
   // A collapsed row has no chart in the DOM at all, so Ctrl+P would print
@@ -225,16 +240,22 @@ export function SessionView({
   }
 
   async function handleCapture(step: SessionStep, algorithm?: string) {
-    if (readOnly || !onCaptureIntoStep || capturingStepId !== null) return // defense in depth
-    // A run drives the real converter - same bar as RunPane's Start run.
-    if (
-      step.kind === 'run' &&
-      !window.confirm(
-        `Start a live${algorithm ? ` "${algorithm}"` : ''} run for "${step.title}"? This drives the real converter.`,
-      )
-    ) {
-      return
+    if (readOnly || !onCaptureIntoStep || capturingRef.current !== null) return // defense in depth
+    // A run drives the real converter - same bar as RunPane's Start run,
+    // and it names what will run, as that one does.
+    if (step.kind === 'run') {
+      const chosen = algorithm ?? runAlgorithms[0]
+      const what = chosen ? ` "${chosen}"` : ''
+      const duration = runDurationS === undefined ? '' : ` (${runDurationS}s)`
+      if (
+        !window.confirm(
+          `Start a live${what} run${duration} for "${step.title}"? This drives the real converter.`,
+        )
+      ) {
+        return
+      }
     }
+    capturingRef.current = step.id
     setCapturingStepId(step.id)
     setCaptureErrors((prev) => {
       const next = { ...prev }
@@ -247,6 +268,7 @@ export function SessionView({
       const message = e instanceof Error ? e.message : String(e)
       setCaptureErrors((prev) => ({ ...prev, [step.id]: message }))
     } finally {
+      capturingRef.current = null
       setCapturingStepId(null)
     }
   }
@@ -270,7 +292,7 @@ export function SessionView({
 
   function handleExportSessionFile() {
     if (runDetailsPending) return // defense in depth - the button is disabled anyway
-    downloadSessionExportFile(session, curves, runDetails)
+    downloadSessionExportFile(session, curves, runDetails, runs)
   }
 
   return (
@@ -352,6 +374,18 @@ export function SessionView({
             )}
           </div>
           {deleteError && <p className="text-sm text-destructive">Failed to delete: {deleteError}</p>}
+          {failedRunIds.length > 0 && (
+            <p className="flex flex-wrap items-center gap-2 text-sm text-destructive print:hidden">
+              Could not load {failedRunIds.length} run{failedRunIds.length === 1 ? '' : 's'} for this
+              session. An exported session file will name{' '}
+              {failedRunIds.length === 1 ? 'it' : 'them'} as missing.
+              {onRetryRunDetails && (
+                <Button size="xs" variant="outline" onClick={onRetryRunDetails}>
+                  Retry
+                </Button>
+              )}
+            </p>
+          )}
         </CardContent>
       </Card>
 

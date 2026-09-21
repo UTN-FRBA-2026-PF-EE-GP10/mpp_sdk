@@ -7,7 +7,9 @@
 // The order is the point: nothing is linked until the record is saved, and
 // nothing is saved unless the capture finished. A failure at any earlier
 // point therefore leaves the step exactly as it was - never a link to
-// something that does not exist.
+// something that does not exist. One exception is not ours to prevent: a
+// run that outlives the wait keeps going, and the server saves it, stamped
+// but unlinked, when it ends.
 
 import {
   fetchLiveRun,
@@ -17,12 +19,17 @@ import {
   startRun,
   startSweep,
 } from '@/lib/api'
+import { isSessionNotFound } from '@/lib/apiError'
 import { abortReasonMessage } from '@/lib/liveRun'
 import type { SessionStep } from '@/lib/sessions'
 
 /** Thrown for every failure of the flow, with a message meant to be shown
  * to the operator as-is. */
 export class CaptureError extends Error {}
+
+/** The server said the session no longer exists - deleted in another tab,
+ * say. The caller should stop filing into it. */
+export class SessionGoneError extends CaptureError {}
 
 export interface CaptureTimings {
   /** How often the sweep or run is polled. */
@@ -56,6 +63,14 @@ async function captureCurve(
   step: SessionStep,
   timings: CaptureTimings,
 ): Promise<string> {
+  // The board serves one thing at a time, and the server accepts a sweep
+  // command while a run is on: it queues it, and it then fires unattended
+  // once the run ends. So a run in progress is refused here, not discovered
+  // as a timeout.
+  const liveRun = await fetchLiveRun(2)
+  if (liveRun.status === 'running') {
+    throw new CaptureError('A run is in progress - wait for it to finish before sweeping.')
+  }
   const before = await fetchLiveSweep()
   // A sweep someone else started would be taken for ours.
   if (before.active) throw new CaptureError('A sweep is already in progress - wait for it to finish.')
@@ -131,7 +146,14 @@ async function captureRun(
       }
       return live.saved_run_id
     }
-    if (Date.now() > deadline) throw new CaptureError('The run did not finish in time.')
+    if (Date.now() > deadline) {
+      // Giving up waiting does not stop the run: it is still driving the
+      // converter, and the server saves it, stamped, when it ends.
+      throw new CaptureError(
+        'The run is taking longer than expected and is still going. When it ends it is ' +
+          'saved under this session but not linked to this step - link it from the picker below.',
+      )
+    }
   }
 }
 
@@ -163,12 +185,24 @@ export async function captureIntoStep(options: CaptureIntoStepOptions): Promise<
         : await captureCurve(sessionId, step, timings)
   } catch (e) {
     if (e instanceof CaptureError) throw e
+    if (isSessionNotFound(e)) {
+      throw new SessionGoneError(
+        'The session this capture was for no longer exists (it may have been deleted in ' +
+          'another tab), so nothing was saved or linked. Filing into it has been turned off.',
+      )
+    }
     throw new CaptureError(`Capture failed: ${messageOf(e)}`)
   }
 
   try {
     await link(kind, id)
   } catch (e) {
+    if (isSessionNotFound(e)) {
+      throw new SessionGoneError(
+        `Captured and saved the ${kind}, but the session no longer exists (it may have been ` +
+          'deleted in another tab), so it could not be linked. Filing into it has been turned off.',
+      )
+    }
     throw new CaptureError(
       `Captured and saved the ${kind}, but linking it to this step failed: ${messageOf(e)}. ` +
         'It is in the library, filed under this session - link it from the picker below.',

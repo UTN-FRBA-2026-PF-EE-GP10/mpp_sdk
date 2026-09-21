@@ -6,6 +6,7 @@ import { SessionView } from './SessionView'
 import { ThemeProvider } from '@/components/ThemeProvider'
 import { UnitsProvider } from '@/components/UnitsProvider'
 import { ACTIVE_SESSION_STORAGE_KEY } from '@/lib/activeSession'
+import { ApiError } from '@/lib/apiError'
 import { DEMO_SESSION } from '@/lib/demoFixtures'
 import type { LiveSweepState } from '@/lib/api'
 import type { LiveRunState, RunDetail, RunSummary } from '@/lib/runs'
@@ -185,6 +186,8 @@ function paneFor(props: Partial<Parameters<typeof SessionPane>[0]> = {}) {
 }
 
 beforeEach(() => {
+  // Nothing is running on the board unless a test says so.
+  vi.mocked(fetchLiveRun).mockResolvedValue(doneRun({ status: 'idle', saved_run_id: null }))
   vi.mocked(fetchSession).mockResolvedValue(session())
   vi.mocked(fetchRunConfig).mockResolvedValue({
     algorithms: ['P&O', 'InCond'],
@@ -405,6 +408,25 @@ describe('SessionPane and the active session', () => {
 
     await waitFor(() => expect(onDeleted).toHaveBeenCalled())
     expect(window.localStorage.getItem(ACTIVE_SESSION_STORAGE_KEY)).toBeNull()
+  })
+
+  it('stops filing when the server says the session is gone (deleted in another tab)', async () => {
+    vi.mocked(fetchLiveSweep)
+      .mockResolvedValueOnce(sweepState())
+      .mockResolvedValue(sweepState({ seq: 2, points: [{ v: 10, i: 0.1 }] }))
+    vi.mocked(startSweep).mockResolvedValue()
+    vi.mocked(saveCurve).mockRejectedValue(
+      new ApiError('POST /api/save-curve: session not found', 404, 'session not found'),
+    )
+    renderPane(paneFor())
+    await screen.findByText('Baseline sweep')
+    await waitFor(() => expect(window.localStorage.getItem(ACTIVE_SESSION_STORAGE_KEY)).not.toBeNull())
+
+    fireEvent.click(screen.getAllByText('Capture into this step')[0])
+
+    await screen.findByText(/no longer exists/, undefined, SLOW)
+    expect(window.localStorage.getItem(ACTIVE_SESSION_STORAGE_KEY)).toBeNull()
+    expect(patchSession).not.toHaveBeenCalled()
   })
 })
 

@@ -202,37 +202,31 @@ export function downloadSessionMarkdown(
  * The stamped items are included even when no step links them, because a
  * capture filed into the session from Measure, or one whose link was
  * removed later, is still part of what was measured for it. Exporting only
- * the linked ones would drop that data with no trace in the file. `missing`
- * keeps its meaning: only ids a step *links* that could not be found -
- * stamped items come from `curves`/`runDetails` themselves, so they always
- * exist.
+ * the linked ones would drop that data with no trace in the file.
  *
- * `curves` is the full, already-loaded curve library (always available in
- * full - see SessionView's own doc comment), so a linked or stamped id
- * resolves straight from it; `runDetails` is keyed by run id and expected
- * to already carry full samples for every linked or stamped run
- * SessionPane could fetch (see its own effect) - a linked id absent from
- * both `curves` and `runDetails` is either deleted from the library or
- * still loading, and either way is named in the file's `missing` rather
- * than silently dropped.
+ * What exists is decided by the current library lists, not by what happens
+ * to be cached: `curves` and `runs` are the live lists, so a run deleted
+ * since is not exported (it is named in `missing` if a step links it), and
+ * a run whose full detail is not in `runDetails` (its fetch failed, or is
+ * still going) is named in `missing.run_ids` rather than dropped without a
+ * trace. `missing` also still names every id a step links that cannot be
+ * found. SessionPane disables Export while a fetch is in flight, so what
+ * is left here is a failure, not a wait.
  */
 export function sessionExportFile(
   session: SessionRecord,
   curves: CurveRecord[],
   runDetails: Record<string, RunDetail>,
+  runs: RunSummary[],
 ): SessionFile {
-  const linkedCurveIds = new Set<string>()
-  const linkedRunIds = new Set<string>()
+  const curveIds = new Set<string>()
+  const runIds = new Set<string>()
   for (const step of session.steps) {
-    for (const id of step.curve_ids) linkedCurveIds.add(id)
-    for (const id of step.run_ids) linkedRunIds.add(id)
+    for (const id of step.curve_ids) curveIds.add(id)
+    for (const id of step.run_ids) runIds.add(id)
   }
-  const curveIds = new Set(linkedCurveIds)
   for (const c of curves) if (c.session_id === session.id) curveIds.add(c.id)
-  const runIds = new Set(linkedRunIds)
-  for (const [id, detail] of Object.entries(runDetails)) {
-    if (detail.session_id === session.id) runIds.add(id)
-  }
+  for (const r of runs) if (r.session_id === session.id) runIds.add(r.id)
 
   const foundCurves: CurveRecord[] = []
   const missingCurveIds: string[] = []
@@ -242,11 +236,15 @@ export function sessionExportFile(
     else missingCurveIds.push(id)
   }
 
+  // A run counts only while the live list still has it: `runDetails` never
+  // evicts, so a run deleted since it was fetched would otherwise still be
+  // exported.
+  const listedRunIds = new Set(runs.map((r) => r.id))
   const foundRuns: RunDetail[] = []
   const missingRunIds: string[] = []
   for (const id of runIds) {
     const detail = runDetails[id]
-    if (detail) foundRuns.push(detail)
+    if (detail && listedRunIds.has(id)) foundRuns.push(detail)
     else missingRunIds.push(id)
   }
 
@@ -265,6 +263,7 @@ export function downloadSessionExportFile(
   session: SessionRecord,
   curves: CurveRecord[],
   runDetails: Record<string, RunDetail>,
+  runs: RunSummary[],
 ): void {
-  downloadSessionFile(sessionExportFile(session, curves, runDetails))
+  downloadSessionFile(sessionExportFile(session, curves, runDetails, runs))
 }

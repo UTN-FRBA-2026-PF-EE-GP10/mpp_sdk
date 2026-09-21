@@ -93,7 +93,8 @@ just a stamp that matches no session.
   ("Stop filing"). Measure and the run form repeat it. The id is sent per
   request (`session_id` on `POST /api/save-curve` and `POST /api/runs/start`);
   the server keeps no "current session" and rejects an id that names no
-  session.
+  session. When it does (the session was deleted in another tab), the client
+  clears the active session and says what happened to that save or run.
 - Curves and Runs lists get a "This session / Everything" switch while a
   session is active.
 - Every `curve`/`run` step has **Capture into this step**
