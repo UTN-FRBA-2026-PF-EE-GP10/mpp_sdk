@@ -153,11 +153,106 @@ export function bareFileName(path: string, fallback: string): string {
   return name === '' ? fallback : name
 }
 
-/** A run's notes hold its abort reason, and an `error: ...` reason is raw
- * exception text that can name a device node or a file under a home
- * directory. Only the last segment of each absolute path is kept. */
+/** First path segment names that make an absolute path plausible even when
+ * it is otherwise short (`/dev/spidev0.0` has only two segments) - these
+ * are the directories a Python OSError actually names, never ordinary
+ * prose. */
+const KNOWN_PATH_ROOTS = new Set(['home', 'dev', 'etc', 'tmp', 'run', 'proc', 'users', 'root'])
+
+/** `segments` is a path body split on `/`. It reads as a real path when it
+ * starts under a known root, or is deep enough (three or more segments)
+ * that a fraction ("/1/2"), a ratio ("3 /4/5"), or a short mention
+ * ("/docs/setup") could not produce it by accident. */
+function isPlausiblePathBody(segments: string[]): boolean {
+  const named = segments.filter((s) => s !== '')
+  if (named.length < 2) return false
+  return KNOWN_PATH_ROOTS.has(named[0].toLowerCase()) || named.length >= 3
+}
+
+// One path segment, allowing a single embedded space ("John Smith") so a
+// directory named after a person still resolves to the file at the end,
+// without letting the match run on into unrelated prose that follows a path.
+const SEGMENT = String.raw`[^\s/'"()]+(?: [^\s/'"()]+)?`
+const FINAL_SEGMENT = String.raw`[^\s/'"()]*`
+
+const BARE_UNIX_PATH = new RegExp(String.raw`(?<![\w.:/-])\/(?:${SEGMENT}\/)+${FINAL_SEGMENT}`, 'g')
+// A bare single letter ("C", "in") never reaches LABELED_PATH as a label:
+// a lone drive letter is a Windows path (handled by WINDOWS_PATH below),
+// not an arbitrary field name.
+const LABELED_PATH = new RegExp(
+  String.raw`\b([A-Za-z]{2,}[\w.-]*):(\/(?:${SEGMENT}\/)+${FINAL_SEGMENT})`,
+  'g',
+)
+const WINDOWS_PATH_COMPONENT = String.raw`[^\s\\/'"()]+(?: [^\s\\/'"()]+)?`
+// Drive-letter ("C:\..." / "C:/...") and UNC ("\\host\share\...") paths both
+// reduce to their base file name the same way, so one pattern covers both -
+// only the prefix differs. A lookbehind stands in for \b: the UNC prefix
+// starts with a backslash, which is not a word character, so \b would not
+// mark a boundary between it and the preceding space.
+const WINDOWS_PATH = new RegExp(
+  String.raw`(?<![\w.:\\/-])(?:[A-Za-z]:|\\\\${WINDOWS_PATH_COMPONENT})[\\/](?:${WINDOWS_PATH_COMPONENT}[\\/])*[^\s\\/'"()]*`,
+  'g',
+)
+const FILE_URL = /\bfile:\/\/[^\s'"()]*/g
+const SSH_URL = /\bssh:\/\/[^\s'"()]*/g
+// scp/rsync-style "user@host:/path" - the colon must be followed straight by
+// a slash, or this would also swallow an ordinary "mail me at user@host: ...".
+const REMOTE_SPEC = /\b[\w.-]+@[\w.-]+:\/[^\s'"()]*/g
+// Excludes file:/ssh: because those are handled above and use a different
+// rule (always local); this only fires for a host that looks like it names
+// this machine, not a real domain.
+const SCHEME_URL = /\b(?!file:|ssh:)[a-zA-Z][a-zA-Z0-9+.-]*:\/\/([^/\s'"()]+)((?:\/[^\s'"()]*)?)/g
+
+function lastSegment(path: string): string {
+  const parts = path.split('/')
+  return parts[parts.length - 1]
+}
+
+/** A `scheme://` host is only treated as leaking local-machine information
+ * when it looks like this machine, not like a public site - `.local`,
+ * `localhost`, or a bare IP address. `example.org` stays untouched. */
+function looksLocal(host: string): boolean {
+  const bare = host.replace(/:\d+$/, '')
+  return /\.local$/i.test(bare) || bare.toLowerCase() === 'localhost' || /^\d{1,3}(\.\d{1,3}){3}$/.test(bare)
+}
+
+/** A run's notes hold its abort reason, which is raw Python exception text
+ * and can name a device node, a file under a home directory, a Windows
+ * path, or a remote spec (an scp/rsync-style `user@host:/path`, or a
+ * `file://`/`ssh://` URL). Only the last path segment is kept; the
+ * scheme/host/user in front of a remote spec is dropped entirely, since it
+ * names another machine, not a file.
+ *
+ * A `word:` label (`in:/home/...`) keeps its label - it likely names a
+ * field in the error text, not a machine. An ordinary `https://`/`http://`
+ * URL to a real-looking domain is left alone entirely: its path is not
+ * filesystem-sensitive the way a local path is, and it is only treated as
+ * leaking when the host itself looks like this machine (see `looksLocal`).
+ *
+ * A bare path with no scheme, drive letter, or known root is only scrubbed
+ * when it is deep enough (see `isPlausiblePathBody`) - otherwise a
+ * fraction, a ratio, or a short mention like "/docs/setup" would be
+ * mangled for no reason. */
 function scrubAbsolutePaths(text: string): string {
-  return text.replace(/(?<![\w.:/-])\/(?:[^\s/'"()]+\/)+([^\s/'"()]*)/g, '$1')
+  let result = text
+
+  result = result.replace(FILE_URL, (match) => lastSegment(match.slice('file://'.length)))
+  result = result.replace(SSH_URL, (match) => lastSegment(match.slice('ssh://'.length)))
+  result = result.replace(REMOTE_SPEC, (match) => lastSegment(match))
+  result = result.replace(SCHEME_URL, (match, host: string, pathPart: string) =>
+    pathPart === '' || !looksLocal(host) ? match : lastSegment(pathPart),
+  )
+  result = result.replace(LABELED_PATH, (match, label: string, body: string) => {
+    const segments = body.slice(1).split('/')
+    return isPlausiblePathBody(segments) ? `${label}:${segments[segments.length - 1]}` : match
+  })
+  result = result.replace(BARE_UNIX_PATH, (match) => {
+    const segments = match.slice(1).split('/')
+    return isPlausiblePathBody(segments) ? segments[segments.length - 1] : match
+  })
+  result = result.replace(WINDOWS_PATH, (match) => match.split(/[\\/]/).pop() ?? match)
+
+  return result
 }
 
 export function withoutCurveDirectories(record: CurveRecord): CurveRecord {
