@@ -247,8 +247,52 @@ describe('captureIntoStep - run step', () => {
     expect(link).toHaveBeenCalledWith('run', 'run-1')
   })
 
+  it('does not link a different run that finishes first: the live slot is shared', async () => {
+    // This capture starts "P&O run". Before it finishes, another tab's
+    // "InCond run" reports done on the one shared live-run slot and would,
+    // if trusted blindly, get linked to this step instead.
+    vi.mocked(startRun).mockResolvedValue({
+      status: 'running',
+      algorithm: 'P&O',
+      label: 'P&O run',
+      duration_s: 0,
+    })
+    vi.mocked(fetchLiveRun)
+      .mockResolvedValueOnce(
+        liveRun({ status: 'done', algorithm: 'InCond', label: 'InCond run', saved_run_id: 'run-other' }),
+      )
+      .mockResolvedValue(liveRun({ status: 'done', algorithm: 'P&O', label: 'P&O run', saved_run_id: 'run-1' }))
+    const link = vi.fn().mockResolvedValue(undefined)
+
+    await captureIntoStep({ sessionId: 's', step: step('run'), link, timings: TIMINGS })
+
+    expect(link).toHaveBeenCalledTimes(1)
+    expect(link).toHaveBeenCalledWith('run', 'run-1')
+  })
+
+  it('a network error while waiting for a run to finish says the run may still be running', async () => {
+    vi.mocked(startRun).mockResolvedValue({
+      status: 'running',
+      algorithm: 'P&O',
+      label: 'P&O run',
+      duration_s: 0,
+    })
+    vi.mocked(fetchLiveRun).mockRejectedValue(new Error('network error'))
+    const link = vi.fn()
+
+    await expect(
+      captureIntoStep({ sessionId: 's', step: step('run'), link, timings: TIMINGS }),
+    ).rejects.toThrow(/may still be running.*saved, stamped, when it ends/)
+    expect(link).not.toHaveBeenCalled()
+  })
+
   it('takes the server first algorithm when none is chosen', async () => {
-    vi.mocked(startRun).mockResolvedValue({ status: 'running', algorithm: '', label: '', duration_s: 0 })
+    vi.mocked(startRun).mockResolvedValue({
+      status: 'running',
+      algorithm: 'P&O',
+      label: 'P&O run',
+      duration_s: 0,
+    })
     vi.mocked(fetchLiveRun).mockResolvedValue(liveRun())
 
     await captureIntoStep({
@@ -272,7 +316,12 @@ describe('captureIntoStep - run step', () => {
   })
 
   it('an aborted run is not linked, and the message says why', async () => {
-    vi.mocked(startRun).mockResolvedValue({ status: 'running', algorithm: '', label: '', duration_s: 0 })
+    vi.mocked(startRun).mockResolvedValue({
+      status: 'running',
+      algorithm: 'P&O',
+      label: 'P&O run',
+      duration_s: 0,
+    })
     vi.mocked(fetchLiveRun).mockResolvedValue(
       liveRun({ aborted: true, abort_reason: 'overvoltage', saved_run_id: 'run-aborted' }),
     )
@@ -285,7 +334,12 @@ describe('captureIntoStep - run step', () => {
   })
 
   it('a finished run that could not be saved is not linked', async () => {
-    vi.mocked(startRun).mockResolvedValue({ status: 'running', algorithm: '', label: '', duration_s: 0 })
+    vi.mocked(startRun).mockResolvedValue({
+      status: 'running',
+      algorithm: 'P&O',
+      label: 'P&O run',
+      duration_s: 0,
+    })
     vi.mocked(fetchLiveRun).mockResolvedValue(
       liveRun({ saved_run_id: null, abort_reason: 'completed; failed to save: disk full' }),
     )
@@ -333,6 +387,40 @@ describe('captureIntoStep - a run already on the board', () => {
 
     expect(startSweep).toHaveBeenCalledTimes(1)
     expect(link).toHaveBeenCalledWith('curve', 'new')
+  })
+
+  it('a failed pre-sweep run check fails closed: it does not assume idle', async () => {
+    // Whether a run is live cannot be told from an error - "might be
+    // live" is the safe reading, the same as "is live".
+    vi.mocked(fetchLiveRun).mockRejectedValue(new Error('network error'))
+    vi.mocked(fetchLiveSweep).mockResolvedValue(sweep())
+    const link = vi.fn()
+
+    await expect(
+      captureIntoStep({ sessionId: 's', step: step('curve'), link, timings: TIMINGS }),
+    ).rejects.toThrow(/network error/)
+    expect(startSweep).not.toHaveBeenCalled()
+    expect(saveCurve).not.toHaveBeenCalled()
+    expect(link).not.toHaveBeenCalled()
+  })
+
+  it('a sweep the server refuses because a hardware run just started is a normal capture failure', async () => {
+    // Server-side race guard (POST /api/start-sweep, 409 while a hardware
+    // run is running) closing the same gap this file's own pre-check is
+    // only a courtesy for - a run accepted after the pre-check but before
+    // startSweep() reaches the server.
+    vi.mocked(fetchLiveRun).mockResolvedValue(liveRun({ status: 'idle', saved_run_id: null }))
+    vi.mocked(fetchLiveSweep).mockResolvedValue(sweep())
+    vi.mocked(startSweep).mockRejectedValue(
+      new Error('POST /api/start-sweep: a hardware run is in progress - wait for it to finish'),
+    )
+    const link = vi.fn()
+
+    await expect(
+      captureIntoStep({ sessionId: 's', step: step('curve'), link, timings: TIMINGS }),
+    ).rejects.toThrow(/Capture failed.*hardware run is in progress/)
+    expect(saveCurve).not.toHaveBeenCalled()
+    expect(link).not.toHaveBeenCalled()
   })
 })
 
@@ -396,5 +484,33 @@ describe('captureIntoStep - the session no longer exists', () => {
 
     expect(error).not.toBeInstanceOf(SessionGoneError)
     expect((error as Error).message).toMatch(/Capture failed.*curve not found/)
+  })
+})
+
+describe('captureIntoStep - the session id is fixed for the whole capture', () => {
+  it('saves and links against the session id given at the start, not one that changes mid-flight', async () => {
+    // Simulates the operator switching the active session in another tab
+    // while this capture's sweep is still running - the switch must not
+    // reach the save or the link, which must still use "session-a".
+    let currentlyActive = 'session-a'
+    vi.mocked(fetchLiveSweep)
+      .mockResolvedValueOnce(sweep())
+      .mockImplementationOnce(async () => {
+        currentlyActive = 'session-b'
+        return sweep({ active: true })
+      })
+      .mockResolvedValue(FINISHED_SWEEP)
+    vi.mocked(saveCurve).mockResolvedValue({ path: 'p', id: 'new' })
+    const link = vi.fn().mockResolvedValue(undefined)
+
+    await captureIntoStep({
+      sessionId: 'session-a',
+      step: step('curve'),
+      link,
+      timings: TIMINGS,
+    })
+
+    expect(currentlyActive).toBe('session-b') // the switch really happened mid-flight
+    expect(saveCurve).toHaveBeenCalledWith(expect.objectContaining({ session_id: 'session-a' }))
   })
 })

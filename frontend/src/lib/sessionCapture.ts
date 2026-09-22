@@ -22,6 +22,7 @@ import {
 import { isSessionNotFound } from '@/lib/apiError'
 import { abortReasonMessage } from '@/lib/liveRun'
 import type { SessionStep } from '@/lib/sessions'
+import type { LiveRunState } from '@/lib/runs'
 
 /** Thrown for every failure of the flow, with a message meant to be shown
  * to the operator as-is. */
@@ -114,7 +115,7 @@ async function captureRun(
   const chosen = algorithm ?? config.algorithms[0]
   if (!chosen) throw new CaptureError('The server offers no algorithm to run.')
 
-  await startRun({
+  const started = await startRun({
     algorithm: chosen,
     duration_s: config.defaultDurationS,
     initial_duty: config.defaultInitialDuty,
@@ -129,8 +130,26 @@ async function captureRun(
   const deadline = Date.now() + config.defaultDurationS * 1000 + timings.runGraceMs
   for (;;) {
     await sleep(timings.pollMs)
-    const live = await fetchLiveRun(2)
-    if (live.status === 'done') {
+    let live: LiveRunState
+    try {
+      live = await fetchLiveRun(2)
+    } catch (e) {
+      // The run itself was already accepted and is not stopped by a poll
+      // that fails to reach the server - only the wait for it here fell
+      // over. Say so, or the operator reads a generic error as "nothing
+      // happened" and starts a second run on top of this one.
+      throw new CaptureError(
+        `Capture failed to confirm the run finished: ${messageOf(e)}. The run may still be ` +
+          'running and will be saved, stamped, when it ends.',
+      )
+    }
+    // The live-run slot is shared with every tab and every other pane -
+    // another run can finish in between polls and leave its own
+    // saved_run_id sitting here. Only the algorithm/label the server just
+    // echoed back for this run identify it; trust saved_run_id only once
+    // they match what's live, otherwise keep waiting for our own.
+    const isThisRun = live.algorithm === started.algorithm && live.label === started.label
+    if (live.status === 'done' && isThisRun) {
       if (live.aborted) {
         // The server may have saved what was recorded before the abort. It
         // stays in the library, stamped, but is not linked as if it were
