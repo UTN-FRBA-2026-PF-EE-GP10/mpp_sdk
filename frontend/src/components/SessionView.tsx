@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronRight } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { CurveChart } from '@/components/CurveChart'
 import { CurveDetailDialog } from '@/components/CurveDetailDialog'
 import { RunChart } from '@/components/RunChart'
@@ -108,6 +108,41 @@ export interface SessionViewProps {
    * container refresh its own curve/run lists. Never fires in read-only
    * mode (RunPlayerDialog's own delete button is disabled there). */
   onLibraryChanged?: () => void
+  /** Runs one "Capture into this step": sweep or run, save stamped with
+   * this session, link to the step (see lib/sessionCapture.ts). Rejects
+   * with a message to show as-is. Absent - and so the button - in read-only
+   * mode and whenever the container cannot capture. */
+  onCaptureIntoStep?: (step: SessionStep, algorithm?: string) => Promise<void>
+  /** Why capturing is off right now, per kind (no live link), or null. */
+  captureUnavailable?: { curve: string | null; run: string | null }
+  /** Algorithms a run step can pick from; empty leaves the server's first. */
+  runAlgorithms?: string[]
+  /** Seconds a captured run lasts, for the confirmation; unknown until the
+   * server's run config has loaded. */
+  runDurationS?: number
+  /** The rest of the server's run defaults, also for the confirmation - a
+   * step capture always uses these, never the operator's own choices from
+   * RunPane's form. */
+  runInitialDuty?: number
+  runVMax?: number
+  runIMax?: number
+  runVOutMax?: number
+  /** Run ids whose full detail could not be loaded (not a 404): they will
+   * be named as missing in an exported file. */
+  failedRunIds?: string[]
+  /** Asks for the failed run details again. */
+  onRetryRunDetails?: () => void
+}
+
+/** What one step's body needs to offer "Capture into this step". */
+interface StepCapture {
+  /** Some step is capturing - only one sweep or run can be in flight. */
+  busy: boolean
+  capturingThis: boolean
+  error: string | null
+  unavailableReason: string | null
+  algorithms: string[]
+  onCapture: (algorithm?: string) => void
 }
 
 function SaveIndicator({ state, error }: { state: string; error: string | null }) {
@@ -129,6 +164,16 @@ export function SessionView({
   onPatch,
   onDeleteSession,
   onLibraryChanged,
+  onCaptureIntoStep,
+  captureUnavailable,
+  runAlgorithms = [],
+  runDurationS,
+  runInitialDuty,
+  runVMax,
+  runIMax,
+  runVOutMax,
+  failedRunIds = [],
+  onRetryRunDetails,
 }: SessionViewProps) {
   const { schedule, sendNow, state, error } = useDebouncedPatch(readOnly ? undefined : onPatch)
   const [openCurve, setOpenCurve] = useState<CurveRecord | null>(null)
@@ -136,6 +181,12 @@ export function SessionView({
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [expandAllSignal, setExpandAllSignal] = useState<ExpandAllSignal>(INITIAL_EXPAND_SIGNAL)
+  const [capturingStepId, setCapturingStepId] = useState<string | null>(null)
+  // The guard against a second capture, in a ref because state is only
+  // seen after the next render: two clicks in one tick would both pass a
+  // state check. The state above is for what is drawn.
+  const capturingRef = useRef<string | null>(null)
+  const [captureErrors, setCaptureErrors] = useState<Record<string, string>>({})
 
   // A collapsed row has no chart in the DOM at all, so Ctrl+P would print
   // a session with no charts. Expanding on beforeprint keeps the printed
@@ -166,6 +217,81 @@ export function SessionView({
     [runs],
   )
 
+  // Curves and runs filed into this session (stamped with its id) that no
+  // step links - captured from Measure while it was active, or unlinked
+  // since. Listed so they are never out of sight, and so they can be linked.
+  const linkedCurveIds = useMemo(
+    () => new Set(session.steps.flatMap((s) => s.curve_ids)),
+    [session.steps],
+  )
+  const linkedRunIds = useMemo(
+    () => new Set(session.steps.flatMap((s) => s.run_ids)),
+    [session.steps],
+  )
+  const unlinkedCurves = useMemo(
+    () => curves.filter((c) => c.session_id === session.id && !linkedCurveIds.has(c.id)),
+    [curves, session.id, linkedCurveIds],
+  )
+  const unlinkedRuns = useMemo(
+    () => runs.filter((r) => r.session_id === session.id && !linkedRunIds.has(r.id)),
+    [runs, session.id, linkedRunIds],
+  )
+
+  function captureFor(step: SessionStep): StepCapture | null {
+    if (readOnly || !onCaptureIntoStep) return null
+    const kind = step.kind === 'run' ? 'run' : 'curve'
+    return {
+      busy: capturingStepId !== null,
+      capturingThis: capturingStepId === step.id,
+      error: captureErrors[step.id] ?? null,
+      unavailableReason: captureUnavailable?.[kind] ?? null,
+      algorithms: runAlgorithms,
+      onCapture: (algorithm) => void handleCapture(step, algorithm),
+    }
+  }
+
+  async function handleCapture(step: SessionStep, algorithm?: string) {
+    if (readOnly || !onCaptureIntoStep || capturingRef.current !== null) return // defense in depth
+    // A run drives the real converter - same bar as RunPane's Start run,
+    // and it names what will run, as that one does.
+    if (step.kind === 'run') {
+      const chosen = algorithm ?? runAlgorithms[0]
+      const what = chosen ? ` "${chosen}"` : ''
+      const duration = runDurationS === undefined ? '' : ` (${runDurationS}s)`
+      const duty = runInitialDuty === undefined ? '' : ` starting duty ${runInitialDuty}`
+      const limits =
+        runVMax === undefined || runIMax === undefined || runVOutMax === undefined
+          ? ''
+          : `, limits v_max ${runVMax} V / i_max ${runIMax} A / v_out_max ${runVOutMax} V`
+      if (
+        !window.confirm(
+          `Start a live${what} run${duration} for "${step.title}"? This drives the real ` +
+            'converter - put a load on the converter output before running it. With no load ' +
+            'the SEPIC output climbs far above the panel voltage.\n\n' +
+            `This uses the server's defaults: no reference curve,${duty}${limits}.`,
+        )
+      ) {
+        return
+      }
+    }
+    capturingRef.current = step.id
+    setCapturingStepId(step.id)
+    setCaptureErrors((prev) => {
+      const next = { ...prev }
+      delete next[step.id]
+      return next
+    })
+    try {
+      await onCaptureIntoStep(step, algorithm)
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e)
+      setCaptureErrors((prev) => ({ ...prev, [step.id]: message }))
+    } finally {
+      capturingRef.current = null
+      setCapturingStepId(null)
+    }
+  }
+
   function patchStep(id: string, changes: Omit<SessionStepPatch, 'id'>) {
     sendNow({ steps: [{ id, ...changes }] })
   }
@@ -185,7 +311,7 @@ export function SessionView({
 
   function handleExportSessionFile() {
     if (runDetailsPending) return // defense in depth - the button is disabled anyway
-    downloadSessionExportFile(session, curves, runDetails)
+    downloadSessionExportFile(session, curves, runDetails, runs)
   }
 
   return (
@@ -267,6 +393,18 @@ export function SessionView({
             )}
           </div>
           {deleteError && <p className="text-sm text-destructive">Failed to delete: {deleteError}</p>}
+          {failedRunIds.length > 0 && (
+            <p className="flex flex-wrap items-center gap-2 text-sm text-destructive print:hidden">
+              Could not load {failedRunIds.length} run{failedRunIds.length === 1 ? '' : 's'} for this
+              session. An exported session file will name{' '}
+              {failedRunIds.length === 1 ? 'it' : 'them'} as missing.
+              {onRetryRunDetails && (
+                <Button size="xs" variant="outline" onClick={onRetryRunDetails}>
+                  Retry
+                </Button>
+              )}
+            </p>
+          )}
         </CardContent>
       </Card>
 
@@ -287,6 +425,7 @@ export function SessionView({
                 mostRecentCurve={mostRecentCurve}
                 mostRecentRun={mostRecentRun}
                 expandAllSignal={expandAllSignal}
+                capture={captureFor(step)}
                 onStatusChange={(status) => patchStep(step.id, { status })}
                 onValueChange={(value) => schedule({ steps: [{ id: step.id, value }] })}
                 onNotesChange={(notes) => schedule({ steps: [{ id: step.id, notes }] })}
@@ -307,6 +446,46 @@ export function SessionView({
           </CardContent>
         </Card>
       ))}
+
+      {(unlinkedCurves.length > 0 || unlinkedRuns.length > 0) && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Captured in this session, not linked to a step</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-2">
+            {unlinkedCurves.map((c) => (
+              <UnlinkedItemRow
+                key={c.id}
+                label={c.label || c.id}
+                capturedAt={c.captured_at}
+                what="curve"
+                steps={session.steps.filter((s) => s.kind === 'curve')}
+                readOnly={readOnly}
+                onOpen={() => setOpenCurve(c)}
+                onLink={(stepId) => {
+                  const step = session.steps.find((s) => s.id === stepId)
+                  if (step) patchStep(stepId, { curve_ids: [...step.curve_ids, c.id] })
+                }}
+              />
+            ))}
+            {unlinkedRuns.map((r) => (
+              <UnlinkedItemRow
+                key={r.id}
+                label={r.label || r.id}
+                capturedAt={r.captured_at}
+                what="run"
+                steps={session.steps.filter((s) => s.kind === 'run')}
+                readOnly={readOnly}
+                onOpen={() => setOpenRun(r)}
+                onLink={(stepId) => {
+                  const step = session.steps.find((s) => s.id === stepId)
+                  if (step) patchStep(stepId, { run_ids: [...step.run_ids, r.id] })
+                }}
+              />
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       {session.open_questions.length > 0 && (
         <Card>
@@ -467,6 +646,7 @@ function StepCard({
   mostRecentCurve,
   mostRecentRun,
   expandAllSignal,
+  capture,
   onStatusChange,
   onValueChange,
   onNotesChange,
@@ -485,6 +665,7 @@ function StepCard({
   mostRecentCurve: CurveRecord | null
   mostRecentRun: RunSummary | null
   expandAllSignal: ExpandAllSignal
+  capture: StepCapture | null
   onStatusChange: (status: StepStatus) => void
   onValueChange: (value: number | string) => void
   onNotesChange: (notes: string) => void
@@ -523,6 +704,7 @@ function StepCard({
           readOnly={readOnly}
           mostRecentCurve={mostRecentCurve}
           expandAllSignal={expandAllSignal}
+          capture={capture}
           onLink={onLinkCurve}
           onUnlink={onUnlinkCurve}
           onOpen={onOpenCurve}
@@ -538,6 +720,7 @@ function StepCard({
           readOnly={readOnly}
           mostRecentRun={mostRecentRun}
           expandAllSignal={expandAllSignal}
+          capture={capture}
           onLink={onLinkRun}
           onUnlink={onUnlinkRun}
           onOpen={onOpenRun}
@@ -657,6 +840,124 @@ function OpenQuestionRow({
   )
 }
 
+/**
+ * "Capture into this step": one button that measures, saves the result
+ * stamped with this session, and links it to the step. The existing picker
+ * below it stays for linking something captured earlier.
+ */
+function CaptureControl({ capture, what }: { capture: StepCapture; what: 'curve' | 'run' }) {
+  const [algorithm, setAlgorithm] = useState('')
+  const disabled = capture.busy || capture.unavailableReason !== null
+  return (
+    <div className="flex flex-col gap-1 print:hidden">
+      <div className="flex flex-wrap items-center gap-2">
+        {what === 'run' && capture.algorithms.length > 0 && (
+          <select
+            value={algorithm}
+            onChange={(e) => setAlgorithm(e.target.value)}
+            aria-label="Algorithm to run"
+            disabled={disabled}
+            className="rounded-md border bg-transparent px-2 py-1 text-xs text-foreground"
+          >
+            <option value="">{`Default (${capture.algorithms[0]})`}</option>
+            {capture.algorithms.map((a) => (
+              <option key={a} value={a}>
+                {a}
+              </option>
+            ))}
+          </select>
+        )}
+        <Button
+          size="xs"
+          onClick={() => capture.onCapture(algorithm || undefined)}
+          disabled={disabled}
+          focusableWhenDisabled
+          title={capture.unavailableReason ?? undefined}
+        >
+          {capture.capturingThis
+            ? what === 'run'
+              ? 'Running...'
+              : 'Sweeping...'
+            : 'Capture into this step'}
+        </Button>
+        {capture.unavailableReason && (
+          <span className="text-xs text-muted-foreground">{capture.unavailableReason}</span>
+        )}
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {what === 'run'
+          ? 'A step-captured run has no reference curve - use RunPane directly to pick one.'
+          : 'A step-captured curve is saved as kind "other" with no panel list - use Measure ' +
+            'first if that matters.'}
+      </p>
+      {capture.error && <p className="text-xs text-destructive">{capture.error}</p>}
+    </div>
+  )
+}
+
+/** One curve or run filed into this session but linked to no step, with a
+ * picker to link it to one of the steps that take that kind. */
+function UnlinkedItemRow({
+  label,
+  capturedAt,
+  what,
+  steps,
+  readOnly,
+  onOpen,
+  onLink,
+}: {
+  label: string
+  capturedAt: string
+  what: 'curve' | 'run'
+  steps: SessionStep[]
+  readOnly: boolean
+  onOpen: () => void
+  onLink: (stepId: string) => void
+}) {
+  const [pick, setPick] = useState('')
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-md border px-2 py-2 text-xs">
+      <span className="font-medium text-foreground">{label}</span>
+      <span className="text-muted-foreground">
+        {what} - {formatCapturedAt(capturedAt)}
+      </span>
+      <div className="ml-auto flex flex-wrap items-center gap-2 print:hidden">
+        <Button size="xs" variant="outline" onClick={onOpen}>
+          Open
+        </Button>
+        {!readOnly && steps.length > 0 && (
+          <>
+            <select
+              value={pick}
+              onChange={(e) => setPick(e.target.value)}
+              aria-label={`Step to link "${label}" to`}
+              className="rounded-md border bg-transparent px-2 py-1 text-xs text-foreground"
+            >
+              <option value="">Link to step...</option>
+              {steps.map((st) => (
+                <option key={st.id} value={st.id}>
+                  {st.title}
+                </option>
+              ))}
+            </select>
+            <Button
+              size="xs"
+              variant="outline"
+              disabled={pick === ''}
+              onClick={() => {
+                onLink(pick)
+                setPick('')
+              }}
+            >
+              Link
+            </Button>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function repeatsLabel(linked: number, repeats: number): string {
   return `${linked} / ${repeats} repeat${repeats === 1 ? '' : 's'}`
 }
@@ -754,6 +1055,7 @@ function CurveStepBody({
   readOnly,
   mostRecentCurve,
   expandAllSignal,
+  capture,
   onLink,
   onUnlink,
   onOpen,
@@ -763,6 +1065,7 @@ function CurveStepBody({
   readOnly: boolean
   mostRecentCurve: CurveRecord | null
   expandAllSignal: ExpandAllSignal
+  capture: StepCapture | null
   onLink: (id: string) => void
   onUnlink: (id: string) => void
   onOpen: (record: CurveRecord) => void
@@ -821,6 +1124,8 @@ function CurveStepBody({
           <StatRow label="P_mpp" unit="W" stats={stats.pMpp} />
         </div>
       )}
+
+      {!readOnly && capture && <CaptureControl capture={capture} what="curve" />}
 
       {!readOnly && (
         <div className="flex flex-wrap items-center gap-2 print:hidden">
@@ -967,6 +1272,7 @@ function RunStepBody({
   readOnly,
   mostRecentRun,
   expandAllSignal,
+  capture,
   onLink,
   onUnlink,
   onOpen,
@@ -978,6 +1284,7 @@ function RunStepBody({
   readOnly: boolean
   mostRecentRun: RunSummary | null
   expandAllSignal: ExpandAllSignal
+  capture: StepCapture | null
   onLink: (id: string) => void
   onUnlink: (id: string) => void
   onOpen: (run: RunSummary) => void
@@ -1048,6 +1355,8 @@ function RunStepBody({
           )}
         </div>
       )}
+
+      {!readOnly && capture && <CaptureControl capture={capture} what="run" />}
 
       {!readOnly && (
         <div className="flex flex-wrap items-center gap-2 print:hidden">

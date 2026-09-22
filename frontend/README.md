@@ -78,6 +78,37 @@ others at a glance:
   command is ever sent - the one write demo mode makes is this clearly
   labelled, non-physical one.
 
+## Active session and capturing into a session
+
+Curves and runs stay one flat, shared library - a run points at a curve by
+`curve_ref`, an old curve can be a later session's reference - but each is
+*stamped* with the session it was measured in (`session_id`, see
+`mpp_sdk/curves/record.py`). A stamp is not ownership: deleting a session
+leaves its curves and runs alone, and a stamp naming a deleted session is
+just a stamp that matches no session.
+
+- The **active session** (`src/lib/activeSession.ts`) is a client concept,
+  kept in `localStorage`. Opening a session makes it active; the banner under
+  the header (`ActiveSessionBar`) says so on every section and dismisses it
+  ("Stop filing"). Measure and the run form repeat it. The id is sent per
+  request (`session_id` on `POST /api/save-curve` and `POST /api/runs/start`);
+  the server keeps no "current session" and rejects an id that names no
+  session. When it does (the session was deleted in another tab), the client
+  clears the active session and says what happened to that save or run.
+- Curves and Runs lists get a "This session / Everything" switch while a
+  session is active.
+- Every `curve`/`run` step has **Capture into this step**
+  (`src/lib/sessionCapture.ts`): sweep or run, wait, save stamped, then link.
+  Nothing is linked until the record is saved, so a failed capture leaves the
+  step as it was. It uses a `measurement` of `other` and no panel list (a step
+  does not say which kind it is); use Measure when that matters, then link the
+  result from the step's picker. A run uses the server's default bounds and
+  duration and no reference curve.
+- A session file exports what its steps link *and* everything stamped with
+  the session, so a capture filed from Measure and never linked is not lost.
+- None of this is reachable in demo mode or while viewing an imported session
+  file (`useReadOnly()` / `useCaptureSession()`).
+
 ## Build
 
 ```bash

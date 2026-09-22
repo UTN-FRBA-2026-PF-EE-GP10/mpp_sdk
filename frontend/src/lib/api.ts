@@ -4,6 +4,7 @@
 // /api/curves, and the run library, /api/runs) stores volts and amps -
 // see CurvePoint's convention in types.ts and RunSample's in runs.ts.
 
+import { ApiError } from '@/lib/apiError'
 import type {
   SessionPatch,
   SessionRecord,
@@ -70,7 +71,7 @@ async function parseJsonOrThrow(r: Response, what: string): Promise<unknown> {
       payload && typeof payload === 'object' && 'detail' in payload
         ? formatDetail((payload as { detail: unknown }).detail)
         : `HTTP ${r.status}`
-    throw new Error(`${what}: ${detail}`)
+    throw new ApiError(`${what}: ${detail}`, r.status, detail)
   }
   return payload
 }
@@ -134,15 +135,19 @@ export interface SaveCurveInput {
   measurement: string
   panels: PanelSetup[]
   notes: string
+  /** The workbench's "active session" (lib/activeSession.ts), if any -
+   * the server validates it and stamps it onto the saved CurveRecord.
+   * Omitted (or null) saves an unstamped curve, same as today. */
+  session_id?: string | null
 }
 
-export async function saveCurve(input: SaveCurveInput): Promise<{ path: string }> {
+export async function saveCurve(input: SaveCurveInput): Promise<{ path: string; id: string }> {
   const r = await fetch('/api/save-curve', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
   })
-  return (await parseJsonOrThrow(r, 'POST /api/save-curve')) as { path: string }
+  return (await parseJsonOrThrow(r, 'POST /api/save-curve')) as { path: string; id: string }
 }
 
 export async function startSweep(): Promise<void> {
@@ -276,6 +281,9 @@ export interface StartRunInput {
    * to the caller, so a forgotten flag can never silently drive the
    * converter when a simulated run was intended, or vice versa. */
   simulated?: boolean
+  /** The workbench's "active session" (lib/activeSession.ts), if any -
+   * validated by the server and stamped onto the saved RunRecord. */
+  session_id?: string | null
 }
 
 export interface StartRunResult {

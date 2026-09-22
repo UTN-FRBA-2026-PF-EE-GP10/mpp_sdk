@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { ActiveSessionNotice } from '@/components/ActiveSessionNotice'
 import { ProvenanceBadge } from '@/components/ProvenanceBadge'
 import { Field } from '@/components/RunReadouts'
 import { RunChart } from '@/components/RunChart'
@@ -7,6 +8,8 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useLiveRun } from '@/hooks/useLiveRun'
+import { sessionGoneMessage, useActiveSession, useCaptureSession } from '@/lib/activeSession'
+import { isSessionNotFound } from '@/lib/apiError'
 import { fetchRunConfig, fetchRuns, type RunConfig } from '@/lib/api'
 import type { StartRunInput } from '@/lib/api'
 import { formatCapturedAt } from '@/lib/format'
@@ -42,8 +45,16 @@ export function RunPane({
   const sandbox = useSandbox()
   const [runConfig, setRunConfig] = useState<RunConfig | null>(null)
   const [algorithmsError, setAlgorithmsError] = useState<string | null>(null)
-  const { phase, live, starting, startError, stopping, stopError, start, stop, reset } =
-    useLiveRun()
+  const { clear: clearActiveSession } = useActiveSession()
+  const { phase, live, starting, startError, stopping, stopError, start, stop, reset } = useLiveRun({
+    // The session this run was to be filed into is gone (deleted in another
+    // tab): turn filing off, or every later start is refused the same way.
+    onStartError: (e) => {
+      if (!isSessionNotFound(e)) return undefined
+      clearActiveSession()
+      return sessionGoneMessage('run')
+    },
+  })
   const [openRun, setOpenRun] = useState<RunSummary | null>(null)
   const [openRunError, setOpenRunError] = useState<string | null>(null)
   const lastSavedIdRef = useRef<string | null>(null)
@@ -214,6 +225,7 @@ function RunSetupForm({
   const [iMax, setIMax] = useState<number | null>(null)
   const [vOutMax, setVOutMax] = useState<number | null>(null)
   const { mode: setupMode } = useSetupMode()
+  const captureSession = useCaptureSession()
   const loadHint =
     setupMode === 'single'
       ? '10 Ohm, 10 W on the output (MPP near D = 0.37)'
@@ -280,6 +292,7 @@ function RunSetupForm({
       // StartRunInput's own doc comment on reference_label.
       reference_label: simulated && chosen ? chosen.id : null,
       simulated,
+      session_id: captureSession?.id ?? null,
     })
   }
 
@@ -401,6 +414,8 @@ function RunSetupForm({
           against on the chart below.
         </p>
       )}
+
+      <ActiveSessionNotice what="run" />
 
       <Button
         onClick={handleStart}

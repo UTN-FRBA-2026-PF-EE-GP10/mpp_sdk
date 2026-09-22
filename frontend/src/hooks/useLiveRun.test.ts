@@ -144,6 +144,24 @@ describe('useLiveRun', () => {
     expect(result.current.startError).toBe('no board attached')
   })
 
+  it('shows the text onStartError returns instead of the error message, and keeps the message when it returns nothing', async () => {
+    vi.mocked(startRun).mockRejectedValue(new Error('session not found'))
+    const onStartError = vi.fn().mockReturnValueOnce('filing was turned off')
+    const { result } = renderHook(() => useLiveRun({ onStartError }))
+
+    await act(async () => {
+      await result.current.start({ algorithm: 'P&O' })
+    })
+    expect(onStartError).toHaveBeenCalledTimes(1)
+    expect(result.current.startError).toBe('filing was turned off')
+
+    onStartError.mockReturnValueOnce(undefined)
+    await act(async () => {
+      await result.current.start({ algorithm: 'P&O' })
+    })
+    expect(result.current.startError).toBe('session not found')
+  })
+
   it('adopts each poll result while running', async () => {
     vi.mocked(startRun).mockResolvedValue({
       status: 'running',

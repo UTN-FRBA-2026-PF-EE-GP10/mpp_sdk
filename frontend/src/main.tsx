@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
+import { ActiveSessionProvider } from '@/components/ActiveSessionProvider'
 import { CaptureModeProvider } from '@/components/CaptureModeProvider'
 import { ImportedSessionProvider } from '@/components/ImportedSessionProvider'
 import { SetupModeProvider } from '@/components/SetupModeProvider'
@@ -15,7 +16,9 @@ createRoot(document.getElementById('root')!).render(
         <SetupModeProvider>
           <CaptureModeProvider>
             <ImportedSessionProvider>
-              <App />
+              <ActiveSessionProvider>
+                <App />
+              </ActiveSessionProvider>
             </ImportedSessionProvider>
           </CaptureModeProvider>
         </SetupModeProvider>

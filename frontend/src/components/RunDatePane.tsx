@@ -2,6 +2,7 @@ import { Download, Trash2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { ProvenanceBadge } from '@/components/ProvenanceBadge'
 import { RunPlayerDialog } from '@/components/RunPlayerDialog'
+import { SessionScopeFilter } from '@/components/SessionScopeFilter'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -13,6 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { filterToSession, useCaptureSession, type SessionScope } from '@/lib/activeSession'
 import { deleteRunsBatch, fetchRun } from '@/lib/api'
 import { formatCapturedAt, formatSeconds } from '@/lib/format'
 import type { RunDetail, RunSummary } from '@/lib/runs'
@@ -40,7 +42,7 @@ import type { CurveRecord } from '@/types'
  */
 export function RunDatePane({
   date,
-  runs,
+  runs: allRuns,
   curves,
   onRunsChanged,
 }: {
@@ -49,6 +51,15 @@ export function RunDatePane({
   curves: CurveRecord[]
   onRunsChanged: () => void
 }) {
+  const captureSession = useCaptureSession()
+  const [scope, setScope] = useState<SessionScope>('all')
+  // Everything is shown whenever no session is active, whatever `scope`
+  // was last left at - the switch itself is hidden then.
+  const runs = useMemo(
+    () => filterToSession(allRuns, scope, captureSession?.id ?? null),
+    [allRuns, scope, captureSession?.id],
+  )
+  const filtered = captureSession !== null && scope === 'session'
   const [selected, setSelected] = useState<RunSummary | null>(null)
   const readOnly = useReadOnly()
   const importedSession = useImportedSession()
@@ -163,6 +174,9 @@ export function RunDatePane({
           <div>
             <CardTitle>{date}</CardTitle>
             <CardDescription>Closed-loop MPPT runs captured this day.</CardDescription>
+            <div className="mt-2">
+              <SessionScopeFilter scope={scope} onScopeChange={setScope} />
+            </div>
           </div>
 
           {runs.length > 0 &&
@@ -240,7 +254,11 @@ export function RunDatePane({
         )}
 
         {runs.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No runs recorded for this date yet.</p>
+          <p className="text-sm text-muted-foreground">
+            {filtered
+              ? 'No runs from this date were captured in this session. Switch to Everything to see the rest.'
+              : 'No runs recorded for this date yet.'}
+          </p>
         ) : (
           <div className="overflow-x-auto">
             <Table>

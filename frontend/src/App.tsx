@@ -1,5 +1,6 @@
 import { Menu } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { ActiveSessionBar } from '@/components/ActiveSessionBar'
 import { ConnectionIndicator } from '@/components/ConnectionIndicator'
 import { CurveCategoryPane } from '@/components/CurveCategoryPane'
 import { ImportedSessionBar } from '@/components/ImportedSessionBar'
@@ -16,6 +17,7 @@ import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/ca
 import { useConnectionStatus } from '@/hooks/useConnectionStatus'
 import { useSessionFileImport } from '@/hooks/useSessionFileImport'
 import { deleteCurve, fetchCurves, fetchMeasurementKinds, fetchRuns, fetchSessions } from '@/lib/api'
+import { useActiveSession } from '@/lib/activeSession'
 import { useCaptureMode } from '@/lib/captureMode'
 import { DEMO_CURVES, DEMO_RUNS, DEMO_SESSIONS } from '@/lib/demoFixtures'
 import { groupRunsByDate, type RunSummary } from '@/lib/runs'
@@ -100,6 +102,10 @@ export default function App() {
   const [fetchedRecords, setFetchedRecords] = useState<CurveRecord[]>([])
   const [fetchedRuns, setFetchedRuns] = useState<RunSummary[]>([])
   const [fetchedSessions, setFetchedSessions] = useState<SessionSummary[]>([])
+  // The reload token the session list above was fetched at - see the effect
+  // that drops a deleted active session, which must not act on a list older
+  // than the last reload.
+  const [sessionsFetchedAt, setSessionsFetchedAt] = useState<number | null>(null)
   const [reloadToken, setReloadToken] = useState(0)
   // An imported session takes priority over demo fixtures - both are
   // offline data sources, but an imported session is something the
@@ -228,9 +234,32 @@ export default function App() {
   useEffect(() => {
     if (sandboxEnabled || importedSession.active) return
     fetchSessions()
-      .then(setFetchedSessions)
+      .then((list) => {
+        setFetchedSessions(list)
+        setSessionsFetchedAt(reloadToken)
+      })
       .catch((e) => console.error('fetching sessions failed', e))
   }, [reloadToken, sandboxEnabled, importedSession.active])
+
+  // A session deleted - here or anywhere else - must stop being the one new
+  // captures are filed into, or the next save would be refused for naming a
+  // session that is gone. Only a list fetched at the current reload counts:
+  // a session opened right after it was created is not in the older list yet.
+  // The curves and runs already stamped with it are left as they are.
+  const { active: activeSession, clear: clearActiveSession } = useActiveSession()
+  useEffect(() => {
+    if (sandboxEnabled || importedSession.active || activeSession === null) return
+    if (sessionsFetchedAt !== reloadToken) return
+    if (!fetchedSessions.some((s) => s.id === activeSession.id)) clearActiveSession()
+  }, [
+    sandboxEnabled,
+    importedSession.active,
+    activeSession,
+    sessionsFetchedAt,
+    reloadToken,
+    fetchedSessions,
+    clearActiveSession,
+  ])
 
   // 'firmware-replay' ("Replay on the board") needs a real board on the
   // other end of a real link - ConnectionIndicator already refuses to let
@@ -360,6 +389,10 @@ export default function App() {
         curves={records}
         runs={runs}
         sandbox={sandboxEnabled}
+        captureUnavailable={{
+          curve: isLiveConnection(connectionStatus) ? null : 'No live link to the board',
+          run: connectionStatus === 'connected' ? null : 'A run needs a live link to the board',
+        }}
         onChanged={() => setReloadToken((t) => t + 1)}
         onDeleted={() => {
           setReloadToken((t) => t + 1)
@@ -408,6 +441,8 @@ export default function App() {
       </header>
 
       <ImportedSessionBar />
+
+      <ActiveSessionBar onOpen={(sessionId) => setSelection({ root: 'session', id: sessionId })} />
 
       {sessionImport.error && (
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-destructive/40 bg-destructive/10 px-4 py-1.5 text-xs font-medium text-destructive">

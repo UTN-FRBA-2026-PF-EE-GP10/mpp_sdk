@@ -214,3 +214,45 @@ def test_a_file_written_before_source_existed_loads_as_unknown(tmp_path):
     path.write_text(json.dumps(payload))
 
     assert load(path).source == "unknown"
+
+
+# ------------------------------------------------------------------
+# session_id
+# ------------------------------------------------------------------
+
+
+def test_session_id_round_trips(tmp_path):
+    record = _record(session_id="20260101T000000Z-a-session")
+    loaded = load(save(record, tmp_path))
+    assert loaded.session_id == "20260101T000000Z-a-session"
+
+
+def test_session_id_defaults_to_none(tmp_path):
+    record = _record()
+    assert record.session_id is None
+    assert load(save(record, tmp_path)).session_id is None
+
+
+def test_a_file_written_before_session_id_existed_loads_with_none(tmp_path):
+    """A file saved before this field existed has no "session_id" key at
+    all (not even null) - same "absent, not stated" case as `source`
+    above (test_a_file_written_before_source_existed_loads_as_unknown)."""
+    path = save(_record(), directory=tmp_path)
+    payload = json.loads(path.read_text())
+    del payload["session_id"]
+    path.write_text(json.dumps(payload))
+
+    assert load(path).session_id is None
+
+
+@pytest.mark.parametrize("bad", [42, 1.5, True, ["a"], {"id": "a"}])
+def test_a_session_id_that_is_not_a_string_or_null_is_rejected(tmp_path, bad):
+    """A hand-edited number must not load as a stamp that later code would
+    treat as an id."""
+    path = save(_record(), directory=tmp_path)
+    payload = json.loads(path.read_text())
+    payload["session_id"] = bad
+    path.write_text(json.dumps(payload))
+
+    with pytest.raises(ValueError, match="session_id"):
+        load(path)

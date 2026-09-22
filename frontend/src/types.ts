@@ -47,6 +47,16 @@ export interface CurveRecord {
    * mpp_sdk/curves/record.py. Anything but "hardware" means the curve was
    * not measured off a panel and must not be read as data. */
   source: 'hardware' | 'firmware-replay' | 'simulated' | 'unknown' | (string & {})
+  /** The bench session this curve was captured in, or null - stamped by
+   * the server from the client's "active session" at save time (see
+   * lib/activeSession.ts), never editable afterward. A stamp is not
+   * ownership: this only drives the Curves list's session filter and the
+   * session-file export's "stamped but unlinked" inclusion (see
+   * lib/sessionExport.ts) - deleting that session leaves the stamp
+   * dangling rather than clearing it. Optional because a session file
+   * exported before stamping existed, and the bundled demo curves, have
+   * none - read absent as null. */
+  session_id?: string | null
   voc: number
   isc: number
   p_mpp: number

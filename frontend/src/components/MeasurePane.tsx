@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { ActiveSessionNotice } from '@/components/ActiveSessionNotice'
 import { CurveWorkbench } from '@/components/CurveWorkbench'
 import { RunPane } from '@/components/RunPane'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -111,6 +112,7 @@ export function MeasurePane({
 
       {section === 'curve' && (
         <>
+          <ActiveSessionNotice what="curve" />
           <div>
             <p className="mb-2 text-sm text-muted-foreground">Capturing under:</p>
             <Tabs value={kind} onValueChange={(value) => setKind(value as string)}>

@@ -132,17 +132,18 @@ class _FakeProgress:
         self.active, self.final_point = active, final_point
 
 
-def _save(directory, label="t", measurement="baseline", points=((21.3, 0.006), (18.0, 0.195))):
-    return save(
-        CurveRecord(
-            captured_at=now_utc(),
-            label=label,
-            measurement=measurement,
-            panels=(PanelSetup(id="A", tilt_deg=0),),
-            points=tuple(points),
-        ),
-        directory=directory,
-    )
+def _save(
+    directory, label="t", measurement="baseline", points=((21.3, 0.006), (18.0, 0.195)), **overrides
+):
+    fields = {
+        "captured_at": now_utc(),
+        "label": label,
+        "measurement": measurement,
+        "panels": (PanelSetup(id="A", tilt_deg=0),),
+        "points": tuple(points),
+    }
+    fields.update(overrides)
+    return save(CurveRecord(**fields), directory=directory)
 
 
 def _save_run(directory, label="run", algorithm="P&O", samples=None, **overrides):
@@ -349,6 +350,18 @@ def test_curves_include_an_id_matching_the_filename_stem(client, tmp_path):
     assert entry["id"] == path.stem
 
 
+def test_curves_reports_session_id_when_present(client, tmp_path):
+    _save(tmp_path, label="both flat", session_id="20260101T000000Z-a-session")
+    entry = client.get("/api/curves").json()[0]
+    assert entry["session_id"] == "20260101T000000Z-a-session"
+
+
+def test_curves_reports_session_id_as_none_when_absent(client, tmp_path):
+    _save(tmp_path, label="both flat")
+    entry = client.get("/api/curves").json()[0]
+    assert entry["session_id"] is None
+
+
 # ------------------------------------------------------------------
 # DELETE /api/curves/{id}
 # ------------------------------------------------------------------
@@ -495,6 +508,72 @@ def test_save_curve_defaults_measurement_and_panels_when_omitted(client):
     assert r.status_code == 200
 
 
+def test_save_curve_response_includes_the_new_curves_id(client):
+    """The client needs the id (not just the path) to link the new curve
+    straight into a session step right after saving it - see
+    SessionView's "Capture into this step"."""
+    client.cache.set([(21.3, 0.006), (18.0, 0.195)], "ok")
+    r = client.post("/api/save-curve", json={"label": "x", "measurement": "baseline"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["id"] == Path(body["path"]).stem
+
+
+def test_save_curve_stamps_the_active_session_from_the_request(client):
+    session_id = _create_session(client).json()["id"]
+    client.cache.set([(21.3, 0.006), (18.0, 0.195)], "ok")
+    r = client.post(
+        "/api/save-curve",
+        json={"label": "x", "measurement": "baseline", "session_id": session_id},
+    )
+    assert r.status_code == 200
+    saved = json.loads(Path(r.json()["path"]).read_text())
+    assert saved["session_id"] == session_id
+    assert client.get("/api/curves").json()[0]["session_id"] == session_id
+
+
+def test_save_curve_without_an_active_session_stamps_none(client):
+    client.cache.set([(21.3, 0.006), (18.0, 0.195)], "ok")
+    r = client.post("/api/save-curve", json={"label": "x", "measurement": "baseline"})
+    assert r.status_code == 200
+    saved = json.loads(Path(r.json()["path"]).read_text())
+    assert saved["session_id"] is None
+
+
+def test_save_curve_rejects_an_unknown_active_session_id(client):
+    client.cache.set([(21.3, 0.006), (18.0, 0.195)], "ok")
+    r = client.post(
+        "/api/save-curve",
+        json={"label": "x", "measurement": "baseline", "session_id": "does-not-exist"},
+    )
+    assert r.status_code == 404
+    # Nothing saved - a rejected active session must not silently save an
+    # unstamped curve either.
+    assert client.get("/api/curves").json() == []
+
+
+def test_save_curve_rejects_an_active_session_id_with_disallowed_characters(client):
+    client.cache.set([(21.3, 0.006), (18.0, 0.195)], "ok")
+    r = client.post(
+        "/api/save-curve",
+        json={"label": "x", "measurement": "baseline", "session_id": "../../etc/passwd"},
+    )
+    assert r.status_code == 400
+    assert client.get("/api/curves").json() == []
+
+
+def test_save_curve_rejects_an_empty_active_session_id_rather_than_stamping_it(client):
+    """ "" is not "no session" (that is null/omitted): stamping it would
+    file the curve under an id no session can ever have."""
+    client.cache.set([(21.3, 0.006), (18.0, 0.195)], "ok")
+    r = client.post(
+        "/api/save-curve",
+        json={"label": "x", "measurement": "baseline", "session_id": ""},
+    )
+    assert r.status_code == 400
+    assert client.get("/api/curves").json() == []
+
+
 # ------------------------------------------------------------------
 # POST /api/start-sweep, /api/release-relay
 # ------------------------------------------------------------------
@@ -510,6 +589,32 @@ def test_release_relay_enqueues_the_command(client):
     r = client.post("/api/release-relay")
     assert r.status_code == 204
     assert client.commands.get_nowait() == "release_relay"
+
+
+def test_start_sweep_refuses_while_a_hardware_run_is_in_progress(client):
+    """The unattended-sweep race: a run already holds the one SPI link a
+    sweep would also need. Must be refused server-side - the client-side
+    guard in sessionCapture.ts is only a courtesy."""
+    assert client.run_cache.try_start(algorithm="P&O", label="bench", curve_ref=None)
+    r = client.post("/api/start-sweep")
+    assert r.status_code == 409
+    assert client.commands.empty()
+
+
+def test_start_demo_sweep_refuses_while_a_hardware_run_is_in_progress(client):
+    assert client.run_cache.try_start(algorithm="P&O", label="bench", curve_ref=None)
+    r = client.post("/api/start-demo-sweep")
+    assert r.status_code == 409
+    assert client.commands.empty()
+
+
+def test_start_sweep_allowed_while_a_simulated_run_is_in_progress(client):
+    """A simulated run never touches the SPI link, so it does not block a
+    sweep, the same way a sweep does not block starting a simulated run."""
+    assert client.run_cache.try_start(algorithm="P&O", label="sim", curve_ref=None, simulated=True)
+    r = client.post("/api/start-sweep")
+    assert r.status_code == 204
+    assert client.commands.get_nowait() == "start_sweep"
 
 
 # ------------------------------------------------------------------
@@ -667,6 +772,18 @@ def test_runs_reports_curve_ref_when_present(client):
     assert entry["curve_ref"] == "20260908T120000Z-baseline.json"
 
 
+def test_runs_reports_session_id_when_present(client):
+    _save_run(client.run_dir, session_id="20260101T000000Z-a-session")
+    entry = client.get("/api/runs").json()[0]
+    assert entry["session_id"] == "20260101T000000Z-a-session"
+
+
+def test_runs_reports_session_id_as_none_when_absent(client):
+    _save_run(client.run_dir)
+    entry = client.get("/api/runs").json()[0]
+    assert entry["session_id"] is None
+
+
 def test_runs_reports_a_malformed_file_without_failing_the_whole_list(client):
     client.run_dir.mkdir(parents=True, exist_ok=True)
     (client.run_dir / "bad.json").write_text("not json")
@@ -693,6 +810,12 @@ def test_get_run_returns_the_full_record_with_samples(client):
         {"t": 0.0, "v": 20.0, "i": 0.05, "d": 0.5},
         {"t": 0.1, "v": 18.0, "i": 0.10, "d": 0.55},
     ]
+
+
+def test_get_run_reports_session_id(client):
+    path = _save_run(client.run_dir, session_id="20260101T000000Z-a-session")
+    entry = client.get(f"/api/runs/{path.stem}").json()
+    assert entry["session_id"] == "20260101T000000Z-a-session"
 
 
 def test_get_run_unknown_id_is_404(client):
@@ -1131,11 +1254,72 @@ def test_start_run_with_a_valid_curve_ref_is_recorded(client, tmp_path):
     assert client.get("/api/runs/live").json()["curve_ref"] == curve_path.stem
 
 
+def test_start_run_queues_the_active_session_from_the_request(client):
+    session_id = _create_session(client).json()["id"]
+    r = client.post("/api/runs/start", json={"algorithm": "P&O", "session_id": session_id})
+    assert r.status_code == 200
+    queued = client.run_requests.get_nowait()
+    assert queued.session_id == session_id
+
+
+def test_start_run_without_an_active_session_queues_none(client):
+    r = client.post("/api/runs/start", json={"algorithm": "P&O"})
+    assert r.status_code == 200
+    assert client.run_requests.get_nowait().session_id is None
+
+
+def test_start_run_rejects_an_unknown_active_session_id(client):
+    r = client.post("/api/runs/start", json={"algorithm": "P&O", "session_id": "does-not-exist"})
+    assert r.status_code == 404
+    assert client.run_requests.empty()
+
+
+def test_start_run_rejects_an_active_session_id_with_disallowed_characters(client):
+    r = client.post("/api/runs/start", json={"algorithm": "P&O", "session_id": "../../etc/passwd"})
+    assert r.status_code == 400
+    assert client.run_requests.empty()
+
+
+def test_start_run_rejects_an_empty_active_session_id_rather_than_stamping_it(client):
+    r = client.post("/api/runs/start", json={"algorithm": "P&O", "session_id": ""})
+    assert r.status_code == 400
+    assert client.run_requests.empty()
+
+
+def test_start_run_simulated_stamps_the_active_session_on_the_saved_record(client):
+    session_id = _create_session(client).json()["id"]
+    r = client.post(
+        "/api/runs/start",
+        json={
+            "algorithm": "P&O",
+            "simulated": True,
+            "duration_s": 0.05,
+            "session_id": session_id,
+        },
+    )
+    assert r.status_code == 200
+    _wait_for_run_done(client)
+    live = client.get("/api/runs/live").json()
+    record = load_run(client.run_dir / f"{live['saved_run_id']}.json")
+    assert record.session_id == session_id
+
+
 def test_start_run_refuses_a_hardware_run_while_a_sweep_is_active(client):
     """A hardware run and curve-tracer polling cannot share the one SPI
     link - queuing a run behind an active sweep would have it "complete"
     while the firmware silently held the gate at 0 throughout."""
     client.cache.set_progress(_FakeProgress(0, 21.3, 0.006, active=True))
+    r = client.post("/api/runs/start", json={"algorithm": "P&O"})
+    assert r.status_code == 409
+    assert client.run_requests.empty()
+
+
+def test_start_run_refuses_while_a_sweep_command_is_queued_but_not_yet_active(client):
+    """The same conflict as above, caught earlier: a sweep command just
+    queued (POST /api/start-sweep) hasn't reached the firmware yet, so
+    `cache.snapshot().active` is still False - a run must not slip in
+    during that gap."""
+    client.commands.put_nowait("start_sweep")
     r = client.post("/api/runs/start", json={"algorithm": "P&O"})
     assert r.status_code == 409
     assert client.run_requests.empty()

@@ -12,7 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from ..curves.record import now_utc  # re-exported below, not duplicated
+from ..curves.record import _optional_session_id, now_utc  # now_utc re-exported below
 
 _SCHEMA = 1
 
@@ -70,6 +70,11 @@ class RunRecord:
     # converter. See RUN_SOURCES. Stamped server-side only - never taken
     # from a request body (scripts/curve_tracer_server.py).
     source: str = field(default="unknown")
+    # The bench session this run was captured in, if any - same stamping
+    # and "not ownership" reasoning as CurveRecord.session_id in
+    # mpp_sdk/curves/record.py. Left dangling, not cleaned up, if that
+    # session is later deleted.
+    session_id: str | None = field(default=None)
 
     def to_dict(self) -> dict:
         return {
@@ -81,6 +86,7 @@ class RunRecord:
             "aborted": self.aborted,
             "notes": self.notes,
             "source": self.source,
+            "session_id": self.session_id,
             "samples": [s.to_dict() for s in self.samples],
         }
 
@@ -101,6 +107,8 @@ class RunRecord:
                 # Absent in files written before this field existed - those
                 # genuinely have no recorded provenance, so say so.
                 source=d.get("source", "unknown"),
+                # Absent in files written before this field existed.
+                session_id=_optional_session_id(d.get("session_id")),
             )
         except KeyError as exc:
             raise ValueError(f"run record missing field {exc.args[0]!r}") from exc

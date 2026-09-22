@@ -109,7 +109,7 @@ describe('buildSessionFile / parseSessionFile round trip', () => {
     expect(parsed.setup).toBe('single')
     expect(parsed.session).toBeNull()
     expect(parsed.curves.map((e) => e.id)).toEqual(['c1', 'c2'])
-    expect(parsed.curves[0].record).toEqual({ ...curve('c1'), path: 'c1.json' })
+    expect(parsed.curves[0].record).toEqual({ ...curve('c1'), path: 'c1.json', session_id: null })
     expect(parsed.runs.map((e) => e.id)).toEqual(['r1'])
     expect(parsed.runs[0].record.samples).toEqual(run('r1').samples)
     expect(parsed.missing).toEqual({ curve_ids: [], run_ids: [] })
@@ -208,6 +208,41 @@ describe('buildSessionFile / parseSessionFile round trip', () => {
     const raw = JSON.parse(JSON.stringify(built))
     raw.runs[0].record.duration_s = 42
     expect(parseSessionFile(raw).runs[0].record.duration_s).toBe(42)
+  })
+
+  it('keeps a curve and a run stamp through the round trip', () => {
+    const built = buildSessionFile({
+      title: 'Stamped',
+      setup: 'single',
+      curves: [{ ...curve('c1'), session_id: 'sess-1' }],
+      runs: [{ ...run('r1'), session_id: 'sess-1' }],
+    })
+    const parsed = parseSessionFile(JSON.parse(JSON.stringify(built)))
+    expect(parsed.curves[0].record.session_id).toBe('sess-1')
+    expect(parsed.runs[0].record.session_id).toBe('sess-1')
+  })
+
+  it('reads a file exported before stamping existed (no session_id) as not filed', () => {
+    const built = buildSessionFile({
+      title: 'Old',
+      setup: 'single',
+      curves: [curve('c1')],
+      runs: [run('r1')],
+    })
+    const raw = JSON.parse(JSON.stringify(built))
+    // Exactly what an older export looks like: the key is absent.
+    delete raw.curves[0].record.session_id
+    delete raw.runs[0].record.session_id
+    const parsed = parseSessionFile(raw)
+    expect(parsed.curves[0].record.session_id).toBeNull()
+    expect(parsed.runs[0].record.session_id).toBeNull()
+  })
+
+  it('rejects a session_id that is not a string', () => {
+    const built = buildSessionFile({ title: 'Bad', setup: 'single', curves: [curve('c1')], runs: [] })
+    const raw = JSON.parse(JSON.stringify(built))
+    raw.curves[0].record.session_id = 42
+    expect(() => parseSessionFile(raw)).toThrow(SessionParseError)
   })
 
   it('carries missing ids through the round trip', () => {

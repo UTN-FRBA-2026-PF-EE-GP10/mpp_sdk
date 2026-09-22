@@ -2,8 +2,10 @@ import { Download, Trash2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { CurveDashboardPane } from '@/components/CurveDashboardPane'
 import { CurveDetailDialog } from '@/components/CurveDetailDialog'
+import { SessionScopeFilter } from '@/components/SessionScopeFilter'
 import { Button } from '@/components/ui/button'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { filterToSession, useCaptureSession, type SessionScope } from '@/lib/activeSession'
 import { deleteCurvesBatch } from '@/lib/api'
 import { buildSessionFile, downloadSessionFile, readOnlyReasonText, useReadOnly } from '@/lib/sessionFile'
 import { useSetupMode } from '@/lib/setupMode'
@@ -24,7 +26,7 @@ import { getMeasurementKindInfo, type CurveRecord } from '@/types'
  */
 export function CurveCategoryPane({
   kind,
-  records,
+  records: allRecords,
   onDeleted,
   onRemeasure,
   remeasurePendingId = null,
@@ -43,6 +45,15 @@ export function CurveCategoryPane({
   remeasurePendingId?: string | null
 }) {
   const info = getMeasurementKindInfo(kind)
+  const captureSession = useCaptureSession()
+  const [scope, setScope] = useState<SessionScope>('all')
+  // Everything is shown whenever no session is active, whatever `scope`
+  // was last left at - the switch itself is hidden then.
+  const records = useMemo(
+    () => filterToSession(allRecords, scope, captureSession?.id ?? null),
+    [allRecords, scope, captureSession?.id],
+  )
+  const filtered = captureSession !== null && scope === 'session'
   const [selected, setSelected] = useState<CurveRecord | null>(null)
   const readOnly = useReadOnly()
   const { mode: setupMode } = useSetupMode()
@@ -145,6 +156,9 @@ export function CurveCategoryPane({
         <div>
           <h2 className="text-lg font-semibold tracking-tight">{info.title}</h2>
           <p className="text-sm text-muted-foreground">{info.description}</p>
+          <div className="mt-2">
+            <SessionScopeFilter scope={scope} onScopeChange={setScope} />
+          </div>
         </div>
 
         {records.length > 0 &&
@@ -214,7 +228,9 @@ export function CurveCategoryPane({
           <CardHeader>
             <CardTitle>Nothing saved yet</CardTitle>
             <CardDescription>
-              No curves saved under &ldquo;{kind}&rdquo; yet. Capture one from Measure.
+              {filtered
+                ? `No curves under \u201c${kind}\u201d were captured in this session. Switch to Everything to see the rest.`
+                : `No curves saved under \u201c${kind}\u201d yet. Capture one from Measure.`}
             </CardDescription>
           </CardHeader>
         </Card>

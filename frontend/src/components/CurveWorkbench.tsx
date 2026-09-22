@@ -17,6 +17,8 @@ import {
 import { useDemoCapture } from '@/hooks/useDemoCapture'
 import { useLiveSweep } from '@/hooks/useLiveSweep'
 import { saveCurve } from '@/lib/api'
+import { sessionGoneMessage, useActiveSession, useCaptureSession } from '@/lib/activeSession'
+import { isSessionNotFound } from '@/lib/apiError'
 import { formatCapturedAt } from '@/lib/format'
 import { useSetupMode } from '@/lib/setupMode'
 import { useUnits } from '@/lib/units'
@@ -61,6 +63,8 @@ function SaveCurveForm({
 }) {
   const { mode: setupMode } = useSetupMode()
   const single = setupMode === 'single'
+  const captureSession = useCaptureSession()
+  const { clear: clearActiveSession } = useActiveSession()
   // `initialPanels` is a "read once" remeasure prefill, same contract as
   // `initialLabel`/`initialNotes` (see their doc comments): MeasurePane
   // clears it from its parent shortly after mount (`onPrefillApplied`),
@@ -100,13 +104,25 @@ function SaveCurveForm({
     setSaving(true)
     setStatus('')
     try {
-      const result = await saveCurve({ label, measurement: kind, panels, notes })
+      const result = await saveCurve({
+        label,
+        measurement: kind,
+        panels,
+        notes,
+        session_id: captureSession?.id ?? null,
+      })
       setStatus(`saved: ${result.path}`)
       setLabel('')
       setNotes('')
       onSaved(kind)
     } catch (e) {
-      setStatus(`save failed: ${e instanceof Error ? e.message : String(e)}`)
+      if (captureSession !== null && isSessionNotFound(e)) {
+        // Deleted elsewhere: every later save would be refused the same way.
+        clearActiveSession()
+        setStatus(`save failed: ${sessionGoneMessage('curve')}`)
+      } else {
+        setStatus(`save failed: ${e instanceof Error ? e.message : String(e)}`)
+      }
     } finally {
       setSaving(false)
     }

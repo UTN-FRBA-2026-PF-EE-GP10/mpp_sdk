@@ -319,7 +319,7 @@ describe('App remeasure workflow', () => {
       commandError: null,
       demoSource: false,
     })
-    vi.mocked(saveCurve).mockResolvedValue({ path: '/data/curves/new.json' })
+    vi.mocked(saveCurve).mockResolvedValue({ path: '/data/curves/new.json', id: 'new' })
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     renderApp()
     await waitFor(() => expect(within(baselineNavRow()).getByText('1')).toBeTruthy())
@@ -353,7 +353,7 @@ describe('App remeasure workflow', () => {
       commandError: null,
       demoSource: false,
     })
-    vi.mocked(saveCurve).mockResolvedValue({ path: '/data/curves/new.json' })
+    vi.mocked(saveCurve).mockResolvedValue({ path: '/data/curves/new.json', id: 'new' })
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     renderApp()
     await waitFor(() => expect(within(baselineNavRow()).getByText('1')).toBeTruthy())

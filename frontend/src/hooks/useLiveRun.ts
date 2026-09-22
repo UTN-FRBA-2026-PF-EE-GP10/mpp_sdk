@@ -35,7 +35,20 @@ export interface UseLiveRun {
   reset: () => void
 }
 
-export function useLiveRun(): UseLiveRun {
+export interface UseLiveRunOptions {
+  /** Called with the error of a start the server refused. Returns the text
+   * to show as `startError` instead of the error's own message, or nothing
+   * to keep it. */
+  onStartError?: (e: unknown) => string | void
+}
+
+export function useLiveRun(options: UseLiveRunOptions = {}): UseLiveRun {
+  // Read through a ref so `start` keeps one identity however the caller
+  // writes the callback.
+  const onStartError = useRef(options.onStartError)
+  useEffect(() => {
+    onStartError.current = options.onStartError
+  })
   const [phase, setPhase] = useState<RunPhase>('idle')
   const [live, setLive] = useState<LiveRunState | null>(null)
   const [starting, setStarting] = useState(false)
@@ -110,7 +123,8 @@ export function useLiveRun(): UseLiveRun {
       setLive(null)
       setPhase('live')
     } catch (e) {
-      setStartError(e instanceof Error ? e.message : String(e))
+      const replacement = onStartError.current?.(e)
+      setStartError(replacement ?? (e instanceof Error ? e.message : String(e)))
     } finally {
       setStarting(false)
     }
