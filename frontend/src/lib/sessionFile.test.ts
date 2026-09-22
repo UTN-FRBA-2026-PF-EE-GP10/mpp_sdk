@@ -396,6 +396,16 @@ describe('server directories in a session file', () => {
     expect(scrub('reading C:\\Users\\x\\a.json failed')).toBe('reading a.json failed')
   })
 
+  it('cuts a UNC path down to its file name, dropping the host and share', () => {
+    const scrub = (notes: string) => withoutRunDirectories({ ...run('x'), notes }).notes
+    expect(scrub('error: \\\\server\\share\\data\\x.json')).toBe('error: x.json')
+  })
+
+  it('reduces a forward-slash Windows drive path the same as the backslash form', () => {
+    const scrub = (notes: string) => withoutRunDirectories({ ...run('x'), notes }).notes
+    expect(scrub('reading C:/Users/x/a.json failed')).toBe(scrub('reading C:\\Users\\x\\a.json failed'))
+  })
+
   it('reduces a path with a space in a directory name to its base name, not a partial cut', () => {
     const scrub = (notes: string) => withoutRunDirectories({ ...run('x'), notes }).notes
     expect(scrub('error: /home/John Smith/data/x.json')).toBe('error: x.json')

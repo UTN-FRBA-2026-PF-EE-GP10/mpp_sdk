@@ -176,9 +176,21 @@ const SEGMENT = String.raw`[^\s/'"()]+(?: [^\s/'"()]+)?`
 const FINAL_SEGMENT = String.raw`[^\s/'"()]*`
 
 const BARE_UNIX_PATH = new RegExp(String.raw`(?<![\w.:/-])\/(?:${SEGMENT}\/)+${FINAL_SEGMENT}`, 'g')
-const LABELED_PATH = new RegExp(String.raw`\b([A-Za-z][\w.-]*):(\/(?:${SEGMENT}\/)+${FINAL_SEGMENT})`, 'g')
+// A bare single letter ("C", "in") never reaches LABELED_PATH as a label:
+// a lone drive letter is a Windows path (handled by WINDOWS_PATH below),
+// not an arbitrary field name.
+const LABELED_PATH = new RegExp(
+  String.raw`\b([A-Za-z]{2,}[\w.-]*):(\/(?:${SEGMENT}\/)+${FINAL_SEGMENT})`,
+  'g',
+)
+const WINDOWS_PATH_COMPONENT = String.raw`[^\s\\/'"()]+(?: [^\s\\/'"()]+)?`
+// Drive-letter ("C:\..." / "C:/...") and UNC ("\\host\share\...") paths both
+// reduce to their base file name the same way, so one pattern covers both -
+// only the prefix differs. A lookbehind stands in for \b: the UNC prefix
+// starts with a backslash, which is not a word character, so \b would not
+// mark a boundary between it and the preceding space.
 const WINDOWS_PATH = new RegExp(
-  String.raw`\b[A-Za-z]:\\(?:[^\s\\/'"()]+(?: [^\s\\/'"()]+)?\\)*[^\s\\/'"()]*`,
+  String.raw`(?<![\w.:\\/-])(?:[A-Za-z]:|\\\\${WINDOWS_PATH_COMPONENT})[\\/](?:${WINDOWS_PATH_COMPONENT}[\\/])*[^\s\\/'"()]*`,
   'g',
 )
 const FILE_URL = /\bfile:\/\/[^\s'"()]*/g
@@ -238,7 +250,7 @@ function scrubAbsolutePaths(text: string): string {
     const segments = match.slice(1).split('/')
     return isPlausiblePathBody(segments) ? segments[segments.length - 1] : match
   })
-  result = result.replace(WINDOWS_PATH, (match) => match.split('\\').pop() ?? match)
+  result = result.replace(WINDOWS_PATH, (match) => match.split(/[\\/]/).pop() ?? match)
 
   return result
 }
