@@ -382,6 +382,32 @@ describe('server directories in a session file', () => {
     }
   })
 
+  it('recognizes a word: prefix, a URL scheme, or a remote spec as a path, not just a leading slash', () => {
+    const scrub = (notes: string) => withoutRunDirectories({ ...run('x'), notes }).notes
+    expect(scrub('in:/home/u/x/y')).toBe('in:y')
+    expect(scrub('dir:/home/u/x/y')).toBe('dir:y')
+    expect(scrub('file:///home/u/x')).toBe('x')
+    expect(scrub('opening user@host:/home/u/x/y')).toBe('opening y')
+    expect(scrub('ssh://user@1.2.3.4/home/u/x')).toBe('x')
+  })
+
+  it('cuts a Windows path in a run note down to its file name', () => {
+    const scrub = (notes: string) => withoutRunDirectories({ ...run('x'), notes }).notes
+    expect(scrub('reading C:\\Users\\x\\a.json failed')).toBe('reading a.json failed')
+  })
+
+  it('reduces a path with a space in a directory name to its base name, not a partial cut', () => {
+    const scrub = (notes: string) => withoutRunDirectories({ ...run('x'), notes }).notes
+    expect(scrub('error: /home/John Smith/data/x.json')).toBe('error: x.json')
+  })
+
+  it('leaves a fraction, a ratio, or a short mention alone rather than treating it as a path', () => {
+    const scrub = (notes: string) => withoutRunDirectories({ ...run('x'), notes }).notes
+    expect(scrub(' /1/2 ')).toBe(' /1/2 ')
+    expect(scrub('ratio 3 /4/5')).toBe('ratio 3 /4/5')
+    expect(scrub('(see /docs/setup)')).toBe('(see /docs/setup)')
+  })
+
   it('leaves a bare curve id and plain abort reasons alone', () => {
     const plain = { ...run('r1'), curve_ref: 'c1', notes: 'overvoltage' }
     const built = buildSessionFile({ title: 't', setup: 'single', curves: [], runs: [plain] })
