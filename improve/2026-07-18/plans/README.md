@@ -70,7 +70,7 @@ re-enabling; no plan file, tracked via the PR that disabled it.
 | 038 | Save the displayed capture, not an unversioned latest sweep (save/display race) | P1 | M | 037 (soft), 032 (soft) | TODO |
 | 039 | Firmware: PIO SPI slave cannot recover from an idle frame timeout | P1 | M-L (bench) | - | TODO (workaround shipped: Pi polls below FRAME_TIMEOUT) |
 | 040 | Bench: drive the converter from the web UI, on target | P1 | M (bench) | powered board; 039 is the open risk underneath; its Step 0 closes 010's unverified ADC_VOUT | IN PROGRESS (Step 0 done 2026-09-19: `ADC_VOUT` within 6 mV of a meter at 7 V with the converter switching; replaces 034's Step 7) |
-| 041 | Docs: one-page guide - the full two-panel setup (A fixed, B tilted) with the workbench | P1 | L (bench + page) | 040 Step 0 before quoting V out | TODO (Session 1, panel A alone, 2026-09-19 -> page v1; Session 2, panels A and B, the week after -> page v2) |
+| 041 | Docs: one-page guide - the full two-panel setup (A fixed, B tilted) with the workbench | P1 | L (bench + page) | 040 Step 0 before quoting V out | IN PROGRESS (todo list rewritten short 2026-09-21. Session 1, Luxen alone, 2026-09-22 -> page v1; Session 2, panels A and B, later -> page v2) |
 | 042 | Workbench: setup mode (single/full) and measurement reports | P1 | L (3 PRs) | - | IN PROGRESS (A: setup toggle; B: reports backend + templates; C: reports frontend) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) |
