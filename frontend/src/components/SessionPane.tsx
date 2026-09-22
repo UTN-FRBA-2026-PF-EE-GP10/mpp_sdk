@@ -48,9 +48,14 @@ export function SessionPane({
   // and a value closed over at click time would be that old. A link the
   // operator made from the picker in between must be in what gets patched.
   const latestSession = useRef<SessionRecord | null>(null)
-  const [runConfig, setRunConfig] = useState<{ algorithms: string[]; durationS: number } | null>(
-    null,
-  )
+  const [runConfig, setRunConfig] = useState<{
+    algorithms: string[]
+    durationS: number
+    initialDuty: number
+    vMax: number
+    iMax: number
+    vOutMax: number
+  } | null>(null)
   const { active: activeSession, setActive: setActiveSession, clear: clearActiveSession } =
     useActiveSession()
   // Sandbox mode never fetches - the one bundled fixture is derived
@@ -95,7 +100,14 @@ export function SessionPane({
       try {
         const config = await fetchRunConfig()
         if (!cancelled) {
-          setRunConfig({ algorithms: config.algorithms, durationS: config.defaultDurationS })
+          setRunConfig({
+            algorithms: config.algorithms,
+            durationS: config.defaultDurationS,
+            initialDuty: config.defaultInitialDuty,
+            vMax: config.defaultVMax,
+            iMax: config.defaultIMax,
+            vOutMax: config.defaultVOutMax,
+          })
         }
       } catch {
         // See above.
@@ -214,6 +226,10 @@ export function SessionPane({
       captureUnavailable={captureUnavailable}
       runAlgorithms={runConfig?.algorithms}
       runDurationS={runConfig?.durationS}
+      runInitialDuty={runConfig?.initialDuty}
+      runVMax={runConfig?.vMax}
+      runIMax={runConfig?.iMax}
+      runVOutMax={runConfig?.vOutMax}
       failedRunIds={failedRunIds}
       onRetryRunDetails={loaded.retry}
     />

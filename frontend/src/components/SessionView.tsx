@@ -120,6 +120,13 @@ export interface SessionViewProps {
   /** Seconds a captured run lasts, for the confirmation; unknown until the
    * server's run config has loaded. */
   runDurationS?: number
+  /** The rest of the server's run defaults, also for the confirmation - a
+   * step capture always uses these, never the operator's own choices from
+   * RunPane's form. */
+  runInitialDuty?: number
+  runVMax?: number
+  runIMax?: number
+  runVOutMax?: number
   /** Run ids whose full detail could not be loaded (not a 404): they will
    * be named as missing in an exported file. */
   failedRunIds?: string[]
@@ -161,6 +168,10 @@ export function SessionView({
   captureUnavailable,
   runAlgorithms = [],
   runDurationS,
+  runInitialDuty,
+  runVMax,
+  runIMax,
+  runVOutMax,
   failedRunIds = [],
   onRetryRunDetails,
 }: SessionViewProps) {
@@ -247,9 +258,17 @@ export function SessionView({
       const chosen = algorithm ?? runAlgorithms[0]
       const what = chosen ? ` "${chosen}"` : ''
       const duration = runDurationS === undefined ? '' : ` (${runDurationS}s)`
+      const duty = runInitialDuty === undefined ? '' : ` starting duty ${runInitialDuty}`
+      const limits =
+        runVMax === undefined || runIMax === undefined || runVOutMax === undefined
+          ? ''
+          : `, limits v_max ${runVMax} V / i_max ${runIMax} A / v_out_max ${runVOutMax} V`
       if (
         !window.confirm(
-          `Start a live${what} run${duration} for "${step.title}"? This drives the real converter.`,
+          `Start a live${what} run${duration} for "${step.title}"? This drives the real ` +
+            'converter - put a load on the converter output before running it. With no load ' +
+            'the SEPIC output climbs far above the panel voltage.\n\n' +
+            `This uses the server's defaults: no reference curve,${duty}${limits}.`,
         )
       ) {
         return
@@ -865,6 +884,12 @@ function CaptureControl({ capture, what }: { capture: StepCapture; what: 'curve'
           <span className="text-xs text-muted-foreground">{capture.unavailableReason}</span>
         )}
       </div>
+      <p className="text-xs text-muted-foreground">
+        {what === 'run'
+          ? 'A step-captured run has no reference curve - use RunPane directly to pick one.'
+          : 'A step-captured curve is saved as kind "other" with no panel list - use Measure ' +
+            'first if that matters.'}
+      </p>
       {capture.error && <p className="text-xs text-destructive">{capture.error}</p>}
     </div>
   )
