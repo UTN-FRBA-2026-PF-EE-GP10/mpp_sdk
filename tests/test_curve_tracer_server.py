@@ -591,6 +591,32 @@ def test_release_relay_enqueues_the_command(client):
     assert client.commands.get_nowait() == "release_relay"
 
 
+def test_start_sweep_refuses_while_a_hardware_run_is_in_progress(client):
+    """The unattended-sweep race: a run already holds the one SPI link a
+    sweep would also need. Must be refused server-side - the client-side
+    guard in sessionCapture.ts is only a courtesy."""
+    assert client.run_cache.try_start(algorithm="P&O", label="bench", curve_ref=None)
+    r = client.post("/api/start-sweep")
+    assert r.status_code == 409
+    assert client.commands.empty()
+
+
+def test_start_demo_sweep_refuses_while_a_hardware_run_is_in_progress(client):
+    assert client.run_cache.try_start(algorithm="P&O", label="bench", curve_ref=None)
+    r = client.post("/api/start-demo-sweep")
+    assert r.status_code == 409
+    assert client.commands.empty()
+
+
+def test_start_sweep_allowed_while_a_simulated_run_is_in_progress(client):
+    """A simulated run never touches the SPI link, so it does not block a
+    sweep, the same way a sweep does not block starting a simulated run."""
+    assert client.run_cache.try_start(algorithm="P&O", label="sim", curve_ref=None, simulated=True)
+    r = client.post("/api/start-sweep")
+    assert r.status_code == 204
+    assert client.commands.get_nowait() == "start_sweep"
+
+
 # ------------------------------------------------------------------
 # Command-error visibility (_SweepCache.set_command_error)
 # ------------------------------------------------------------------
@@ -1283,6 +1309,17 @@ def test_start_run_refuses_a_hardware_run_while_a_sweep_is_active(client):
     link - queuing a run behind an active sweep would have it "complete"
     while the firmware silently held the gate at 0 throughout."""
     client.cache.set_progress(_FakeProgress(0, 21.3, 0.006, active=True))
+    r = client.post("/api/runs/start", json={"algorithm": "P&O"})
+    assert r.status_code == 409
+    assert client.run_requests.empty()
+
+
+def test_start_run_refuses_while_a_sweep_command_is_queued_but_not_yet_active(client):
+    """The same conflict as above, caught earlier: a sweep command just
+    queued (POST /api/start-sweep) hasn't reached the firmware yet, so
+    `cache.snapshot().active` is still False - a run must not slip in
+    during that gap."""
+    client.commands.put_nowait("start_sweep")
     r = client.post("/api/runs/start", json={"algorithm": "P&O"})
     assert r.status_code == 409
     assert client.run_requests.empty()

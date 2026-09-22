@@ -1782,8 +1782,13 @@ def create_app(
         # than let a run queue behind a sweep and appear to "complete"
         # while the firmware actually held the gate at 0 throughout,
         # displaced by the sweep the whole time. A simulated run never
-        # touches the link, so it is unaffected.
-        if not body.simulated and cache.snapshot().active:
+        # touches the link, so it is unaffected. `commands` is checked
+        # too, not just `cache.snapshot().active`: a queued command hasn't
+        # reached the firmware yet, so the sweep it starts wouldn't show
+        # up as active until the poll thread dispatches it and a progress
+        # frame confirms it - a run accepted in that gap would still
+        # collide with it.
+        if not body.simulated and (not commands.empty() or cache.snapshot().active):
             raise HTTPException(
                 status_code=409,
                 detail="a curve-tracer sweep is in progress - wait for it to finish "
@@ -2017,8 +2022,22 @@ def create_app(
             )
         return _delete_batch(body.ids, _run_path, run_library.delete)
 
+    def _refuse_if_hardware_run_in_progress() -> None:
+        """A hardware run and a sweep command cannot share the one SPI
+        link (the same conflict `post_start_run` refuses in the other
+        direction, below). A simulated run never touches the link, so it
+        does not block a sweep."""
+        snap = run_cache.snapshot(0)
+        if snap["status"] == "running" and snap["source"] == "hardware":
+            raise HTTPException(
+                status_code=409,
+                detail="a hardware run is in progress - wait for it to finish before "
+                "starting a sweep",
+            )
+
     @app.post("/api/start-sweep", status_code=204)
     def post_start_sweep() -> None:
+        _refuse_if_hardware_run_in_progress()
         commands.put_nowait("start_sweep")
 
     @app.post("/api/start-demo-sweep", status_code=204)
@@ -2026,6 +2045,7 @@ def create_app(
         """Replay a curve stored in the firmware over real SPI - lets the
         whole loop be worked on with no panel and no lamp. Distinct from
         the server's own --demo flag, which never touches the board."""
+        _refuse_if_hardware_run_in_progress()
         commands.put_nowait("demo_sweep_bright" if bright else "demo_sweep_dim")
 
     @app.post("/api/release-relay", status_code=204)
