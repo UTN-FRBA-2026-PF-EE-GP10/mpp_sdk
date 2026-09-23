@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "template_id": "single-panel-characterization",
-  "version": 3,
+  "version": 4,
   "title": "Single panel characterization",
   "setup": "single",
   "field_defs": [
@@ -98,13 +98,6 @@
       "kind": "check"
     },
     {
-      "id": "heatsink-and-power-cut",
-      "section": "Before energizing",
-      "title": "Heatsink and power cut",
-      "instructions": "Check that Q3 has its heatsink fitted, or plan to keep runs short. Check that someone at the bench can cut power right away. Pass: both are true.",
-      "kind": "check"
-    },
-    {
       "id": "single-mode-pico-connected",
       "section": "Before energizing",
       "title": "Workbench mode and connection",
@@ -124,14 +117,6 @@
       "title": "Link status before a sweep",
       "instructions": "With nothing running, open the connection menu (top right of the workbench) and read the raw link line. Pass: it reads \"waiting for sweep\".",
       "kind": "check"
-    },
-    {
-      "id": "light-check-isc",
-      "section": "Light and curve",
-      "title": "Light check",
-      "instructions": "Run one sweep. Record Isc, in amps. Pass: Isc is below 0.7 A (700 mA). If it is not, reduce the light and sweep again.",
-      "kind": "number",
-      "unit": "A"
     },
     {
       "id": "baseline-curve",
@@ -163,30 +148,6 @@
       "instructions": "From the P&O run, record the held power as a percentage of the theoretical MPP power (P / MPP_th).",
       "kind": "number",
       "unit": "%"
-    },
-    {
-      "id": "po-samples-per-second",
-      "section": "Runs (curve as reference, 10 s, starting duty 0.5)",
-      "title": "P&O samples per second",
-      "instructions": "From the P&O run, record the samples per second. This sets the link-down detection threshold.",
-      "kind": "number",
-      "unit": "samples/s"
-    },
-    {
-      "id": "vout-during-po-run-adc",
-      "section": "Runs (curve as reference, 10 s, starting duty 0.5)",
-      "title": "V out during the run (board)",
-      "instructions": "Record V out reported by the board during the P&O run.",
-      "kind": "number",
-      "unit": "V"
-    },
-    {
-      "id": "vout-during-po-run-meter",
-      "section": "Runs (curve as reference, 10 s, starting duty 0.5)",
-      "title": "V out during the run (meter)",
-      "instructions": "Record V out measured with a meter at the same time. Compare it with the board reading above.",
-      "kind": "number",
-      "unit": "V"
     },
     {
       "id": "incond-run",
@@ -229,32 +190,11 @@
       "repeats": 3
     },
     {
-      "id": "stop-test",
-      "section": "Runs (curve as reference, 10 s, starting duty 0.5)",
-      "title": "Stop test",
-      "instructions": "Start a run and stop it halfway through. Pass: the run aborts with status \"stopped\" and duty goes to 0.",
-      "kind": "run"
-    },
-    {
-      "id": "link-down-test",
-      "section": "Runs (curve as reference, 10 s, starting duty 0.5)",
-      "title": "Link-down test",
-      "instructions": "Start a run and pull the SPI cable mid-run. Pass: the run aborts with status \"link-down\" and duty goes to 0.",
-      "kind": "run"
-    },
-    {
       "id": "q3-temperature-after-runs",
       "section": "Runs (curve as reference, 10 s, starting duty 0.5)",
       "title": "Q3 temperature after the runs",
       "instructions": "Record Q3's temperature after the runs, by hand or with a probe.",
       "kind": "text"
-    },
-    {
-      "id": "downloads",
-      "section": "After",
-      "title": "Downloads",
-      "instructions": "Check that every curve and run used in this session is downloaded, and that this session is downloaded as Markdown. Pass: all files are saved.",
-      "kind": "check"
     }
   ],
   "open_questions": [

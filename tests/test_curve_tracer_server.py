@@ -2385,8 +2385,8 @@ def test_get_sessions_progress_counts_reflect_step_status(client):
         f"/api/sessions/{session_id}",
         json={
             "steps": [
-                {"id": "light-check-isc", "status": "done"},
-                {"id": "heatsink-and-power-cut", "status": "failed"},
+                {"id": "po-held-power", "status": "done"},
+                {"id": "firmware-config", "status": "failed"},
             ]
         },
     )
@@ -2421,21 +2421,21 @@ def test_patch_session_updates_a_step_status_value_and_notes(client):
         json={
             "steps": [
                 {
-                    "id": "light-check-isc",
+                    "id": "po-held-power",
                     "status": "done",
                     "value": 12.5,
-                    "notes": "read off the label",
+                    "notes": "held power against the curve MPP",
                 }
             ]
         },
     )
     assert r.status_code == 200
-    step = next(s for s in r.json()["steps"] if s["id"] == "light-check-isc")
+    step = next(s for s in r.json()["steps"] if s["id"] == "po-held-power")
     assert step["status"] == "done"
     assert step["value"] == 12.5
-    assert step["notes"] == "read off the label"
+    assert step["notes"] == "held power against the curve MPP"
     # Every other step is untouched.
-    other = next(s for s in r.json()["steps"] if s["id"] == "heatsink-and-power-cut")
+    other = next(s for s in r.json()["steps"] if s["id"] == "firmware-config")
     assert other["status"] == "todo"
 
 
@@ -2508,7 +2508,7 @@ def test_patch_session_rejects_an_unknown_open_question_id(client):
 def test_patch_session_rejects_an_invalid_status(client, status):
     session_id = _create_session(client).json()["id"]
     r = client.patch(
-        f"/api/sessions/{session_id}", json={"steps": [{"id": "light-check-isc", "status": status}]}
+        f"/api/sessions/{session_id}", json={"steps": [{"id": "po-held-power", "status": status}]}
     )
     assert r.status_code == 400
 
@@ -2517,7 +2517,7 @@ def test_patch_session_rejects_an_oversized_notes_field(client):
     session_id = _create_session(client).json()["id"]
     r = client.patch(
         f"/api/sessions/{session_id}",
-        json={"steps": [{"id": "light-check-isc", "notes": "x" * (_SESSION_NOTES_MAX_LEN + 1)}]},
+        json={"steps": [{"id": "po-held-power", "notes": "x" * (_SESSION_NOTES_MAX_LEN + 1)}]},
     )
     assert r.status_code == 400
 
@@ -2657,7 +2657,7 @@ def test_patch_session_rejects_a_non_finite_value(client, value):
     session_id = _create_session(client).json()["id"]
     r = client.patch(
         f"/api/sessions/{session_id}",
-        content=f'{{"steps": [{{"id": "light-check-isc", "value": {value}}}]}}',
+        content=f'{{"steps": [{{"id": "po-held-power", "value": {value}}}]}}',
         headers={"content-type": "application/json"},
     )
     assert r.status_code == 400
