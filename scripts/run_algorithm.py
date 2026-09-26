@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import logging
 import time
 from collections.abc import Callable
 
@@ -46,6 +47,17 @@ from mpp_sdk.runs.record import now_utc as runs_now_utc
 # a similar wall-clock detection time rather than tripping on one burst
 # of ordinary line noise.
 _BAD_FRAMES_LINK_DOWN = 300
+
+# Consecutive readings over v_max / i_max / v_out_max before a run aborts.
+# A single garbage sample (seen on the bench: normal readings, then one
+# absurd V, I or V out) would otherwise end the run at once. A real
+# overvoltage or overcurrent lasts far longer than this many exchanges.
+_LIMIT_DEBOUNCE_SAMPLES = 5
+# Also require the streak to span this long: a failed SPI frame replays the
+# last good reading, so one garbage frame can repeat for several exchanges.
+_LIMIT_DEBOUNCE_S = 0.05
+
+_log = logging.getLogger(__name__)
 
 
 def run_control_loop(
@@ -80,6 +92,11 @@ def run_control_loop(
     (source is driven to 0 duty before returning either way):
 
     - `"overvoltage"` / `"overcurrent"`: a reading exceeded `v_max`/`i_max`.
+      A limit aborts only when `_LIMIT_DEBOUNCE_SAMPLES` readings in a row
+      break it and the streak spans `_LIMIT_DEBOUNCE_S`. A shorter streak is
+      dropped: the loop holds the duty, reads again, and the reading never
+      reaches the algorithm or `samples`. This applies to the output limit
+      below too.
     - `"output-overvoltage"`: the converter output (`source.vout`, absent on
       a simulated source, which never trips this) exceeded `v_out_max`. The
       panel limits cannot see this: with a light or missing load the SEPIC
@@ -115,17 +132,34 @@ def run_control_loop(
         # skip the `finally` below entirely, breaking the zero-duty
         # guarantee this docstring promises for every exit path.
         source.write(initial_duty)  # SpiMcuSource.read() raises before the first write()
+        duty = initial_duty
+        over_limit = 0
+        streak: list[tuple[float, float, float, float | None, float, str]] = []
         while clock() - start < duration_s:
             voltage, current = source.read()
             t = clock() - start
-            if voltage > v_max or current > i_max:
-                aborted = True
-                reason = "overvoltage" if voltage > v_max else "overcurrent"
-                break
             v_out = getattr(source, "vout", None)
-            if v_out_max is not None and v_out is not None and v_out > v_out_max:
+            suspect: str | None = None
+            if voltage > v_max:
+                suspect = "overvoltage"
+            elif current > i_max:
+                suspect = "overcurrent"
+            elif v_out_max is not None and v_out is not None and v_out > v_out_max:
+                suspect = "output-overvoltage"
+            over_limit = over_limit + 1 if suspect else 0
+            if suspect:
+                streak.append((round(t, 4), voltage, current, v_out, duty, suspect))
+            elif streak:
+                _log.warning("ignored %d suspect reading(s): %s", len(streak), streak)
+                streak = []
+            if (
+                suspect
+                and over_limit >= _LIMIT_DEBOUNCE_SAMPLES
+                and t - streak[0][0] >= _LIMIT_DEBOUNCE_S
+            ):
                 aborted = True
-                reason = "output-overvoltage"
+                reason = suspect
+                _log.warning("run aborted (%s), t,V,I,Vout,duty,kind: %s", reason, streak)
                 break
             if getattr(source, "consecutive_bad_frames", 0) >= max_consecutive_bad_frames:
                 aborted = True
@@ -135,6 +169,13 @@ def run_control_loop(
                 aborted = True
                 reason = "stopped"
                 break
+            if suspect:
+                # Hold the duty and fetch a fresh reading; the suspect one
+                # never reaches the algorithm or the saved samples.
+                source.write(duty)
+                if period_s > 0:
+                    sleep(period_s)
+                continue
             duty = algorithm.step(voltage, current)
             source.write(duty)
             sample = RunSample(t=t, voltage=voltage, current=current, duty=duty)
