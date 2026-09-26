@@ -91,7 +91,6 @@ def test_single_panel_template_covers_the_appendix_checklist():
         "Link and limits",
         "Light and curve",
         "Runs (curve as reference, 10 s, starting duty 0.5)",
-        "After",
     }
     # The four panel-label readings are no longer steps - they're
     # snapshotted from a picked panel model straight into these fields

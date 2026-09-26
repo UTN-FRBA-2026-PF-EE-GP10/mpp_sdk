@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "template_id": "full-setup-characterization",
-  "version": 3,
+  "version": 4,
   "title": "Full setup characterization (two panels)",
   "setup": "full",
   "field_defs": [
@@ -146,13 +146,6 @@
       "kind": "check"
     },
     {
-      "id": "heatsink-and-power-cut",
-      "section": "Before energizing",
-      "title": "Heatsink and power cut",
-      "instructions": "Check that Q3 has its heatsink fitted, or plan to keep runs short. Check that someone at the bench can cut power right away. Pass: both are true.",
-      "kind": "check"
-    },
-    {
       "id": "full-mode-pico-connected",
       "section": "Before energizing",
       "title": "Workbench mode and connection",
@@ -172,14 +165,6 @@
       "title": "Link status before a sweep",
       "instructions": "With nothing running, open the connection menu (top right of the workbench) and read the raw link line. Pass: it reads \"waiting for sweep\".",
       "kind": "check"
-    },
-    {
-      "id": "light-check-isc",
-      "section": "Light and curve",
-      "title": "Light check",
-      "instructions": "With both panels at 90 degrees, run one sweep. Record Isc, in amps. Pass: Isc matches what is expected for the light level. If it does not, adjust the light and sweep again.",
-      "kind": "number",
-      "unit": "A"
     },
     {
       "id": "baseline-curve",
@@ -252,13 +237,6 @@
       "instructions": "Start a P&O run seeded at a starting duty near the lower peak of the B = 30 degree curve. Pass: recorded and linked here, noting which peak it settles on. Do it 3 times and link every run: the session shows the median and spread of the results.",
       "kind": "run",
       "repeats": 3
-    },
-    {
-      "id": "downloads",
-      "section": "After",
-      "title": "Downloads",
-      "instructions": "Check that every curve and run used in this session is downloaded, and that this session is downloaded as Markdown. Pass: all files are saved.",
-      "kind": "check"
     }
   ],
   "open_questions": [
