@@ -7,7 +7,8 @@ known faults.
 
 ## Setup
 
-- Two 10 W panels in series (Voc about 34 V, Isc about 0.37 A), one lamp.
+- Two 10 W panels in series (Voc about 34 V, Isc about 0.37 A), one lamp
+  at 53 cm from the panels.
   Panel A stays at 90 degrees. Panel B is at 90, 60 or 30 degrees.
 - SEPIC power stage, 10 Ohm, 10 W load on the output, RP2040 firmware over
   SPI, Raspberry Pi host.
