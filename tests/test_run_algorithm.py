@@ -199,6 +199,11 @@ def test_samples_argument_is_populated_in_place_even_when_the_loop_raises():
 def test_safety_abort_on_overvoltage_stops_and_zeroes_duty():
     source = _FakeSource()
     clock = _FakeClock()
+
+    def tick():
+        clock.advance(0.1)
+        return clock()
+
     samples, aborted, reason = run_control_loop(
         source,
         _FixedDutyAlgorithm(0.5),
@@ -206,7 +211,7 @@ def test_safety_abort_on_overvoltage_stops_and_zeroes_duty():
         v_max=1.0,  # source's V at duty=0.5 (seed) is 10.0 - immediately over
         i_max=100.0,
         initial_duty=0.5,
-        clock=clock,
+        clock=tick,
         sleep=lambda _: None,
     )
     assert aborted is True
@@ -273,7 +278,6 @@ def test_output_limit_never_trips_on_a_source_without_vout():
 
 def test_safety_abort_on_overcurrent():
     source = _FakeSource()
-    clock = _FakeClock()
     samples, aborted, reason = run_control_loop(
         source,
         _FixedDutyAlgorithm(0.9),
@@ -281,7 +285,7 @@ def test_safety_abort_on_overcurrent():
         v_max=100.0,
         i_max=0.05,  # source's I at duty=0.9 (seed) is 0.18 - over
         initial_duty=0.9,
-        clock=clock,
+        clock=_ticking_clock(),
         sleep=lambda _: None,
     )
     assert aborted is True
@@ -392,3 +396,93 @@ def test_on_sample_is_called_once_per_recorded_sample():
         on_sample=seen.append,
     )
     assert seen == samples
+
+
+class _ScriptedSource(_FakeSource):
+    """Returns the plant's reading, except on the read() numbers in `bad`,
+    which return `bad_reading` instead - a garbage frame from the link."""
+
+    def __init__(self, bad, bad_reading):
+        super().__init__()
+        self._bad = set(bad)
+        self._bad_reading = bad_reading
+        self.reads = 0
+
+    def read(self):
+        self.reads += 1
+        if self.reads in self._bad:
+            return self._bad_reading
+        return super().read()
+
+
+class _RecordingAlgorithm:
+    def __init__(self, duty):
+        self._duty = duty
+        self.seen: list[tuple[float, float]] = []
+
+    def step(self, voltage, current):
+        self.seen.append((voltage, current))
+        return self._duty
+
+
+def test_a_short_burst_of_bad_readings_is_ignored_and_never_reaches_the_algorithm():
+    source = _ScriptedSource(bad={3, 4}, bad_reading=(50.0, 6.0))
+    algorithm = _RecordingAlgorithm(0.5)
+    samples, aborted, reason = run_control_loop(
+        source,
+        algorithm,
+        duration_s=1.0,
+        v_max=40.0,
+        i_max=1.0,
+        initial_duty=0.5,
+        clock=_ticking_clock(step=0.01),
+        sleep=lambda _: None,
+    )
+    assert (aborted, reason) == (False, None)
+    assert all(v <= 40.0 and i <= 1.0 for v, i in algorithm.seen)
+    assert all(s.voltage <= 40.0 and s.current <= 1.0 for s in samples)
+
+
+def test_a_long_run_of_bad_readings_aborts_only_once_the_window_has_passed():
+    """Every read after the first few is over the limit. With a fast clock
+    the 5 readings in a row pass long before 50 ms do, so the run must
+    keep going until the streak spans the window."""
+    source = _ScriptedSource(bad=range(3, 10_000), bad_reading=(20.0, 6.0))
+    clock = _FakeClock()
+    calls = []
+
+    def tick():
+        clock.advance(0.001)
+        calls.append(clock())
+        return clock()
+
+    samples, aborted, reason = run_control_loop(
+        source,
+        _FixedDutyAlgorithm(0.5),
+        duration_s=10.0,
+        v_max=40.0,
+        i_max=1.0,
+        initial_duty=0.5,
+        clock=tick,
+        sleep=lambda _: None,
+    )
+    assert (aborted, reason) == (True, "overcurrent")
+    # 2 clock calls per step at 1 ms each: the streak must span at least 50 ms.
+    assert source.reads > 5 + 20
+    assert source._duty == 0.0
+
+
+def test_bad_readings_split_by_a_good_one_do_not_add_up():
+    bad = [n for n in range(3, 400) if n % 4]  # 3 bad, 1 good, 3 bad ...
+    source = _ScriptedSource(bad=bad, bad_reading=(20.0, 6.0))
+    _, aborted, reason = run_control_loop(
+        source,
+        _FixedDutyAlgorithm(0.5),
+        duration_s=0.3,
+        v_max=40.0,
+        i_max=1.0,
+        initial_duty=0.5,
+        clock=_ticking_clock(step=0.001),
+        sleep=lambda _: None,
+    )
+    assert (aborted, reason) == (False, None)
