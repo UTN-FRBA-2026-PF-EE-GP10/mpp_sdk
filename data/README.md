@@ -16,6 +16,10 @@
     `duty_hold_D040_12Vin_10R_20260919.csv` - long holds with the meter
     reading typed in: ADC 3.221 V against 3.2 V, and 7.006 V against
     7.00 V (86 % efficiency at 5.7 W in).
+- `data/bench/two_panels_10R_20260926/` - three curve-tracer sweeps (panel B
+  at 90, 60 and 30 degrees) and one P&O run, two panels in series into a
+  10 Ohm load. Scrubbed copies in the curve and run record format, with a
+  report of what failed (corrupted readings, run aborts, tracking).
 - `data/curves/` - captured curve-tracer sweeps, one JSON file per sweep,
   written by `mpp_sdk.curves.library.save`. Git-ignored: this is operator
   measurement data, not repo content. Each file holds `schema`,
