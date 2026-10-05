@@ -13,7 +13,7 @@ running the mpp-sdk.
 | MicroSD card | ≥ 8 GB, Class 10 recommended |
 | 5 V barrel-jack or USB power supply | Barrel jack preferred for stability during flashing |
 | Ethernet cable or USB cable | For headless SSH access |
-| 4 jumper wires + 1 GND wire | SPI connection to the Pico |
+| 6 jumper wires + 1 GND wire | 4 for SPI + 2 for SWD debug/flashing |
 | A PC with an SD card reader | To flash the image |
 
 ---
@@ -213,6 +213,8 @@ ls -l /dev/spidev*
 
 ## Step 7 — Wire the BBB to the RP2040 Pico
 
+### 7a — SPI telemetry and control wiring
+
 ```text
 BeagleBone Black (P9 header)          RP2040 Pico
 ──────────────────────────────        ─────────────
@@ -221,6 +223,18 @@ P9.29  (SPI1_D0 = MISO) ◄───────────── GPIO 11 (TX/M
 P9.30  (SPI1_D1 = MOSI) ─────────────► GPIO 12 (RX/MOSI)
 P9.28  (SPI1_CS0) ──────────────────► GPIO 13 (CSn)
 P9.1 or P9.2  (GND) ────────────────► GND
+```
+
+### 7b — SWD flashing & debug wiring (optional but recommended)
+
+Allows flashing firmware remotely and reading high-speed `defmt` debug logs without touching the Pico or plugging in USB cables:
+
+```text
+BeagleBone Black (P9 header)          RP2040 Pico Debug Header / Pads
+──────────────────────────────        ───────────────────────────────
+P9.12  (GPIO 540 / SWDIO) ──────────► SWDIO (right pad)
+P9.14  (GPIO 530 / SWCLK) ──────────► SWCLK (left pad)
+P9.1 or P9.2  (GND) ────────────────► GND   (middle pad or shared pin)
 ```
 
 > [!IMPORTANT]
@@ -235,11 +249,25 @@ P9.1 or P9.2  (GND) ────────────────► GND
     ┌────────────────────────────┐
     │ Pin 1 (GND)   Pin 2 (GND) │  ← use either for GND
     │ ...                       │
+    │ Pin 11         Pin 12     │  ← P9.12 = SWDIO (GPIO 540)
+    │ Pin 13         Pin 14     │  ← P9.14 = SWCLK (GPIO 530)
+    │ ...                       │
     │ Pin 27         Pin 28     │  ← P9.28 = SPI1_CS0
     │ Pin 29         Pin 30     │  ← P9.29 = MISO, P9.30 = MOSI
     │ Pin 31         Pin 32     │  ← P9.31 = SCLK
     │ ...                       │
     └────────────────────────────┘
+```
+
+#### Pico Debug Pads Location
+On the Raspberry Pi Pico, the 3-pin debug header/pads are located at the bottom edge opposite the USB connector:
+```text
+  ┌────────────────────────────────────────────────────────┐
+  │ [USB]                                     [SWCLK GND SWDIO] │
+  └────────────────────────────────────────────────────────┘
+                                               Pin 1: SWCLK (left)
+                                               Pin 2: GND   (middle)
+                                               Pin 3: SWDIO (right)
 ```
 
 ---
@@ -331,6 +359,126 @@ sudo systemctl start spi1-pins.service
 
 ---
 
+## Step 11 — Remote firmware flashing via OpenOCD SWD
+
+With SWD connected (Step 7b), you can build the firmware on your PC (fast) and flash the Pico over the network via the BeagleBone Black — no need to unplug wires or hold the BOOTSEL button.
+
+### 11a — Install OpenOCD on the BeagleBone Black
+
+```bash
+# On the BBB:
+sudo apt update && sudo apt install -y openocd
+```
+
+### 11b — Create the flashing configuration on the BBB
+
+Create `/etc/openocd/rp2040_swd.cfg`:
+
+```bash
+sudo tee /etc/openocd/rp2040_swd.cfg > /dev/null << 'EOF'
+adapter driver sysfsgpio
+sysfsgpio swdio_num 540
+sysfsgpio swclk_num 530
+transport select swd
+source [find target/rp2040.cfg]
+EOF
+```
+
+### 11c — Build on your PC and flash remotely
+
+From your host PC inside the repository:
+
+```bash
+# 1. Compile the firmware in release mode
+cd firmware/pipico_board
+cargo build --release
+
+# 2. Transfer the ELF binary to the BeagleBone
+scp target/thumbv6m-none-eabi/release/mpp-firmware debian@<bbb-ip>:/tmp/mpp-firmware.elf
+
+# 3. Flash, verify, and reboot the Pico
+ssh debian@<bbb-ip> "sudo openocd -f /etc/openocd/rp2040_swd.cfg -c 'program /tmp/mpp-firmware.elf verify reset exit'"
+```
+
+> [!TIP]
+> **One-step build & flash:** You can configure Cargo on your PC to flash automatically when you type `cargo run --release`.
+> In `firmware/pipico_board/.cargo/config.toml`, set:
+> ```toml
+> [target.thumbv6m-none-eabi]
+> runner = "bash -c 'scp $0 debian@<bbb-ip>:/tmp/mpp-firmware.elf && ssh debian@<bbb-ip> \"sudo openocd -f /etc/openocd/rp2040_swd.cfg -c \\\"program /tmp/mpp-firmware.elf verify reset exit\\\"\"'"
+> ```
+
+---
+
+## Step 12 — Stream live debug logs (defmt over RTT)
+
+The firmware logs telemetry (voltage, current, temperature, ADC calibration) via `defmt` over SEGGER RTT using the SWD pins. You can stream these logs live to your PC over Ethernet without needing a serial/UART cable.
+
+### 12a — Setup host PC tools
+
+On your development PC, install `defmt-print`:
+
+```bash
+cargo install defmt-print
+```
+
+### 12b — Configure RTT on the BeagleBone Black
+
+Create `/etc/openocd/rp2040_rtt.cfg` on the BBB:
+
+```bash
+sudo tee /etc/openocd/rp2040_rtt.cfg > /dev/null << 'EOF'
+bindto 0.0.0.0
+adapter driver sysfsgpio
+sysfsgpio swdio_num 540
+sysfsgpio swclk_num 530
+transport select swd
+source [find target/rp2040.cfg]
+init
+poll off
+rtt setup 0x20000000 0x40000 "SEGGER RTT"
+rtt polling_interval 1000
+rtt start
+rtt server start 9999 0
+EOF
+```
+
+> [!IMPORTANT]
+> **Critical BBB CPU optimization:**
+> - `poll off` disables OpenOCD's continuous GDB core polling. Without this, constant SWD bitbang traffic wakes up BeagleBoard's `gpio-manager` system service, pegging the single CPU core at 100%.
+> - `rtt polling_interval 1000` polls the RTT buffer once per second instead of the default ~1 ms, which matches the ~1 Hz sensor logging rate and drops CPU usage down to ~10–15%.
+
+### 12c — Start the RTT server on the BBB
+
+Run OpenOCD with reduced priority (`nice -n 19`) so it never starves real-time tasks:
+
+```bash
+# In foreground:
+sudo nice -n 19 openocd -f /etc/openocd/rp2040_rtt.cfg
+
+# Or in background with nohup:
+sudo nohup nice -n 19 openocd -f /etc/openocd/rp2040_rtt.cfg > /tmp/openocd.log 2>&1 &
+```
+
+### 12d — View the log stream from your PC
+
+From the root of the `mpp-sdk` repository on your PC, pipe the RTT TCP stream directly into `defmt-print`:
+
+```bash
+nc <bbb-ip> 9999 | defmt-print -e firmware/pipico_board/target/thumbv6m-none-eabi/release/mpp-firmware
+```
+
+You will see live decoded firmware logs in your terminal:
+```text
+INFO  V=0 mV I=0 mA T=n/a
+INFO  ADC_PWR=0 mV ADC_VOUT=8 mV ADC_Input_Curr=3 mV (INA229 V=0 mV I=0 mA)
+INFO  ADC cal: PWR raw=0.0 pin=0 mV scaled=0 mV | VOUT raw=14.3 pin=0 mV scaled=0 mV | INA229 V=0 mV (n=10)
+```
+
+To stop viewing, simply press `Ctrl+C`.
+
+---
+
 ## Summary of differences from the RPi 5
 
 | What | RPi 5 | BBB |
@@ -339,6 +487,9 @@ sudo systemctl start spi1-pins.service
 | Enable SPI | `raspi-config` toggle | Device tree overlay + HDMI disable |
 | SPI device | `/dev/spidev0.0` (bus=0) | `/dev/spidev1.0` (bus=1) |
 | SPI pins | GPIO header (BCM 8-11) | P9 header (pins 28-31) |
+| SWD debug pins | GPIO header (BCM 24, 25) | P9 header (P9.12=SWDIO, P9.14=SWCLK) |
+| Firmware flashing | SWD via RPi GPIO (`rp2040.cfg`) | SWD via BBB GPIO (`sysfsgpio`) |
+| Live telemetry logs | defmt over RTT (port 9999) | defmt over RTT (port 9999, `poll off`) |
 | `SpiMcuSource()` call | `SpiMcuSource(bus=0, device=0)` | `SpiMcuSource(bus=1, device=0)` |
 | Code changes needed | — | **None** (just different constructor args) |
 | Firmware changes | — | **None** |
