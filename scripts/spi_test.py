@@ -11,17 +11,12 @@ import time
 
 import spidev
 
+import os
 from mpp_sdk.io.spi_mcu import crc8
 
-BUS, DEVICE = 0, 0
-# 8 MHz is unreliable on the breadboard HIL wiring (GPIO input synchronizer
-# latency eats too much of the 125 ns bit period, on top of jumper-wire
-# signal integrity), so 1 MHz was the validated speed at first. After
-# wiring in the GPIO4 NeoPixel strip, 1 MHz started producing
-# corrupted-but-complete MISO frames (e.g. I_raw reading exactly 0x8000 -
-# one bit, not random noise), most likely electrical crosstalk from the
-# NeoPixels' fast switching onto nearby breadboard wiring. 200 kHz is
-# bench-confirmed clean with the NeoPixels active.
+# Auto-detect default bus: BeagleBone Black uses SPI1 (bus=1), RPi uses SPI0 (bus=0).
+DEFAULT_BUS = 1 if not os.path.exists("/dev/spidev0.0") and os.path.exists("/dev/spidev1.0") else 0
+DEFAULT_DEVICE = 0
 SPEED_HZ = 200_000
 # Firmware reports V/I/Vout in millivolts/milliamperes as raw u16
 # (firmware/pipico_board/README.md "Sensing"), not raw ADC counts.
@@ -58,10 +53,12 @@ def main() -> None:
     parser.add_argument("--duty", type=float, default=0.5)
     parser.add_argument("--once", action="store_true")
     parser.add_argument("--interval", type=float, default=0.5)
+    parser.add_argument("--bus", type=int, default=DEFAULT_BUS, help=f"SPI bus (default: {DEFAULT_BUS})")
+    parser.add_argument("--device", type=int, default=DEFAULT_DEVICE, help=f"SPI device (default: {DEFAULT_DEVICE})")
     args = parser.parse_args()
 
     spi = spidev.SpiDev()
-    spi.open(BUS, DEVICE)
+    spi.open(args.bus, args.device)
     spi.max_speed_hz = SPEED_HZ
     spi.mode = 0
 

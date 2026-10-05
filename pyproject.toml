@@ -3,7 +3,7 @@ name = "mpp-sdk"
 version = "0.1.0"
 description = "SDK for solar-panel MPPT algorithm simulation, comparison, and on-hardware execution."
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.13"
 dependencies = [
     "numpy",
     "matplotlib",

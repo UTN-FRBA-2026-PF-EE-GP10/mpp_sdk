@@ -190,7 +190,7 @@ def _read_seeded(directory: Path) -> set[str]:
         if not isinstance(ids, list):
             return set()
         return {i for i in ids if isinstance(i, str)}
-    except OSError, ValueError, KeyError, TypeError:
+    except (OSError, ValueError, KeyError, TypeError):
         return set()
 
 

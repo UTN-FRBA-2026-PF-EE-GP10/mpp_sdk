@@ -87,7 +87,7 @@ from scripts.run_algorithm import _BAD_FRAMES_LINK_DOWN as _RUN_BAD_FRAMES_LINK_
 from scripts.run_algorithm import run_control_loop
 
 try:
-    from fastapi import FastAPI, HTTPException
+    from fastapi import FastAPI, HTTPException, Response
     from fastapi.staticfiles import StaticFiles
     from pydantic import BaseModel
 except ModuleNotFoundError as exc:  # pragma: no cover
@@ -101,6 +101,9 @@ if TYPE_CHECKING:
     from mpp_sdk.io.sweep_source import SweepSource
 
 _WEB_ROOT = Path(__file__).parent / "curve_tracer_web"
+
+# Auto-detect default SPI bus: BBB uses SPI1 (bus=1), RPi uses SPI0 (bus=0).
+_DEFAULT_SPI_BUS = 1 if not Path("/dev/spidev0.0").exists() and Path("/dev/spidev1.0").exists() else 0
 
 # Consecutive failed frames before the link is reported down. At the
 # default poll period this is well under a second, fast enough to notice
@@ -1299,9 +1302,10 @@ def create_app(
                 entries.append({"id": path.stem, "path": str(path), "error": str(exc)})
         return entries
 
-    @app.delete("/api/curves/{curve_id}", status_code=204)
-    def delete_curve(curve_id: str) -> None:
+    @app.delete("/api/curves/{curve_id}", status_code=204, response_class=Response)
+    def delete_curve(curve_id: str) -> Response:
         curve_library.delete(_curve_path(curve_id))
+        return Response(status_code=204)
 
     @app.post("/api/curves/delete-batch")
     def post_delete_curves_batch(body: _BatchDeleteRequest) -> dict:
@@ -1452,9 +1456,10 @@ def create_app(
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         return updated.to_dict()
 
-    @app.delete("/api/panels/{panel_id}", status_code=204)
-    def delete_panel(panel_id: str) -> None:
+    @app.delete("/api/panels/{panel_id}", status_code=204, response_class=Response)
+    def delete_panel(panel_id: str) -> Response:
         panel_library.delete(_panel_path(panel_id))
+        return Response(status_code=204)
 
     @app.get("/api/session-templates")
     def get_session_templates() -> list[dict]:
@@ -1704,9 +1709,10 @@ def create_app(
         session_library.update(updated)
         return updated.to_dict()
 
-    @app.delete("/api/sessions/{session_id}", status_code=204)
-    def delete_session(session_id: str) -> None:
+    @app.delete("/api/sessions/{session_id}", status_code=204, response_class=Response)
+    def delete_session(session_id: str) -> Response:
         session_library.delete(_session_path(session_id))
+        return Response(status_code=204)
 
     @app.get("/api/runs")
     def get_runs() -> list[dict]:
@@ -1947,8 +1953,8 @@ def create_app(
             "duration_s": duration_s,
         }
 
-    @app.post("/api/runs/stop", status_code=204)
-    def post_stop_run() -> None:
+    @app.post("/api/runs/stop", status_code=204, response_class=Response)
+    def post_stop_run() -> Response:
         # Checked and set atomically under run_cache's own lock
         # (stop_if_running), not as two separate steps - otherwise a run
         # that finishes and a new one that claims the slot in the gap
@@ -1956,6 +1962,7 @@ def create_app(
         # old run instead.
         if not run_cache.stop_if_running(stop_event):
             raise HTTPException(status_code=409, detail="no run in progress")
+        return Response(status_code=204)
 
     @app.get("/api/runs/live")
     def get_live_run(max_samples: int = _DEFAULT_LIVE_MAX_SAMPLES) -> dict:
@@ -2007,9 +2014,10 @@ def create_app(
             "samples": [s.to_dict() for s in samples],
         }
 
-    @app.delete("/api/runs/{run_id}", status_code=204)
-    def delete_run(run_id: str) -> None:
+    @app.delete("/api/runs/{run_id}", status_code=204, response_class=Response)
+    def delete_run(run_id: str) -> Response:
         run_library.delete(_run_path(run_id))
+        return Response(status_code=204)
 
     @app.post("/api/runs/delete-batch")
     def post_delete_runs_batch(body: _BatchDeleteRequest) -> dict:
@@ -2035,22 +2043,25 @@ def create_app(
                 "starting a sweep",
             )
 
-    @app.post("/api/start-sweep", status_code=204)
-    def post_start_sweep() -> None:
+    @app.post("/api/start-sweep", status_code=204, response_class=Response)
+    def post_start_sweep() -> Response:
         _refuse_if_hardware_run_in_progress()
         commands.put_nowait("start_sweep")
+        return Response(status_code=204)
 
-    @app.post("/api/start-demo-sweep", status_code=204)
-    def post_start_demo_sweep(bright: bool = False) -> None:
+    @app.post("/api/start-demo-sweep", status_code=204, response_class=Response)
+    def post_start_demo_sweep(bright: bool = False) -> Response:
         """Replay a curve stored in the firmware over real SPI - lets the
         whole loop be worked on with no panel and no lamp. Distinct from
         the server's own --demo flag, which never touches the board."""
         _refuse_if_hardware_run_in_progress()
         commands.put_nowait("demo_sweep_bright" if bright else "demo_sweep_dim")
+        return Response(status_code=204)
 
-    @app.post("/api/release-relay", status_code=204)
-    def post_release_relay() -> None:
+    @app.post("/api/release-relay", status_code=204, response_class=Response)
+    def post_release_relay() -> Response:
         commands.put_nowait("release_relay")
+        return Response(status_code=204)
 
     if _WEB_ROOT.exists():
         # Mounted last: FastAPI/Starlette match routes in registration
@@ -2069,7 +2080,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--host", default="0.0.0.0")
     parser.add_argument("--port", type=int, default=8000)
-    parser.add_argument("--spi-bus", type=int, default=0)
+    parser.add_argument("--spi-bus", type=int, default=_DEFAULT_SPI_BUS, help=f"SPI bus (default: {_DEFAULT_SPI_BUS})")
     parser.add_argument("--spi-device", type=int, default=0)
     parser.add_argument("--spi-speed-hz", type=int, default=200_000)
     parser.add_argument(

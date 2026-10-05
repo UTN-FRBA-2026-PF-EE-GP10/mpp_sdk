@@ -6,6 +6,8 @@ implements exactly the three methods `PanelModel` requires, same as
 `TabulatedPanel` and `IdealSingleDiode`.
 """
 
+from __future__ import annotations
+
 from collections import defaultdict
 from collections.abc import Sequence
 

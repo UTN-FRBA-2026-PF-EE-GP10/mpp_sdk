@@ -30,7 +30,9 @@ nav:
   - Rationale: rationale.md
   - Methodology: methodology.md
   - Measurement Procedure: measurement_procedure.md
-  - Hardware v1:
+  - Hardware & Boards:
+      - Dual-Board Compatibility: board_compatibility.md
+      - BeagleBone Black Setup: beaglebone_setup_guide.md
       - ADC calibration: hardware_v1/calibration.md
   - Algorithms:
       - Perturb & Observe: algorithms/perturb_observe.md
