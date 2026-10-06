@@ -83,7 +83,7 @@ import mpp_sdk
 panel = mpp_sdk.IdealSingleDiode()
 conv  = mpp_sdk.SEPICConverter()
 src   = mpp_sdk.SimulatedSource(panel, conv, load_resistance=10.0)
-ctl   = mpp_sdk.PerturbAndObserve(initial_duty=src.duty)
+ctl   = mpp_sdk.PerturbAndObserve(initial_duty=src.duty, min_duty=0.1, max_duty=0.9)
 
 for _ in range(500):
     v, i = src.read()

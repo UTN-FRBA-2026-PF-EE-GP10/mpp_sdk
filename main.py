@@ -28,7 +28,7 @@ def main() -> None:
         load_resistance=10.0,
         initial_duty=0.1,
     )
-    controller = PerturbAndObserve(initial_duty=source.duty, step_size=0.005)
+    controller = PerturbAndObserve(initial_duty=source.duty, step_size=0.005, min_duty=0.1, max_duty=0.9)
 
     view = LivePanelView(panel)
     base_photocurrent = panel.photocurrent

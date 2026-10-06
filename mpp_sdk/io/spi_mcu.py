@@ -143,7 +143,7 @@ class SpiMcuSource(SignalSource):
     Usage::
 
         with SpiMcuSource() as src:
-            ctl = PerturbAndObserve(initial_duty=0.5)
+            ctl = PerturbAndObserve(initial_duty=0.5, min_duty=0.1, max_duty=0.9)
             for _ in range(500):
                 v, i = src.read()
                 src.write(ctl.step(v, i))
@@ -162,6 +162,8 @@ class SpiMcuSource(SignalSource):
         v_offset: float = 0.0,
         i_offset: float = 0.0,
         initial_duty: float = 0.0,
+        settling_time_s: float = 0.01,
+        oversample_count: int = 5,
     ) -> None:
         """
         Parameters
@@ -185,6 +187,10 @@ class SpiMcuSource(SignalSource):
             Additive offset applied after scaling.
         initial_duty:
             Duty cycle sent on the first ``write()`` (0.0 - 1.0).
+        settling_time_s:
+            Seconds to wait after setting a new duty cycle before reading telemetry.
+        oversample_count:
+            Number of samples to read and average (dropping the min and max) after settling.
         """
         self._spi = _spidev.SpiDev()
         self._spi.open(bus, device)
@@ -195,6 +201,9 @@ class SpiMcuSource(SignalSource):
         self._i_scale = i_scale
         self._v_offset = v_offset
         self._i_offset = i_offset
+
+        self._settling_time_s = settling_time_s
+        self._oversample_count = oversample_count
 
         self._duty = float(initial_duty)
         self._v: float = 0.0
@@ -285,7 +294,35 @@ class SpiMcuSource(SignalSource):
         available via ``read()``/``vout``/``temperature_c`` afterward.
         """
         self._duty = max(0.0, min(1.0, duty_cycle))
+        
+        # 1. Apply new duty cycle (ignore returned stale telemetry)
         self._send_cmd()
+        
+        # 2. Wait for converter to settle
+        if self._settling_time_s > 0:
+            time.sleep(self._settling_time_s)
+            
+        # 3. Read multiple times
+        if self._oversample_count <= 2:
+            self._send_cmd()
+            return
+
+        v_samples = []
+        i_samples = []
+        for _ in range(self._oversample_count):
+            time.sleep(0.001)  # tiny delay between samples
+            self._send_cmd()
+            v_samples.append(self._v)
+            i_samples.append(self._i)
+            
+        # 4. Filter and average: drop the lowest and highest values
+        v_samples.remove(min(v_samples))
+        v_samples.remove(max(v_samples))
+        i_samples.remove(min(i_samples))
+        i_samples.remove(max(i_samples))
+
+        self._v = sum(v_samples) / len(v_samples)
+        self._i = sum(i_samples) / len(i_samples)
 
     # ── extras ───────────────────────────────────────────────────────────────
 
