@@ -162,8 +162,8 @@ class SpiMcuSource(SignalSource):
         v_offset: float = 0.0,
         i_offset: float = 0.0,
         initial_duty: float = 0.0,
-        settling_time_s: float = 0.01,
-        oversample_count: int = 5,
+        settling_time_s: float = 0.10,
+        oversample_count: int = 20,
     ) -> None:
         """
         Parameters
@@ -189,8 +189,9 @@ class SpiMcuSource(SignalSource):
             Duty cycle sent on the first ``write()`` (0.0 - 1.0).
         settling_time_s:
             Seconds to wait after setting a new duty cycle before reading telemetry.
+            Default 0.10 s (100 ms) matches the hardware SEPIC converter's settling time.
         oversample_count:
-            Number of samples to read and average (dropping the min and max) after settling.
+            Number of samples to read and average (dropping the top/bottom 20%) after settling.
         """
         self._spi = _spidev.SpiDev()
         self._spi.open(bus, device)
@@ -297,32 +298,51 @@ class SpiMcuSource(SignalSource):
         
         # 1. Apply new duty cycle (ignore returned stale telemetry)
         self._send_cmd()
-        
-        # 2. Wait for converter to settle
-        if self._settling_time_s > 0:
-            time.sleep(self._settling_time_s)
-            
-        # 3. Read multiple times
-        if self._oversample_count <= 2:
-            self._send_cmd()
+
+        if self._settling_time_s <= 0 and self._oversample_count <= 0:
             return
 
+        # 2. Initial delay before taking measurements
+        time.sleep(0.005)
+
+        # 3. Dynamic settling loop
         v_samples = []
         i_samples = []
-        for _ in range(self._oversample_count):
-            time.sleep(0.001)  # tiny delay between samples
+        start_time = time.time()
+        
+        buffer_size = max(5, self._oversample_count)
+        
+        while True:
             self._send_cmd()
             v_samples.append(self._v)
             i_samples.append(self._i)
             
-        # 4. Filter and average: drop the lowest and highest values
-        v_samples.remove(min(v_samples))
-        v_samples.remove(max(v_samples))
-        i_samples.remove(min(i_samples))
-        i_samples.remove(max(i_samples))
+            if len(v_samples) > buffer_size:
+                v_samples.pop(0)
+                i_samples.pop(0)
+                
+            elapsed = time.time() - start_time
+            if len(v_samples) == buffer_size:
+                v_ripple = max(v_samples) - min(v_samples)
+                # If difference between max and min is less than 0.15V, assume settled.
+                # Or fallback to max settling time.
+                if v_ripple < 0.15 or elapsed >= self._settling_time_s:
+                    break
+                    
+        # 4. Filter and average: sort and drop the top and bottom 20% of values
+        if len(v_samples) >= 5:
+            drop_count = len(v_samples) // 5  # 20%
+            v_sorted = sorted(v_samples)
+            i_sorted = sorted(i_samples)
+            v_filtered = v_sorted[drop_count:len(v_sorted)-drop_count]
+            i_filtered = i_sorted[drop_count:len(i_sorted)-drop_count]
+        else:
+            v_filtered = v_samples
+            i_filtered = i_samples
 
-        self._v = sum(v_samples) / len(v_samples)
-        self._i = sum(i_samples) / len(i_samples)
+        if v_filtered:
+            self._v = sum(v_filtered) / len(v_filtered)
+            self._i = sum(i_filtered) / len(i_filtered)
 
     # ── extras ───────────────────────────────────────────────────────────────
 

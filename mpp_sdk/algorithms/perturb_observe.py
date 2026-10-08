@@ -30,7 +30,7 @@ class PerturbAndObserve(MPPTAlgorithm):
     def __init__(
         self,
         initial_duty: float = 0.5,
-        step_size: float = 0.005,
+        step_size: float = 0.001,
         min_duty: float = 0.05,
         max_duty: float = 0.95,
     ) -> None:

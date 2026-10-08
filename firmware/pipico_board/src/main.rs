@@ -188,7 +188,8 @@ enum AdcDividerRange {
 }
 
 /// Set this to match the jumpers actually shorted on the board.
-const ADC_DIVIDER_RANGE: AdcDividerRange = AdcDividerRange::Low;
+const ADC_VIN_DIVIDER_RANGE: AdcDividerRange = AdcDividerRange::Low;
+const ADC_VOUT_DIVIDER_RANGE: AdcDividerRange = AdcDividerRange::Low;
 
 /// Set to `true` once a PT100 probe is fitted. With no probe the MAX31865
 /// reports a fault on every read, which floods the log with errors, so it
@@ -210,13 +211,18 @@ async fn onchip_adc_task(
     // Matches the currently-shorted jumper state. The ratio numbers and the
     // saturating conversion live in adc_cal.rs, next to the rest of the ADC
     // calibration.
-    fn divider_to_actual_mv(adc_mv: u16) -> u16 {
-        adc_cal::divider_to_actual_mv(ADC_DIVIDER_RANGE, adc_mv)
+    fn pwr_divider_to_actual_mv(adc_mv: u16) -> u16 {
+        adc_cal::divider_to_actual_mv(ADC_VIN_DIVIDER_RANGE, adc_mv)
+    }
+
+    fn vout_divider_to_actual_mv(adc_mv: u16) -> u16 {
+        adc_cal::divider_to_actual_mv(ADC_VOUT_DIVIDER_RANGE, adc_mv)
     }
 
     defmt::info!(
-        "ADC divider range: {} (must match the physical jumpers)",
-        ADC_DIVIDER_RANGE
+        "ADC divider ranges: Vin={} Vout={} (must match the physical jumpers)",
+        ADC_VIN_DIVIDER_RANGE,
+        ADC_VOUT_DIVIDER_RANGE
     );
 
     // Per-second sums for the calibration log line below: the raw codes
@@ -233,7 +239,7 @@ async fn onchip_adc_task(
         let pwr_raw = adc.blocking_read(&mut ch_pwr).ok();
         let v_ina = MEAS_V_MV.load(Ordering::Relaxed);
         if let Some(raw) = pwr_raw {
-            MEAS_ADC_PWR_MV.store(divider_to_actual_mv(raw_to_mv(raw)), Ordering::Relaxed);
+            MEAS_ADC_PWR_MV.store(pwr_divider_to_actual_mv(raw_to_mv(raw)), Ordering::Relaxed);
         }
 
         let vout_raw = adc.blocking_read(&mut ch_vout).ok();
@@ -244,7 +250,7 @@ async fn onchip_adc_task(
             cal_ina_mv += v_ina as u32;
         }
         if let Some(raw) = vout_raw {
-            MEAS_ADC_VOUT_MV.store(divider_to_actual_mv(raw_to_mv(raw)), Ordering::Relaxed);
+            MEAS_ADC_VOUT_MV.store(vout_divider_to_actual_mv(raw_to_mv(raw)), Ordering::Relaxed);
         }
 
         // ADC_Input_Curr (INA281 cross-check): pin mV, same calibration line.
@@ -254,8 +260,8 @@ async fn onchip_adc_task(
         ADC_SAMPLE_COUNT.fetch_add(1, Ordering::Relaxed);
 
         tick = tick.wrapping_add(1);
-        if tick.is_multiple_of(10) {
-            // ~1 Hz at the 100 ms poll period.
+        if tick.is_multiple_of(1000) {
+            // ~1 Hz at the 1 ms poll period.
             defmt::info!(
                 "ADC_PWR={} mV ADC_VOUT={} mV ADC_Input_Curr={} mV (INA229 V={} mV I={} mA)",
                 MEAS_ADC_PWR_MV.load(Ordering::Relaxed),
@@ -276,11 +282,11 @@ async fn onchip_adc_task(
                     pwr_x10 / 10,
                     pwr_x10 % 10,
                     raw_to_mv(pwr_mean),
-                    divider_to_actual_mv(raw_to_mv(pwr_mean)),
+                    pwr_divider_to_actual_mv(raw_to_mv(pwr_mean)),
                     vout_x10 / 10,
                     vout_x10 % 10,
                     raw_to_mv(vout_mean),
-                    divider_to_actual_mv(raw_to_mv(vout_mean)),
+                    vout_divider_to_actual_mv(raw_to_mv(vout_mean)),
                     cal_ina_mv / n,
                     n
                 );
@@ -290,7 +296,7 @@ async fn onchip_adc_task(
             cal_vout_raw = 0;
             cal_ina_mv = 0;
         }
-        Timer::after_millis(100).await;
+        Timer::after_millis(1).await;
     }
 }
 

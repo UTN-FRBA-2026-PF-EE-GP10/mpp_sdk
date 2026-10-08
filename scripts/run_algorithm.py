@@ -29,6 +29,10 @@ import contextlib
 import logging
 import time
 from collections.abc import Callable
+from pathlib import Path
+
+# Auto-detect default SPI bus: BeagleBone Black uses SPI1 (bus=1), RPi uses SPI0 (bus=0).
+DEFAULT_BUS = 1 if not Path("/dev/spidev0.0").exists() and Path("/dev/spidev1.0").exists() else 0
 
 from harness.common import algorithm_specs
 from mpp_sdk.curves import CurveRecord
@@ -234,9 +238,15 @@ def main() -> None:
     )
     parser.add_argument("--no-sweep", action="store_true", help="skip the curve sweep")
     parser.add_argument("--curve", default=None, help="existing curve filename (with --no-sweep)")
-    parser.add_argument("--bus", type=int, default=0)
+    parser.add_argument("--bus", type=int, default=DEFAULT_BUS, help=f"SPI bus (default: {DEFAULT_BUS})")
     parser.add_argument("--device", type=int, default=0)
     parser.add_argument("--speed-hz", type=int, default=200_000)
+    parser.add_argument(
+        "--settling-time-s",
+        type=float,
+        default=0.10,
+        help="converter settling delay per step in seconds (default: 0.10s / 100ms)",
+    )
     args = parser.parse_args()
 
     spec = specs.get(args.algorithm.lower())
@@ -245,7 +255,12 @@ def main() -> None:
 
     from mpp_sdk.io.spi_mcu import SpiMcuSource
 
-    with SpiMcuSource(bus=args.bus, device=args.device, speed_hz=args.speed_hz) as src:
+    with SpiMcuSource(
+        bus=args.bus,
+        device=args.device,
+        speed_hz=args.speed_hz,
+        settling_time_s=args.settling_time_s,
+    ) as src:
         curve_ref = args.curve
         if not args.no_sweep:
             print("Sweeping curve...")

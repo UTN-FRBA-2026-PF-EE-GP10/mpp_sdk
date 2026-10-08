@@ -75,7 +75,7 @@ class ParticleSwarm(MPPTAlgorithm):
         cognitive: float = 1.5,
         social: float = 1.5,
         max_iterations: int = 4,
-        track_step: float = 0.005,
+        track_step: float = 0.001,
         min_duty: float = 0.05,
         max_duty: float = 0.95,
         seed: int = 0,

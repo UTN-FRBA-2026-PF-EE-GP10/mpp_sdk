@@ -67,7 +67,12 @@ def spi_mcu_source(monkeypatch):
 
     from mpp_sdk.io.spi_mcu import SpiMcuSource
 
-    return SpiMcuSource
+    def _factory(*args, settling_time_s: float = 0.0, oversample_count: int = 0, **kwargs):
+        return SpiMcuSource(
+            *args, settling_time_s=settling_time_s, oversample_count=oversample_count, **kwargs
+        )
+
+    return _factory
 
 
 def _miso_frame(

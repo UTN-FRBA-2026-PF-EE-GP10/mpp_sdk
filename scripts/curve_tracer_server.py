@@ -299,7 +299,7 @@ _SIMULATED_RUN_PERIOD_S = 0.05
 # A fixed operating point for a simulated run to track - not calibrated to
 # any particular board, matching harness/panel_config.py's
 # make_static_source default.
-_SIMULATED_LOAD_RESISTANCE = 10.0
+_SIMULATED_LOAD_RESISTANCE = 41.0
 
 # Bounds on inline `curve_points` for a simulated run. A captured sweep is
 # a few dozen points; the cap only stops an oversized body from building
