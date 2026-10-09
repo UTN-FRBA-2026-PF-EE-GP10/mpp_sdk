@@ -32,5 +32,22 @@ Instead of hardcoding a blind `0.10s` wait time, we can dynamically detect when 
 * **The Fix**: In the firmware or the Python loop, start taking measurements after $5\,\text{ms}$. Keep a rolling buffer of readings. If the difference between the maximum and minimum of those readings is less than a small threshold (e.g., less than the known ripple), assume it has settled and return the value early.
 * **The Result**: Small duty cycle steps will return quickly (maybe $20\,\text{ms}$), while large steps will dynamically wait longer (up to $100\,\text{ms}$) only when necessary.
 
-## Conclusion
-The most effective engineering fix is **Option A**. A $1000\,\mu\text{F}$ capacitor acts as a large energy storage tank, not a high-frequency switching filter. Swapping it for a $\sim 47\,\mu\text{F}$ capacitor will solve the speed issue at the hardware level, allowing the `settling-time-s` parameter to be safely lowered to `0.01` or `0.02` seconds.
+## Conclusion & Hardware Verification
+The most effective engineering fix is **Option A**. A $1000\,\mu\text{F}$ capacitor acts as a large energy storage tank, not a high-frequency switching filter. Swapping it for a $22\,\mu\text{F}$ capacitor solved the speed issue at the hardware level, allowing the `settling-time-s` parameter to be safely lowered to `0.02` seconds (a $5\times$ speedup).
+
+## Bench Verification Results ($22\,\mu\text{F}$ vs $1000\,\mu\text{F}$)
+
+Executed on 2026-10-08 using `scripts/sepic_step_response.py` across duty cycles $0.40 \to 0.70$ on a $10\,\Omega$ load:
+
+| Step | Duty Transition | $V_\text{in}$ Mean | $V_\text{out}$ Transition | Settling Time ($1000\,\mu\text{F}$) | Settling Time ($22\,\mu\text{F}$) | Speedup |
+|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| 1 | $0.40 \to 0.45$ | $16.49\text{ V}$ | $12.37\text{ V} \to 14.43\text{ V}$ | $7.3\text{ ms}$ | **$14.1\text{ ms}$** | Steady |
+| 2 | $0.45 \to 0.50$ | $14.43\text{ V}$ | $14.44\text{ V} \to 15.30\text{ V}$ | $23.8\text{ ms}$ | **$5.5\text{ ms}$** | **$4.3\times$** |
+| 3 | $0.50 \to 0.55$ | $10.10\text{ V}$ | $15.30\text{ V} \to 12.84\text{ V}$ | $68.4\text{ ms}$ | **$14.6\text{ ms}$** | ⚡ **$4.7\times$** |
+| 4 | $0.55 \to 0.60$ | $6.90\text{ V}$ | $12.85\text{ V} \to 10.53\text{ V}$ | $55.3\text{ ms}$ | **$14.6\text{ ms}$** | ⚡ **$3.8\times$** |
+| 5 | $0.60 \to 0.65$ | $6.91\text{ V}$ | $10.50\text{ V} \to 10.56\text{ V}$ | $41.7\text{ ms}$ | **$0.0\text{ ms}$** | Instant |
+| 6 | $0.65 \to 0.70$ | $6.90\text{ V}$ | $10.56\text{ V} \to 10.55\text{ V}$ | $28.2\text{ ms}$ | **$0.0\text{ ms}$** | Instant |
+
+- **Worst-case settling time**: Reduced from $68.4\,\text{ms}$ to $14.6\,\text{ms}$.
+- **SDK Default Updated**: `settling_time_s` in `SpiMcuSource` and `scripts/run_algorithm.py` reduced from `0.10` ($100\,\text{ms}$) to `0.02` ($20\,\text{ms}$).
+

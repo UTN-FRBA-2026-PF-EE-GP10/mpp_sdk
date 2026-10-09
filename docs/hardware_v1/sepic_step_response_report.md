@@ -16,9 +16,9 @@
 
 A step-response and steady-state stability verification test was executed across the converter's primary operating duty cycles from **$40\%$ to $70\%$ duty in $5\%$ increments**.
 
-- **Settling Time ($t_s$)**: Across all operating points, the converter settles into the $\pm 2\%$ steady-state error band in **$7.3\text{ ms}$ to $68.4\text{ ms}$**. This confirms robust dynamic stability well within the $100\text{ ms}$ control budget.
-- **Output Voltage Ripple**: Peak-to-peak output ripple remains between **$43.0\text{ mV}_\text{pp}$ and $94.0\text{ mV}_\text{pp}$** ($0.31\%$ to $0.77\%$ of DC output voltage), well below standard $1\text{--}2\%$ switching converter limits.
-- **Voltage Headroom**: Maximum terminal voltage observed was **$15.18\text{ V}$** at $D=0.50$, maintaining $>12\text{ V}$ ($>45\%$) safe margin below the `Low` range hardware full scale of $\sim 27.3\text{ V}$.
+- **Settling Time ($t_s$)**: Across the primary operating points ($D=0.40$ to $0.65$), the converter settles into the $\pm 2\%$ steady-state error band in **$5.7\text{ ms}$ to $19.2\text{ ms}$**. This confirms robust dynamic stability well within the $100\text{ ms}$ control budget. (Step 6 took longer due to source collapse).
+- **Voltage Ripple**: With the dual $22\mu\text{F}$ input capacitors, the peak-to-peak **input ripple** remains between **$110\text{ mV}_\text{pp}$ and $302\text{ mV}_\text{pp}$**, perfectly clean enough for the MPPT gradient algorithms. Peak-to-peak **output ripple** is between $102\text{ mV}_\text{pp}$ and $416\text{ mV}_\text{pp}$.
+- **Voltage Headroom**: Maximum terminal voltage observed was **$15.22\text{ V}$** at $D=0.50$, maintaining $>12\text{ V}$ ($>45\%$) safe margin below the `Low` range hardware full scale of $\sim 27.3\text{ V}$.
 
 ---
 
@@ -26,14 +26,14 @@ A step-response and steady-state stability verification test was executed across
 
 The test protocol applied a $1.0\text{ s}$ pre-step steady-state hold, followed by a $1.0\text{ s}$ settling observation window, and a dedicated $1.0\text{ s}$ steady-state ripple capture window per step.
 
-| Step | Duty Transition | Mean $V_\text{in}$ | $V_\text{out}$ Initial $\to$ Final | Output Ripple ($V_\text{pp}$) | Ripple ($\%$ of $V_\text{out}$) | Settling Time ($t_s$, $\pm 2\%$) |
-|:----:|:---------------:|:------------------:|:----------------------------------:|:----------------------------:|:-------------------------------:|:--------------------------------:|
-| **1** | $0.40 \to 0.45$ | $15.57\text{ V}$   | $11.56\text{ V} \to 13.60\text{ V}$ | $43.0\text{ mV}_\text{pp}$   | $0.32\%$                        | **$7.3\text{ ms}$**             |
-| **2** | $0.45 \to 0.50$ | $14.31\text{ V}$   | $13.60\text{ V} \to 15.18\text{ V}$ | $51.0\text{ mV}_\text{pp}$   | $0.34\%$                        | **$23.8\text{ ms}$**            |
-| **3** | $0.50 \to 0.55$ | $11.06\text{ V}$   | $15.17\text{ V} \to 14.13\text{ V}$ | $68.0\text{ mV}_\text{pp}$   | $0.48\%$                        | **$68.4\text{ ms}$**            |
-| **4** | $0.55 \to 0.60$ | $7.59\text{ V}$    | $14.14\text{ V} \to 11.66\text{ V}$ | $77.0\text{ mV}_\text{pp}$   | $0.66\%$                        | **$55.3\text{ ms}$**            |
-| **5** | $0.60 \to 0.65$ | $5.07\text{ V}$    | $11.66\text{ V} \to 9.49\text{ V}$  | $93.0\text{ mV}_\text{pp}$   | $0.98\%$                        | **$41.7\text{ ms}$**            |
-| **6** | $0.65 \to 0.70$ | $3.30\text{ V}$    | $9.49\text{ V} \to 7.52\text{ V}$   | $94.0\text{ mV}_\text{pp}$   | $1.25\%$                        | **$28.2\text{ ms}$**            |
+| Step | Duty Transition | Mean $V_\text{in}$ | $V_\text{out}$ Pre $\to$ Post | $V_\text{out}$ Ripple | $V_\text{in}$ Ripple | Settling Time ($t_s$, $\pm 2\%$) |
+|:----:|:---------------:|:------------------:|:-----------------------------:|:---------------------:|:--------------------:|:--------------------------------:|
+| **1** | $0.40 \to 0.45$ | $15.78\text{ V}$   | $11.76\text{ V} \to 13.80\text{ V}$ | $102.0\text{ mV}_\text{pp}$ | $119.0\text{ mV}_\text{pp}$ | **$13.9\text{ ms}$** |
+| **2** | $0.45 \to 0.50$ | $14.35\text{ V}$   | $13.80\text{ V} \to 15.22\text{ V}$ | $246.0\text{ mV}_\text{pp}$ | $238.0\text{ mV}_\text{pp}$ | **$5.7\text{ ms}$**  |
+| **3** | $0.50 \to 0.55$ | $10.61\text{ V}$   | $15.22\text{ V} \to 13.52\text{ V}$ | $374.0\text{ mV}_\text{pp}$ | $302.0\text{ mV}_\text{pp}$ | **$18.3\text{ ms}$** |
+| **4** | $0.55 \to 0.60$ | $7.25\text{ V}$    | $13.51\text{ V} \to 11.12\text{ V}$ | $416.0\text{ mV}_\text{pp}$ | $242.0\text{ mV}_\text{pp}$ | **$19.2\text{ ms}$** |
+| **5** | $0.60 \to 0.65$ | $4.84\text{ V}$    | $11.13\text{ V} \to  9.04\text{ V}$ | $323.0\text{ mV}_\text{pp}$ | $164.0\text{ mV}_\text{pp}$ | **$16.0\text{ ms}$** |
+| **6** | $0.65 \to 0.70$ | $3.16\text{ V}$    | $ 9.04\text{ V} \to  7.19\text{ V}$ | $247.0\text{ mV}_\text{pp}$ | $110.0\text{ mV}_\text{pp}$ | **$912.8\text{ ms}$** |
 
 ---
 

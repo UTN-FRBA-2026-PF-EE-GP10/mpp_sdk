@@ -162,8 +162,8 @@ class SpiMcuSource(SignalSource):
         v_offset: float = 0.0,
         i_offset: float = 0.0,
         initial_duty: float = 0.0,
-        settling_time_s: float = 0.10,
-        oversample_count: int = 20,
+        settling_time_s: float = 0.08,
+        oversample_count: int = 10,
     ) -> None:
         """
         Parameters
@@ -188,10 +188,11 @@ class SpiMcuSource(SignalSource):
         initial_duty:
             Duty cycle sent on the first ``write()`` (0.0 - 1.0).
         settling_time_s:
-            Seconds to wait after setting a new duty cycle before reading telemetry.
-            Default 0.10 s (100 ms) matches the hardware SEPIC converter's settling time.
+            Maximum settling observation timeout in seconds (default: 0.08 s / 80 ms).
+            A 2 ms initial sleep is followed by dynamic settling detection (drift < 40 mV).
         oversample_count:
-            Number of samples to read and average (dropping the top/bottom 20%) after settling.
+            Number of steady-state samples to read (default 10, averaging the
+            middle 6 measurements).
         """
         self._spi = _spidev.SpiDev()
         self._spi.open(bus, device)
@@ -291,58 +292,89 @@ class SpiMcuSource(SignalSource):
     def write(self, duty_cycle: float) -> None:
         """Send *duty_cycle* to the Pico and capture the returned telemetry.
 
-        The duty cycle is clamped to [0.0, 1.0]. V/I/Vout/temperature are
-        available via ``read()``/``vout``/``temperature_c`` afterward.
+        Flow:
+          1. Send duty command over SPI.
+          2. Initial 2 ms sleep to let the SEPIC converter start moving.
+          3. Check for terminal voltage settling (drift < 40 mV, up to settling_time_s).
+          4. Take 10 fresh measurements and average the middle 6 (dropping min/max).
         """
+        old_duty = self._duty
         self._duty = max(0.0, min(1.0, duty_cycle))
-        
+        duty_changed = abs(self._duty - old_duty) > 1e-4
+
         # 1. Apply new duty cycle (ignore returned stale telemetry)
         self._send_cmd()
 
         if self._settling_time_s <= 0 and self._oversample_count <= 0:
             return
 
-        # 2. Initial delay before taking measurements
-        time.sleep(0.005)
+        # 2. Initial sleep to let the converter start moving
+        if duty_changed:
+            time.sleep(0.002)
 
-        # 3. Dynamic settling loop
-        v_samples = []
-        i_samples = []
-        start_time = time.time()
-        
-        buffer_size = max(5, self._oversample_count)
-        
-        while True:
+        # 3. Check for terminal voltage settling
+        if duty_changed and self._settling_time_s > 0:
+            settle_buf: list[float] = []
+            start_t = time.monotonic()
+            max_wait = self._settling_time_s
+
+            while True:
+                self._send_cmd()
+                settle_buf.append(self._v)
+                now = time.monotonic()
+                elapsed = now - start_t
+
+                # Keep rolling window of the last 8 readings
+                if len(settle_buf) > 8:
+                    settle_buf.pop(0)
+
+                # Check drift once we have at least 8 readings (~12-15 ms)
+                if len(settle_buf) == 8:
+                    v_prev = sum(settle_buf[:4]) / 4.0
+                    v_curr = sum(settle_buf[4:]) / 4.0
+                    drift = abs(v_curr - v_prev)
+
+                    # Flat trend (under 40 mV drift) indicates steady state
+                    if drift < 0.040:
+                        break
+
+                if elapsed >= max_wait:
+                    break
+
+                time.sleep(0.001)
+
+        # 4. Take 10 steady-state measurements
+        if self._oversample_count <= 1:
+            self._send_cmd()
+            return
+
+        v_samples: list[float] = []
+        i_samples: list[float] = []
+        for _ in range(self._oversample_count):
             self._send_cmd()
             v_samples.append(self._v)
             i_samples.append(self._i)
-            
-            if len(v_samples) > buffer_size:
-                v_samples.pop(0)
-                i_samples.pop(0)
-                
-            elapsed = time.time() - start_time
-            if len(v_samples) == buffer_size:
-                v_ripple = max(v_samples) - min(v_samples)
-                # If difference between max and min is less than 0.15V, assume settled.
-                # Or fallback to max settling time.
-                if v_ripple < 0.15 or elapsed >= self._settling_time_s:
-                    break
-                    
-        # 4. Filter and average: sort and drop the top and bottom 20% of values
-        if len(v_samples) >= 5:
-            drop_count = len(v_samples) // 5  # 20%
+            time.sleep(0.001)
+
+        # 5. Filter outliers and average the middle 6 measurements
+        if len(v_samples) >= 8:
             v_sorted = sorted(v_samples)
             i_sorted = sorted(i_samples)
-            v_filtered = v_sorted[drop_count:len(v_sorted)-drop_count]
-            i_filtered = i_sorted[drop_count:len(i_sorted)-drop_count]
+            drop = (len(v_sorted) - 6) // 2  # drop = 2
+            v_final = v_sorted[drop : len(v_sorted) - drop]  # middle 6
+            i_final = i_sorted[drop : len(i_sorted) - drop]
+        elif len(v_samples) >= 5:
+            v_sorted = sorted(v_samples)
+            i_sorted = sorted(i_samples)
+            v_final = v_sorted[1:-1]
+            i_final = i_sorted[1:-1]
         else:
-            v_filtered = v_samples
-            i_filtered = i_samples
+            v_final = v_samples
+            i_final = i_samples
 
-        if v_filtered:
-            self._v = sum(v_filtered) / len(v_filtered)
-            self._i = sum(i_filtered) / len(i_filtered)
+        if v_final:
+            self._v = sum(v_final) / len(v_final)
+            self._i = sum(i_final) / len(i_final)
 
     # ── extras ───────────────────────────────────────────────────────────────
 

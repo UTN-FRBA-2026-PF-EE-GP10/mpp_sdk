@@ -70,6 +70,7 @@ class StepMetrics:
     v_out_initial: float
     v_out_final: float
     ripple_pp_mv: float
+    v_in_ripple_pp_mv: float
     settling_time_ms: float | None
     tolerance_pct: float
     n_samples: int
@@ -291,6 +292,9 @@ def calculate_step_metrics(
     final_vouts = [s.v_out for s in ripple_samples]
     ripple_pp_mv = (max(final_vouts) - min(final_vouts)) * 1000.0
 
+    final_vins = [s.v_in for s in ripple_samples]
+    v_in_ripple_pp_mv = (max(final_vins) - min(final_vins)) * 1000.0
+
     # Settling time (ts):
     # Error band ±tolerance_pct around v_out_final (with floor 0.05 V for low voltages)
     tol_abs = max(abs(v_out_final) * (tolerance_pct / 100.0), 0.05)
@@ -337,6 +341,7 @@ def calculate_step_metrics(
         v_out_initial=v_out_initial,
         v_out_final=v_out_final,
         ripple_pp_mv=ripple_pp_mv,
+        v_in_ripple_pp_mv=v_in_ripple_pp_mv,
         settling_time_ms=settling_time_ms,
         tolerance_pct=tolerance_pct,
         n_samples=len(post_samples),
@@ -426,30 +431,30 @@ def run_step_response_test(
 def print_report(results: list[StepMetrics], tolerance_pct: float) -> None:
     """Print console summary table."""
     print()
-    print("=" * 86)
+    print("=" * 102)
     print(f"SEPIC Step Response & Stability Report (Tolerance: ±{tolerance_pct:g}%)")
-    print("=" * 86)
+    print("=" * 102)
     print(
         f"{'Step':>4}  {'Duty Transition':^15}  {'Vin Mean':>9}  "
-        f"{'Vout: Pre -> Post':^19}  {'Ripple pk-pk':>14}  {'Settling Ts':>13}"
+        f"{'Vout: Pre -> Post':^19}  {'Vout Ripple':>14}  {'Vin Ripple':>14}  {'Settling Ts':>13}"
     )
-    print("-" * 86)
+    print("-" * 102)
     for r in results:
         ts_str = f"{r.settling_time_ms:6.1f} ms" if r.settling_time_ms is not None else "> window (unsettled)"
         vout_str = f"{r.v_out_initial:5.2f} V -> {r.v_out_final:5.2f} V"
         duty_str = f"{r.duty_initial:4.2f} -> {r.duty_target:4.2f}"
         print(
             f"{r.step_idx:4d}  {duty_str:^15}  {r.v_in_mean:7.2f} V  "
-            f"{vout_str:^19}  {r.ripple_pp_mv:10.1f} mVpp  {ts_str:>13}"
+            f"{vout_str:^19}  {r.ripple_pp_mv:9.1f} mVpp  {r.v_in_ripple_pp_mv:9.1f} mVpp  {ts_str:>13}"
         )
-    print("=" * 86)
+    print("=" * 102)
     print()
     for r in results:
         ts_str = f"{r.settling_time_ms:.1f} ms" if r.settling_time_ms is not None else "N/A"
         print(
             f"Step {r.duty_initial:.2f} -> {r.duty_target:.2f} | "
             f"Vout: {r.v_out_initial:.2f}V -> {r.v_out_final:.2f}V | "
-            f"Ripple: {r.ripple_pp_mv:.0f} mVpp | Settling Time: {ts_str}"
+            f"Vout Ripple: {r.ripple_pp_mv:.0f} mVpp | Vin Ripple: {r.v_in_ripple_pp_mv:.0f} mVpp | Settling Time: {ts_str}"
         )
     print()
 
@@ -536,7 +541,7 @@ def plot_step_responses(
             ax.axvline(r.settling_time_ms, color="#2ca02c", linestyle="--", alpha=0.9, label=f"ts = {r.settling_time_ms:.1f} ms")
             ax.plot([r.settling_time_ms], [r.v_out_final], marker="o", color="#2ca02c")
             ax.annotate(
-                f"ts={r.settling_time_ms:.1f} ms\nRipple={r.ripple_pp_mv:.0f} mVpp",
+                f"ts={r.settling_time_ms:.1f} ms\nVout Ripple={r.ripple_pp_mv:.0f} mVpp\nVin Ripple={r.v_in_ripple_pp_mv:.0f} mVpp",
                 xy=(r.settling_time_ms, r.v_out_final),
                 xytext=(r.settling_time_ms + 15, r.v_out_final + tol_abs * 1.5),
                 arrowprops={"arrowstyle": "->", "color": "#2ca02c"},

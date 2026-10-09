@@ -244,8 +244,8 @@ def main() -> None:
     parser.add_argument(
         "--settling-time-s",
         type=float,
-        default=0.10,
-        help="converter settling delay per step in seconds (default: 0.10s / 100ms)",
+        default=0.03,
+        help="converter settling delay per step in seconds (default: 0.03s / 30ms)",
     )
     args = parser.parse_args()
 
