@@ -34,7 +34,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 # Hard cap: at 12 V in and 10 Ohm, D = 0.50 already means about 1.2 A out,
-# past the board's 1 A rating.
+# past the board's 1 A rating and the INA229's 999 mA maximum reading.
 MAX_DUTY = 0.45
 
 # Below the firmware's 100 ms frame timeout: the PIO SPI slave cannot
@@ -226,7 +226,9 @@ def main() -> None:
     parser.add_argument("--hold-s", type=float, default=4.0)
     parser.add_argument("--avg-s", type=float, default=2.0)
     parser.add_argument("--meter", action="store_true", help="prompt for the meter's V out")
-    parser.add_argument("--i-in-max", type=float, default=1.0)
+    parser.add_argument(
+        "--i-in-max", type=float, default=0.9, help="below the INA229's 999 mA maximum reading"
+    )
     parser.add_argument("--v-in-max", type=float, default=30.0)
     parser.add_argument(
         "--v-out-max", type=float, default=25.0, help="below the ADC Low range (~27 V)"

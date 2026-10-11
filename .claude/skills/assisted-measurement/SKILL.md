@@ -19,7 +19,7 @@ server, the monitors and the analysis.
 2. **Ask before any action that changes hardware or state**: flashing the
    Pico, restarting the server, deleting data, pulling code on the Pi.
    Approval for one action is not approval for the next.
-3. **Never raise a limit.** `v_max` 40 V, `i_max` 1 A, `v_out_max` 25 V and the
+3. **Never raise a limit.** `v_max` 40 V, `i_max` 0.9 A, `v_out_max` 25 V and the
    sweep cutoffs (700 mA, 16.1 W) protect the board. If a limit trips, find
    the cause. A debounce or a filter is a separate, agreed change.
 4. **Do not run the hardware yourself.** The operator starts sweeps and

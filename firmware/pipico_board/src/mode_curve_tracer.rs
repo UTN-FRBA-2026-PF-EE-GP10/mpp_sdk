@@ -134,6 +134,12 @@ const TRACER_SETTLE_POLL_MS: u64 = 10;
 /// glitches shorter than this before committing to a sweep.
 const BUTTON_DEBOUNCE_MS: u64 = 30;
 
+/// Time from the relay coil going low to the contacts being open. Signal
+/// relays of this size release in under 10 ms; 20 ms gives margin. The
+/// part's datasheet value is not in the repo, so check it against the
+/// fitted relay if this ever matters.
+const RELAY_RELEASE_MS: u64 = 20;
+
 // ── auto-range (see `auto_range`) ────────────────────────────────────────
 //
 // The load's full-scale current is far above what a small PV panel can
@@ -802,13 +808,15 @@ impl CurveTracer {
     /// number of sweeps - it is no longer released automatically when a
     /// sweep ends. Safe to call whether or not a sweep is in progress or
     /// the relay is already released.
-    fn release_relay(&mut self) {
+    async fn release_relay(&mut self) {
         self.set_pwm(0);
         self.tracer_en.set_low();
         // Cleared only after the relay has actually opened, so main.rs's
         // loop (which gates the SEPIC gate duty on this) never sees "safe
         // to resume driving" a tick before the panel is really back on
-        // the SEPIC path.
+        // the SEPIC path. The coil going low does not open the contacts at
+        // once, so wait the release time first.
+        Timer::after_millis(RELAY_RELEASE_MS).await;
         RELAY_ENGAGED.store(false, Ordering::Relaxed);
     }
 }
@@ -849,7 +857,7 @@ pub async fn curve_tracer_task(mut tracer: CurveTracer) {
                 tracer.run_demo_sweep(curve).await;
             }
             Either::Second(TracerCommand::ReleaseRelay) => {
-                tracer.release_relay();
+                tracer.release_relay().await;
             }
         }
     }

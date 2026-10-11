@@ -209,6 +209,16 @@ def test_write_clamps_duty(spi_mcu_source, requested, expected):
     assert src.duty == pytest.approx(expected)
 
 
+@pytest.mark.parametrize("requested", [float("nan"), float("inf"), float("-inf")])
+def test_write_sends_zero_duty_for_a_non_finite_request(spi_mcu_source, requested):
+    """min(1.0, nan) is 1.0, so a plain clamp would send full duty."""
+    src = spi_mcu_source()
+    src.write(requested)
+    assert src.duty == 0.0
+    duty_h, duty_l = src._spi.sent[-1][0], src._spi.sent[-1][1]
+    assert (duty_h, duty_l) == (0, 0)
+
+
 # ------------------------------------------------------------------
 # read() before write()
 # ------------------------------------------------------------------

@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "template_id": "full-setup-characterization",
-  "version": 4,
+  "version": 5,
   "title": "Full setup characterization (two panels)",
   "setup": "full",
   "field_defs": [
@@ -156,7 +156,7 @@
       "id": "run-config-limits",
       "section": "Link and limits",
       "title": "Run config limits",
-      "instructions": "Open the run config and check it shows v_max 40 V, i_max 1 A, v_out_max 25 V. Pass: all three match.",
+      "instructions": "Open the run config and check it shows v_max 40 V, i_max 0.9 A, v_out_max 25 V. Pass: all three match.",
       "kind": "check"
     },
     {

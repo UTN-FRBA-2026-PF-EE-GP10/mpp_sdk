@@ -32,7 +32,7 @@ use embassy_rp::peripherals::{PIN_10, PIN_11, PIN_12, PIN_13, PIO0};
 use embassy_rp::pio::program::pio_asm;
 use embassy_rp::pio::{Config, Direction, InterruptHandler, Pio, ShiftDirection, StateMachine};
 use embassy_rp::{Peri, bind_interrupts};
-use embassy_time::{Duration, with_timeout};
+use embassy_time::{Duration, Instant, with_timeout};
 use portable_atomic::Ordering;
 
 use crate::mode_curve_tracer::{
@@ -365,6 +365,30 @@ const BULK_FRAME_TIMEOUT: Duration = Duration::from_millis(500);
 /// host watching. Resets on the next valid frame.
 const LINK_LOST_TIMEOUTS: u32 = 5; // ~500 ms of total silence
 
+/// How long MOSI frames can keep failing their CRC before DUTY is forced to
+/// 0. Such frames still complete, so they reset `consecutive_timeouts` and
+/// the silence-based link-lost check never fires. Without this, a link that
+/// only sends corrupt frames holds the gate at its last duty forever. Same
+/// ~500 ms as `LINK_LOST_TIMEOUTS`.
+const MOSI_INVALID_LINK_LOST: Duration = Duration::from_millis(500);
+
+/// MOSI frame health, kept across exchanges by `spi_pio_task`.
+struct MosiHealth {
+    checksum_failures: u32,
+    last_valid: Instant,
+    duty_forced_off: bool,
+}
+
+impl MosiHealth {
+    fn new() -> Self {
+        Self {
+            checksum_failures: 0,
+            last_valid: Instant::now(),
+            duty_forced_off: false,
+        }
+    }
+}
+
 /// Force the state machine back to a known-clean state: halted, FIFOs
 /// flushed, program counter at instruction `origin` (the top of
 /// `.wrap_target`, i.e. the `wait 1 gpio 13` CS-idle check), then resumed.
@@ -438,7 +462,7 @@ enum BulkState {
 fn apply_duty_frame(
     rx: &[u32],
     last_logged_duty: &mut Option<u16>,
-    checksum_failures: &mut u32,
+    health: &mut MosiHealth,
 ) -> Option<u8> {
     // RX autopush puts byte in bits 7-0 (shift_in = Left).
     let duty_h = rx[0] as u8;
@@ -450,6 +474,8 @@ fn apply_duty_frame(
         let duty = ((duty_h as u16) << 8) | duty_l as u16;
         DUTY.store(duty, Ordering::Relaxed);
         PACKET_COUNT.fetch_add(1, Ordering::Relaxed);
+        health.last_valid = Instant::now();
+        health.duty_forced_off = false;
 
         // Log only on change - at the Pi's control period this would
         // otherwise flood RTT every frame; V/I are already logged
@@ -464,12 +490,19 @@ fn apply_duty_frame(
         // than apply garbage, and don't act on `cmd` either -
         // a corrupted frame's command byte is not trustworthy. Rate
         // limited - a jammed link could otherwise flood RTT every frame.
-        *checksum_failures += 1;
-        if *checksum_failures == 1 || checksum_failures.is_multiple_of(100) {
+        health.checksum_failures += 1;
+        if health.checksum_failures == 1 || health.checksum_failures.is_multiple_of(100) {
             defmt::warn!(
                 "spi_pio_task: MOSI checksum mismatch, keeping last duty ({} total)",
-                checksum_failures
+                health.checksum_failures
             );
+        }
+        if Instant::now() - health.last_valid >= MOSI_INVALID_LINK_LOST {
+            DUTY.store(0, Ordering::Relaxed);
+            if !health.duty_forced_off {
+                defmt::error!("spi_pio_task: no valid MOSI frame for 500 ms, forcing duty to 0");
+                health.duty_forced_off = true;
+            }
         }
         None
     }
@@ -571,7 +604,7 @@ pub async fn spi_pio_task(
     let mut tx_buf = build_tx_buf_for_state(&bulk_state);
     let mut consecutive_timeouts: u32 = 0;
     let mut last_logged_duty: Option<u16> = None;
-    let mut checksum_failures: u32 = 0;
+    let mut mosi_health = MosiHealth::new();
 
     loop {
         let (this_frame_len, frame_timeout) = match &bulk_state {
@@ -607,7 +640,7 @@ pub async fn spi_pio_task(
             // DUTY is left untouched by a single torn frame (see doc
             // comment above) but forced to 0 if the master appears gone.
             consecutive_timeouts += 1;
-            // Rate-limited like checksum_failures below - a sustained
+            // Rate-limited like MOSI checksum failures - a sustained
             // outage would otherwise flood RTT every 100 ms.
             if log_link_state
                 && (consecutive_timeouts == 1 || consecutive_timeouts.is_multiple_of(100))
@@ -657,18 +690,18 @@ pub async fn spi_pio_task(
                 BulkState::Idle
             }
             BulkState::SendAck(sweep) => {
-                apply_duty_frame(&rx, &mut last_logged_duty, &mut checksum_failures);
+                apply_duty_frame(&rx, &mut last_logged_duty, &mut mosi_health);
                 BulkState::DoBulk(sweep)
             }
             BulkState::SendProgress(_) => {
                 // Same shape as SendAck above: this exchange's RX is a
                 // normal duty-update frame, not something to inspect for a
                 // second command - one progress reply is one exchange.
-                apply_duty_frame(&rx, &mut last_logged_duty, &mut checksum_failures);
+                apply_duty_frame(&rx, &mut last_logged_duty, &mut mosi_health);
                 BulkState::Idle
             }
             BulkState::Idle => {
-                let cmd = apply_duty_frame(&rx, &mut last_logged_duty, &mut checksum_failures);
+                let cmd = apply_duty_frame(&rx, &mut last_logged_duty, &mut mosi_health);
                 match cmd {
                     Some(CMD_REQUEST_BULK_DUMP) => match mode_curve_tracer::take_last_sweep() {
                         Some(sweep) => {

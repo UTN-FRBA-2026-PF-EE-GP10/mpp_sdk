@@ -448,3 +448,24 @@ def test_step_statuses_and_kinds_are_pinned():
     # deliberate edit to this test.
     assert STEP_STATUSES == ("todo", "done", "failed", "skipped")
     assert STEP_KINDS == ("check", "number", "text", "curve", "run")
+
+
+def test_load_takes_the_id_from_the_file_name_not_the_body(tmp_path):
+    """A copied file keeps the original id in its body. If load kept that
+    id, an update would overwrite the original file instead of the copy."""
+    record = _record()
+    _saved, path = session_library.save(record, tmp_path)
+    copy = tmp_path / "copy-of-session.json"
+    copy.write_text(path.read_text())
+
+    loaded = load(copy)
+    assert loaded.id == "copy-of-session"
+    session_library.update(replace_title(loaded, "edited copy"), directory=tmp_path)
+    assert load(copy).title == "edited copy"
+    assert load(path).title == record.title
+
+
+def replace_title(record, title):
+    import dataclasses
+
+    return dataclasses.replace(record, title=title)

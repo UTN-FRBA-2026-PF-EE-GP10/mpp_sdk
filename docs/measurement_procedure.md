@@ -14,15 +14,26 @@ Quickstart to install the `web` extra first.
   MOSFET). Give it a heatsink and watch its temperature if you run sweeps
   back-to-back - see `firmware/pipico_board/README.md`'s "Curve tracer"
   section.
-- A closed-loop run has no on-target safety cutoff besides the duty
-  ceiling. The Pi side aborts the run if a reading ever exceeds the
-  v_max/i_max limits, if the converter output exceeds v_out_max, or if the
-  SPI link drops mid-run. This protection only exists while the
-  controlling process (the workbench server, or `run-algorithm`) is
-  running.
-- **Always put a load on the converter output before a run** (10 Ohm,
-  10 W for one panel; 20 Ohm for two). With a light or missing load the
-  SEPIC output climbs far above the panel voltage.
+- A closed-loop run has few on-target cutoffs. The firmware sets duty to
+  0 when:
+  - the Pi sends no frame for about 500 ms,
+  - the Pi sends only frames that fail their CRC for 500 ms,
+  - the INA229 gives no new reading for 50 ms.
+
+  The Pi side aborts the run when readings stay above v_max/i_max, when
+  the converter output stays above v_out_max, or when the SPI link drops.
+  This protection works only while the controlling process (the workbench
+  server, or `run-algorithm`) runs.
+- **Always put a load on the converter output before a run.** With a
+  light or missing load the SEPIC output climbs far above the panel
+  voltage.
+- Choose the load from the panel curve:
+  - The panel looks like `R_in = Vmp / Imp` at its MPP. A load near that
+    value puts the MPP near duty 0.5. Two Hissuma panels in series are
+    about 80 Ohm.
+  - Output voltage is about `sqrt(P x R_load)`. Keep it below v_out_max
+    (25 V), or the run aborts. At 80 Ohm that means less than about 7 W.
+  - Keep the panel power below 80 % of the resistor rating.
 
 ## Before you start
 
@@ -120,7 +131,10 @@ for what protects it.
 3. Leave **Duration** blank for the default (10 s), or set your own, up
    to the server's safety backstop (600 s). **Starting duty cycle** picks
    which maximum a local tracker hill-climbs to on a multi-peak curve.
-   **v_max**/**i_max** default to 40 V / 1 A and set the abort limits.
+   **v_max**/**i_max**/**v_out_max** default to 40 V / 0.9 A / 25 V and set
+   the abort limits. A limit aborts the run only when readings stay above
+   it for 5 readings in a row and at least 50 ms; a shorter streak is
+   treated as a bad reading and skipped.
 4. Click **Start run** and confirm. This drives the real converter.
 5. Watch the live V/I/duty readouts and the operating point move on the
    reference curve. Click **Stop run** to end it early.
@@ -145,7 +159,8 @@ Useful for scripted or headless captures:
    run). Produces a figure with the P-V curve and the run's trajectory
    overlaid (colored by time), plus V/I/P time series.
 
-Other flags: `--v-max`/`--i-max` (override the 40 V/1 A default limits),
+Other flags: `--v-max`/`--i-max`/`--v-out-max` (narrow the 40 V / 0.9 A /
+25 V default limits),
 `--bus`/`--device`/`--speed-hz` (SPI settings, same defaults as the other
 hardware scripts). Run `mpp-sdk run-algorithm --help` /
 `mpp-sdk plot-run --help` for the full list.
@@ -185,7 +200,7 @@ does not capture.
 ### Repeats and statistics
 
 A curve or run step can ask for more than one repeat, e.g. "3 curves, one
-after the other" (the Appendix's procedure). The step shows how many are
+after the other"). The step shows how many are
 linked against how many are asked for, e.g. "2 / 3 repeats". Once two or
 more are linked, the workbench shows the median, mean, standard
 deviation, min, and max for each number that matters: Voc, Isc, and P at

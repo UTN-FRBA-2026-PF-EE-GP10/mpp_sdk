@@ -10,6 +10,7 @@ session's file in place, atomically.
 from __future__ import annotations
 
 import contextlib
+import dataclasses
 import json
 import os
 import re
@@ -17,6 +18,7 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 
+from .._files import read_json_object
 from .record import OpenQuestion, SessionRecord, SessionStep, now_utc
 from .templates import SessionTemplate
 
@@ -142,14 +144,17 @@ def load(path: Path) -> SessionRecord:
     the offending field on a missing key, a bad type, or an unknown
     `schema` - same reasoning as `curves.library.load`/`runs.library.load`:
     these files are hand-editable JSON, not just internal state."""
+    data = read_json_object(path)
     try:
-        data = json.loads(path.read_text())
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"{path}: not valid JSON: {exc}") from exc
-    try:
-        return SessionRecord.from_dict(data)
+        record = SessionRecord.from_dict(data)
     except ValueError as exc:
         raise ValueError(f"{path}: {exc}") from exc
+    # The file name is the record's identity: `update` writes to
+    # `{id}.json`. A copied or renamed file keeps the old id in its body,
+    # and an update would then overwrite the original file.
+    if record.id != path.stem:
+        record = dataclasses.replace(record, id=path.stem)
+    return record
 
 
 def update(record: SessionRecord, directory: Path | None = None) -> Path:
