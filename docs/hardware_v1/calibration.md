@@ -116,7 +116,7 @@ ceiling; `Full` gives the highest ceiling but the least resolution per volt.
 | Range | Full scale | When to use it |
 |-------|-----------|-----------------|
 | `Low` | about 27.3 V | one panel (the firmware setting today) |
-| `Mid` | about 51.5 V | two panels in series (about 44 V open-circuit) |
+| `Mid` | about 51.5 V | two panels in series (about 35 V open-circuit) |
 | `Full` | about 75.6 V | highest input the board can see |
 
 This needs four steps: move the jumpers, set the constant, reflash, and
