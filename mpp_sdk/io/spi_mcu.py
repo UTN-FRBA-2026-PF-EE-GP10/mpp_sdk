@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import time
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -281,9 +282,13 @@ class SpiMcuSource(SignalSource):
     def write(self, duty_cycle: float) -> None:
         """Send *duty_cycle* to the Pico and capture the returned telemetry.
 
-        The duty cycle is clamped to [0.0, 1.0]. V/I/Vout/temperature are
+        The duty cycle is clamped to [0.0, 1.0]. A value that is not a
+        finite number is sent as 0.0: ``min(1.0, nan)`` is 1.0, so a plain
+        clamp would turn a NaN into full duty. V/I/Vout/temperature are
         available via ``read()``/``vout``/``temperature_c`` afterward.
         """
+        if not math.isfinite(duty_cycle):
+            duty_cycle = 0.0
         self._duty = max(0.0, min(1.0, duty_cycle))
         self._send_cmd()
 

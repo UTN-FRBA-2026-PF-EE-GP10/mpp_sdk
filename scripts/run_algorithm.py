@@ -10,8 +10,8 @@ that with `--no-sweep --curve <path>` to reuse an existing capture.
 whatever duty the Pi last wrote, unconditionally - there is no on-target
 safety cutoff for this continuous-drive use case (unlike the curve
 tracer's own `breach()` check), so this script adds a client-side abort:
-if a reading ever exceeds `--v-max`/`--i-max` (defaults matching the
-board's documented 40V/1A limits), or the link looks down (a sustained
+if readings stay above `--v-max`/`--i-max` (defaults: the board limits
+`BOARD_V_MAX`/`BOARD_I_MAX` below), or the link looks down (a sustained
 run of corrupt SPI frames - see `_BAD_FRAMES_LINK_DOWN` below), duty is
 driven to zero and the run is marked aborted. `run_control_loop` is also
 what `scripts/curve_tracer_server.py` calls to drive a run started from
@@ -27,6 +27,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import logging
+import math
 import time
 from collections.abc import Callable
 
@@ -57,7 +58,28 @@ _LIMIT_DEBOUNCE_SAMPLES = 5
 # last good reading, so one garbage frame can repeat for several exchanges.
 _LIMIT_DEBOUNCE_S = 0.05
 
+# Board limits a run is held to unless the operator narrows them. The web
+# server imports these, so the CLI and the UI enforce the same values.
+#
+# Current: the INA229 is scaled to a 1000 mA full scale (`I_MAX_MA` in
+# firmware/pipico_board/src/ina229.rs). Its CURRENT register is 20-bit
+# signed, so the largest real reading is 999 mA. A 1.0 A limit could never
+# trip on a real reading, so the limit sits below the sensor maximum.
+#
+# Output voltage: the on-chip ADC's `Low` divider range reads up to about
+# 27 V; above that the reading saturates and a higher limit never trips.
+BOARD_V_MAX = 40.0
+BOARD_I_MAX = 0.9
+BOARD_V_OUT_MAX = 25.0
+
 _log = logging.getLogger(__name__)
+
+
+def _check_positive_finite(name: str, value: float) -> None:
+    # NaN compares False against everything, so a NaN limit would switch
+    # its abort off without a sign. Refuse it before any duty is written.
+    if not (math.isfinite(value) and value > 0):
+        raise ValueError(f"{name} must be a finite number above 0; got {value!r}")
 
 
 def run_control_loop(
@@ -107,6 +129,13 @@ def run_control_loop(
       disconnected board otherwise looks like valid-but-stale telemetry.
     - `"stopped"`: `should_stop()` returned True - an explicit request to
       end the run early (e.g. a UI Stop button), checked once per step.
+    - `"invalid-reading"`: V or I is not a finite number, held for the same
+      debounce as the limits.
+    - `"invalid-duty"`: the algorithm returned a duty that is not a finite
+      number. It is never written.
+
+    A limit or `initial_duty` that is not finite, or not in range, raises
+    `ValueError` before any duty is written.
 
     `reason` is `None` on an ordinary `duration_s` timeout - that is not
     an abort.
@@ -123,6 +152,12 @@ def run_control_loop(
     web server) that wants to observe the run live without waiting for it
     to finish.
     """
+    _check_positive_finite("v_max", v_max)
+    _check_positive_finite("i_max", i_max)
+    if v_out_max is not None:
+        _check_positive_finite("v_out_max", v_out_max)
+    if not (math.isfinite(initial_duty) and 0.0 <= initial_duty < 1.0):
+        raise ValueError(f"initial_duty must be a finite number in [0, 1); got {initial_duty!r}")
     samples = [] if samples is None else samples
     start = clock()
     aborted = False
@@ -140,7 +175,9 @@ def run_control_loop(
             t = clock() - start
             v_out = getattr(source, "vout", None)
             suspect: str | None = None
-            if voltage > v_max:
+            if not (math.isfinite(voltage) and math.isfinite(current)):
+                suspect = "invalid-reading"
+            elif voltage > v_max:
                 suspect = "overvoltage"
             elif current > i_max:
                 suspect = "overcurrent"
@@ -176,7 +213,12 @@ def run_control_loop(
                 if period_s > 0:
                     sleep(period_s)
                 continue
-            duty = algorithm.step(voltage, current)
+            next_duty = algorithm.step(voltage, current)
+            if not math.isfinite(next_duty):
+                aborted = True
+                reason = "invalid-duty"
+                break
+            duty = next_duty
             source.write(duty)
             sample = RunSample(t=t, voltage=voltage, current=current, duty=duty)
             samples.append(sample)
@@ -224,12 +266,17 @@ def main() -> None:
     )
     parser.add_argument("--duration-s", type=float, default=10.0)
     parser.add_argument("--label", required=True)
-    parser.add_argument("--v-max", type=float, default=40.0)
-    parser.add_argument("--i-max", type=float, default=1.0)
+    parser.add_argument("--v-max", type=float, default=BOARD_V_MAX)
+    parser.add_argument(
+        "--i-max",
+        type=float,
+        default=BOARD_I_MAX,
+        help="input current limit (below the INA229's 999 mA maximum reading)",
+    )
     parser.add_argument(
         "--v-out-max",
         type=float,
-        default=25.0,
+        default=BOARD_V_OUT_MAX,
         help="converter output limit (below the ADC Low range, ~27 V)",
     )
     parser.add_argument("--no-sweep", action="store_true", help="skip the curve sweep")

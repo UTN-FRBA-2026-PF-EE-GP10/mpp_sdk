@@ -5,9 +5,11 @@ for the link-down abort, reads `.consecutive_bad_frames` if present),
 nothing curve-tracer-specific.
 """
 
+import math
+
 import pytest
 
-from scripts.run_algorithm import run_control_loop
+from scripts.run_algorithm import BOARD_I_MAX, run_control_loop
 
 
 class _FakeSource:
@@ -486,3 +488,94 @@ def test_bad_readings_split_by_a_good_one_do_not_add_up():
         sleep=lambda _: None,
     )
     assert (aborted, reason) == (False, None)
+
+
+# ------------------------------------------------------------------
+# Non-finite inputs and board limits
+# ------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "limits",
+    [
+        {"v_max": float("nan"), "i_max": 1.0},
+        {"v_max": 40.0, "i_max": float("nan")},
+        {"v_max": 40.0, "i_max": 1.0, "v_out_max": float("nan")},
+        {"v_max": float("inf"), "i_max": 1.0},
+        {"v_max": 0.0, "i_max": 1.0},
+        {"v_max": 40.0, "i_max": -1.0},
+    ],
+)
+def test_a_bad_limit_raises_before_any_duty_is_written(limits):
+    """NaN compares False against everything, so a NaN limit would switch
+    its abort off without a sign."""
+    source = _FakeSource()
+    with pytest.raises(ValueError):
+        run_control_loop(
+            source,
+            _FixedDutyAlgorithm(0.5),
+            duration_s=1.0,
+            clock=_FakeClock(),
+            sleep=lambda _: None,
+            **limits,
+        )
+    assert source.writes == []
+
+
+@pytest.mark.parametrize("seed", [float("nan"), -0.1, 1.0, 1.5])
+def test_a_bad_initial_duty_raises_before_any_duty_is_written(seed):
+    source = _FakeSource()
+    with pytest.raises(ValueError):
+        run_control_loop(
+            source,
+            _FixedDutyAlgorithm(0.5),
+            duration_s=1.0,
+            v_max=40.0,
+            i_max=1.0,
+            initial_duty=seed,
+            clock=_FakeClock(),
+            sleep=lambda _: None,
+        )
+    assert source.writes == []
+
+
+def test_a_non_finite_duty_from_the_algorithm_aborts_and_is_never_written():
+    source = _FakeSource()
+    samples, aborted, reason = run_control_loop(
+        source,
+        _FixedDutyAlgorithm(float("nan")),
+        duration_s=1.0,
+        v_max=40.0,
+        i_max=1.0,
+        initial_duty=0.5,
+        clock=_ticking_clock(step=0.01),
+        sleep=lambda _: None,
+    )
+    assert (aborted, reason) == (True, "invalid-duty")
+    assert samples == []
+    assert all(math.isfinite(d) for d in source.writes)
+    assert source.writes[-1] == 0.0
+
+
+def test_a_sustained_non_finite_reading_aborts_as_invalid_reading():
+    source = _ScriptedSource(bad=range(2, 10_000), bad_reading=(float("nan"), 0.1))
+    _, aborted, reason = run_control_loop(
+        source,
+        _FixedDutyAlgorithm(0.5),
+        duration_s=10.0,
+        v_max=40.0,
+        i_max=1.0,
+        initial_duty=0.5,
+        clock=_ticking_clock(step=0.01),
+        sleep=lambda _: None,
+    )
+    assert (aborted, reason) == (True, "invalid-reading")
+    assert source._duty == 0.0
+
+
+def test_the_default_current_limit_is_below_the_sensor_maximum():
+    """The INA229 is scaled to 1000 mA full scale with a 20-bit signed
+    register, so its largest reading is 999 mA. A limit at or above that
+    can never trip on a real reading."""
+    sensor_max_a = 1000 * (2**19 - 1) / 2**19 / 1000
+    assert sensor_max_a > BOARD_I_MAX

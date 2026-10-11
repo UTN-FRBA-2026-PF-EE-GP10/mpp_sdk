@@ -8,6 +8,7 @@ import os
 import re
 from pathlib import Path
 
+from .._files import read_json_object, write_new
 from .record import RunRecord
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -29,35 +30,20 @@ def _slug(label: str) -> str:
 
 
 def save(record: RunRecord, directory: Path | None = None) -> Path:
-    """Write `record` as `{captured_at}-{slug(label)}.json`. Same
-    collision handling as `mpp_sdk.curves.library.save` - exclusive
-    creation, `-2`/`-3`/... suffix on collision, never overwrites."""
+    """Write `record` as `{captured_at}-{slug(label)}.json`. Same rules as
+    `mpp_sdk.curves.library.save`: atomic, `-2`/`-3`/... suffix on
+    collision, never overwrites."""
     directory = directory if directory is not None else default_dir()
-    directory.mkdir(parents=True, exist_ok=True)
-
     stem = f"{record.captured_at.strftime('%Y%m%dT%H%M%SZ')}-{_slug(record.label)}"
-    body = json.dumps(record.to_dict(), indent=2) + "\n"
-    suffix = 0
-    while True:
-        name = f"{stem}.json" if suffix == 0 else f"{stem}-{suffix + 1}.json"
-        path = directory / name
-        try:
-            with path.open("x", encoding="utf-8") as f:
-                f.write(body)
-        except FileExistsError:
-            suffix += 1
-            continue
-        return path
+    body = json.dumps(record.to_dict(), indent=2, allow_nan=False) + "\n"
+    return write_new(directory, stem, body)
 
 
 def load(path: Path) -> RunRecord:
     """Parse one run record file - same error-reporting philosophy as
     `mpp_sdk.curves.library.load` (named file + field, since these are
     hand-editable JSON, not just internal state)."""
-    try:
-        data = json.loads(path.read_text())
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"{path}: not valid JSON: {exc}") from exc
+    data = read_json_object(path)
     try:
         return RunRecord.from_dict(data)
     except ValueError as exc:
