@@ -87,6 +87,7 @@ def main() -> None:
         ax.set_ylim(bottom=0)
 
     out = Path(__file__).parent / "output" / "compare_dynamic.png"
+    out.parent.mkdir(parents=True, exist_ok=True)
     fig.tight_layout()
     fig.savefig(out, dpi=120)
     print(f"\nSaved: {out}")

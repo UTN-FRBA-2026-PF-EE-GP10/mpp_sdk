@@ -41,20 +41,35 @@ def algorithm_specs(
 
     def _scan_and_track(d: float) -> object:
         if rescan_period is None:
-            return mpp_sdk.ScanAndTrack(initial_duty=d, min_duty=0.1, max_duty=0.9)
-        return mpp_sdk.ScanAndTrack(initial_duty=d, rescan_period=rescan_period, min_duty=0.1, max_duty=0.9)
+            return mpp_sdk.ScanAndTrack(initial_duty=d, track_step=0.002, min_duty=0.1, max_duty=0.9)
+        return mpp_sdk.ScanAndTrack(
+            initial_duty=d, track_step=0.002, rescan_period=rescan_period, min_duty=0.1, max_duty=0.9
+        )
 
     def _pso(d: float) -> object:
         if rescan_period is None:
-            return mpp_sdk.ParticleSwarm(initial_duty=d, n_particles=pso_particles, min_duty=0.1, max_duty=0.9)
+            return mpp_sdk.ParticleSwarm(
+                initial_duty=d, track_step=0.002, n_particles=pso_particles, min_duty=0.1, max_duty=0.9
+            )
         return mpp_sdk.ParticleSwarm(
-            initial_duty=d, n_particles=pso_particles, rescan_period=rescan_period, min_duty=0.1, max_duty=0.9
+            initial_duty=d,
+            track_step=0.002,
+            n_particles=pso_particles,
+            rescan_period=rescan_period,
+            min_duty=0.1,
+            max_duty=0.9,
         )
 
     return [
-        AlgorithmSpec("P&O", "tab:blue", lambda d: mpp_sdk.PerturbAndObserve(initial_duty=d, min_duty=0.1, max_duty=0.9)),
         AlgorithmSpec(
-            "InCond", "tab:red", lambda d: mpp_sdk.IncrementalConductance(initial_duty=d, min_duty=0.1, max_duty=0.9)
+            "P&O",
+            "tab:blue",
+            lambda d: mpp_sdk.PerturbAndObserve(initial_duty=d, step_size=0.002, min_duty=0.1, max_duty=0.9),
+        ),
+        AlgorithmSpec(
+            "InCond",
+            "tab:red",
+            lambda d: mpp_sdk.IncrementalConductance(initial_duty=d, step_size=0.002, min_duty=0.1, max_duty=0.9),
         ),
         AlgorithmSpec("Fuzzy", "tab:green", lambda d: mpp_sdk.FuzzyLogic(initial_duty=d, min_duty=0.1, max_duty=0.9)),
         AlgorithmSpec("Scan&Track", "tab:purple", _scan_and_track),

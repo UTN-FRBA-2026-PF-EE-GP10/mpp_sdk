@@ -653,7 +653,6 @@ def main() -> None:
                 device=args.device,
                 speed_hz=args.speed_hz,
                 settling_time_s=0.0,
-                oversample_count=0,
             )
             print(f"Connected to hardware SpiMcuSource on /dev/spidev{args.bus}.{args.device}")
         except Exception as exc:

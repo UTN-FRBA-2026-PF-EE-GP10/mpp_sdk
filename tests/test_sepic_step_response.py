@@ -220,6 +220,7 @@ def test_export_csv(tmp_path: Path):
         v_out_initial=1.3,
         v_out_final=5.1,
         ripple_pp_mv=30.0,
+        v_in_ripple_pp_mv=15.0,
         settling_time_ms=28.5,
         tolerance_pct=2.0,
         n_samples=2,

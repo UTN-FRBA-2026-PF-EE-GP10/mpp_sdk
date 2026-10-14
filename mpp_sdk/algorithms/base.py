@@ -11,7 +11,7 @@ class MPPTAlgorithm(ABC):
     Implementations must be agnostic to the panel and converter models —
     they see only V, I, and (optionally) the duty cycle they previously
     requested. That constraint is what lets the same controller code run
-    in simulation and on a Raspberry Pi without modification.
+    in simulation and on a Host/sbc without modification.
     """
 
     @abstractmethod

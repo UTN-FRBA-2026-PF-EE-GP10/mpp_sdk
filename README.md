@@ -9,7 +9,7 @@
 A Python SDK for designing, comparing, and deploying **Maximum Power Point
 Tracking** (MPPT) algorithms for photovoltaic systems. Built around a clean
 hardware-abstraction seam so the same controller code drives a simulation
-today and a real SEPIC converter on a Raspberry Pi 5 tomorrow.
+today and a real SEPIC converter on a Host/sbc tomorrow.
 
 See [`AGENTS.md`](./AGENTS.md) for architectural pillars and contribution
 guidelines, and [`PLAN.md`](./PLAN.md) for the full roadmap and viability
@@ -36,8 +36,8 @@ reproduce [Subudhi & Pradhan 2013].
    board, with no branches in the algorithm.
 3. **A microcontroller as the deployment target.** A small MCU
    (Raspberry Pi Pico / RP2040) drives the power stage, connected to the
-   Raspberry Pi 5 over SPI. This isolates the fast-switching, high-current
-   side from the Pi, and gives the project its deployment target: once an
+   Host/sbc over SPI. This isolates the fast-switching, high-current
+   side from the Host/sbc, and gives the project its deployment target: once an
    algorithm is validated in the framework, it is ported to the MCU and
    re-run end to end on the same physical rig.
 4. **A reproducible comparison harness.** Dynamic irradiance profiles,
@@ -255,13 +255,13 @@ UI and [`firmware/pipico_board/README.md`](firmware/pipico_board/README.md)'s
 ### Hardware (future - see [`PLAN.md`](./PLAN.md))
 
 The power stage is driven by an **RP2040 (Pi Pico, firmware in Rust)** connected
-to the Raspberry Pi 5 over SPI. The MCU isolates the fast-switching side *and* is
+to the Host/sbc over SPI. The MCU isolates the fast-switching side *and* is
 the deployment target for the final algorithm. See
 [`firmware/pipico_board/README.md`](firmware/pipico_board/README.md) for
 build/flash/calibration instructions.
 
 - [x] SPI-slave firmware scaffold (PIO)
-- [x] `SpiMcuSource(SignalSource)` - Pi-side SPI wrapper (`mpp-sdk[hardware]`)
+- [x] `SpiMcuSource(SignalSource)` - Host-side SPI wrapper (`mpp-sdk[hardware]`)
 - [x] MCU firmware (HIL mode): ADC + PWM + SPI-slave as an I/O proxy
 - [x] Calibration (ADC scale/offset, INA229 calibration, PWM freq, duty
       limits) - the INA281 analog cross-check still needs its gain/shunt

@@ -20,6 +20,9 @@ vi.mock('@/lib/api', () => ({
   startRun: vi.fn(),
   stopRun: vi.fn(),
   fetchLiveRun: vi.fn(() => new Promise(() => {})),
+  fetchPicoConfig: vi.fn(() => new Promise(() => {})),
+  sendPicoConfig: vi.fn(),
+  resetPicoCutoff: vi.fn(),
 }))
 
 afterEach(cleanup)
@@ -131,6 +134,13 @@ describe('MeasurePane', () => {
     fireEvent.click(screen.getByText('Run an algorithm'))
     expect(isDisabled(button('Start run'))).toBe(true)
     expect(screen.getByText(/No live link to the board/)).toBeTruthy()
+  })
+
+  it('switches to the Pico Configuration tab when clicked', () => {
+    renderPane('hardware')
+    expect(screen.getByText('Pico Configuration')).toBeTruthy()
+    fireEvent.click(screen.getByText('Pico Configuration'))
+    expect(screen.getByText('Pico Dynamic Configuration')).toBeTruthy()
   })
 })
 

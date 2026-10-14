@@ -38,9 +38,14 @@ class _FakeSpiDev:
         self.sent.append(list(tx))
         if self.next_rx is not None:
             rx, self.next_rx = self.next_rx, None
+            self._last_rx = rx
             return rx
         if self.responses:
-            return self.responses.pop(0)
+            rx = self.responses.pop(0)
+            self._last_rx = rx
+            return rx
+        if hasattr(self, "_last_rx"):
+            return self._last_rx
         return [0] * 12
 
     def close(self) -> None:
@@ -67,16 +72,21 @@ def spi_mcu_source(monkeypatch):
 
     from mpp_sdk.io.spi_mcu import SpiMcuSource
 
-    def _factory(*args, settling_time_s: float = 0.0, oversample_count: int = 0, **kwargs):
-        return SpiMcuSource(
-            *args, settling_time_s=settling_time_s, oversample_count=oversample_count, **kwargs
-        )
+    def _factory(*args, settling_time_s: float = 0.0, **kwargs):
+        return SpiMcuSource(*args, settling_time_s=settling_time_s, **kwargs)
 
     return _factory
 
 
 def _miso_frame(
-    v_raw: int, i_raw: int, vout_raw: int, temp_raw: int, *, ack: int = 0, corrupt: bool = False
+    v_raw: int,
+    i_raw: int,
+    vout_raw: int,
+    temp_raw: int,
+    *,
+    ack: int = 0,
+    corrupt: bool = False,
+    settled: int = 1,
 ) -> list[int]:
     # Imported here, not at module scope: `mpp_sdk.io.spi_mcu` pulls in
     # `spidev`, which only exists once the `spi_mcu_source` fixture has
@@ -98,7 +108,7 @@ def _miso_frame(
     checksum = crc8([*data, ack])
     if corrupt:
         checksum ^= 0x01
-    return [*data, checksum, ack, 0, 0]
+    return [*data, checksum, ack, settled, 0]
 
 
 # Mirrors spi_mcu.py's private _TRACER_SWEEP_POINTS/_BULK_MAGIC/
@@ -594,3 +604,182 @@ def test_a_bad_frame_does_not_raise_so_the_count_is_the_only_signal(spi_mcu_sour
     src.write(0.0)  # must not raise
     assert src.read() == pytest.approx((5.0, 0.25))
     assert src.consecutive_bad_frames == 1
+
+
+def test_read_waits_for_settled_flag_when_duty_changed(spi_mcu_source):
+    src = spi_mcu_source(settling_time_s=0.05)
+    src._spi.next_rx = _miso_frame(v_raw=10000, i_raw=500, vout_raw=0, temp_raw=0, settled=1)
+    src.write(0.0)
+    v, i = src.read()
+    assert v == pytest.approx(10.0)
+
+    src._spi.responses = [
+        _miso_frame(v_raw=10000, i_raw=500, vout_raw=0, temp_raw=0, settled=0),
+        _miso_frame(v_raw=8000, i_raw=600, vout_raw=0, temp_raw=0, settled=1),
+    ]
+    src.write(0.5)
+    v, i = src.read()
+    assert v == pytest.approx(8.0)
+    assert i == pytest.approx(0.6)
+
+
+def test_default_dynamic_config_properties(spi_mcu_source):
+    src = spi_mcu_source()
+    assert src.vin_range == "low"
+    assert src.vout_range == "low"
+    assert src.ron_mohm == 6
+    assert src.max31865_enabled is False
+    assert src.cutoff_i_max_ma == 1000
+    assert src.cutoff_v_max_mv == 40000
+    assert src.psu_enabled is False
+    assert src.psu_open_loop is False
+    assert src.psu_vout_target_mv == 5000
+    assert src.psu_fixed_duty == 0.5
+
+
+def test_set_divider_ranges(spi_mcu_source):
+    from mpp_sdk.io.spi_mcu import crc8
+
+    src = spi_mcu_source()
+    src._spi.next_rx = _miso_frame(1000, 100, 0, 0)
+    src.set_divider_ranges("full", "mid")
+    tx = src._spi.sent[-1]
+    assert tx[3] == 0xC1
+    assert tx[0] == 0  # Full
+    assert tx[1] == 1  # Mid
+    assert tx[2] == crc8([0, 1, 0xC1])
+    assert src.vin_range == "full"
+    assert src.vout_range == "mid"
+
+    # Numeric integers
+    src._spi.next_rx = _miso_frame(1000, 100, 0, 0)
+    src.set_divider_ranges(2, 0)
+    tx = src._spi.sent[-1]
+    assert tx[0] == 2
+    assert tx[1] == 0
+
+    with pytest.raises(ValueError, match="Invalid vin_range"):
+        src.set_divider_ranges("unknown", "low")
+
+    with pytest.raises(ValueError, match="Invalid vout_range"):
+        src.set_divider_ranges("low", "unknown")
+
+
+def test_set_ron(spi_mcu_source):
+    from mpp_sdk.io.spi_mcu import crc8
+
+    src = spi_mcu_source()
+    src._spi.next_rx = _miso_frame(1000, 100, 0, 0)
+    src.set_ron(15)
+    tx = src._spi.sent[-1]
+    assert tx[3] == 0xC8
+    assert ((tx[0] << 8) | tx[1]) == 15
+    assert tx[2] == crc8([tx[0], tx[1], 0xC8])
+    assert src.ron_mohm == 15
+
+    with pytest.raises(ValueError):
+        src.set_ron(-1)
+    with pytest.raises(ValueError):
+        src.set_ron(70000)
+
+
+def test_set_max31865(spi_mcu_source):
+    from mpp_sdk.io.spi_mcu import crc8
+
+    src = spi_mcu_source()
+    src._spi.next_rx = _miso_frame(1000, 100, 0, 0)
+    src.set_max31865(True)
+    tx = src._spi.sent[-1]
+    assert tx[3] == 0xC2
+    assert tx[0] == 0
+    assert tx[1] == 1
+    assert tx[2] == crc8([0, 1, 0xC2])
+    assert src.max31865_enabled is True
+
+    src._spi.next_rx = _miso_frame(1000, 100, 0, 0)
+    src.set_max31865(False)
+    tx = src._spi.sent[-1]
+    assert tx[1] == 0
+    assert src.max31865_enabled is False
+
+
+def test_set_cutoffs_and_reset(spi_mcu_source):
+    from mpp_sdk.io.spi_mcu import crc8
+
+    src = spi_mcu_source()
+    src._spi.next_rx = _miso_frame(1000, 100, 0, 0)
+    src.set_cutoffs(i_max_ma=2500, v_max_mv=35000)
+
+    # Two frames sent: CMD_SET_CONFIG_CUTOFF_I and CMD_SET_CONFIG_CUTOFF_V
+    tx_i = src._spi.sent[-2]
+    tx_v = src._spi.sent[-1]
+
+    assert tx_i[3] == 0xC3
+    assert ((tx_i[0] << 8) | tx_i[1]) == 2500
+    assert tx_i[2] == crc8([tx_i[0], tx_i[1], 0xC3])
+    assert src.cutoff_i_max_ma == 2500
+
+    assert tx_v[3] == 0xC4
+    assert ((tx_v[0] << 8) | tx_v[1]) == 35000
+    assert tx_v[2] == crc8([tx_v[0], tx_v[1], 0xC4])
+    assert src.cutoff_v_max_mv == 35000
+
+    src._spi.next_rx = _miso_frame(1000, 100, 0, 0)
+    src.reset_cutoff()
+    tx_rst = src._spi.sent[-1]
+    assert tx_rst[3] == 0xC9
+    assert tx_rst[0] == 0
+    assert tx_rst[1] == 0
+    assert tx_rst[2] == crc8([0, 0, 0xC9])
+
+    with pytest.raises(ValueError):
+        src.set_cutoffs(i_max_ma=-1)
+    with pytest.raises(ValueError):
+        src.set_cutoffs(v_max_mv=70000)
+
+
+def test_power_supply_mode(spi_mcu_source):
+    from mpp_sdk.io.spi_mcu import crc8
+
+    src = spi_mcu_source()
+    src._spi.next_rx = _miso_frame(1000, 100, 0, 0)
+    src.set_power_supply_mode(enabled=True, open_loop=True, vout_target_mv=12000, fixed_duty=0.4)
+
+    # 3 frames: target, fixed_duty, mode
+    tx_mode = src._spi.sent[-1]
+    tx_duty = src._spi.sent[-2]
+    tx_target = src._spi.sent[-3]
+
+    assert tx_target[3] == 0xC6
+    assert ((tx_target[0] << 8) | tx_target[1]) == 12000
+
+    assert tx_duty[3] == 0xC7
+    assert ((tx_duty[0] << 8) | tx_duty[1]) == round(0.4 * 65535)
+
+    assert tx_mode[3] == 0xC5
+    assert tx_mode[0] == 1  # enabled
+    assert tx_mode[1] == 1  # open loop
+    assert tx_mode[2] == crc8([1, 1, 0xC5])
+
+    assert src.psu_enabled is True
+    assert src.psu_open_loop is True
+    assert src.psu_vout_target_mv == 12000
+    assert src.psu_fixed_duty == 0.4
+
+
+def test_batch_configure(spi_mcu_source):
+    src = spi_mcu_source()
+    src._spi.next_rx = _miso_frame(1000, 100, 0, 0)
+    src.configure(
+        vin_range="mid",
+        ron_mohm=12,
+        max31865=True,
+        i_max_ma=1500,
+        psu_enabled=True,
+    )
+    assert src.vin_range == "mid"
+    assert src.ron_mohm == 12
+    assert src.max31865_enabled is True
+    assert src.cutoff_i_max_ma == 1500
+    assert src.psu_enabled is True
+

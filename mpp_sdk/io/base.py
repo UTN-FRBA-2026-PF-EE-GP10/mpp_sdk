@@ -12,7 +12,7 @@ class SignalSource(ABC):
     - ``SimulatedSource`` — wraps a panel model + DC-DC converter + load and
       computes ``(V, I)`` from the requested duty cycle.
     - A future hardware source — reads ADC channels for V and I and writes
-      a PWM duty cycle on a Raspberry Pi 5 (or similar).
+      a PWM duty cycle on a Host/sbc (or similar).
 
     Algorithms must not branch on which one they are talking to.
     """

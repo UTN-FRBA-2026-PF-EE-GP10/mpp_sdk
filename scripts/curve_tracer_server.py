@@ -102,7 +102,7 @@ if TYPE_CHECKING:
 
 _WEB_ROOT = Path(__file__).parent / "curve_tracer_web"
 
-# Auto-detect default SPI bus: BBB uses SPI1 (bus=1), RPi uses SPI0 (bus=0).
+# Auto-detect default SPI bus: BeagleBone Black uses SPI1 (bus=1), RPi uses SPI0 (bus=0).
 _DEFAULT_SPI_BUS = 1 if not Path("/dev/spidev0.0").exists() and Path("/dev/spidev1.0").exists() else 0
 
 # Consecutive failed frames before the link is reported down. At the
@@ -253,6 +253,55 @@ class _SweepCache:
                     else "hardware"
                 ),
             )
+
+
+class _ConfigCache:
+    """Thread-safe cache of the Pico dynamic configuration state and defaults."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._state: dict[str, object] = {
+            "vin_range": "low",
+            "vout_range": "low",
+            "ron_mohm": 6,
+            "max31865": False,
+            "i_max_ma": 1000,
+            "v_max_mv": 40000,
+            "psu_enabled": False,
+            "psu_open_loop": False,
+            "psu_vout_target_mv": 5000,
+            "psu_fixed_duty": 0.5,
+        }
+        self._last_applied_at: str | None = None
+        self._last_error: str | None = None
+
+    def update(self, changes: dict[str, object], error: str | None = None) -> None:
+        with self._lock:
+            for k, v in changes.items():
+                if v is not None and k in self._state:
+                    self._state[k] = v
+            self._last_applied_at = now_utc()
+            self._last_error = error
+
+    def snapshot(self) -> dict[str, object]:
+        with self._lock:
+            return {
+                "config": dict(self._state),
+                "defaults": {
+                    "vin_range": "low",
+                    "vout_range": "low",
+                    "ron_mohm": 6,
+                    "max31865": False,
+                    "i_max_ma": 1000,
+                    "v_max_mv": 40000,
+                    "psu_enabled": False,
+                    "psu_open_loop": False,
+                    "psu_vout_target_mv": 5000,
+                    "psu_fixed_duty": 0.5,
+                },
+                "last_applied_at": self._last_applied_at,
+                "last_error": self._last_error,
+            }
 
 
 # Hard ceiling on how long a live run can drive the converter, regardless
@@ -678,7 +727,7 @@ def _run_simulated(
 
 def _poll_loop(
     cache: _SweepCache,
-    commands: queue.Queue[str],
+    commands: queue.Queue[object],
     bus: int,
     device: int,
     speed_hz: int,
@@ -687,6 +736,7 @@ def _poll_loop(
     demo: bool = False,
     run_requests: queue.Queue[_RunRequest] | None = None,
     run_cache: _LiveRunCache | None = None,
+    config_cache: _ConfigCache | None = None,
     stop_event: threading.Event | None = None,
     shutdown_event: threading.Event | None = None,
 ) -> None:
@@ -755,24 +805,49 @@ def _poll_loop(
             # about one `request_sweep()` cycle apart.
             if not commands.empty():
                 cmd = commands.get_nowait()
-                try:
-                    if cmd == "start_sweep":
-                        src.start_sweep()
-                        cache.set_demo_source(False)
-                    elif cmd.startswith("demo_sweep_"):
-                        src.start_demo_sweep(bright=cmd.endswith("bright"))
-                        cache.set_demo_source(True)
-                    elif cmd == "release_relay":
-                        src.release_relay()
-                except RuntimeError as exc:
-                    # A transient SPI fault must not kill this thread, or
-                    # every future command and sweep result silently stops
-                    # working with no visible error. Still falls through
-                    # to the request_sweep() poll and the sleep below,
-                    # rather than looping tightly on a persistent fault.
-                    cache.set_command_error(f"{cmd} failed: {exc}")
+                if isinstance(cmd, tuple) and cmd[0] == "config":
+                    payload = cmd[1]
+                    try:
+                        if payload.get("reset_cutoff"):
+                            reset_fn = getattr(src, "reset_cutoff", None)
+                            if reset_fn is not None:
+                                reset_fn()
+                        cfg_fn = getattr(src, "configure", None)
+                        if cfg_fn is not None:
+                            cfg_fn(
+                                vin_range=payload.get("vin_range"),
+                                vout_range=payload.get("vout_range"),
+                                ron_mohm=payload.get("ron_mohm"),
+                                max31865=payload.get("max31865"),
+                                i_max_ma=payload.get("i_max_ma"),
+                                v_max_mv=payload.get("v_max_mv"),
+                                psu_enabled=payload.get("psu_enabled"),
+                                psu_open_loop=payload.get("psu_open_loop"),
+                                psu_vout_target_mv=payload.get("psu_vout_target_mv"),
+                                psu_fixed_duty=payload.get("psu_fixed_duty"),
+                            )
+                        if config_cache is not None:
+                            config_cache.update(payload)
+                    except RuntimeError as exc:
+                        if config_cache is not None:
+                            config_cache.update({}, error=str(exc))
+                        cache.set_command_error(f"config failed: {exc}")
+                    else:
+                        cache.set_command_error(None)
                 else:
-                    cache.set_command_error(None)
+                    try:
+                        if cmd == "start_sweep":
+                            src.start_sweep()
+                            cache.set_demo_source(False)
+                        elif str(cmd).startswith("demo_sweep_"):
+                            src.start_demo_sweep(bright=str(cmd).endswith("bright"))
+                            cache.set_demo_source(True)
+                        elif cmd == "release_relay":
+                            src.release_relay()
+                    except RuntimeError as exc:
+                        cache.set_command_error(f"{cmd} failed: {exc}")
+                    else:
+                        cache.set_command_error(None)
             # Progress first, and it decides whether the bulk fetch below
             # runs at all. Never raises (see its docstring): a dropped or
             # corrupted progress poll is reported as None, not an error.
@@ -800,6 +875,20 @@ def _poll_loop(
                     cache.set(result, link_for(result, src))
 
             time.sleep(period_s)
+
+
+class _PicoConfigRequest(BaseModel):
+    vin_range: str | int | None = None
+    vout_range: str | int | None = None
+    ron_mohm: int | None = None
+    max31865: bool | None = None
+    i_max_ma: int | None = None
+    v_max_mv: int | None = None
+    reset_cutoff: bool = False
+    psu_enabled: bool | None = None
+    psu_open_loop: bool | None = None
+    psu_vout_target_mv: int | None = None
+    psu_fixed_duty: float | None = None
 
 
 class _PanelSetupIn(BaseModel):
@@ -1191,9 +1280,10 @@ def _run_duration_s(samples: tuple[RunSample, ...]) -> float:
 
 def create_app(
     cache: _SweepCache,
-    commands: queue.Queue[str],
+    commands: queue.Queue[object],
     *,
     demo: bool = False,
+    config_cache: _ConfigCache | None = None,
     run_cache: _LiveRunCache | None = None,
     run_requests: queue.Queue[_RunRequest] | None = None,
     stop_event: threading.Event | None = None,
@@ -1215,6 +1305,7 @@ def create_app(
     run_cache = run_cache if run_cache is not None else _LiveRunCache()
     run_requests = run_requests if run_requests is not None else queue.Queue()
     stop_event = stop_event if stop_event is not None else threading.Event()
+    config_cache = config_cache if config_cache is not None else _ConfigCache()
     specs = {s.label.lower(): s for s in algorithm_specs()}
 
     # Seeded once, here, rather than per-request: this is "first use" of
@@ -2063,6 +2154,26 @@ def create_app(
         commands.put_nowait("release_relay")
         return Response(status_code=204)
 
+    @app.get("/api/pico-config")
+    def get_pico_config() -> dict:
+        return config_cache.snapshot()
+
+    @app.post("/api/pico-config")
+    def post_pico_config(req: _PicoConfigRequest) -> dict:
+        _refuse_if_hardware_run_in_progress()
+        payload = {k: v for k, v in req.model_dump().items() if v is not None}
+        if not payload:
+            return {"status": "ok", "message": "No parameters provided"}
+        config_cache.update(payload)
+        commands.put_nowait(("config", payload))
+        return {"status": "ok", "applied": payload}
+
+    @app.post("/api/pico-config/reset-cutoff")
+    def post_pico_reset_cutoff() -> dict:
+        _refuse_if_hardware_run_in_progress()
+        commands.put_nowait(("config", {"reset_cutoff": True}))
+        return {"status": "ok", "message": "Cutoff reset command sent"}
+
     if _WEB_ROOT.exists():
         # Mounted last: FastAPI/Starlette match routes in registration
         # order, so the decorated /api/* routes above always win over this
@@ -2105,7 +2216,8 @@ def main() -> None:
     args = parser.parse_args()
 
     cache = _SweepCache()
-    commands: queue.Queue[str] = queue.Queue()
+    commands: queue.Queue[object] = queue.Queue()
+    config_cache = _ConfigCache()
     run_cache = _LiveRunCache()
     run_requests: queue.Queue[_RunRequest] = queue.Queue()
     stop_event = threading.Event()
@@ -2124,6 +2236,7 @@ def main() -> None:
             "demo": args.demo,
             "run_requests": run_requests,
             "run_cache": run_cache,
+            "config_cache": config_cache,
             "stop_event": stop_event,
             "shutdown_event": shutdown_event,
         },
@@ -2135,6 +2248,7 @@ def main() -> None:
         cache,
         commands,
         demo=args.demo,
+        config_cache=config_cache,
         run_cache=run_cache,
         run_requests=run_requests,
         stop_event=stop_event,

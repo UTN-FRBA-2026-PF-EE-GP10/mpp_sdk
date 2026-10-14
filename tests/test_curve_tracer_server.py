@@ -2829,3 +2829,77 @@ def test_patch_session_rejects_a_duplicate_open_question_id(client):
         },
     )
     assert r.status_code == 400
+
+
+def test_get_pico_config_returns_defaults(client):
+    r = client.get("/api/pico-config")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["config"]["vin_range"] == "low"
+    assert data["config"]["vout_range"] == "low"
+    assert data["config"]["ron_mohm"] == 6
+    assert data["config"]["max31865"] is False
+    assert data["config"]["i_max_ma"] == 1000
+    assert data["config"]["v_max_mv"] == 40000
+    assert data["config"]["psu_enabled"] is False
+    assert data["config"]["psu_open_loop"] is False
+    assert data["config"]["psu_vout_target_mv"] == 5000
+    assert data["config"]["psu_fixed_duty"] == 0.5
+    assert data["defaults"]["vin_range"] == "low"
+
+
+def test_post_pico_config_updates_and_enqueues(client):
+    r = client.post(
+        "/api/pico-config",
+        json={
+            "vin_range": "mid",
+            "ron_mohm": 12,
+            "max31865": True,
+            "i_max_ma": 1500,
+        },
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] == "ok"
+    assert body["applied"]["vin_range"] == "mid"
+    assert body["applied"]["ron_mohm"] == 12
+
+    # Check that command was enqueued
+    cmd = client.commands.get_nowait()
+    assert isinstance(cmd, tuple)
+    assert cmd[0] == "config"
+    assert cmd[1]["vin_range"] == "mid"
+    assert cmd[1]["ron_mohm"] == 12
+    assert cmd[1]["max31865"] is True
+    assert cmd[1]["i_max_ma"] == 1500
+
+    # Verify that GET now reflects the updated cached state
+    get_r = client.get("/api/pico-config")
+    cfg = get_r.json()["config"]
+    assert cfg["vin_range"] == "mid"
+    assert cfg["ron_mohm"] == 12
+    assert cfg["max31865"] is True
+    assert cfg["i_max_ma"] == 1500
+
+
+def test_post_pico_reset_cutoff_enqueues(client):
+    r = client.post("/api/pico-config/reset-cutoff")
+    assert r.status_code == 200
+    cmd = client.commands.get_nowait()
+    assert isinstance(cmd, tuple)
+    assert cmd[0] == "config"
+    assert cmd[1] == {"reset_cutoff": True}
+
+
+def test_post_pico_config_refuses_when_hardware_run_in_progress(client):
+    client.run_cache.try_start(algorithm="P&O", label="bench", curve_ref=None)
+    try:
+        r = client.post("/api/pico-config", json={"vin_range": "mid"})
+        assert r.status_code == 409
+        r_reset = client.post("/api/pico-config/reset-cutoff")
+        assert r_reset.status_code == 409
+    finally:
+        client.run_cache.finish(aborted=True, reason="test", saved_run_id=None)
+
+
+

@@ -108,12 +108,14 @@ construct `SpiMcuSource()` (defaults already match the firmware's
 calibrated units and this checksum).
 
 `CMD`/`ACK` are both `0x00` in normal operation - the curve-tracer
-control/bulk-read commands (see "Curve tracer" below) are the only thing
-that sets them: `0xB1` requests a bulk sweep-result dump, `0xB2` starts a
-sweep, `0xB3` releases the tracer relay, `0xB4` polls the streamed
-in-progress-sweep state (see "Curve tracer" - streaming below), `0xB5`/
-`0xB6` replay one of two stored demo curves instead of sweeping a real
-panel (see "Curve tracer" - demo sweep below).
+control/bulk-read commands (see "Curve tracer" below) and dynamic configuration
+commands are the only things that set them:
+- `0xB1`: requests a bulk sweep-result dump
+- `0xB2`: starts a sweep
+- `0xB3`: releases the tracer relay
+- `0xB4`: polls streamed in-progress-sweep state
+- `0xB5`/`0xB6`: replay demo curves
+- `0xC1`..`0xC9`: dynamic configuration commands (jumpers, $R_{\text{on}}$, MAX31865 enable, hardware cutoffs, power supply mode, Vout target, fixed duty, and cutoff reset). See "Dynamic Configuration" below.
 
 **Poll faster than 100 ms**: the PIO SPI slave has a known, still-open
 defect where it cannot cleanly recover from an idle gap longer than its
@@ -252,6 +254,25 @@ Two stages (`ClosedLoopState`), at most once per fresh on-chip ADC sample
    setpoint through load/input changes afterward.
 
    `duty` is clamped to `DUTY_MAX` in both stages.
+
+## Dynamic Configuration
+
+The firmware supports dynamic runtime reconfiguration over SPI without needing firmware re-flashing or MCU reboots. Atomic configuration variables are initialized with bench-safe defaults at boot and updated instantly upon receiving matching SPI commands:
+
+| Configuration Item | Command Byte | Encoding | Default Value | Description |
+|-------------------|--------------|----------|---------------|-------------|
+| **Divider Jumpers** | `0xC1` (`CMD_SET_CONFIG_JUMPERS`) | `rx[0]`: Vin range (u8)<br>`rx[1]`: Vout range (u8) | `Low` (`2`) for Vin<br>`Low` (`2`) for Vout | `0` = Full (~75.6 V max)<br>`1` = Mid (~51.5 V max)<br>`2` = Low (~27.3 V max) |
+| **MAX31865 RTD Sensor** | `0xC2` (`CMD_SET_CONFIG_MAX31865`) | `rx[1]`: enable flag (`u8 != 0`) | `false` (disabled) | Enables/disables PT100 RTD sensor polling dynamically |
+| **Current Cutoff ($I_{\max}$)** | `0xC3` (`CMD_SET_CONFIG_CUTOFF_I`) | `rx[0..2]`: $I_{\max}$ in mA (u16 big-endian) | `1000` mA ($1.0\text{ A}$) | Trips gate to 0 % if current exceeds limit |
+| **Voltage Cutoff ($V_{\max}$)** | `0xC4` (`CMD_SET_CONFIG_CUTOFF_V`) | `rx[0..2]`: $V_{\max}$ in mV (u16 big-endian) | `40000` mV ($40.0\text{ V}$) | Trips gate to 0 % if terminal voltage exceeds limit |
+| **Power Supply Mode** | `0xC5` (`CMD_SET_CONFIG_PSU`) | `rx[0]`: firmware mode (u8)<br>`rx[1]`: loop mode (u8) | `MppTracker` (`0`)<br>`ClosedLoop` (`0`) | Mode: 0 = MPPT Tracker, 1 = Power Supply<br>Loop: 0 = ClosedLoop, 1 = OpenLoop |
+| **PSU Target Voltage** | `0xC6` (`CMD_SET_CONFIG_PSU_TARGET`) | `rx[0..2]`: $V_{\text{target}}$ in mV (u16 big-endian) | `5000` mV ($5.0\text{ V}$) | Setpoint for PSU closed-loop regulation |
+| **PSU Fixed Duty** | `0xC7` (`CMD_SET_CONFIG_FIXED_DUTY`) | `rx[0..2]`: raw duty (u16 big-endian) | `32768` ($50\,\%$) | Fixed duty for PSU open-loop mode |
+| **Switch Resistance ($R_{\text{on}}$)** | `0xC8` (`CMD_SET_CONFIG_RON`) | `rx[0..2]`: $R_{\text{on}}$ in $\text{m}\Omega$ (u16 big-endian) | `6` $\text{m}\Omega$ | SEPIC MOSFET on-resistance (Infineon IPP060N06N) |
+| **Reset Cutoff** | `0xC9` (`CMD_RESET_CUTOFF`) | Payload 0 | - | Clears `CUTOFF_TRIPPED` flag and resumes normal PWM operation |
+
+### Safety Cutoff Trip and Reset Behavior
+When either current or voltage breaches the configured cutoff thresholds ($I > I_{\max}$ or $V_{\text{in}} > V_{\max}$ or $V_{\text{out}} > V_{\max}$), the firmware asserts `CUTOFF_TRIPPED` atomically and latches the SEPIC gate drive to 0 % duty (`compare_b = 0`). The gate remains safely disabled until `CMD_RESET_CUTOFF` (`0xC9`) is issued by the host.
 
 ## What it does
 
@@ -509,13 +530,12 @@ Two independent LEDs answer two different questions:
   the main loop regardless of SPI activity - a frozen LED means a hung
   firmware, not just "no traffic right now."
 - **GPIO4 (4x WS2812 NeoPixels, `PIO1` + its own DMA channel, decoupled
-  from the SPI-slave task)**: is the Pi actually talking to me? Flashes
-  dim green briefly on every successfully-received SPI frame, dark
-  otherwise - a frozen or dark strip with the heartbeat LED still
-  blinking means the link has gone quiet (or `spi_pio_task` itself is
-  stuck), not that the whole board is down. Driven by `PACKET_COUNT`, an
-  `AtomicU32` bumped once per received frame in `spi_slave_pio.rs` -
-  nothing SPI-timing-sensitive runs on the NeoPixel's own task.
+  from the SPI-slave task)**: multi-status indicators:
+  - **LED 0**: $V_{\text{in}}$ ADC level (`ADC_PWR`).
+  - **LED 1**: $V_{\text{out}}$ ADC level (`ADC_VOUT`).
+  - **LED 2**: $I$ ADC level (`ADC_Input_Curr`).
+    - *Colors*: Green when $< 50\,\%$ of full scale, Yellow $\to$ Orange $\to$ Red for in-between values, and Blinking Red when saturated / over the limit for that jumper setup ($\ge 4090$ raw ADC codes).
+  - **LED 3**: SPI communication status heartbeat. Flashes green briefly on every successfully-received SPI frame, dark otherwise.
 
 ## GPIO Assignments
 
@@ -525,7 +545,7 @@ Two independent LEDs answer two different questions:
 | 2   | GPIO1   | But2            | Button 2 input                |
 | 4   | GPIO2   | Tracer_En       | Curve-tracer relay enable (idle low) |
 | 5   | GPIO3   | Tracer_pwm      | Curve-tracer bleed PWM, hardware PWM (idle 0 %) |
-| 6   | GPIO4   | NeoPixel_Din    | 4x WS2812 NeoPixels, packet-receive heartbeat |
+| 6   | GPIO4   | NeoPixel_Din    | 4x WS2812 NeoPixels: Vin, Vout, I levels + SPI heartbeat |
 | 7   | GPIO5   | I2C_SDA         | I2C data                      |
 | 9   | GPIO6   | I2C_SCL         | I2C clock                     |
 | 10  | GPIO7   | GPIO7           | General purpose               |

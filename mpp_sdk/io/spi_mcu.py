@@ -22,6 +22,31 @@ except ModuleNotFoundError as exc:  # pragma: no cover
 _TEMP_NOT_AVAILABLE_RAW = 0x8000
 _TEMP_NOT_AVAILABLE_CC = -32768
 
+# MPPT synchronous measurement protocol commands (matching spi_slave_pio.rs)
+_CMD_SET_DUTY = 0x01
+_CMD_READ_MEASUREMENT = 0x02
+
+# Dynamic configuration protocol commands (matching spi_slave_pio.rs)
+_CMD_SET_CONFIG_JUMPERS = 0xC1
+_CMD_SET_CONFIG_MAX31865 = 0xC2
+_CMD_SET_CONFIG_CUTOFF_I = 0xC3
+_CMD_SET_CONFIG_CUTOFF_V = 0xC4
+_CMD_SET_CONFIG_PSU = 0xC5
+_CMD_SET_CONFIG_PSU_TARGET = 0xC6
+_CMD_SET_CONFIG_FIXED_DUTY = 0xC7
+_CMD_SET_CONFIG_RON = 0xC8
+_CMD_RESET_CUTOFF = 0xC9
+
+# Jumper divider ranges
+_DIVIDER_RANGE_MAP: dict[str | int, int] = {
+    "full": 0,
+    "mid": 1,
+    "low": 2,
+    0: 0,
+    1: 1,
+    2: 2,
+}
+
 # Curve-tracer bulk-read protocol - must match
 # firmware/pipico_board/src/spi_slave_pio.rs's constants of the same name
 # and mode_curve_tracer::TRACER_SWEEP_POINTS exactly.
@@ -162,8 +187,8 @@ class SpiMcuSource(SignalSource):
         v_offset: float = 0.0,
         i_offset: float = 0.0,
         initial_duty: float = 0.0,
-        settling_time_s: float = 0.08,
-        oversample_count: int = 10,
+        settling_time_s: float = 0.03,
+        oversample_count: int = 0,
     ) -> None:
         """
         Parameters
@@ -188,11 +213,11 @@ class SpiMcuSource(SignalSource):
         initial_duty:
             Duty cycle sent on the first ``write()`` (0.0 - 1.0).
         settling_time_s:
-            Maximum settling observation timeout in seconds (default: 0.08 s / 80 ms).
-            A 2 ms initial sleep is followed by dynamic settling detection (drift < 40 mV).
+            Maximum settling observation timeout in seconds (default: 0.03 s / 30 ms).
+            When > 0, read() waits for RP2040 hardware settling verification.
+            When <= 0, read() returns immediate telemetry without waiting.
         oversample_count:
-            Number of steady-state samples to read (default 10, averaging the
-            middle 6 measurements).
+            Deprecated parameter retained for backwards compatibility.
         """
         self._spi = _spidev.SpiDev()
         self._spi.open(bus, device)
@@ -205,7 +230,6 @@ class SpiMcuSource(SignalSource):
         self._i_offset = i_offset
 
         self._settling_time_s = settling_time_s
-        self._oversample_count = oversample_count
 
         self._duty = float(initial_duty)
         self._v: float = 0.0
@@ -221,8 +245,37 @@ class SpiMcuSource(SignalSource):
         # last-good telemetry forever. Counting the failures is what lets
         # a caller tell "the board is talking" from "nothing is there".
         self._consecutive_bad_frames = 0
+        self._settled = True
+        self._duty_changed = False
+        self._last_write_time: float = 0.0
+
+        # Dynamic configuration tracking (initialized to firmware defaults)
+        self._vin_range: str | int = "low"
+        self._vout_range: str | int = "low"
+        self._ron_mohm: int = 6
+        self._max31865_enabled: bool = False
+        self._cutoff_i_max_ma: int = 1000
+        self._cutoff_v_max_mv: int = 40000
+        self._psu_enabled: bool = False
+        self._psu_open_loop: bool = False
+        self._psu_vout_target_mv: int = 5000
+        self._psu_fixed_duty: float = 0.5
 
     # ── internal ──────────────────────────────────────────────────────────────
+
+    def _xfer_raw(self, payload_u16: int, cmd: int) -> tuple[list[int], int] | None:
+        """Low-level full-duplex exchange sending raw 16-bit payload and command byte."""
+        val = max(0, min(65535, int(payload_u16)))
+        byte_h, byte_l = val >> 8, val & 0xFF
+        tx = [byte_h, byte_l, crc8([byte_h, byte_l, cmd]), cmd] + [0] * 8
+        rx = self._spi.xfer2(list(tx))
+
+        if rx[8] != crc8(rx[0:8] + [rx[9]]):
+            self._consecutive_bad_frames += 1
+            return None
+        self._consecutive_bad_frames = 0
+        self._settled = bool(rx[10] & 0x01) if len(rx) > 10 else True
+        return rx[0:8], rx[9]
 
     def _xfer_checked(self, duty: float, cmd: int) -> tuple[list[int], int] | None:
         """Low-level full-duplex exchange shared by ``_transact()`` and
@@ -233,25 +286,23 @@ class SpiMcuSource(SignalSource):
         ``(payload_bytes, ack)`` on a valid frame, ``None`` on a checksum
         mismatch (a corrupted-but-complete frame).
         """
-        duty_u16 = max(0, min(65535, round(duty * 65535)))
-        duty_h, duty_l = duty_u16 >> 8, duty_u16 & 0xFF
-        # `cmd` participates in the checksum (matches
-        # spi_slave_pio.rs's apply_duty_frame) so a corrupted frame can't
-        # spoof a bulk-dump request by chance.
-        tx = [duty_h, duty_l, crc8([duty_h, duty_l, cmd]), cmd] + [0] * 8
-        rx = self._spi.xfer2(list(tx))
+        duty_u16 = round(duty * 65535)
+        return self._xfer_raw(duty_u16, cmd)
 
-        # The MISO checksum covers the 8 payload bytes and the ack byte
-        # (rx[9]) - the latter is a command to us, not a reading, so a bit
-        # flip setting its top bit would otherwise send us off to clock an
-        # 83-byte bulk read against firmware still sending telemetry. It
-        # sits after the checksum byte in the frame; that is only byte
-        # order, both sides fold it in at the same point.
-        if rx[8] != crc8(rx[0:8] + [rx[9]]):
-            self._consecutive_bad_frames += 1
-            return None
-        self._consecutive_bad_frames = 0
-        return rx[0:8], rx[9]
+    def _send_config_cmd(self, cmd: int, payload_u16: int = 0) -> int:
+        """Send a configuration command with a 16-bit payload, update telemetry, and return ack."""
+        result = self._xfer_raw(payload_u16, cmd)
+        if result is None:
+            v_raw, i_raw, vout_raw, temp_raw, _stale_ack = self._last_good_raw
+            return 0
+        payload, ack = result
+        v_raw = (payload[0] << 8) | payload[1]
+        i_raw = (payload[2] << 8) | payload[3]
+        vout_raw = (payload[4] << 8) | payload[5]
+        temp_raw = (payload[6] << 8) | payload[7]
+        self._last_good_raw = (v_raw, i_raw, vout_raw, temp_raw, ack)
+        self._apply_telemetry(v_raw, i_raw, vout_raw, temp_raw)
+        return ack
 
     def _transact(self, duty: float, cmd: int = 0) -> tuple[int, int, int, int, int]:
         """Send *duty* (and, if given, a curve-tracer bulk-read *cmd* byte).
@@ -284,97 +335,56 @@ class SpiMcuSource(SignalSource):
     # ── SignalSource interface ────────────────────────────────────────────────
 
     def read(self) -> tuple[float, float]:
-        """Return the (V, I) received in the last ``write()`` transaction."""
-        if not self._has_read:
+        """Return the (V, I) measurement, waiting for hardware settling if duty changed.
+
+        Flow:
+          1. Wait hardware settling window (~15 ms since duty was written).
+          2. Send _CMD_READ_MEASUREMENT over SPI to query the settled measurement.
+          3. Pico returns the settled measurement frame (is_settled=1).
+        """
+        if not self._has_read and not self._duty_changed:
             raise RuntimeError("SpiMcuSource.read() called before the first write()")
+
+        # If duty changed and settling requested, wait reaction delay and ask for settled measurement
+        if self._duty_changed and self._settling_time_s > 0:
+            elapsed = time.monotonic() - getattr(self, "_last_write_time", 0.0)
+            if elapsed < 0.015:
+                time.sleep(0.015 - elapsed)
+
+            self._settled = False
+            start_t = time.monotonic()
+            while not self._settled:
+                self._send_cmd(cmd=_CMD_READ_MEASUREMENT)
+                if self._settled:
+                    break
+                if self._consecutive_bad_frames >= 20:
+                    break
+                if time.monotonic() - start_t > 0.150:  # 150 ms timeout
+                    break
+                time.sleep(0.004)
+            self._duty_changed = False
+
         return self._v, self._i
 
     def write(self, duty_cycle: float) -> None:
-        """Send *duty_cycle* to the Pico and capture the returned telemetry.
+        """Send *duty_cycle* to the Pico.
 
         Flow:
-          1. Send duty command over SPI.
-          2. Initial 2 ms sleep to let the SEPIC converter start moving.
-          3. Check for terminal voltage settling (drift < 40 mV, up to settling_time_s).
-          4. Take 10 fresh measurements and average the middle 6 (dropping min/max).
+          1. Send commanded duty cycle over SPI.
+          2. The RP2040 firmware sets PWM duty, clears old measurements, waits 2ms delay,
+             evaluates Vin settling drift, and filters 25 samples.
+          3. If duty changed (or first write), mark settling pending so read()
+             queries the fresh settled measurement from the Pico.
         """
-        old_duty = self._duty
-        self._duty = max(0.0, min(1.0, duty_cycle))
-        duty_changed = abs(self._duty - old_duty) > 1e-4
-
-        # 1. Apply new duty cycle (ignore returned stale telemetry)
+        new_duty = max(0.0, min(1.0, duty_cycle))
+        duty_changed = abs(new_duty - self._duty) > 1e-4
+        self._duty = new_duty
         self._send_cmd()
 
-        if self._settling_time_s <= 0 and self._oversample_count <= 0:
-            return
-
-        # 2. Initial sleep to let the converter start moving
         if duty_changed:
-            time.sleep(0.002)
-
-        # 3. Check for terminal voltage settling
-        if duty_changed and self._settling_time_s > 0:
-            settle_buf: list[float] = []
-            start_t = time.monotonic()
-            max_wait = self._settling_time_s
-
-            while True:
-                self._send_cmd()
-                settle_buf.append(self._v)
-                now = time.monotonic()
-                elapsed = now - start_t
-
-                # Keep rolling window of the last 8 readings
-                if len(settle_buf) > 8:
-                    settle_buf.pop(0)
-
-                # Check drift once we have at least 8 readings (~12-15 ms)
-                if len(settle_buf) == 8:
-                    v_prev = sum(settle_buf[:4]) / 4.0
-                    v_curr = sum(settle_buf[4:]) / 4.0
-                    drift = abs(v_curr - v_prev)
-
-                    # Flat trend (under 40 mV drift) indicates steady state
-                    if drift < 0.040:
-                        break
-
-                if elapsed >= max_wait:
-                    break
-
-                time.sleep(0.001)
-
-        # 4. Take 10 steady-state measurements
-        if self._oversample_count <= 1:
-            self._send_cmd()
-            return
-
-        v_samples: list[float] = []
-        i_samples: list[float] = []
-        for _ in range(self._oversample_count):
-            self._send_cmd()
-            v_samples.append(self._v)
-            i_samples.append(self._i)
-            time.sleep(0.001)
-
-        # 5. Filter outliers and average the middle 6 measurements
-        if len(v_samples) >= 8:
-            v_sorted = sorted(v_samples)
-            i_sorted = sorted(i_samples)
-            drop = (len(v_sorted) - 6) // 2  # drop = 2
-            v_final = v_sorted[drop : len(v_sorted) - drop]  # middle 6
-            i_final = i_sorted[drop : len(i_sorted) - drop]
-        elif len(v_samples) >= 5:
-            v_sorted = sorted(v_samples)
-            i_sorted = sorted(i_samples)
-            v_final = v_sorted[1:-1]
-            i_final = i_sorted[1:-1]
-        else:
-            v_final = v_samples
-            i_final = i_samples
-
-        if v_final:
-            self._v = sum(v_final) / len(v_final)
-            self._i = sum(i_final) / len(i_final)
+            self._duty_changed = True
+            self._settled = False
+            self._last_write_time = time.monotonic()
 
     # ── extras ───────────────────────────────────────────────────────────────
 
@@ -529,6 +539,192 @@ class SpiMcuSource(SignalSource):
         """
         self._send_cmd(cmd=_CMD_RELEASE_RELAY)
 
+    # ── dynamic configuration ────────────────────────────────────────────────
+
+    def set_divider_ranges(
+        self,
+        vin_range: str | int = "low",
+        vout_range: str | int = "low",
+    ) -> None:
+        """Configure the ADC voltage divider jumper settings for Vin and Vout dynamically.
+
+        Parameters
+        ----------
+        vin_range, vout_range:
+            Divider range setting: 'low' (~27.3V), 'mid' (~51.5V), 'full' (~75.6V),
+            or raw integer 2, 1, 0. Defaults to 'low'.
+        """
+        vin_key = vin_range.lower() if isinstance(vin_range, str) else vin_range
+        vout_key = vout_range.lower() if isinstance(vout_range, str) else vout_range
+        if vin_key not in _DIVIDER_RANGE_MAP:
+            raise ValueError(f"Invalid vin_range '{vin_range}'. Expected 'full', 'mid', 'low', or 0, 1, 2")
+        if vout_key not in _DIVIDER_RANGE_MAP:
+            raise ValueError(f"Invalid vout_range '{vout_range}'. Expected 'full', 'mid', 'low', or 0, 1, 2")
+
+        vin_val = _DIVIDER_RANGE_MAP[vin_key]
+        vout_val = _DIVIDER_RANGE_MAP[vout_key]
+        self._vin_range = vin_range
+        self._vout_range = vout_range
+
+        payload = (vin_val << 8) | vout_val
+        self._send_config_cmd(_CMD_SET_CONFIG_JUMPERS, payload)
+
+    def set_ron(self, ron_mohm: int = 6) -> None:
+        """Configure switch on-resistance in mOhm dynamically.
+
+        Parameters
+        ----------
+        ron_mohm:
+            Switch on-resistance in mOhm (0..65535). Default: 6 mOhm (IPP060N06N).
+        """
+        if not (0 <= ron_mohm <= 65535):
+            raise ValueError(f"ron_mohm={ron_mohm} out of range 0..65535")
+        self._ron_mohm = ron_mohm
+        self._send_config_cmd(_CMD_SET_CONFIG_RON, ron_mohm)
+
+    def set_max31865(self, enabled: bool = False) -> None:
+        """Enable or disable the MAX31865 RTD temperature sensor on the fly.
+
+        Parameters
+        ----------
+        enabled:
+            True to enable PT100 sensor polling; False to disable. Default: False.
+        """
+        self._max31865_enabled = bool(enabled)
+        payload = 1 if enabled else 0
+        self._send_config_cmd(_CMD_SET_CONFIG_MAX31865, payload)
+
+    def set_cutoffs(
+        self,
+        i_max_ma: int | None = 1000,
+        v_max_mv: int | None = 40000,
+    ) -> None:
+        """Configure hardware safety cutoff limits dynamically.
+
+        Parameters
+        ----------
+        i_max_ma:
+            Maximum allowed inductor/panel current in mA (0..65535). Default: 1000 mA (1.0 A).
+            If None, current cutoff is left unchanged.
+        v_max_mv:
+            Maximum allowed terminal voltage in mV (0..65535). Default: 40000 mV (40 V).
+            If None, voltage cutoff is left unchanged.
+        """
+        if i_max_ma is not None:
+            if not (0 <= i_max_ma <= 65535):
+                raise ValueError(f"i_max_ma={i_max_ma} out of range 0..65535")
+            self._cutoff_i_max_ma = i_max_ma
+            self._send_config_cmd(_CMD_SET_CONFIG_CUTOFF_I, i_max_ma)
+
+        if v_max_mv is not None:
+            if not (0 <= v_max_mv <= 65535):
+                raise ValueError(f"v_max_mv={v_max_mv} out of range 0..65535")
+            self._cutoff_v_max_mv = v_max_mv
+            self._send_config_cmd(_CMD_SET_CONFIG_CUTOFF_V, v_max_mv)
+
+    def reset_cutoff(self) -> None:
+        """Reset a tripped hardware safety cutoff, restoring normal gate drive operation."""
+        self._send_config_cmd(_CMD_RESET_CUTOFF, 0)
+
+    def set_psu_target(self, vout_target_mv: int = 5000) -> None:
+        """Set target output voltage in mV for power supply mode.
+
+        Parameters
+        ----------
+        vout_target_mv:
+            Target voltage in mV (0..65535). Default: 5000 mV (5.0 V).
+        """
+        if not (0 <= vout_target_mv <= 65535):
+            raise ValueError(f"vout_target_mv={vout_target_mv} out of range 0..65535")
+        self._psu_vout_target_mv = vout_target_mv
+        self._send_config_cmd(_CMD_SET_CONFIG_PSU_TARGET, vout_target_mv)
+
+    def set_psu_fixed_duty(self, fixed_duty: float = 0.5) -> None:
+        """Set fixed duty cycle for power supply open-loop mode.
+
+        Parameters
+        ----------
+        fixed_duty:
+            Duty cycle (0.0..1.0). Default: 0.5 (50%).
+        """
+        clamped = max(0.0, min(1.0, float(fixed_duty)))
+        self._psu_fixed_duty = clamped
+        duty_u16 = round(clamped * 65535)
+        self._send_config_cmd(_CMD_SET_CONFIG_FIXED_DUTY, duty_u16)
+
+    def set_power_supply_mode(
+        self,
+        enabled: bool = False,
+        open_loop: bool = False,
+        vout_target_mv: int | None = 5000,
+        fixed_duty: float | None = 0.5,
+    ) -> None:
+        """Activate or deactivate bench power supply mode and configure its parameters.
+
+        Parameters
+        ----------
+        enabled:
+            True to activate power supply mode; False for MPPT tracker mode. Default: False.
+        open_loop:
+            True for open-loop (fixed duty); False for closed-loop PI regulation. Default: False.
+        vout_target_mv:
+            Target output voltage in mV when in closed-loop mode. Default: 5000 mV (5.0 V).
+            If None, existing target is retained.
+        fixed_duty:
+            Duty cycle (0.0..1.0) when in open-loop mode. Default: 0.5 (50%).
+            If None, existing fixed duty is retained.
+        """
+        if vout_target_mv is not None:
+            self.set_psu_target(vout_target_mv)
+        if fixed_duty is not None:
+            self.set_psu_fixed_duty(fixed_duty)
+
+        self._psu_enabled = bool(enabled)
+        self._psu_open_loop = bool(open_loop)
+        mode = 1 if enabled else 0
+        loop_mode = 1 if open_loop else 0
+        payload = (mode << 8) | loop_mode
+        self._send_config_cmd(_CMD_SET_CONFIG_PSU, payload)
+
+    def configure(
+        self,
+        *,
+        vin_range: str | int | None = None,
+        vout_range: str | int | None = None,
+        ron_mohm: int | None = None,
+        max31865: bool | None = None,
+        i_max_ma: int | None = None,
+        v_max_mv: int | None = None,
+        psu_enabled: bool | None = None,
+        psu_open_loop: bool | None = None,
+        psu_vout_target_mv: int | None = None,
+        psu_fixed_duty: float | None = None,
+    ) -> None:
+        """Batch configure dynamic hardware and firmware parameters."""
+        if vin_range is not None or vout_range is not None:
+            self.set_divider_ranges(
+                vin_range=self._vin_range if vin_range is None else vin_range,
+                vout_range=self._vout_range if vout_range is None else vout_range,
+            )
+        if ron_mohm is not None:
+            self.set_ron(ron_mohm)
+        if max31865 is not None:
+            self.set_max31865(max31865)
+        if i_max_ma is not None or v_max_mv is not None:
+            self.set_cutoffs(i_max_ma=i_max_ma, v_max_mv=v_max_mv)
+        if (
+            psu_enabled is not None
+            or psu_open_loop is not None
+            or psu_vout_target_mv is not None
+            or psu_fixed_duty is not None
+        ):
+            self.set_power_supply_mode(
+                enabled=self._psu_enabled if psu_enabled is None else psu_enabled,
+                open_loop=self._psu_open_loop if psu_open_loop is None else psu_open_loop,
+                vout_target_mv=psu_vout_target_mv,
+                fixed_duty=psu_fixed_duty,
+            )
+
     def _send_cmd(self, cmd: int = 0) -> int:
         """Transact once at the current duty with *cmd*, apply the
         returned telemetry, and return the ack byte - the shared shape
@@ -637,6 +833,56 @@ class SpiMcuSource(SignalSource):
         if signed == _TEMP_NOT_AVAILABLE_CC:
             return None
         return signed / 100.0
+
+    @property
+    def vin_range(self) -> str | int:
+        """Currently configured Vin ADC divider range ('low', 'mid', 'full')."""
+        return self._vin_range
+
+    @property
+    def vout_range(self) -> str | int:
+        """Currently configured Vout ADC divider range ('low', 'mid', 'full')."""
+        return self._vout_range
+
+    @property
+    def ron_mohm(self) -> int:
+        """Currently configured switch on-resistance in mOhm."""
+        return self._ron_mohm
+
+    @property
+    def max31865_enabled(self) -> bool:
+        """Whether MAX31865 RTD temperature sensor polling is enabled."""
+        return self._max31865_enabled
+
+    @property
+    def cutoff_i_max_ma(self) -> int:
+        """Current hardware cutoff limit for current in mA."""
+        return self._cutoff_i_max_ma
+
+    @property
+    def cutoff_v_max_mv(self) -> int:
+        """Current hardware cutoff limit for voltage in mV."""
+        return self._cutoff_v_max_mv
+
+    @property
+    def psu_enabled(self) -> bool:
+        """Whether power supply mode is enabled."""
+        return self._psu_enabled
+
+    @property
+    def psu_open_loop(self) -> bool:
+        """Whether power supply mode is in open-loop (fixed duty) mode."""
+        return self._psu_open_loop
+
+    @property
+    def psu_vout_target_mv(self) -> int:
+        """Target output voltage in mV for power supply closed-loop mode."""
+        return self._psu_vout_target_mv
+
+    @property
+    def psu_fixed_duty(self) -> float:
+        """Fixed duty cycle (0.0..1.0) for power supply open-loop mode."""
+        return self._psu_fixed_duty
 
     # ── resource management ──────────────────────────────────────────────────
 

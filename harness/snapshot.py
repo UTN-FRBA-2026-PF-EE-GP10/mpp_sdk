@@ -97,6 +97,7 @@ def main() -> None:
     ax_t.legend(loc="lower right", fontsize=9)
 
     out = Path(__file__).parent / "output" / "animate_frame.png"
+    out.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out, dpi=120)
     print(f"Saved: {out}")
 

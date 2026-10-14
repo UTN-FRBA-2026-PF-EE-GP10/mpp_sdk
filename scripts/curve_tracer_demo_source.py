@@ -118,3 +118,65 @@ class DemoSweepSource:
         return _DemoProgress(
             index=index, voltage=v, current=i, active=active, final_point=not active
         )
+
+    def set_divider_ranges(self, vin_range: str | int = "low", vout_range: str | int = "low") -> None:
+        self._vin_range = vin_range
+        self._vout_range = vout_range
+
+    def set_ron(self, ron_mohm: int = 6) -> None:
+        self._ron_mohm = ron_mohm
+
+    def set_max31865(self, enabled: bool = False) -> None:
+        self._max31865_enabled = bool(enabled)
+
+    def set_cutoffs(self, i_max_ma: int | None = 1000, v_max_mv: int | None = 40000) -> None:
+        if i_max_ma is not None:
+            self._cutoff_i_max_ma = i_max_ma
+        if v_max_mv is not None:
+            self._cutoff_v_max_mv = v_max_mv
+
+    def reset_cutoff(self) -> None:
+        pass
+
+    def set_psu_target(self, vout_target_mv: int = 5000) -> None:
+        self._psu_vout_target_mv = vout_target_mv
+
+    def set_psu_fixed_duty(self, fixed_duty: float = 0.5) -> None:
+        self._psu_fixed_duty = fixed_duty
+
+    def set_power_supply_mode(
+        self,
+        enabled: bool = False,
+        open_loop: bool = False,
+        vout_target_mv: int | None = 5000,
+        fixed_duty: float | None = 0.5,
+    ) -> None:
+        self._psu_enabled = bool(enabled)
+        self._psu_open_loop = bool(open_loop)
+        if vout_target_mv is not None:
+            self._psu_vout_target_mv = vout_target_mv
+        if fixed_duty is not None:
+            self._psu_fixed_duty = fixed_duty
+
+    def configure(self, **kwargs: object) -> None:
+        if "vin_range" in kwargs and kwargs["vin_range"] is not None:
+            self._vin_range = str(kwargs["vin_range"])
+        if "vout_range" in kwargs and kwargs["vout_range"] is not None:
+            self._vout_range = str(kwargs["vout_range"])
+        if "ron_mohm" in kwargs and kwargs["ron_mohm"] is not None:
+            self._ron_mohm = int(kwargs["ron_mohm"])  # type: ignore[arg-type]
+        if "max31865" in kwargs and kwargs["max31865"] is not None:
+            self._max31865_enabled = bool(kwargs["max31865"])
+        if "i_max_ma" in kwargs and kwargs["i_max_ma"] is not None:
+            self._cutoff_i_max_ma = int(kwargs["i_max_ma"])  # type: ignore[arg-type]
+        if "v_max_mv" in kwargs and kwargs["v_max_mv"] is not None:
+            self._cutoff_v_max_mv = int(kwargs["v_max_mv"])  # type: ignore[arg-type]
+        if "psu_enabled" in kwargs and kwargs["psu_enabled"] is not None:
+            self._psu_enabled = bool(kwargs["psu_enabled"])
+        if "psu_open_loop" in kwargs and kwargs["psu_open_loop"] is not None:
+            self._psu_open_loop = bool(kwargs["psu_open_loop"])
+        if "psu_vout_target_mv" in kwargs and kwargs["psu_vout_target_mv"] is not None:
+            self._psu_vout_target_mv = int(kwargs["psu_vout_target_mv"])  # type: ignore[arg-type]
+        if "psu_fixed_duty" in kwargs and kwargs["psu_fixed_duty"] is not None:
+            self._psu_fixed_duty = float(kwargs["psu_fixed_duty"])  # type: ignore[arg-type]
+

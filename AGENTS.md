@@ -7,8 +7,8 @@ Read this before any structural change.
 
 `mpp-sdk` is a Python SDK for MPPT (Maximum Power Point Tracking) algorithms
 for photovoltaic systems. The same controller code runs in simulation today.
-It will run on a real **SEPIC** converter later, driven by a **Raspberry Pi
-5 and an RP2040 (Pi Pico)** over SPI. The RP2040 (firmware in **Rust**)
+It will run on a real **SEPIC** converter later, driven by a **Host/sbc
+and an RP2040 (Pi Pico)** over SPI. The RP2040 (firmware in **Rust**)
 drives the power stage. It is the final deployment target for the chosen
 algorithm - the thesis's headline deliverable.
 
@@ -102,8 +102,8 @@ All implement `MPPTAlgorithm.step(V, I) -> D` and own their state.
 **Algorithms must stay portable to a Pico-class MCU.** Keep `step`
 dependency-free (no numpy/scipy/pandas inside it). Keep state small - a
 handful of scalars. Prefer fixed-step, branch-light variants. Models,
-sources, the harness, and visualisation live on the Pi and are not bound by
-this rule - only the algorithm leaves the Pi.
+sources, the harness, and visualisation live on the Host/sbc and are not bound by
+this rule - only the algorithm leaves the Host/sbc.
 
 ## Coding conventions
 
@@ -124,10 +124,10 @@ this rule - only the algorithm leaves the Pi.
 
 ## Hardware target (future)
 
-**Raspberry Pi 5 and RP2040.** The Pi 5 hosts the SDK, the harness, and (in
+**Host/sbc and RP2040.** The Host/sbc hosts the SDK, the harness, and (in
 HIL mode) the algorithm. It is not responsible for hard-real-time signals.
 The RP2040 (firmware in **Rust**, `rp2040-hal`) drives the board: ADC sense
-for `(V, I)`, hardware PWM for the SEPIC switch, SPI-slave to the Pi. It
+for `(V, I)`, hardware PWM for the SEPIC switch, SPI-slave to the Host/sbc. It
 isolates the fast-switching side and is also the deployment target. See
 `firmware/pipico_board/README.md` for build, flash, and calibration steps.
 
@@ -136,7 +136,7 @@ Two phases (see `PLAN.md`, Phase 5):
 1. **HIL bringup (in progress).** `SpiMcuSource(SignalSource)` (shipped,
    under `mpp_sdk/io/`, gated by `mpp-sdk[hardware]`) wraps the SPI
    protocol. The firmware runs the curve-tracer sweep and the SEPIC drive;
-   the MPPT algorithm still runs on the Pi. A closed-loop MPPT run on the
+   the MPPT algorithm still runs on the Host/sbc. A closed-loop MPPT run on the
    real converter has not happened yet.
 2. **Deployed mode.** The validated algorithm is ported to RP2040 firmware
    and cross-checked against the Python reference, on recorded `(V, I, D)`

@@ -16,7 +16,7 @@ viability assessment.
   1. The `mpp-sdk` Python library (this repository).
   2. A written paper / thesis describing methodology, comparisons, and
      conclusions.
-  3. A reproducible hardware demonstrator: Raspberry Pi 5 + a small
+  3. A reproducible hardware demonstrator: Host/sbc + a small
      intermediary MCU (Raspberry Pi Pico / RP2040) over SPI + a
      **SEPIC** power stage (chosen so panel `V_mpp` may sit on either
      side of the load voltage) + two PV panels in series.
@@ -296,8 +296,8 @@ Still to do:
 ### Phase 5 - Hardware demonstrator
 
 The power-electronics board is driven by an **RP2040 (Pi Pico, firmware in
-Rust)**, connected to the Raspberry Pi 5 over SPI. The MCU provides isolation
-from the Pi (the expensive, soft-real-time side) *and* is the deployment target
+Rust)**, connected to the Host/sbc over SPI. The MCU provides isolation
+from the Host/sbc (the expensive, soft-real-time side) *and* is the deployment target
 for the final algorithm. The phase is split into two sub-phases:
 
 #### Phase 5a - Pi + MCU HIL bringup
@@ -632,10 +632,10 @@ layers that pvlib does not address:
    sliding-mode / MPC, and data-driven baselines on the roadmap).
 2. **Power-stage abstraction with an MCU-mediated hardware seam**: a
    `SEPICConverter` model plus a `SignalSource` ABC. The hardware
-   implementation is intentionally split - the Pi 5 hosts the SDK and
+   implementation is intentionally split - the Host/sbc hosts the SDK and
    the algorithm; a small MCU (Raspberry Pi Pico / RP2040) drives
-   the power stage and talks to the Pi over SPI. This isolates the
-   fast-switching / high-current side from the Pi *and* gives us a
+   the power stage and talks to the Host/sbc over SPI. This isolates the
+   fast-switching / high-current side from the Host/sbc *and* gives us a
    natural target for deploying the validated algorithm on the MCU
    itself, which is the thesis's headline deliverable.
 3. **A reproducible comparison harness**: a fixed set of dynamic
@@ -702,7 +702,7 @@ the framework + the deployment evidence are the artefacts.
   use commodity parts (INA229/INA281 for sense, hardware PWM on the MCU).
   The bill of materials is under `hardware/jlcpcb/production_files/`.
 - **Real-time control budget.** Mitigation: the inner control loop
-  *intentionally* lives on the MCU rather than on the Pi 5. The MCU is
+  *intentionally* lives on the MCU rather than on the Host/sbc. The MCU is
   not a fallback - it is the planned topology, both for jitter
   reasons (Linux user space is too soft a real-time environment for
   kHz-class PWM control) and because the MCU is the deployment target
