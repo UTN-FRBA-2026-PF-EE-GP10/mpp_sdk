@@ -14,12 +14,13 @@ Quickstart to install the `web` extra first.
   MOSFET). Give it a heatsink and watch its temperature if you run sweeps
   back-to-back - see `firmware/pipico_board/README.md`'s "Curve tracer"
   section.
-- A closed-loop run has no on-target safety cutoff besides the duty
-  ceiling. The Pi side aborts the run if a reading ever exceeds the
-  v_max/i_max limits, if the converter output exceeds v_out_max, or if the
-  SPI link drops mid-run. This protection only exists while the
-  controlling process (the workbench server, or `run-algorithm`) is
-  running.
+- **Hardware safety cutoffs protect the rig autonomously.** In addition to the
+  software bounds enforced by the Host/sbc, the RP2040 firmware enforces on-target
+  hardware cutoffs (`CUTOFF_IMAX_MA`, `CUTOFF_VMAX_MV`). If current or voltage
+  exceeds these thresholds, the firmware instantly latches the SEPIC switch to
+  0 % duty (`CUTOFF_TRIPPED`), independent of the Host/sbc. Normal drive can be
+  restored via the workbench's "Reset Tripped Cutoff" button or `CMD_RESET_CUTOFF`
+  (`0xC9`).
 - **Always put a load on the converter output before a run** (10 Ohm,
   10 W for one panel; 20 Ohm for two). With a light or missing load the
   SEPIC output climbs far above the panel voltage.
@@ -39,7 +40,7 @@ Quickstart to install the `web` extra first.
 
 ## Capture one curve
 
-1. Open `http://<pi-host>:8000/` (or `http://localhost:8000/` for
+1. Open `http://<host-ip>:8000/` (or `http://localhost:8000/` for
    `--demo`). The workbench opens on **Measure**.
 2. Check the connection pill, top right. It also doubles as the capture
    mode menu:

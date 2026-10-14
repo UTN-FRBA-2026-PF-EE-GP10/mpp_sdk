@@ -33,7 +33,9 @@ nav:
   - Hardware & Boards:
       - Dual-Board Compatibility: board_compatibility.md
       - BeagleBone Black Setup: beaglebone_setup_guide.md
-      - ADC calibration: hardware_v1/calibration.md
+      - ADC Calibration: hardware_v1/calibration.md
+      - Settling Time Optimization: hardware_v1/settling_time_optimization.md
+      - Measurement & Telemetry Protocol: hardware_v1/mppt_measurement_protocol.md
   - Algorithms:
       - Perturb & Observe: algorithms/perturb_observe.md
       - Incremental Conductance: algorithms/incremental_conductance.md

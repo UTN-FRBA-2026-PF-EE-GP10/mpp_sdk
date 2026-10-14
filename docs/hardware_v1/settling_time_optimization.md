@@ -77,6 +77,23 @@ $$T_s \approx T_{\text{hardware}} + T_{\text{filter}} \approx 22.9\,\text{ms} + 
 - **Power Peak Alignment**: Output voltage $V_\text{out}$ reaches its peak ($14.53\,\text{V}$, yielding $P \approx 21.1\,\text{W}$ into $10\,\Omega$) at $D=0.50$ ($V_\text{in} \approx 13.74\,\text{V}$), matching the panel's physical maximum power point.
 - **SDK Configuration**: `settling_time_s` in `SpiMcuSource` is set to `0.05` ($50\,\text{ms}$) for closed-loop MPPT tracking to ensure full filter and hardware stabilization, with `settling_time_s = 0.0` available for raw high-speed telemetry polling.
 
+### 4. Analog Divider Jumper Selection (`Full` vs `Low`)
+
+Switching the analog divider jumpers from `Full` ($23.5\times$) to `Low` ($8.5\times$) provides a **$2.76\times$ gain in ADC voltage resolution**, substantially lowering quantization noise in the measurement:
+
+| Metric | `Full` Divider Range ($235\text{ k}\Omega / 10\text{ k}\Omega$) | `Low` Divider Range ($85\text{ k}\Omega / 10\text{ k}\Omega$) |
+|:-------|:---------------------------------------------------------------|:-------------------------------------------------------------|
+| **Divider Ratio** | $23.5\times$ | $8.5\times$ |
+| **Full Scale Ceiling** | $\sim 75.6\text{ V}$ | $\sim 27.3\text{ V}$ |
+| **Quantization Step (1 LSB)** | $\sim 23.5\text{ mV}$ | $\sim 8.5\text{ mV}$ |
+| **Step 1 Ripple ($0.40 \to 0.45$)** | $94.0\text{ mV}_\text{pp}$ ($\sim 4$ LSBs) | **$43.0\text{ mV}_\text{pp}$** ($\sim 5$ LSBs) |
+| **Step 2 Ripple ($0.45 \to 0.50$)** | $212.0\text{ mV}_\text{pp}$ | **$51.0\text{ mV}_\text{pp}$** |
+| **Step 4 Ripple ($0.55 \to 0.60$)** | $517.0\text{ mV}_\text{pp}$ | **$77.0\text{ mV}_\text{pp}$** |
+
+For 1-panel and 2-panel configurations ($V_{\text{oc}} \le 27.3\,\text{V}$), the `Low` setting provides optimal gradient sensitivity for fine-step MPPT tracking.
+
+---
+
 For the complete closed-loop timing sequence diagram and single-measurement request-response protocol, see [`docs/hardware_v1/mppt_measurement_protocol.md`](./mppt_measurement_protocol.md).
 
 
