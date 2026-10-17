@@ -198,6 +198,19 @@ export function PicoConfigPane({
     return payload
   }
 
+  // PowerSupply mode drives the converter with no Pi watchdog. The operator
+  // must confirm the input is a bench supply; the server refuses without it.
+  const confirmPsuIfNeeded = (payload: SendPicoConfigInput): boolean => {
+    if (!payload.psu_enabled) return true
+    const ok = window.confirm(
+      'Power supply mode drives the converter with no Pi watchdog.\n\n' +
+        'Check that the input is a bench supply, NOT the solar panel, and that ' +
+        'the output load is connected. Continue?',
+    )
+    if (ok) payload.psu_confirm = true
+    return ok
+  }
+
   // Send batch of selected parameters
   const handleSendSelected = async () => {
     const selectedKeys = (Object.keys(selectedFields) as ConfigFieldKey[]).filter(
@@ -212,6 +225,7 @@ export function PicoConfigPane({
     }
 
     const payload = buildPayloadForKeys(selectedKeys)
+    if (!confirmPsuIfNeeded(payload)) return
     setSendingBatch(true)
     setFeedback(null)
     try {
@@ -239,6 +253,7 @@ export function PicoConfigPane({
   // Send a single specific parameter
   const handleSendSingle = async (key: ConfigFieldKey, label: string) => {
     const payload = buildPayloadForKeys([key])
+    if (!confirmPsuIfNeeded(payload)) return
     setSendingSingle(key)
     setFeedback(null)
     try {

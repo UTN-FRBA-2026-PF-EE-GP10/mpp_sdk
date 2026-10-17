@@ -2912,6 +2912,30 @@ def test_apply_pico_config_failure_keeps_the_cache_and_reports(exc):
     assert "config failed" in (cache.snapshot().command_error or "")
 
 
+def test_post_pico_config_refuses_psu_mode_without_confirm(client):
+    r = client.post("/api/pico-config", json={"psu_enabled": True})
+    assert r.status_code == 400
+    assert "panel" in r.json()["detail"]
+    assert client.commands.empty()
+
+
+def test_post_pico_config_passes_the_psu_confirm_to_the_board(client):
+    r = client.post("/api/pico-config", json={"psu_enabled": True, "psu_confirm": True})
+    assert r.status_code == 200
+    _, payload = client.commands.get_nowait()
+    assert payload["psu_enabled"] is True
+    assert payload["psu_confirm"] is True
+
+
+def test_apply_pico_config_does_not_cache_the_confirm_flag():
+    cache = _SweepCache()
+    config = server_module._ConfigCache()
+    src = _ConfigSource()
+    server_module._apply_pico_config(src, cache, config, {"psu_enabled": True, "psu_confirm": True})
+    assert src.calls[0]["psu_confirm"] is True
+    assert "psu_confirm" not in config.snapshot()["config"]
+
+
 @pytest.mark.parametrize(
     "body",
     [

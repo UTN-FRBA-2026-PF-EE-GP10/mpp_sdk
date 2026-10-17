@@ -799,12 +799,16 @@ def test_power_supply_mode(spi_mcu_source):
 
     src = spi_mcu_source()
     src._spi.next_rx = _miso_frame(1000, 100, 0, 0)
-    src.set_power_supply_mode(enabled=True, open_loop=True, vout_target_mv=12000, fixed_duty=0.4)
+    src.set_power_supply_mode(
+        enabled=True, open_loop=True, vout_target_mv=12000, fixed_duty=0.4, confirm=True
+    )
 
-    # 3 frames: target, fixed_duty, mode
+    # 4 frames: target, fixed_duty, then the mode frame twice (the firmware
+    # arms on the first and switches on the second)
     tx_mode = src._spi.sent[-1]
-    tx_duty = src._spi.sent[-2]
-    tx_target = src._spi.sent[-3]
+    assert src._spi.sent[-2] == tx_mode
+    tx_duty = src._spi.sent[-3]
+    tx_target = src._spi.sent[-4]
 
     assert tx_target[3] == 0xC6
     assert ((tx_target[0] << 8) | tx_target[1]) == 12000
@@ -823,6 +827,33 @@ def test_power_supply_mode(spi_mcu_source):
     assert src.psu_fixed_duty == 0.4
 
 
+def test_power_supply_mode_needs_confirm(spi_mcu_source):
+    src = spi_mcu_source()
+    src._spi.next_rx = _miso_frame(1000, 100, 0, 0)
+    with pytest.raises(ValueError, match="confirm"):
+        src.set_power_supply_mode(enabled=True)
+    with pytest.raises(ValueError, match="confirm"):
+        src.configure(psu_enabled=True)
+    assert src._spi.sent == []
+    assert src.psu_enabled is False
+
+
+def test_leaving_power_supply_mode_needs_no_confirm_and_one_frame(spi_mcu_source):
+    src = spi_mcu_source()
+    src._spi.next_rx = _miso_frame(1000, 100, 0, 0)
+    src.set_power_supply_mode(enabled=False, vout_target_mv=None, fixed_duty=None)
+    assert len(src._spi.sent) == 1
+    assert src._spi.sent[0][3] == 0xC5
+    assert src._spi.sent[0][0] == 0
+
+
+def test_configure_psu_target_alone_sends_no_mode_frame(spi_mcu_source):
+    src = spi_mcu_source()
+    src._spi.next_rx = _miso_frame(1000, 100, 0, 0)
+    src.configure(psu_vout_target_mv=12000)
+    assert [tx[3] for tx in src._spi.sent] == [0xC6]
+
+
 def test_batch_configure(spi_mcu_source):
     src = spi_mcu_source()
     src._spi.next_rx = _miso_frame(1000, 100, 0, 0)
@@ -832,6 +863,7 @@ def test_batch_configure(spi_mcu_source):
         max31865=True,
         i_max_ma=900,
         psu_enabled=True,
+        psu_confirm=True,
     )
     assert src.vin_range == "mid"
     assert src.ron_mohm == 12
