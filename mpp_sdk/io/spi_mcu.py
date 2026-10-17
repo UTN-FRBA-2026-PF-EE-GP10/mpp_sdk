@@ -706,8 +706,15 @@ class SpiMcuSource(SignalSource):
         open_loop: bool = False,
         vout_target_mv: int | None = 5000,
         fixed_duty: float | None = 0.5,
+        *,
+        confirm: bool = False,
     ) -> None:
         """Activate or deactivate bench power supply mode and configure its parameters.
+
+        PowerSupply mode drives the converter with no Pi watchdog, so turning
+        it on needs two checks: the caller passes ``confirm=True`` after it
+        made sure the input is a bench supply and not the panel, and the
+        firmware only switches after it gets the same frame twice.
 
         Parameters
         ----------
@@ -721,7 +728,14 @@ class SpiMcuSource(SignalSource):
         fixed_duty:
             Duty cycle (0.0..1.0) when in open-loop mode. Default: 0.5 (50%).
             If None, existing fixed duty is retained.
+        confirm:
+            Must be True when ``enabled`` is True.
         """
+        if enabled and not confirm:
+            raise ValueError(
+                "set_power_supply_mode(enabled=True) needs confirm=True: check that "
+                "the input is a bench supply, not the panel"
+            )
         if vout_target_mv is not None:
             self.set_psu_target(vout_target_mv)
         if fixed_duty is not None:
@@ -733,6 +747,9 @@ class SpiMcuSource(SignalSource):
         loop_mode = 1 if open_loop else 0
         payload = (mode << 8) | loop_mode
         self._send_config_cmd(_CMD_SET_CONFIG_PSU, payload)
+        if enabled:
+            # The firmware arms on the first frame and switches on the second.
+            self._send_config_cmd(_CMD_SET_CONFIG_PSU, payload)
 
     def configure(
         self,
@@ -747,8 +764,10 @@ class SpiMcuSource(SignalSource):
         psu_open_loop: bool | None = None,
         psu_vout_target_mv: int | None = None,
         psu_fixed_duty: float | None = None,
+        psu_confirm: bool = False,
     ) -> None:
-        """Batch configure dynamic hardware and firmware parameters."""
+        """Batch configure dynamic hardware and firmware parameters.
+        ``psu_confirm`` is passed on as ``set_power_supply_mode(confirm=...)``."""
         if vin_range is not None or vout_range is not None:
             self.set_divider_ranges(
                 vin_range=self._vin_range if vin_range is None else vin_range,
@@ -760,17 +779,19 @@ class SpiMcuSource(SignalSource):
             self.set_max31865(max31865)
         if i_max_ma is not None or v_max_mv is not None:
             self.set_cutoffs(i_max_ma=i_max_ma, v_max_mv=v_max_mv)
-        if (
-            psu_enabled is not None
-            or psu_open_loop is not None
-            or psu_vout_target_mv is not None
-            or psu_fixed_duty is not None
-        ):
+        # The mode frame goes out only when the mode is asked for, so a new
+        # target or duty alone never needs the PowerSupply confirmation.
+        if psu_vout_target_mv is not None:
+            self.set_psu_target(psu_vout_target_mv)
+        if psu_fixed_duty is not None:
+            self.set_psu_fixed_duty(psu_fixed_duty)
+        if psu_enabled is not None or psu_open_loop is not None:
             self.set_power_supply_mode(
                 enabled=self._psu_enabled if psu_enabled is None else psu_enabled,
                 open_loop=self._psu_open_loop if psu_open_loop is None else psu_open_loop,
-                vout_target_mv=psu_vout_target_mv,
-                fixed_duty=psu_fixed_duty,
+                vout_target_mv=None,
+                fixed_duty=None,
+                confirm=psu_confirm,
             )
 
     def _send_cmd(self, cmd: int = 0) -> int:

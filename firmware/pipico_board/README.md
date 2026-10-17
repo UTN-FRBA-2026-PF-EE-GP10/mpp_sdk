@@ -286,6 +286,17 @@ value starts at a bench-safe default at boot and changes when its SPI command ar
 - The limits have hard ceilings (1000 mA, 40000 mV; PSU target 25000 mV). A value of
   0 or above the ceiling sets the ceiling, so a host cannot turn a cutoff off.
 
+### Entering PowerSupply mode
+
+PowerSupply mode drives the converter with no Pi watchdog, so it has three checks:
+
+- The operator confirms in the workbench that the input is a bench supply, not the
+  panel. The server refuses `psu_enabled` without `psu_confirm`.
+- The firmware switches only on the second identical `CMD_SET_CONFIG_PSU` frame within
+  1 s. `SpiMcuSource.set_power_supply_mode(enabled=True, confirm=True)` sends both.
+- The firmware refuses the switch while a sweep runs, the relay is engaged, or a
+  cutoff is latched.
+
 ## What it does
 
 `src/main.rs` drives the SEPIC gate PWM on GPIO15 (`PWM_Gate`) at 100 kHz.

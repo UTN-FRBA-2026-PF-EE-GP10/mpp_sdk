@@ -810,6 +810,7 @@ def _apply_pico_config(
                 psu_open_loop=payload.get("psu_open_loop"),
                 psu_vout_target_mv=payload.get("psu_vout_target_mv"),
                 psu_fixed_duty=payload.get("psu_fixed_duty"),
+                psu_confirm=bool(payload.get("psu_confirm")),
             )
     except (RuntimeError, ValueError, OSError) as exc:
         if config_cache is not None:
@@ -817,7 +818,9 @@ def _apply_pico_config(
         cache.set_command_error(f"config failed: {exc}")
         return
     if config_cache is not None:
-        config_cache.update({k: v for k, v in payload.items() if k != "reset_cutoff"})
+        config_cache.update(
+            {k: v for k, v in payload.items() if k not in ("reset_cutoff", "psu_confirm")}
+        )
     cache.set_command_error(None)
 
 
@@ -982,6 +985,9 @@ class _PicoConfigRequest(BaseModel):
     psu_open_loop: bool | None = None
     psu_vout_target_mv: int | None = Field(default=None, ge=0, le=PSU_VOUT_TARGET_CEILING_MV)
     psu_fixed_duty: float | None = Field(default=None, ge=0.0, le=0.95, allow_inf_nan=False)
+    # PowerSupply mode drives the converter with no Pi watchdog. The page
+    # sets this only after the operator confirmed the input is not the panel.
+    psu_confirm: bool = False
 
 
 class _PanelSetupIn(BaseModel):
@@ -2347,6 +2353,12 @@ def create_app(
     @app.post("/api/pico-config")
     def post_pico_config(req: _PicoConfigRequest) -> dict:
         _refuse_if_hardware_run_in_progress()
+        if req.psu_enabled and not req.psu_confirm:
+            raise HTTPException(
+                400,
+                "PowerSupply mode needs psu_confirm: check that the input is a bench "
+                "supply, not the panel",
+            )
         payload = {k: v for k, v in req.model_dump().items() if v is not None}
         if not payload:
             return {"status": "ok", "message": "No parameters provided"}

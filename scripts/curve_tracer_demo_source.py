@@ -152,7 +152,11 @@ class DemoSweepSource:
         open_loop: bool = False,
         vout_target_mv: int | None = 5000,
         fixed_duty: float | None = 0.5,
+        *,
+        confirm: bool = False,
     ) -> None:
+        if enabled and not confirm:
+            raise ValueError("set_power_supply_mode(enabled=True) needs confirm=True")
         self._psu_enabled = bool(enabled)
         self._psu_open_loop = bool(open_loop)
         if vout_target_mv is not None:

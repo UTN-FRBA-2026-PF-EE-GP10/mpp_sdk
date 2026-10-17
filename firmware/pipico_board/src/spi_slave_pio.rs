@@ -364,6 +364,10 @@ fn build_progress_tx_frame(progress: &SweepProgress) -> [u32; FRAME_LEN] {
     words
 }
 
+/// How long the first PowerSupply request stays armed, waiting for the
+/// confirming second one.
+const PSU_ARM_WINDOW: Duration = Duration::from_millis(1000);
+
 /// Time budget for one 12-byte frame's RX side. At the Pi's control period
 /// (1 kHz nominal) a normal frame completes in microseconds even at a
 /// conservative SPI clock; 100 ms is generous headroom that only trips on a
@@ -647,6 +651,9 @@ pub async fn spi_pio_task(
     let mut consecutive_timeouts: u32 = 0;
     let mut last_logged_duty: Option<u16> = None;
     let mut mosi_health = MosiHealth::new();
+    // When the first of the two CMD_SET_CONFIG_PSU frames that enter
+    // PowerSupply mode arrived, and with which loop mode.
+    let mut psu_armed: Option<(u8, Instant)> = None;
 
     loop {
         if matches!(bulk_state, BulkState::Idle) {
@@ -819,9 +826,23 @@ pub async fn spi_pio_task(
                         let unsafe_now = crate::TRACER_ACTIVE.load(Ordering::Relaxed)
                             || crate::RELAY_ENGAGED.load(Ordering::Relaxed)
                             || crate::CUTOFF_TRIPPED.load(Ordering::Relaxed);
+                        // Second check: entering PowerSupply needs the same
+                        // frame twice within PSU_ARM_WINDOW, so one stray or
+                        // corrupted-but-valid frame cannot switch modes.
+                        let confirmed = match psu_armed {
+                            Some((armed_loop, at)) => {
+                                armed_loop == loop_mode && at.elapsed() <= PSU_ARM_WINDOW
+                            }
+                            None => false,
+                        };
                         if to_psu && unsafe_now {
+                            psu_armed = None;
                             defmt::warn!("config: PowerSupply mode refused (tracer or cutoff)");
+                        } else if to_psu && !confirmed {
+                            psu_armed = Some((loop_mode, Instant::now()));
+                            defmt::info!("config: PowerSupply mode armed, send again to confirm");
                         } else {
+                            psu_armed = None;
                             crate::FIRMWARE_MODE.store(mode, Ordering::Relaxed);
                             crate::mode_power_supply::POWER_SUPPLY_LOOP
                                 .store(loop_mode, Ordering::Relaxed);

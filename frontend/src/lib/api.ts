@@ -449,6 +449,8 @@ export interface SendPicoConfigInput {
   psu_open_loop?: boolean
   psu_vout_target_mv?: number
   psu_fixed_duty?: number
+  // Set only after the operator confirmed the input is not the panel.
+  psu_confirm?: boolean
 }
 
 export async function fetchPicoConfig(): Promise<PicoConfigResponse> {
