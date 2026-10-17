@@ -44,7 +44,7 @@ def parse_response(rx: list[int]) -> tuple[int, int, int, int, bool]:
     """Return (v_raw, i_raw, vout_raw, temp_raw_signed, checksum_ok)."""
     # Covers the 8 telemetry bytes plus the curve-tracer ack byte (rx[9]),
     # matching firmware's build_tx_frame and SpiMcuSource._transact.
-    checksum_ok = rx[8] == crc8(rx[0:8] + [rx[9]])
+    checksum_ok = rx[8] == crc8(rx[0:8] + [rx[9], rx[10]])
 
     v_raw = (rx[0] << 8) | rx[1]
     i_raw = (rx[2] << 8) | rx[3]

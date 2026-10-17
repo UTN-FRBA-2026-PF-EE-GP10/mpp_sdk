@@ -252,10 +252,13 @@ fn crc8(bytes: &[u8]) -> u8 {
 /// MISO checksum: `crc8` over the 8 payload bytes followed by `ack`.
 /// `ack` is folded in as a covered byte rather than XORed onto the
 /// result, so its position counts too.
-fn miso_checksum(bytes: &[u8; 8], ack: u8) -> u8 {
-    let mut covered = [0u8; 9];
+/// Covers `settled` as well: the Pi takes a frame with it set as the one
+/// measurement for the new duty, so a flipped bit must not pass.
+fn miso_checksum(bytes: &[u8; 8], ack: u8, settled: u8) -> u8 {
+    let mut covered = [0u8; 10];
     covered[..8].copy_from_slice(bytes);
     covered[8] = ack;
+    covered[9] = settled;
     crc8(&covered)
 }
 
@@ -263,7 +266,7 @@ fn miso_checksum(bytes: &[u8; 8], ack: u8) -> u8 {
 ///
 /// MISO layout: [ V_H | V_L | I_H | I_L | VOUT_H | VOUT_L | TEMP_H
 ///   | TEMP_L | CHECKSUM | ACK | 0 x 2 ]  (12 bytes total). `CHECKSUM` is
-/// `crc8` over the 8 telemetry bytes **and** `ack` - must match
+/// `crc8` over the 8 telemetry bytes, `ack` and the settled byte - must match
 /// `spi_mcu.py`/`spi_test.py` exactly. `ack` is the curve-tracer bulk-read
 /// handshake byte: `0x00` in normal operation, `0x80 | point_count` on the
 /// one frame that acks a bulk-dump request - see `spi_pio_task`'s doc
@@ -285,12 +288,12 @@ fn build_tx_frame(v: u16, i: u16, vout: u16, temp_cc: i16, ack: u8) -> [u32; FRA
         (temp_cc as u16).to_be_bytes(),
     ];
     let bytes: [u8; 8] = core::array::from_fn(|idx| data[idx / 2][idx % 2]);
-    let checksum = miso_checksum(&bytes, ack);
     let is_settled = if crate::DUTY_SETTLED.load(Ordering::Relaxed) {
         1u8
     } else {
         0u8
     };
+    let checksum = miso_checksum(&bytes, ack, is_settled);
 
     let mut words = [0u32; FRAME_LEN];
     let all = bytes
@@ -348,7 +351,7 @@ fn build_progress_tx_frame(progress: &SweepProgress) -> [u32; FRAME_LEN] {
     let i = progress.i_ma.to_be_bytes();
     let bytes = [progress.index, v[0], v[1], i[0], i[1], flags, 0, 0];
     let ack = 0u8;
-    let checksum = miso_checksum(&bytes, ack);
+    let checksum = miso_checksum(&bytes, ack, 0);
 
     let mut words = [0u32; FRAME_LEN];
     let all = bytes
@@ -808,14 +811,26 @@ pub async fn spi_pio_task(
                     Some(CMD_SET_CONFIG_PSU) => {
                         let mode = rx[0] as u8;
                         let loop_mode = rx[1] as u8;
-                        crate::FIRMWARE_MODE.store(mode, Ordering::Relaxed);
-                        crate::mode_power_supply::POWER_SUPPLY_LOOP
-                            .store(loop_mode, Ordering::Relaxed);
-                        defmt::info!(
-                            "config: FirmwareMode={}, PowerSupplyLoop={}",
-                            mode,
-                            loop_mode
-                        );
+                        // PowerSupply mode runs with no Pi watchdog. Do not
+                        // enter it while the relay holds the panel on the
+                        // bleed path or a cutoff is latched: the board is
+                        // not in a known-good state then.
+                        let to_psu = FirmwareMode::from_u8(mode) == FirmwareMode::PowerSupply;
+                        let unsafe_now = crate::TRACER_ACTIVE.load(Ordering::Relaxed)
+                            || crate::RELAY_ENGAGED.load(Ordering::Relaxed)
+                            || crate::CUTOFF_TRIPPED.load(Ordering::Relaxed);
+                        if to_psu && unsafe_now {
+                            defmt::warn!("config: PowerSupply mode refused (tracer or cutoff)");
+                        } else {
+                            crate::FIRMWARE_MODE.store(mode, Ordering::Relaxed);
+                            crate::mode_power_supply::POWER_SUPPLY_LOOP
+                                .store(loop_mode, Ordering::Relaxed);
+                            defmt::info!(
+                                "config: FirmwareMode={}, PowerSupplyLoop={}",
+                                mode,
+                                loop_mode
+                            );
+                        }
                         BulkState::Idle
                     }
                     Some(CMD_SET_CONFIG_PSU_TARGET) => {

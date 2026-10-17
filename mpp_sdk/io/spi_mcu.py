@@ -154,7 +154,7 @@ class SpiMcuSource(SignalSource):
 
         MOSI (RPi -> Pico): [ DUTY_H | DUTY_L | CHECKSUM | CMD | 0x00 x 8 ]
         MISO (Pico -> RPi): [ V_H | V_L | I_H | I_L | VOUT_H | VOUT_L
-                               | TEMP_H | TEMP_L | CHECKSUM | ACK | 0x00 x 2 ]
+                               | TEMP_H | TEMP_L | CHECKSUM | ACK | SETTLED | 0x00 ]
 
     The duty cycle is a u16 (0 = 0 %, 65535 = 100 %). V, I, and Vout are
     calibrated millivolts/milliamperes as saturating u16 (not raw ADC
@@ -163,7 +163,7 @@ class SpiMcuSource(SignalSource):
     connected (see ``temperature_c``). ``CHECKSUM`` is a CRC-8 (polynomial
     0x07, init 0xFF; see ``crc8()`` above) over the frame's data bytes in
     each direction - ``DUTY_H``, ``DUTY_L``, ``CMD`` for MOSI, the eight
-    telemetry bytes plus ``ACK`` for MISO. Both handshake bytes are
+    telemetry bytes plus ``ACK`` and ``SETTLED`` for MISO. Both handshake bytes are
     covered because each is a command to the other side rather than a
     reading. A mismatched frame is corrupted-but-complete (passed the
     firmware's own frame-timeout check) and is rejected - the last-good
@@ -285,11 +285,13 @@ class SpiMcuSource(SignalSource):
         tx = [byte_h, byte_l, crc8([byte_h, byte_l, cmd]), cmd] + [0] * 8
         rx = self._spi.xfer2(list(tx))
 
-        if rx[8] != crc8(rx[0:8] + [rx[9]]):
+        # The settled byte (rx[10]) is covered too: a frame with it set is
+        # taken as the one measurement for the new duty.
+        if rx[8] != crc8(rx[0:8] + [rx[9], rx[10]]):
             self._consecutive_bad_frames += 1
             return None
         self._consecutive_bad_frames = 0
-        self._settled = bool(rx[10] & 0x01) if len(rx) > 10 else True
+        self._settled = bool(rx[10] & 0x01)
         return rx[0:8], rx[9]
 
     def _xfer_checked(self, duty: float, cmd: int) -> tuple[list[int], int] | None:

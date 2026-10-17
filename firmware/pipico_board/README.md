@@ -78,7 +78,7 @@ Pico pins 14-18 are adjacent on the left side of the board (USB connector facing
 
 MOSI (RPi→Pico): `[ DUTY_H | DUTY_L | CHECKSUM | CMD | 0x00 x 8 ]`
 
-MISO (Pico→RPi): `[ V_H | V_L | I_H | I_L | VOUT_H | VOUT_L | TEMP_H | TEMP_L | CHECKSUM | ACK | 0x00 x 2 ]`
+MISO (Pico→RPi): `[ V_H | V_L | I_H | I_L | VOUT_H | VOUT_L | TEMP_H | TEMP_L | CHECKSUM | ACK | SETTLED | 0x00 ]`
 
 DUTY is a u16 (0 = 0 %, 65535 = 100 %). V/I/VOUT are u16, saturating: V/VOUT
 in millivolts, I in milliamperes (negative current clamps to 0). TEMP is a
@@ -87,7 +87,9 @@ the MAX31865 probe stays disabled (see "Panel temperature" below). See
 "Sensing" below for the sensor details. `CHECKSUM` is a CRC-8 (polynomial
 `0x07`, init `0xFF`) over the frame's data bytes in each direction -
 `DUTY_H`, `DUTY_L`, `CMD` for MOSI; `V_H`, `V_L`, `I_H`, `I_L`, `VOUT_H`,
-`VOUT_L`, `TEMP_H`, `TEMP_L`, `ACK` for MISO, in that order. `CMD` and
+`VOUT_L`, `TEMP_H`, `TEMP_L`, `ACK`, `SETTLED` for MISO, in that order.
+`SETTLED` is 1 on the frame that carries the settled measurement for the
+last duty, so it is covered too. `CMD` and
 `ACK` are both covered because each is a *command to the other side*
 rather than a reading: a bit flip on `CMD` would spoof a bulk-dump
 request, and one setting `ACK`'s top bit would send the Pi off to clock

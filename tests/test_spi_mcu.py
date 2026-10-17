@@ -106,7 +106,7 @@ def _miso_frame(
     ]
     # ack participates in the checksum (see firmware's build_tx_frame) so
     # a flipped ack bit can't spoof "sweep ready" at the Pi.
-    checksum = crc8([*data, ack])
+    checksum = crc8([*data, ack, settled])
     if corrupt:
         checksum ^= 0x01
     return [*data, checksum, ack, settled, 0]
@@ -464,7 +464,7 @@ def _progress_frame(
 
     # ack is 0 on a progress frame, but still covered - matches firmware's
     # build_progress_frame.
-    checksum = crc8([*data, 0])
+    checksum = crc8([*data, 0, 0])
     if corrupt:
         checksum ^= 0x01
     return [*data, checksum, 0, 0, 0]  # ack=0 (a progress reply never also acks a bulk request)
