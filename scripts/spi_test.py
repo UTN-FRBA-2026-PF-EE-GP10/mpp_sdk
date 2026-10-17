@@ -8,10 +8,10 @@ Usage:
 
 import argparse
 import time
-from pathlib import Path
 
 import spidev
 
+from mpp_sdk.io.board import default_spi_bus
 from mpp_sdk.io.spi_mcu import crc8
 
 DEFAULT_DEVICE = 0
@@ -44,7 +44,7 @@ def parse_response(rx: list[int]) -> tuple[int, int, int, int, bool]:
     """Return (v_raw, i_raw, vout_raw, temp_raw_signed, checksum_ok)."""
     # Covers the 8 telemetry bytes plus the curve-tracer ack byte (rx[9]),
     # matching firmware's build_tx_frame and SpiMcuSource._transact.
-    checksum_ok = rx[8] == crc8(rx[0:8] + [rx[9]])
+    checksum_ok = rx[8] == crc8(rx[0:8] + [rx[9], rx[10]])
 
     v_raw = (rx[0] << 8) | rx[1]
     i_raw = (rx[2] << 8) | rx[3]
@@ -54,23 +54,13 @@ def parse_response(rx: list[int]) -> tuple[int, int, int, int, bool]:
     return v_raw, i_raw, vout_raw, temp_raw_signed, checksum_ok
 
 
-def default_bus() -> int:
-    """SPI1 on a BeagleBone Black, SPI0 everywhere else - same rule as the
-    curve-tracer server."""
-    try:
-        model = Path("/proc/device-tree/model").read_text(errors="replace")
-    except OSError:
-        return 0
-    return 1 if "BeagleBone" in model else 0
-
-
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--duty", type=float, default=0.5)
     parser.add_argument("--once", action="store_true")
     parser.add_argument("--interval", type=float, default=0.5)
     parser.add_argument(
-        "--bus", type=int, default=default_bus(), help="SPI bus (default: 1 on a BBB, else 0)"
+        "--bus", type=int, default=default_spi_bus(), help="SPI bus (default: 1 on a BBB, else 0)"
     )
     parser.add_argument(
         "--device", type=int, default=DEFAULT_DEVICE, help=f"SPI device (default: {DEFAULT_DEVICE})"

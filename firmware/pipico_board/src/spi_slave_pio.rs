@@ -54,6 +54,23 @@ pub const FRAME_LEN: usize = 12;
 // the steady FRAME_LEN telemetry frame it rides alongside. See
 // spi_pio_task's doc comment for the full three-step protocol.
 
+/// Command indicating the master is sending a duty update and requesting a fresh measurement cycle.
+pub const CMD_SET_DUTY: u8 = 0x01;
+/// Command asking for the single settled measurement value.
+#[allow(dead_code)]
+pub const CMD_READ_MEASUREMENT: u8 = 0x02;
+
+/// Dynamic configuration commands (matching mpp_sdk.io.spi_mcu)
+pub const CMD_SET_CONFIG_JUMPERS: u8 = 0xC1;
+pub const CMD_SET_CONFIG_MAX31865: u8 = 0xC2;
+pub const CMD_SET_CONFIG_CUTOFF_I: u8 = 0xC3;
+pub const CMD_SET_CONFIG_CUTOFF_V: u8 = 0xC4;
+pub const CMD_SET_CONFIG_PSU: u8 = 0xC5;
+pub const CMD_SET_CONFIG_PSU_TARGET: u8 = 0xC6;
+pub const CMD_SET_CONFIG_FIXED_DUTY: u8 = 0xC7;
+pub const CMD_SET_CONFIG_RON: u8 = 0xC8;
+pub const CMD_RESET_CUTOFF: u8 = 0xC9;
+
 /// MOSI command value (one of the 9 spare bytes, index 3) requesting a
 /// bulk-dump; unlikely to appear from a zeroed/uninitialized buffer.
 const CMD_REQUEST_BULK_DUMP: u8 = 0xB1;
@@ -235,10 +252,13 @@ fn crc8(bytes: &[u8]) -> u8 {
 /// MISO checksum: `crc8` over the 8 payload bytes followed by `ack`.
 /// `ack` is folded in as a covered byte rather than XORed onto the
 /// result, so its position counts too.
-fn miso_checksum(bytes: &[u8; 8], ack: u8) -> u8 {
-    let mut covered = [0u8; 9];
+/// Covers `settled` as well: the Pi takes a frame with it set as the one
+/// measurement for the new duty, so a flipped bit must not pass.
+fn miso_checksum(bytes: &[u8; 8], ack: u8, settled: u8) -> u8 {
+    let mut covered = [0u8; 10];
     covered[..8].copy_from_slice(bytes);
     covered[8] = ack;
+    covered[9] = settled;
     crc8(&covered)
 }
 
@@ -246,7 +266,7 @@ fn miso_checksum(bytes: &[u8; 8], ack: u8) -> u8 {
 ///
 /// MISO layout: [ V_H | V_L | I_H | I_L | VOUT_H | VOUT_L | TEMP_H
 ///   | TEMP_L | CHECKSUM | ACK | 0 x 2 ]  (12 bytes total). `CHECKSUM` is
-/// `crc8` over the 8 telemetry bytes **and** `ack` - must match
+/// `crc8` over the 8 telemetry bytes, `ack` and the settled byte - must match
 /// `spi_mcu.py`/`spi_test.py` exactly. `ack` is the curve-tracer bulk-read
 /// handshake byte: `0x00` in normal operation, `0x80 | point_count` on the
 /// one frame that acks a bulk-dump request - see `spi_pio_task`'s doc
@@ -268,13 +288,19 @@ fn build_tx_frame(v: u16, i: u16, vout: u16, temp_cc: i16, ack: u8) -> [u32; FRA
         (temp_cc as u16).to_be_bytes(),
     ];
     let bytes: [u8; 8] = core::array::from_fn(|idx| data[idx / 2][idx % 2]);
-    let checksum = miso_checksum(&bytes, ack);
+    let is_settled = if crate::DUTY_SETTLED.load(Ordering::Relaxed) {
+        1u8
+    } else {
+        0u8
+    };
+    let checksum = miso_checksum(&bytes, ack, is_settled);
 
     let mut words = [0u32; FRAME_LEN];
     let all = bytes
         .iter()
         .chain(core::iter::once(&checksum))
-        .chain(core::iter::once(&ack));
+        .chain(core::iter::once(&ack))
+        .chain(core::iter::once(&is_settled));
     for (word, byte) in words.iter_mut().zip(all) {
         *word = (*byte as u32) << 24;
     }
@@ -325,7 +351,7 @@ fn build_progress_tx_frame(progress: &SweepProgress) -> [u32; FRAME_LEN] {
     let i = progress.i_ma.to_be_bytes();
     let bytes = [progress.index, v[0], v[1], i[0], i[1], flags, 0, 0];
     let ack = 0u8;
-    let checksum = miso_checksum(&bytes, ack);
+    let checksum = miso_checksum(&bytes, ack, 0);
 
     let mut words = [0u32; FRAME_LEN];
     let all = bytes
@@ -472,17 +498,33 @@ fn apply_duty_frame(
 
     if crc8(&[duty_h, duty_l, cmd]) == received_checksum {
         let duty = ((duty_h as u16) << 8) | duty_l as u16;
-        DUTY.store(duty, Ordering::Relaxed);
         PACKET_COUNT.fetch_add(1, Ordering::Relaxed);
         health.last_valid = Instant::now();
         health.duty_forced_off = false;
 
-        // Log only on change - at the Pi's control period this would
-        // otherwise flood RTT every frame; V/I are already logged
-        // periodically by sensors_task.
-        if *last_logged_duty != Some(duty) {
-            defmt::info!("rx: duty={}%", duty as u32 * 100 / 65535);
-            *last_logged_duty = Some(duty);
+        if cmd == 0 || cmd == CMD_SET_DUTY {
+            let old_duty = DUTY.swap(duty, Ordering::Relaxed);
+
+            if duty != old_duty || cmd == CMD_SET_DUTY {
+                crate::DUTY_SETTLED.store(false, Ordering::Relaxed);
+                crate::SETTLED_TRIGGER.store(0, Ordering::Relaxed);
+
+                // Erase old measurements so stale data is never reported to the BBB
+                crate::MEAS_V_MV.store(0, Ordering::Relaxed);
+                crate::MEAS_I_MA.store(0, Ordering::Relaxed);
+                crate::MEAS_ADC_VOUT_MV.store(0, Ordering::Relaxed);
+                crate::MEAS_ADC_PWR_MV.store(0, Ordering::Relaxed);
+                crate::MEAS_ADC_IIN_MV.store(0, Ordering::Relaxed);
+                crate::MEAS_TRIGGER_COUNT.fetch_add(1, Ordering::Relaxed);
+            }
+
+            // Log only on change - at the Pi's control period this would
+            // otherwise flood RTT every frame; V/I are already logged
+            // periodically by sensors_task.
+            if *last_logged_duty != Some(duty) {
+                defmt::info!("rx: duty={}%", duty as u32 * 100 / 65535);
+                *last_logged_duty = Some(duty);
+            }
         }
         Some(cmd)
     } else {
@@ -607,6 +649,10 @@ pub async fn spi_pio_task(
     let mut mosi_health = MosiHealth::new();
 
     loop {
+        if matches!(bulk_state, BulkState::Idle) {
+            tx_buf = build_tx_buf_for_state(&bulk_state);
+        }
+
         let (this_frame_len, frame_timeout) = match &bulk_state {
             BulkState::DoBulk(_) => (BULK_FRAME_LEN, BULK_FRAME_TIMEOUT),
             BulkState::Idle | BulkState::SendAck(_) | BulkState::SendProgress(_) => {
@@ -632,7 +678,8 @@ pub async fn spi_pio_task(
         if with_timeout(frame_timeout, exchange).await.is_err() {
             // No Pi attached is expected/normal in PowerSupply mode
             // (mode_power_supply.rs) - suppress the WARN spam there.
-            let log_link_state = FIRMWARE_MODE != FirmwareMode::PowerSupply;
+            let log_link_state = FirmwareMode::from_u8(FIRMWARE_MODE.load(Ordering::Relaxed))
+                != FirmwareMode::PowerSupply;
 
             // Dropping `exchange` here cancels the DMA push (its Drop impl
             // aborts the channel) and the pending `wait_pull`s.
@@ -723,6 +770,90 @@ pub async fn spi_pio_task(
                                 final_point: false,
                             });
                         BulkState::SendProgress(progress)
+                    }
+                    Some(CMD_SET_CONFIG_JUMPERS) => {
+                        let duty_h = rx[0] as u8;
+                        let duty_l = rx[1] as u8;
+                        crate::ADC_VIN_DIVIDER_RANGE.store(duty_h, Ordering::Relaxed);
+                        crate::ADC_VOUT_DIVIDER_RANGE.store(duty_l, Ordering::Relaxed);
+                        defmt::info!("config: Vin jumper={}, Vout jumper={}", duty_h, duty_l);
+                        BulkState::Idle
+                    }
+                    Some(CMD_SET_CONFIG_MAX31865) => {
+                        let duty_l = rx[1] as u8;
+                        let enabled = duty_l != 0;
+                        crate::MAX31865_ENABLED.store(enabled, Ordering::Relaxed);
+                        defmt::info!("config: MAX31865 enabled={}", enabled);
+                        BulkState::Idle
+                    }
+                    Some(CMD_SET_CONFIG_CUTOFF_I) => {
+                        let val = ((rx[0] as u16) << 8) | (rx[1] as u16);
+                        let val = crate::clamp_cutoff(val, crate::CUTOFF_I_MAX_CEILING_MA);
+                        crate::CUTOFF_IMAX_MA.store(val, Ordering::Relaxed);
+                        defmt::info!("config: Cutoff Imax={} mA", val);
+                        BulkState::Idle
+                    }
+                    Some(CMD_SET_CONFIG_CUTOFF_V) => {
+                        let val = ((rx[0] as u16) << 8) | (rx[1] as u16);
+                        let val = crate::clamp_cutoff(val, crate::CUTOFF_V_MAX_CEILING_MV);
+                        crate::CUTOFF_VMAX_MV.store(val, Ordering::Relaxed);
+                        defmt::info!("config: Cutoff Vmax={} mV", val);
+                        BulkState::Idle
+                    }
+                    Some(CMD_RESET_CUTOFF) => {
+                        // Safe to clear on request: the gate loop checks
+                        // the live values every tick and trips again at
+                        // once if the fault is still there.
+                        crate::CUTOFF_TRIPPED.store(false, Ordering::Relaxed);
+                        defmt::info!("config: Cutoff reset");
+                        BulkState::Idle
+                    }
+                    Some(CMD_SET_CONFIG_PSU) => {
+                        let mode = rx[0] as u8;
+                        let loop_mode = rx[1] as u8;
+                        // PowerSupply mode runs with no Pi watchdog. Do not
+                        // enter it while the relay holds the panel on the
+                        // bleed path or a cutoff is latched: the board is
+                        // not in a known-good state then.
+                        let to_psu = FirmwareMode::from_u8(mode) == FirmwareMode::PowerSupply;
+                        let unsafe_now = crate::TRACER_ACTIVE.load(Ordering::Relaxed)
+                            || crate::RELAY_ENGAGED.load(Ordering::Relaxed)
+                            || crate::CUTOFF_TRIPPED.load(Ordering::Relaxed);
+                        if to_psu && unsafe_now {
+                            defmt::warn!("config: PowerSupply mode refused (tracer or cutoff)");
+                        } else {
+                            crate::FIRMWARE_MODE.store(mode, Ordering::Relaxed);
+                            crate::mode_power_supply::POWER_SUPPLY_LOOP
+                                .store(loop_mode, Ordering::Relaxed);
+                            defmt::info!(
+                                "config: FirmwareMode={}, PowerSupplyLoop={}",
+                                mode,
+                                loop_mode
+                            );
+                        }
+                        BulkState::Idle
+                    }
+                    Some(CMD_SET_CONFIG_PSU_TARGET) => {
+                        let val = ((rx[0] as u16) << 8) | (rx[1] as u16);
+                        let val = val.min(crate::PSU_VOUT_TARGET_CEILING_MV);
+                        crate::mode_power_supply::POWER_SUPPLY_VOUT_MV
+                            .store(val, Ordering::Relaxed);
+                        defmt::info!("config: PSU Vout target={} mV", val);
+                        BulkState::Idle
+                    }
+                    Some(CMD_SET_CONFIG_FIXED_DUTY) => {
+                        let val = ((rx[0] as u16) << 8) | (rx[1] as u16);
+                        let val = val.min(crate::DUTY_MAX);
+                        crate::mode_power_supply::POWER_SUPPLY_FIXED_DUTY
+                            .store(val, Ordering::Relaxed);
+                        defmt::info!("config: PSU fixed duty={}", val);
+                        BulkState::Idle
+                    }
+                    Some(CMD_SET_CONFIG_RON) => {
+                        let val = ((rx[0] as u16) << 8) | (rx[1] as u16);
+                        crate::RON_MOHM.store(val, Ordering::Relaxed);
+                        defmt::info!("config: Ron={} mOhm", val);
+                        BulkState::Idle
                     }
                     Some(cmd) => {
                         if let Some(tracer_cmd) = tracer_command_for(cmd) {

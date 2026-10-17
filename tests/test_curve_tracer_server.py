@@ -2835,6 +2835,120 @@ def test_patch_session_rejects_a_duplicate_open_question_id(client):
     assert r.status_code == 400
 
 
+def test_get_pico_config_returns_defaults(client):
+    r = client.get("/api/pico-config")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["config"]["vin_range"] == "low"
+    assert data["config"]["vout_range"] == "low"
+    assert data["config"]["ron_mohm"] == 6
+    assert data["config"]["max31865"] is False
+    assert data["config"]["i_max_ma"] == 1000
+    assert data["config"]["v_max_mv"] == 40000
+    assert data["config"]["psu_enabled"] is False
+    assert data["config"]["psu_open_loop"] is False
+    assert data["config"]["psu_vout_target_mv"] == 5000
+    assert data["config"]["psu_fixed_duty"] == 0.5
+    assert data["defaults"]["vin_range"] == "low"
+
+
+def test_post_pico_config_enqueues_and_caches_only_after_apply(client):
+    r = client.post(
+        "/api/pico-config",
+        json={
+            "vin_range": "mid",
+            "ron_mohm": 12,
+            "max31865": True,
+            "i_max_ma": 900,
+        },
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] == "ok"
+    assert body["applied"]["vin_range"] == "mid"
+    assert body["applied"]["ron_mohm"] == 12
+
+    cmd = client.commands.get_nowait()
+    assert isinstance(cmd, tuple)
+    assert cmd[0] == "config"
+    assert cmd[1]["vin_range"] == "mid"
+    assert cmd[1]["i_max_ma"] == 900
+
+    # Not applied to the board yet, so GET still shows the old value.
+    assert client.get("/api/pico-config").json()["config"]["vin_range"] == "low"
+
+
+class _ConfigSource:
+    def __init__(self, fail: Exception | None = None):
+        self.fail = fail
+        self.calls: list[dict] = []
+
+    def configure(self, **kwargs):
+        if self.fail is not None:
+            raise self.fail
+        self.calls.append(kwargs)
+
+    def reset_cutoff(self):
+        self.calls.append({"reset_cutoff": True})
+
+
+def test_apply_pico_config_updates_the_cache_after_the_board_takes_it():
+    cache = _SweepCache()
+    config = server_module._ConfigCache()
+    src = _ConfigSource()
+    server_module._apply_pico_config(src, cache, config, {"vin_range": "mid", "i_max_ma": 900})
+    assert src.calls[0]["vin_range"] == "mid"
+    snap = config.snapshot()["config"]
+    assert snap["vin_range"] == "mid"
+    assert snap["i_max_ma"] == 900
+
+
+@pytest.mark.parametrize("exc", [ValueError("bad"), OSError("EIO"), RuntimeError("spi")])
+def test_apply_pico_config_failure_keeps_the_cache_and_reports(exc):
+    cache = _SweepCache()
+    config = server_module._ConfigCache()
+    server_module._apply_pico_config(_ConfigSource(fail=exc), cache, config, {"vin_range": "mid"})
+    assert config.snapshot()["config"]["vin_range"] == "low"
+    assert "config failed" in (cache.snapshot().command_error or "")
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"i_max_ma": 0},
+        {"i_max_ma": 1500},
+        {"v_max_mv": 99999},
+        {"vin_range": "bogus"},
+        {"psu_vout_target_mv": 30000},
+        {"psu_fixed_duty": 1.0},
+    ],
+)
+def test_post_pico_config_refuses_out_of_range_values(client, body):
+    r = client.post("/api/pico-config", json=body)
+    assert r.status_code == 422
+    assert client.commands.empty()
+
+
+def test_post_pico_reset_cutoff_enqueues(client):
+    r = client.post("/api/pico-config/reset-cutoff")
+    assert r.status_code == 200
+    cmd = client.commands.get_nowait()
+    assert isinstance(cmd, tuple)
+    assert cmd[0] == "config"
+    assert cmd[1] == {"reset_cutoff": True}
+
+
+def test_post_pico_config_refuses_when_hardware_run_in_progress(client):
+    client.run_cache.try_start(algorithm="P&O", label="bench", curve_ref=None)
+    try:
+        r = client.post("/api/pico-config", json={"vin_range": "mid"})
+        assert r.status_code == 409
+        r_reset = client.post("/api/pico-config/reset-cutoff")
+        assert r_reset.status_code == 409
+    finally:
+        client.run_cache.finish(aborted=True, reason="test", saved_run_id=None)
+
+
 # ------------------------------------------------------------------
 # Sweep pending, poll thread faults, input bounds, bad library files
 # ------------------------------------------------------------------

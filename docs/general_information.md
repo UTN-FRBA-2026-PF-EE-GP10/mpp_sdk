@@ -27,7 +27,7 @@ swapped.
         └──────────────────┴──► RP2040 (firmware, Rust)
                                     │ SPI
                                     ▼
-                            Raspberry Pi (Python SDK)
+                            Host/sbc (Python SDK)
 ```
 
 - **Panels:** two Hissuma PSF10MONO (10 W each) in **series**. Series wiring
@@ -39,9 +39,9 @@ swapped.
 - **RP2040 (Raspberry Pi Pico):** drives the converter PWM, reads voltage
   and current (an INA229 power monitor over SPI, plus an INA281 sense
   amplifier into the on-chip ADC as an analog cross-check), and talks to
-  the Pi over SPI. Firmware is in **Rust**. It is also the deployment
+  the Host/sbc over SPI. Firmware is in **Rust**. It is also the deployment
   target for the final algorithm.
-- **Raspberry Pi:** hosts the Python SDK, and the algorithm during
+- **Host/sbc:** hosts the Python SDK, and the algorithm during
   hardware-in-the-loop (HIL) testing. See `AGENTS.md` for the target model.
 
 ## The four SDK pillars

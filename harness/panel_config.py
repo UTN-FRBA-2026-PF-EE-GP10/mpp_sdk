@@ -68,7 +68,7 @@ def shaded_string(
 
 def make_dynamic_source(
     panel=None,
-    load_resistance: float = 10.0,
+    load_resistance: float = 41.0,
     initial_duty: float = 0.5,
     tabulate: bool = True,
 ) -> DynamicSimulatedSource:
@@ -93,7 +93,7 @@ def make_dynamic_source(
 
 def make_static_source(
     panel=None,
-    load_resistance: float = 10.0,
+    load_resistance: float = 41.0,
     initial_duty: float = 0.5,
 ) -> SimulatedSource:
     """Return a ``SimulatedSource`` (instant operating point, no dynamics)."""

@@ -358,3 +358,33 @@ export const DEMO_SESSIONS: SessionSummary[] = [
 export const DEMO_RUN_DETAILS: Record<string, RunDetail> = {
   [DEMO_RUN.id]: DEMO_RUN,
 }
+
+export const DEMO_PICO_CONFIG = {
+  config: {
+    vin_range: 'low' as const,
+    vout_range: 'low' as const,
+    ron_mohm: 6,
+    max31865: false,
+    i_max_ma: 1000,
+    v_max_mv: 40000,
+    psu_enabled: false,
+    psu_open_loop: false,
+    psu_vout_target_mv: 5000,
+    psu_fixed_duty: 0.5,
+  },
+  defaults: {
+    vin_range: 'low' as const,
+    vout_range: 'low' as const,
+    ron_mohm: 6,
+    max31865: false,
+    i_max_ma: 1000,
+    v_max_mv: 40000,
+    psu_enabled: false,
+    psu_open_loop: false,
+    psu_vout_target_mv: 5000,
+    psu_fixed_duty: 0.5,
+  },
+  last_applied_at: null,
+  last_error: null,
+}
+

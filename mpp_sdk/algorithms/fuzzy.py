@@ -61,7 +61,7 @@ class FuzzyLogic(MPPTAlgorithm):
         initial_duty: float = 0.5,
         e_scale: float = 0.5,
         de_scale: float = 0.5,
-        max_step: float = 0.01,
+        max_step: float = 0.002,
         min_duty: float = 0.05,
         max_duty: float = 0.95,
     ) -> None:

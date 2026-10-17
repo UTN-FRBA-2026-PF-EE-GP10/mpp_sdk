@@ -414,3 +414,64 @@ export async function deletePanelModel(id: string): Promise<void> {
   const r = await fetch(`/api/panels/${encodeURIComponent(id)}`, { method: 'DELETE' })
   await parseJsonOrThrow(r, 'DELETE /api/panels/{id}')
 }
+
+// --- Pico Dynamic Configuration ----------------------------------------
+
+export interface PicoConfig {
+  vin_range: 'low' | 'mid' | 'full' | number
+  vout_range: 'low' | 'mid' | 'full' | number
+  ron_mohm: number
+  max31865: boolean
+  i_max_ma: number
+  v_max_mv: number
+  psu_enabled: boolean
+  psu_open_loop: boolean
+  psu_vout_target_mv: number
+  psu_fixed_duty: number
+}
+
+export interface PicoConfigResponse {
+  config: PicoConfig
+  defaults: PicoConfig
+  last_applied_at: string | null
+  last_error: string | null
+}
+
+export interface SendPicoConfigInput {
+  vin_range?: 'low' | 'mid' | 'full' | number
+  vout_range?: 'low' | 'mid' | 'full' | number
+  ron_mohm?: number
+  max31865?: boolean
+  i_max_ma?: number
+  v_max_mv?: number
+  reset_cutoff?: boolean
+  psu_enabled?: boolean
+  psu_open_loop?: boolean
+  psu_vout_target_mv?: number
+  psu_fixed_duty?: number
+}
+
+export async function fetchPicoConfig(): Promise<PicoConfigResponse> {
+  const r = await fetch('/api/pico-config')
+  return (await parseJsonOrThrow(r, 'GET /api/pico-config')) as PicoConfigResponse
+}
+
+export async function sendPicoConfig(
+  input: SendPicoConfigInput,
+): Promise<{ status: string; applied?: unknown }> {
+  const r = await fetch('/api/pico-config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  })
+  return (await parseJsonOrThrow(r, 'POST /api/pico-config')) as {
+    status: string
+    applied?: unknown
+  }
+}
+
+export async function resetPicoCutoff(): Promise<void> {
+  const r = await fetch('/api/pico-config/reset-cutoff', { method: 'POST' })
+  await parseJsonOrThrow(r, 'POST /api/pico-config/reset-cutoff')
+}
+

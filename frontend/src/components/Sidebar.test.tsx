@@ -41,6 +41,13 @@ describe('Sidebar - desktop', () => {
     fireEvent.click(screen.getByText('Baseline'))
     expect(props.onSelect).toHaveBeenCalledWith({ root: 'curves', kind: 'baseline' })
   })
+
+  it('picking Pico Config calls onSelect with root pico-config', () => {
+    const props = baseProps()
+    render(<Sidebar {...props} />)
+    fireEvent.click(screen.getByText('Pico Config'))
+    expect(props.onSelect).toHaveBeenCalledWith({ root: 'pico-config' })
+  })
 })
 
 describe('Sidebar - mobile drawer', () => {

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ActiveSessionNotice } from '@/components/ActiveSessionNotice'
 import { CurveWorkbench } from '@/components/CurveWorkbench'
+import { PicoConfigPane } from '@/components/PicoConfigPane'
 import { RunPane } from '@/components/RunPane'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useCaptureMode } from '@/lib/captureMode'
@@ -12,7 +13,7 @@ import {
   type MeasurePrefill,
 } from '@/types'
 
-type Section = 'curve' | 'run'
+type Section = 'curve' | 'run' | 'config'
 
 /**
  * Now that the flat page's kind cards are gone, the operator picks what
@@ -107,6 +108,7 @@ export function MeasurePane({
         <TabsList>
           <TabsTrigger value="curve">Capture a curve</TabsTrigger>
           <TabsTrigger value="run">Run an algorithm</TabsTrigger>
+          <TabsTrigger value="config">Pico Configuration</TabsTrigger>
         </TabsList>
       </Tabs>
 
@@ -148,6 +150,10 @@ export function MeasurePane({
 
       {section === 'run' && (
         <RunPane curves={curves} connectionStatus={connectionStatus} onRunSaved={onRunSaved} />
+      )}
+
+      {section === 'config' && (
+        <PicoConfigPane connected={connected} />
       )}
     </div>
   )

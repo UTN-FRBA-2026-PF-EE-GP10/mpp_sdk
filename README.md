@@ -9,7 +9,7 @@
 A Python SDK for designing, comparing, and deploying **Maximum Power Point
 Tracking** (MPPT) algorithms for photovoltaic systems. Built around a clean
 hardware-abstraction seam so the same controller code drives a simulation
-today and a real SEPIC converter on a Raspberry Pi 5 tomorrow.
+today and a real SEPIC converter on a Host/sbc tomorrow.
 
 See [`AGENTS.md`](./AGENTS.md) for architectural pillars and contribution
 guidelines. Open work is tracked in the
@@ -36,8 +36,8 @@ reproduce [Subudhi & Pradhan 2013].
    board, with no branches in the algorithm.
 3. **A microcontroller as the deployment target.** A small MCU
    (Raspberry Pi Pico / RP2040) drives the power stage, connected to the
-   Raspberry Pi 5 over SPI. This isolates the fast-switching, high-current
-   side from the Pi, and gives the project its deployment target: once an
+   Host/sbc over SPI. This isolates the fast-switching, high-current
+   side from the Host/sbc, and gives the project its deployment target: once an
    algorithm is validated in the framework, it is ported to the MCU and
    re-run end to end on the same physical rig.
 4. **A reproducible comparison harness.** Dynamic irradiance profiles,
@@ -84,7 +84,7 @@ import mpp_sdk
 panel = mpp_sdk.IdealSingleDiode()
 conv  = mpp_sdk.SEPICConverter()
 src   = mpp_sdk.SimulatedSource(panel, conv, load_resistance=10.0)
-ctl   = mpp_sdk.PerturbAndObserve(initial_duty=src.duty)
+ctl   = mpp_sdk.PerturbAndObserve(initial_duty=src.duty, min_duty=0.1, max_duty=0.9)
 
 for _ in range(500):
     v, i = src.read()

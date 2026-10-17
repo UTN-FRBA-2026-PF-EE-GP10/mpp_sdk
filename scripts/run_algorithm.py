@@ -35,6 +35,7 @@ from harness.common import algorithm_specs
 from mpp_sdk.curves import CurveRecord
 from mpp_sdk.curves.library import save as curves_save
 from mpp_sdk.curves.record import now_utc as curves_now_utc
+from mpp_sdk.io.board import default_spi_bus
 from mpp_sdk.runs import RunRecord, RunSample
 from mpp_sdk.runs import save as runs_save
 from mpp_sdk.runs.record import now_utc as runs_now_utc
@@ -281,9 +282,17 @@ def main() -> None:
     )
     parser.add_argument("--no-sweep", action="store_true", help="skip the curve sweep")
     parser.add_argument("--curve", default=None, help="existing curve filename (with --no-sweep)")
-    parser.add_argument("--bus", type=int, default=0)
+    parser.add_argument(
+        "--bus", type=int, default=default_spi_bus(), help="SPI bus (default: 1 on a BBB, else 0)"
+    )
     parser.add_argument("--device", type=int, default=0)
     parser.add_argument("--speed-hz", type=int, default=200_000)
+    parser.add_argument(
+        "--settling-time-s",
+        type=float,
+        default=0.03,
+        help="converter settling delay per step in seconds (default: 0.03s / 30ms)",
+    )
     args = parser.parse_args()
 
     spec = specs.get(args.algorithm.lower())
@@ -292,7 +301,12 @@ def main() -> None:
 
     from mpp_sdk.io.spi_mcu import SpiMcuSource
 
-    with SpiMcuSource(bus=args.bus, device=args.device, speed_hz=args.speed_hz) as src:
+    with SpiMcuSource(
+        bus=args.bus,
+        device=args.device,
+        speed_hz=args.speed_hz,
+        settling_time_s=args.settling_time_s,
+    ) as src:
         curve_ref = args.curve
         if not args.no_sweep:
             print("Sweeping curve...")

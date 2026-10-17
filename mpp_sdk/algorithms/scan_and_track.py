@@ -64,7 +64,7 @@ class ScanAndTrack(MPPTAlgorithm):
         self,
         initial_duty: float = 0.5,
         scan_step: float = 0.04,
-        track_step: float = 0.005,
+        track_step: float = 0.001,
         min_duty: float = 0.05,
         max_duty: float = 0.95,
         rescan_period: int | None = None,

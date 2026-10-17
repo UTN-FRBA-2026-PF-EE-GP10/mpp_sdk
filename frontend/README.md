@@ -11,8 +11,9 @@ dependency - only the pieces actually used live under
 is the one place that talks to it (curve routes: `GET /api/data`/`/api/curves`/
 `/api/measurement-kinds`, `POST /api/save-curve`/`/api/start-sweep`/
 `/api/release-relay`; run routes: `GET /api/run-config`/`/api/runs`/
-`/api/runs/live`, `POST /api/runs/start`/`/api/runs/stop`) and the one place
-the mA/A unit boundary is crossed.
+`/api/runs/live`, `POST /api/runs/start`/`/api/runs/stop`; pico-config routes:
+`GET /api/pico-config`, `POST /api/pico-config`, `POST /api/pico-config/reset-cutoff`)
+and the one place the mA/A unit boundary is crossed.
 This replaced the earlier mock-data prototype and the vanilla-JS page
 under `scripts/curve_tracer_web/` (now the build output directory below,
 not source).
@@ -112,6 +113,24 @@ just a stamp that matches no session.
   the session, so a capture filed from Measure and never linked is not lost.
 - None of this is reachable in demo mode or while viewing an imported session
   file (`useReadOnly()` / `useCaptureSession()`).
+
+## Pico Dynamic Configuration
+
+The **Pico Configuration** pane (`src/components/PicoConfigPane.tsx`), reachable
+via the "Pico Configuration" tab in Measure or the "Pico Config" sidebar item,
+allows live on-the-fly adjustment of board settings over high-speed SPI without
+recompiling firmware:
+
+- **ADC Divider Jumpers**: $V_{\text{in}}$ and $V_{\text{out}}$ jumper scaling
+  (`Low` ~27.3 V, `Mid` ~51.5 V, `Full` ~75.6 V).
+- **Hardware Safety Cutoffs**: $I_{\max}$ in mA and $V_{\max}$ in mV with
+  automatic PWM shutdown, plus a "Reset Tripped Cutoff" trigger to resume gate drive.
+- **Power Stage Switch**: $R_{\text{on}}$ MOSFET on-resistance in $\text{m}\Omega$.
+- **Sensors**: MAX31865 RTD PT100 SPI sensor enable/disable toggle.
+- **Bench Power Supply Mode**: Autonomous Pico closed-loop PID or open-loop
+  fixed-duty PSU regulation setpoint ($V_{\text{out}}$ in mV and duty cycle).
+- **Batch & Single Transmission**: Checkboxes let operators select any subset of
+  parameters to send in batch, with individual per-field send buttons for instant tweaks.
 
 ## Build
 

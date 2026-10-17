@@ -40,8 +40,8 @@ def test_initial_duty_clamped():
 def test_first_step_moves_up_by_step_size():
     ctl = PerturbAndObserve(initial_duty=0.5)
     d = ctl.step(14.0, 0.72)
-    assert d == pytest.approx(0.505)
-    assert ctl.duty == pytest.approx(0.505)
+    assert d == pytest.approx(0.501)
+    assert ctl.duty == pytest.approx(0.501)
 
 
 # ------------------------------------------------------------------

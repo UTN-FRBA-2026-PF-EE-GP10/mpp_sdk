@@ -40,3 +40,11 @@ data/curves/
 data/runs/
 data/sessions/
 data/panels/
+data/bench/
+data/step_responses/
+
+# Firmware build artifacts
+firmware/Cargo.lock
+target/
+**/target/
+*.cfg

@@ -21,7 +21,7 @@ use embassy_rp::spi::{Config as SpiConfig, Phase, Polarity, Spi};
 use embassy_time::Timer;
 use ina229::Ina229;
 use max31865::Max31865;
-use portable_atomic::{AtomicBool, AtomicI16, AtomicU16, AtomicU32, Ordering};
+use portable_atomic::{AtomicBool, AtomicI16, AtomicU8, AtomicU16, AtomicU32, Ordering};
 use smart_leds::RGB8;
 use {defmt_rtt as _, panic_probe as _};
 
@@ -33,14 +33,80 @@ bind_interrupts!(struct Pio1Irqs {
     PIO1_IRQ_0 => PioInterruptHandler<PIO1>;
 });
 
+/// Jumper state of the ADC_PWR/ADC_VOUT divider network.
+/// Configurable dynamically via SPI. Default: Low.
+#[derive(Clone, Copy, PartialEq, Eq, defmt::Format)]
+#[repr(u8)]
+pub enum AdcDividerRange {
+    /// 3x 75k in series (235k/10k divider). Full scale ~75.6 V.
+    Full = 0,
+    /// 2x 75k in series (160k/10k divider). Full scale ~51.5 V.
+    Mid = 1,
+    /// 1x 75k (85k/10k divider). Full scale ~27.3 V.
+    Low = 2,
+}
+
+impl AdcDividerRange {
+    pub fn from_u8(val: u8) -> Self {
+        match val {
+            0 => AdcDividerRange::Full,
+            1 => AdcDividerRange::Mid,
+            _ => AdcDividerRange::Low,
+        }
+    }
+}
+
+/// Host-driven MPPT vs local bench supply.
+/// Configurable dynamically via SPI. Default: MppTracker.
+#[derive(Clone, Copy, PartialEq, Eq, defmt::Format)]
+#[repr(u8)]
+pub enum FirmwareMode {
+    MppTracker = 0,
+    PowerSupply = 1,
+}
+
+impl FirmwareMode {
+    pub fn from_u8(val: u8) -> Self {
+        match val {
+            1 => FirmwareMode::PowerSupply,
+            _ => FirmwareMode::MppTracker,
+        }
+    }
+}
+
 // Shared state (written by SPI/ADC tasks, read by main).
 pub static DUTY: AtomicU16 = AtomicU16::new(0); // 0 % initial - safe boot state
+
+// Dynamic configuration atomics (configurable on the fly via SPI with default values)
+pub static ADC_VIN_DIVIDER_RANGE: AtomicU8 = AtomicU8::new(AdcDividerRange::Low as u8);
+pub static ADC_VOUT_DIVIDER_RANGE: AtomicU8 = AtomicU8::new(AdcDividerRange::Low as u8);
+pub static MAX31865_ENABLED: AtomicBool = AtomicBool::new(false);
+pub static FIRMWARE_MODE: AtomicU8 = AtomicU8::new(FirmwareMode::MppTracker as u8);
+pub static RON_MOHM: AtomicU16 = AtomicU16::new(6); // Default 6 mOhm (Infineon IPP060N06N)
+// Hard ceilings for the SPI-configurable limits; mpp_sdk/io/board.py has
+// the same values. A host can make a cutoff tighter, never turn it off.
+pub const CUTOFF_I_MAX_CEILING_MA: u16 = 1000;
+pub const CUTOFF_V_MAX_CEILING_MV: u16 = 40000;
+pub const PSU_VOUT_TARGET_CEILING_MV: u16 = 25000;
+pub static CUTOFF_IMAX_MA: AtomicU16 = AtomicU16::new(CUTOFF_I_MAX_CEILING_MA);
+pub static CUTOFF_VMAX_MV: AtomicU16 = AtomicU16::new(CUTOFF_V_MAX_CEILING_MV);
+
+/// A cutoff from the host, limited to `ceiling`. 0 used to disable the
+/// check, so it now means "use the ceiling", like any value above it.
+pub fn clamp_cutoff(value: u16, ceiling: u16) -> u16 {
+    if value == 0 || value > ceiling {
+        ceiling
+    } else {
+        value
+    }
+}
+pub static CUTOFF_TRIPPED: AtomicBool = AtomicBool::new(false);
 
 // 0.95 * 65535, mirrors the SDK's max_duty. The Pi sends the raw SPI DUTY
 // word unvalidated, and an unclamped 100 % duty ramps a SEPIC's inductor
 // current unbounded. spi_slave_pio.rs guards frame integrity; this guards
 // the value it carries.
-const DUTY_MAX: u16 = 62258;
+pub const DUTY_MAX: u16 = 62258;
 // MppTracker mode drives the gate from the Pi, and the Pi's only view of
 // the converter is the INA229. If that sensor stops publishing (init never
 // finished, reads failing, device reset), the Pi keeps seeing the last V/I
@@ -48,6 +114,16 @@ const DUTY_MAX: u16 = 62258;
 // INA229 sample has landed for this many gate-loop ticks (~1 ms each).
 // sensors_task publishes about every 1-2 ms, so this is many missed reads.
 const INA_STALE_TICKS: u32 = 50;
+// Every successful INA229 read, also between the settled measurements the
+// Pi asks for. The gate stale check and the hardware cutoffs use these:
+// MEAS_V_MV/MEAS_I_MA hold one settled value per duty step and are zeroed
+// on a duty change, so they cannot show a fault as it happens.
+pub static INA_LIVE_V_MV: AtomicU16 = AtomicU16::new(0);
+pub static INA_LIVE_I_MA: AtomicU16 = AtomicU16::new(0);
+pub static INA_LIVE_COUNT: AtomicU32 = AtomicU32::new(0);
+// The same for the on-chip ADC terminal voltages (divider applied).
+pub static ADC_LIVE_PWR_MV: AtomicU16 = AtomicU16::new(0);
+pub static ADC_LIVE_VOUT_MV: AtomicU16 = AtomicU16::new(0);
 pub static MEAS_V_MV: AtomicU16 = AtomicU16::new(0);
 pub static MEAS_I_MA: AtomicU16 = AtomicU16::new(0);
 pub static MEAS_T_CC: AtomicI16 = AtomicI16::new(spi_slave_pio::TEMP_NOT_AVAILABLE_CC);
@@ -58,9 +134,16 @@ pub static MEAS_T_CC: AtomicI16 = AtomicI16::new(spi_slave_pio::TEMP_NOT_AVAILAB
 pub static MEAS_ADC_PWR_MV: AtomicU16 = AtomicU16::new(0);
 pub static MEAS_ADC_VOUT_MV: AtomicU16 = AtomicU16::new(0);
 pub static MEAS_ADC_IIN_MV: AtomicU16 = AtomicU16::new(0);
+// Raw on-chip ADC codes (0..=4095) for the NeoPixel status LEDs.
+pub static ADC_RAW_PWR: AtomicU16 = AtomicU16::new(0);
+pub static ADC_RAW_VOUT: AtomicU16 = AtomicU16::new(0);
+pub static ADC_RAW_IIN: AtomicU16 = AtomicU16::new(0);
 // Bumped once per SPI frame received (spi_slave_pio.rs). Drives the
 // NeoPixel packet heartbeat.
 pub static PACKET_COUNT: AtomicU32 = AtomicU32::new(0);
+pub static DUTY_SETTLED: AtomicBool = AtomicBool::new(false);
+pub static MEAS_TRIGGER_COUNT: AtomicU32 = AtomicU32::new(0);
+pub static SETTLED_TRIGGER: AtomicU32 = AtomicU32::new(0);
 // Bumped once per onchip_adc_task poll (~100 ms). mode_power_supply's
 // ClosedLoop gates its control step on this, not on MEAS_ADC_VOUT_MV's
 // value: a reading can repeat across samples (e.g. Vout not moving yet at
@@ -108,54 +191,133 @@ async fn sensors_task(
     defmt::info!("INA229 ready");
 
     let mut max = Max31865::new();
-    let mut max_ok = if MAX31865_ENABLED {
-        match max.init(&mut spi, &mut cs_tp100) {
-            Ok(()) => {
-                defmt::info!("MAX31865 ready");
-                true
+    let mut max_ok = false;
+    let mut was_max_enabled = false;
+
+    // One INA229 read. A good one updates the live values the gate loop
+    // checks; MEAS_* are left to the caller.
+    fn read_live(
+        ina: &mut Ina229,
+        spi: &mut Spi<'static, embassy_rp::peripherals::SPI0, embassy_rp::spi::Blocking>,
+        cs: &mut Output<'static>,
+    ) -> Option<(u16, u16)> {
+        match (ina.read_vbus_mv(spi, cs), ina.read_current_ma(spi, cs)) {
+            (Ok(v), Ok(i)) => {
+                INA_LIVE_V_MV.store(v, Ordering::Relaxed);
+                INA_LIVE_I_MA.store(i, Ordering::Relaxed);
+                INA_LIVE_COUNT.fetch_add(1, Ordering::Relaxed);
+                Some((v, i))
             }
-            Err(e) => {
-                defmt::error!("MAX31865 init failed: {}, will retry in background", e);
-                false
-            }
+            _ => None,
         }
-    } else {
-        defmt::info!("MAX31865 disabled (MAX31865_ENABLED = false)");
-        false
-    };
+    }
+
+    const BATCH: usize = 25;
+    // A few failed reads are retried; more than this many and the batch is
+    // dropped, so a dead sensor never reports "settled".
+    const BATCH_MAX_ATTEMPTS: usize = 35;
 
     let mut tick: u32 = 0;
+    let mut last_trigger: u32 = 0;
     loop {
-        match (
-            ina.read_vbus_mv(&mut spi, &mut cs_ina),
-            ina.read_current_ma(&mut spi, &mut cs_ina),
-        ) {
-            (Ok(v), Ok(i)) => {
+        let trigger = MEAS_TRIGGER_COUNT.load(Ordering::Relaxed);
+        if trigger != 0 && trigger != last_trigger {
+            if SETTLED_TRIGGER.load(Ordering::Relaxed) != trigger {
+                // Waiting for onchip_adc_task to see Vin settle. Keep the
+                // live values fresh, or the gate stale check trips.
+                let _ = read_live(&mut ina, &mut spi, &mut cs_ina);
+                Timer::after_millis(1).await;
+                continue;
+            }
+            last_trigger = trigger;
+
+            let mut v_samples = [0u16; BATCH];
+            let mut i_samples = [0u16; BATCH];
+            let mut n = 0;
+            for _ in 0..BATCH_MAX_ATTEMPTS {
+                if n == BATCH {
+                    break;
+                }
+                if let Some((v, c)) = read_live(&mut ina, &mut spi, &mut cs_ina) {
+                    v_samples[n] = v;
+                    i_samples[n] = c;
+                    n += 1;
+                }
+                Timer::after_micros(800).await;
+            }
+            if n < BATCH {
+                defmt::error!("INA229 batch failed: {} of {} reads", n, BATCH);
+                continue;
+            }
+            if MEAS_TRIGGER_COUNT.load(Ordering::Relaxed) != trigger {
+                // A new duty arrived during the batch; part of it was taken
+                // at the old duty. The next pass measures the new one.
+                continue;
+            }
+
+            v_samples.sort_unstable();
+            i_samples.sort_unstable();
+
+            // 25 samples: drop 4 lowest (0..4) and 4 highest (21..25), average remaining 17 (4..21)
+            let v_mean = (v_samples[4..21].iter().map(|&x| x as u32).sum::<u32>() / 17) as u16;
+            let i_mean = (i_samples[4..21].iter().map(|&x| x as u32).sum::<u32>() / 17) as u16;
+
+            MEAS_V_MV.store(v_mean, Ordering::Relaxed);
+            MEAS_I_MA.store(i_mean, Ordering::Relaxed);
+            DUTY_SETTLED.store(true, Ordering::Relaxed);
+            mode_curve_tracer::INA_SAMPLE_COUNT.fetch_add(1, Ordering::Relaxed);
+            defmt::info!("settled INA: V={} mV I={} mA", v_mean, i_mean);
+            continue;
+        }
+
+        match read_live(&mut ina, &mut spi, &mut cs_ina) {
+            // Only a sweep streams raw reads into MEAS_*. Otherwise they
+            // keep the last settled measurement for the Pi.
+            Some((v, i)) if TRACER_ACTIVE.load(Ordering::Relaxed) => {
                 MEAS_V_MV.store(v, Ordering::Relaxed);
                 MEAS_I_MA.store(i, Ordering::Relaxed);
                 mode_curve_tracer::INA_SAMPLE_COUNT.fetch_add(1, Ordering::Relaxed);
             }
-            _ => defmt::error!("INA229 read failed"),
+            Some(_) => {}
+            None => defmt::error!("INA229 read failed"),
         }
 
         tick = tick.wrapping_add(1);
 
-        if MAX31865_ENABLED && tick.is_multiple_of(100) {
-            if max_ok {
-                match max.read_temp_centi_c(&mut spi, &mut cs_tp100) {
-                    Ok(t) => MEAS_T_CC.store(t, Ordering::Relaxed),
-                    Err(e) => {
-                        if tick.is_multiple_of(1000) {
-                            defmt::error!("MAX31865 read failed: {}", e);
-                        }
-                    }
-                }
-            } else if tick.is_multiple_of(5000) {
+        let max_enabled = MAX31865_ENABLED.load(Ordering::Relaxed);
+        if max_enabled {
+            if !was_max_enabled {
                 max_ok = max.init(&mut spi, &mut cs_tp100).is_ok();
                 if max_ok {
-                    defmt::info!("MAX31865 ready");
+                    defmt::info!("MAX31865 ready (enabled on the fly)");
+                } else {
+                    defmt::error!("MAX31865 init failed, will retry in background");
+                }
+                was_max_enabled = true;
+            }
+
+            if tick.is_multiple_of(100) {
+                if max_ok {
+                    match max.read_temp_centi_c(&mut spi, &mut cs_tp100) {
+                        Ok(t) => MEAS_T_CC.store(t, Ordering::Relaxed),
+                        Err(e) => {
+                            if tick.is_multiple_of(1000) {
+                                defmt::error!("MAX31865 read failed: {}", e);
+                            }
+                        }
+                    }
+                } else if tick.is_multiple_of(5000) {
+                    max_ok = max.init(&mut spi, &mut cs_tp100).is_ok();
+                    if max_ok {
+                        defmt::info!("MAX31865 ready");
+                    }
                 }
             }
+        } else if was_max_enabled {
+            defmt::info!("MAX31865 disabled on the fly");
+            was_max_enabled = false;
+            max_ok = false;
+            MEAS_T_CC.store(spi_slave_pio::TEMP_NOT_AVAILABLE_CC, Ordering::Relaxed);
         }
 
         if tick.is_multiple_of(1000) {
@@ -180,30 +342,7 @@ async fn sensors_task(
     }
 }
 
-/// Jumper state of the ADC_PWR/ADC_VOUT divider network (see README for
-/// the range table and why it matters). Must match the physical board -
-/// not auto-sensed, logged once at boot.
-#[allow(dead_code)] // Mid/Low selected by editing ADC_DIVIDER_RANGE, not constructed elsewhere.
-#[derive(Clone, Copy, defmt::Format)]
-enum AdcDividerRange {
-    /// 3x 75k in series (235k/10k divider). As-built default.
-    Full,
-    /// 2x 75k in series (160k/10k divider).
-    Mid,
-    /// 1x 75k (85k/10k divider) - most resolution at low bench voltages.
-    Low,
-}
-
-/// Set this to match the jumpers actually shorted on the board.
-const ADC_DIVIDER_RANGE: AdcDividerRange = AdcDividerRange::Low;
-
-/// Set to `true` once a PT100 probe is fitted. With no probe the MAX31865
-/// reports a fault on every read, which floods the log with errors, so it
-/// stays off by default: no init, no reads, and the SPI frame reports
-/// "no temperature" (`TEMP_NOT_AVAILABLE_CC`). Its chip select stays high.
-const MAX31865_ENABLED: bool = false;
-
-/// Polls the RP2040's on-chip ADC and logs it next to MEAS_I_MA so
+// Polls the RP2040's on-chip ADC and logs it next to MEAS_I_MA so
 /// ADC_Input_Curr can be eyeballed against the INA229.
 #[embassy_executor::task]
 async fn onchip_adc_task(
@@ -217,145 +356,261 @@ async fn onchip_adc_task(
     // Matches the currently-shorted jumper state. The ratio numbers and the
     // saturating conversion live in adc_cal.rs, next to the rest of the ADC
     // calibration.
-    fn divider_to_actual_mv(adc_mv: u16) -> u16 {
-        adc_cal::divider_to_actual_mv(ADC_DIVIDER_RANGE, adc_mv)
+    fn pwr_divider_to_actual_mv(adc_mv: u16) -> u16 {
+        let range = AdcDividerRange::from_u8(ADC_VIN_DIVIDER_RANGE.load(Ordering::Relaxed));
+        adc_cal::divider_to_actual_mv(range, adc_mv)
+    }
+
+    fn vout_divider_to_actual_mv(adc_mv: u16) -> u16 {
+        let range = AdcDividerRange::from_u8(ADC_VOUT_DIVIDER_RANGE.load(Ordering::Relaxed));
+        adc_cal::divider_to_actual_mv(range, adc_mv)
     }
 
     defmt::info!(
-        "ADC divider range: {} (must match the physical jumpers)",
-        ADC_DIVIDER_RANGE
+        "ADC divider ranges: Vin={} Vout={} (dynamically configurable)",
+        AdcDividerRange::from_u8(ADC_VIN_DIVIDER_RANGE.load(Ordering::Relaxed)),
+        AdcDividerRange::from_u8(ADC_VOUT_DIVIDER_RANGE.load(Ordering::Relaxed))
     );
 
-    // Per-second sums for the calibration log line below: the raw codes
-    // (before the DNL fix, the divider or any correction) and the INA229,
-    // averaged over the same window. One line is then one calibration
-    // point: ADC code against a reference voltage.
-    let mut cal_n: u32 = 0;
-    let mut cal_pwr_raw: u32 = 0;
-    let mut cal_vout_raw: u32 = 0;
-    let mut cal_ina_mv: u32 = 0;
-
-    let mut tick: u32 = 0;
+    let mut last_trigger: u32 = 0;
+    let mut idle_tick: u32 = 0;
     loop {
-        let pwr_raw = adc.blocking_read(&mut ch_pwr).ok();
-        let v_ina = MEAS_V_MV.load(Ordering::Relaxed);
-        if let Some(raw) = pwr_raw {
-            MEAS_ADC_PWR_MV.store(divider_to_actual_mv(raw_to_mv(raw)), Ordering::Relaxed);
-        }
+        let trigger = MEAS_TRIGGER_COUNT.load(Ordering::Relaxed);
+        if trigger != 0 && trigger != last_trigger {
+            last_trigger = trigger;
 
-        let vout_raw = adc.blocking_read(&mut ch_vout).ok();
-        if let (Some(p), Some(v)) = (pwr_raw, vout_raw) {
-            cal_n += 1;
-            cal_pwr_raw += p as u32;
-            cal_vout_raw += v as u32;
-            cal_ina_mv += v_ina as u32;
-        }
-        if let Some(raw) = vout_raw {
-            MEAS_ADC_VOUT_MV.store(divider_to_actual_mv(raw_to_mv(raw)), Ordering::Relaxed);
-        }
+            Timer::after_millis(2).await;
 
-        // ADC_Input_Curr (INA281 cross-check): pin mV, same calibration line.
-        if let Ok(raw) = adc.blocking_read(&mut ch_iin) {
-            MEAS_ADC_IIN_MV.store(raw_to_mv(raw), Ordering::Relaxed);
-        }
-        ADC_SAMPLE_COUNT.fetch_add(1, Ordering::Relaxed);
+            let mut settle_buf = [0i32; 8];
+            let mut settle_idx = 0;
+            let start_t = embassy_time::Instant::now();
+            let max_wait = embassy_time::Duration::from_millis(20);
 
-        tick = tick.wrapping_add(1);
-        if tick.is_multiple_of(10) {
-            // ~1 Hz at the 100 ms poll period.
-            defmt::info!(
-                "ADC_PWR={} mV ADC_VOUT={} mV ADC_Input_Curr={} mV (INA229 V={} mV I={} mA)",
-                MEAS_ADC_PWR_MV.load(Ordering::Relaxed),
-                MEAS_ADC_VOUT_MV.load(Ordering::Relaxed),
-                MEAS_ADC_IIN_MV.load(Ordering::Relaxed),
-                MEAS_V_MV.load(Ordering::Relaxed),
-                MEAS_I_MA.load(Ordering::Relaxed)
-            );
-            if let Some(n) = core::num::NonZeroU32::new(cal_n) {
-                // Means with one decimal, as integer tenths: defmt has no
-                // cheap float formatting on this target.
-                let pwr_x10 = cal_pwr_raw * 10 / n;
-                let vout_x10 = cal_vout_raw * 10 / n;
-                let pwr_mean = (cal_pwr_raw / n) as u16;
-                let vout_mean = (cal_vout_raw / n) as u16;
-                defmt::info!(
-                    "ADC cal: PWR raw={}.{} pin={} mV scaled={} mV | VOUT raw={}.{} pin={} mV scaled={} mV | INA229 V={} mV (n={})",
-                    pwr_x10 / 10,
-                    pwr_x10 % 10,
-                    raw_to_mv(pwr_mean),
-                    divider_to_actual_mv(raw_to_mv(pwr_mean)),
-                    vout_x10 / 10,
-                    vout_x10 % 10,
-                    raw_to_mv(vout_mean),
-                    divider_to_actual_mv(raw_to_mv(vout_mean)),
-                    cal_ina_mv / n,
-                    n
-                );
+            loop {
+                let raw = adc.blocking_read(&mut ch_pwr).unwrap_or(0);
+                let mv = pwr_divider_to_actual_mv(raw_to_mv(raw)) as i32;
+
+                if settle_idx < 8 {
+                    settle_buf[settle_idx] = mv;
+                    settle_idx += 1;
+                } else {
+                    for i in 0..7 {
+                        settle_buf[i] = settle_buf[i + 1];
+                    }
+                    settle_buf[7] = mv;
+
+                    let v_prev =
+                        (settle_buf[0] + settle_buf[1] + settle_buf[2] + settle_buf[3]) / 4;
+                    let v_curr =
+                        (settle_buf[4] + settle_buf[5] + settle_buf[6] + settle_buf[7]) / 4;
+
+                    if (v_curr - v_prev).abs() < 50 {
+                        break;
+                    }
+                }
+
+                if start_t.elapsed() >= max_wait {
+                    break;
+                }
+                Timer::after_millis(1).await;
             }
-            cal_n = 0;
-            cal_pwr_raw = 0;
-            cal_vout_raw = 0;
-            cal_ina_mv = 0;
+
+            SETTLED_TRIGGER.store(trigger, Ordering::Relaxed);
+
+            let mut pwr_samples = [0u16; 25];
+            let mut vout_samples = [0u16; 25];
+            let mut iin_samples = [0u16; 25];
+
+            for i in 0..25 {
+                pwr_samples[i] = adc.blocking_read(&mut ch_pwr).unwrap_or(0);
+                vout_samples[i] = adc.blocking_read(&mut ch_vout).unwrap_or(0);
+                iin_samples[i] = adc.blocking_read(&mut ch_iin).unwrap_or(0);
+                Timer::after_micros(800).await;
+            }
+
+            pwr_samples.sort_unstable();
+            vout_samples.sort_unstable();
+            iin_samples.sort_unstable();
+
+            // 25 samples: drop 4 lowest (0..4) and 4 highest (21..25), average remaining 17 (4..21)
+            let pwr_mean = (pwr_samples[4..21].iter().map(|&x| x as u32).sum::<u32>() / 17) as u16;
+            let vout_mean =
+                (vout_samples[4..21].iter().map(|&x| x as u32).sum::<u32>() / 17) as u16;
+            let iin_mean = (iin_samples[4..21].iter().map(|&x| x as u32).sum::<u32>() / 17) as u16;
+
+            ADC_RAW_PWR.store(pwr_mean, Ordering::Relaxed);
+            ADC_RAW_VOUT.store(vout_mean, Ordering::Relaxed);
+            ADC_RAW_IIN.store(iin_mean, Ordering::Relaxed);
+
+            let pwr_mv = pwr_divider_to_actual_mv(raw_to_mv(pwr_mean));
+            let vout_mv = vout_divider_to_actual_mv(raw_to_mv(vout_mean));
+            MEAS_ADC_PWR_MV.store(pwr_mv, Ordering::Relaxed);
+            MEAS_ADC_VOUT_MV.store(vout_mv, Ordering::Relaxed);
+            ADC_LIVE_PWR_MV.store(pwr_mv, Ordering::Relaxed);
+            ADC_LIVE_VOUT_MV.store(vout_mv, Ordering::Relaxed);
+            MEAS_ADC_IIN_MV.store(raw_to_mv(iin_mean), Ordering::Relaxed);
+
+            ADC_SAMPLE_COUNT.fetch_add(1, Ordering::Relaxed);
+            defmt::info!(
+                "settled ADC: PWR={} mV VOUT={} mV",
+                pwr_divider_to_actual_mv(raw_to_mv(pwr_mean)),
+                vout_divider_to_actual_mv(raw_to_mv(vout_mean))
+            );
+            continue;
         }
-        Timer::after_millis(100).await;
+
+        // Only stream continuous reads if in PowerSupply mode
+        let current_fw_mode = FirmwareMode::from_u8(FIRMWARE_MODE.load(Ordering::Relaxed));
+        if current_fw_mode == FirmwareMode::PowerSupply {
+            let pwr_raw = adc.blocking_read(&mut ch_pwr).ok();
+            if let Some(raw) = pwr_raw {
+                ADC_RAW_PWR.store(raw, Ordering::Relaxed);
+                let mv = pwr_divider_to_actual_mv(raw_to_mv(raw));
+                MEAS_ADC_PWR_MV.store(mv, Ordering::Relaxed);
+                ADC_LIVE_PWR_MV.store(mv, Ordering::Relaxed);
+            }
+            let vout_raw = adc.blocking_read(&mut ch_vout).ok();
+            if let Some(raw) = vout_raw {
+                ADC_RAW_VOUT.store(raw, Ordering::Relaxed);
+                let mv = vout_divider_to_actual_mv(raw_to_mv(raw));
+                MEAS_ADC_VOUT_MV.store(mv, Ordering::Relaxed);
+                ADC_LIVE_VOUT_MV.store(mv, Ordering::Relaxed);
+            }
+            if let Ok(raw) = adc.blocking_read(&mut ch_iin) {
+                ADC_RAW_IIN.store(raw, Ordering::Relaxed);
+                MEAS_ADC_IIN_MV.store(raw_to_mv(raw), Ordering::Relaxed);
+            }
+            ADC_SAMPLE_COUNT.fetch_add(1, Ordering::Relaxed);
+        } else {
+            // In MppTracker mode, when idle (between settling triggers or before first trigger),
+            // update raw ADC readings for the NeoPixel status LEDs without overwriting
+            // the settled telemetry registers (MEAS_*).
+            // The live values feed the hardware cutoffs, hence the 10 ms.
+            idle_tick = idle_tick.wrapping_add(1);
+            if idle_tick.is_multiple_of(10) {
+                if let Ok(raw) = adc.blocking_read(&mut ch_pwr) {
+                    ADC_RAW_PWR.store(raw, Ordering::Relaxed);
+                    ADC_LIVE_PWR_MV
+                        .store(pwr_divider_to_actual_mv(raw_to_mv(raw)), Ordering::Relaxed);
+                }
+                if let Ok(raw) = adc.blocking_read(&mut ch_vout) {
+                    ADC_RAW_VOUT.store(raw, Ordering::Relaxed);
+                    ADC_LIVE_VOUT_MV
+                        .store(vout_divider_to_actual_mv(raw_to_mv(raw)), Ordering::Relaxed);
+                }
+                if let Ok(raw) = adc.blocking_read(&mut ch_iin) {
+                    ADC_RAW_IIN.store(raw, Ordering::Relaxed);
+                }
+            }
+        }
+
+        Timer::after_millis(1).await;
     }
 }
 
 const NEOPIXEL_COUNT: usize = 4;
 
-/// Flashes the GPIO4 NeoPixel strip briefly on every SPI frame the Pi
-/// sends successfully, dark otherwise - a packet-received heartbeat,
-/// separate from GPIO14's firmware-alive one. Runs on PIO1 (PIO0 is
-/// owned by the SPI slave) with its own DMA channel, decoupled from
-/// `spi_pio_task` via `PACKET_COUNT` so it can never affect that task's
-/// timing budget.
+/// Converts a raw 12-bit ADC reading (0..=4095) to an RGB status color:
+/// - Below 50% (< 2048): Green
+/// - In between values (50% to 100%):
+///   50%..67%  (2048..2730): Yellow
+///   67%..83%  (2731..3413): Orange
+///   83%..100% (3414..4089): Red
+/// - Over the limit / saturated (>= 4090): Blinking Red
+fn adc_raw_to_rgb(raw: u16, blink_on: bool) -> RGB8 {
+    if raw >= 4090 {
+        if blink_on {
+            RGB8 { r: 32, g: 0, b: 0 }
+        } else {
+            RGB8 { r: 0, g: 0, b: 0 }
+        }
+    } else if raw >= 3414 {
+        RGB8 { r: 32, g: 0, b: 0 } // Red
+    } else if raw >= 2731 {
+        RGB8 { r: 32, g: 8, b: 0 } // Orange
+    } else if raw >= 2048 {
+        RGB8 { r: 32, g: 24, b: 0 } // Yellow
+    } else {
+        RGB8 { r: 0, g: 32, b: 0 } // Green
+    }
+}
+
+/// Drives the 4-LED WS2812 strip on GPIO4:
+/// - LED 0: Vin (ADC_PWR)
+/// - LED 1: Vout (ADC_VOUT)
+/// - LED 2: I (ADC_Input_Curr)
+/// - LED 3: SPI packet heartbeat (flashes green on received frame, dark otherwise)
+///
+/// Runs on PIO1 with its own DMA channel, decoupled from SPI timing.
 #[embassy_executor::task]
 async fn neopixel_task(mut ws2812: PioWs2812<'static, PIO1, 0, NEOPIXEL_COUNT, Grb>) {
-    const OFF: [RGB8; NEOPIXEL_COUNT] = [RGB8 { r: 0, g: 0, b: 0 }; NEOPIXEL_COUNT];
-    const FLASH: [RGB8; NEOPIXEL_COUNT] = [RGB8 { r: 0, g: 32, b: 0 }; NEOPIXEL_COUNT];
+    const BLACK: RGB8 = RGB8 { r: 0, g: 0, b: 0 };
+    const SPI_FLASH: RGB8 = RGB8 { r: 0, g: 32, b: 0 };
 
     let mut last_seen: u32 = 0;
-    ws2812.write(&OFF).await;
+    let mut flash_timer_ms: u8 = 0;
+    let mut blink_tick: u16 = 0;
+    let mut refresh_tick: u16 = 0;
+    let mut last_pixels: [RGB8; NEOPIXEL_COUNT] = [BLACK; NEOPIXEL_COUNT];
+
+    ws2812.write(&last_pixels).await;
+
     loop {
         let current = PACKET_COUNT.load(Ordering::Relaxed);
         if current != last_seen {
             last_seen = current;
-            ws2812.write(&FLASH).await;
-            Timer::after_millis(20).await;
-            ws2812.write(&OFF).await;
+            flash_timer_ms = 20; // 20 ms flash
         }
+
+        let pwr_raw = ADC_RAW_PWR.load(Ordering::Relaxed);
+        let vout_raw = ADC_RAW_VOUT.load(Ordering::Relaxed);
+        let iin_raw = ADC_RAW_IIN.load(Ordering::Relaxed);
+
+        // 250 ms ON / 250 ms OFF blinking phase for over-limit channels
+        let blink_on = blink_tick < 250;
+
+        let pixels = [
+            adc_raw_to_rgb(pwr_raw, blink_on),
+            adc_raw_to_rgb(vout_raw, blink_on),
+            adc_raw_to_rgb(iin_raw, blink_on),
+            if flash_timer_ms > 0 { SPI_FLASH } else { BLACK },
+        ];
+
+        // Write on state change or periodic 1-second refresh
+        if pixels != last_pixels || refresh_tick >= 1000 {
+            ws2812.write(&pixels).await;
+            last_pixels = pixels;
+            refresh_tick = 0;
+        }
+
+        if flash_timer_ms > 0 {
+            flash_timer_ms = flash_timer_ms.saturating_sub(10);
+        }
+
+        blink_tick = (blink_tick + 10) % 500;
+        refresh_tick = refresh_tick.saturating_add(10);
+
         Timer::after_millis(10).await;
     }
 }
-
-/// Host-driven MPPT (`MppTracker`, applies the Pi's `DUTY` directly - see
-/// the match arm below) vs local bench supply (`PowerSupply`,
-/// `mode_power_supply.rs`). This const is the only thing `main()`'s loop
-/// switches on.
-#[allow(dead_code)]
-#[derive(Clone, Copy, PartialEq, Eq, defmt::Format)]
-enum FirmwareMode {
-    MppTracker,
-    PowerSupply,
-}
-
-/// Change to `FirmwareMode::PowerSupply` for bench supply operation.
-const FIRMWARE_MODE: FirmwareMode = FirmwareMode::MppTracker;
 
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
     let p = embassy_rp::init(Default::default());
 
-    if FIRMWARE_MODE == FirmwareMode::PowerSupply {
+    let initial_mode = FirmwareMode::from_u8(FIRMWARE_MODE.load(Ordering::Relaxed));
+    if initial_mode == FirmwareMode::PowerSupply {
         defmt::info!(
             "mpp-firmware booted (PIO SPI slave), mode: {} ({})",
-            FIRMWARE_MODE,
-            mode_power_supply::POWER_SUPPLY_LOOP
+            initial_mode,
+            mode_power_supply::PowerSupplyLoop::from_u8(
+                mode_power_supply::POWER_SUPPLY_LOOP.load(Ordering::Relaxed)
+            )
         );
     } else {
         defmt::info!(
             "mpp-firmware booted (PIO SPI slave), mode: {}",
-            FIRMWARE_MODE
+            initial_mode
         );
     }
 
@@ -437,7 +692,7 @@ async fn main(spawner: Spawner) {
     let mut tick: u32 = 0;
     let mut psu_closed_loop = mode_power_supply::ClosedLoopState::new();
     let mut tracer_holding_panel = false;
-    let mut last_ina_count = mode_curve_tracer::INA_SAMPLE_COUNT.load(Ordering::Relaxed);
+    let mut last_ina_count = INA_LIVE_COUNT.load(Ordering::Relaxed);
     let mut ina_stale_ticks: u32 = 0;
 
     loop {
@@ -448,7 +703,7 @@ async fn main(spawner: Spawner) {
         // on the bleed path would switch into a disconnected input.
         let tracer_holds_panel =
             TRACER_ACTIVE.load(Ordering::Relaxed) || RELAY_ENGAGED.load(Ordering::Relaxed);
-        let ina_count = mode_curve_tracer::INA_SAMPLE_COUNT.load(Ordering::Relaxed);
+        let ina_count = INA_LIVE_COUNT.load(Ordering::Relaxed);
         if ina_count != last_ina_count {
             last_ina_count = ina_count;
             if ina_stale_ticks >= INA_STALE_TICKS {
@@ -465,7 +720,36 @@ async fn main(spawner: Spawner) {
             }
         }
         let ina_stale = ina_stale_ticks >= INA_STALE_TICKS;
-        let duty = if tracer_holds_panel {
+
+        // Hardware cutoffs. They read the live values, not MEAS_*: those
+        // hold one settled measurement per duty step and are zeroed on a
+        // duty change. Vin comes from the INA229 too, because the on-chip
+        // ADC's Low divider range ends near 28 V, below the 40 V limit.
+        // Not checked while the tracer holds the panel: the gate is already
+        // 0 then, and a sweep transient must not latch the cutoff.
+        if !tracer_holds_panel && !CUTOFF_TRIPPED.load(Ordering::Relaxed) {
+            let i_meas = INA_LIVE_I_MA.load(Ordering::Relaxed);
+            let v_ina = INA_LIVE_V_MV.load(Ordering::Relaxed);
+            let v_in = ADC_LIVE_PWR_MV.load(Ordering::Relaxed);
+            let v_out = ADC_LIVE_VOUT_MV.load(Ordering::Relaxed);
+            let imax = CUTOFF_IMAX_MA.load(Ordering::Relaxed);
+            let vmax = CUTOFF_VMAX_MV.load(Ordering::Relaxed);
+            if i_meas > imax || v_ina > vmax || v_in > vmax || v_out > vmax {
+                CUTOFF_TRIPPED.store(true, Ordering::Relaxed);
+                defmt::error!(
+                    "Hardware cutoff tripped: I={} mA (max {}), Vin={} mV (INA) {} mV (ADC), Vout={} mV (max {})",
+                    i_meas,
+                    imax,
+                    v_ina,
+                    v_in,
+                    v_out,
+                    vmax
+                );
+            }
+        }
+        let cutoff_tripped = CUTOFF_TRIPPED.load(Ordering::Relaxed);
+
+        let duty = if tracer_holds_panel || cutoff_tripped {
             0
         } else {
             if tracer_holding_panel {
@@ -478,7 +762,7 @@ async fn main(spawner: Spawner) {
                 // stale.
                 psu_closed_loop.reset();
             }
-            match FIRMWARE_MODE {
+            match FirmwareMode::from_u8(FIRMWARE_MODE.load(Ordering::Relaxed)) {
                 // Apply the Pi's commanded SPI duty directly, clamped as
                 // defense-in-depth against SEPIC inductor current runaway.
                 FirmwareMode::MppTracker if ina_stale => 0,

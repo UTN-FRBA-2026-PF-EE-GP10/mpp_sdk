@@ -59,7 +59,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import TYPE_CHECKING, NamedTuple
+from typing import TYPE_CHECKING, Literal, NamedTuple
 from urllib.parse import urlsplit
 
 import numpy as np
@@ -69,6 +69,12 @@ from mpp_sdk import IdealSingleDiode, MeasuredPanel, SEPICConverter, SimulatedSo
 from mpp_sdk.curves import MEASUREMENT_KINDS, CurveRecord, PanelSetup
 from mpp_sdk.curves import library as curve_library
 from mpp_sdk.curves.record import now_utc
+from mpp_sdk.io.board import (
+    CUTOFF_I_MAX_CEILING_MA,
+    CUTOFF_V_MAX_CEILING_MV,
+    PSU_VOUT_TARGET_CEILING_MV,
+    default_spi_bus,
+)
 from mpp_sdk.panels import library as panel_library
 from mpp_sdk.runs import RunRecord
 from mpp_sdk.runs import library as run_library
@@ -98,7 +104,7 @@ try:
     from fastapi import FastAPI, HTTPException, Request, Response
     from fastapi.responses import JSONResponse
     from fastapi.staticfiles import StaticFiles
-    from pydantic import BaseModel
+    from pydantic import BaseModel, Field
 except ModuleNotFoundError as exc:  # pragma: no cover
     raise ModuleNotFoundError(
         "fastapi is required for the curve-tracer server. "
@@ -110,17 +116,6 @@ if TYPE_CHECKING:
     from mpp_sdk.io.sweep_source import SweepSource
 
 _WEB_ROOT = Path(__file__).parent / "curve_tracer_web"
-
-
-def _default_spi_bus() -> int:
-    """SPI1 on a BeagleBone Black (its header wires SPI1 to the Pico), SPI0
-    everywhere else. Checks the board model, not which spidev nodes exist:
-    a BBB with the SPI0 overlay also has /dev/spidev0.0."""
-    try:
-        model = Path("/proc/device-tree/model").read_text(errors="replace")
-    except OSError:
-        return 0
-    return 1 if "BeagleBone" in model else 0
 
 
 # Consecutive failed frames before the link is reported down. At the
@@ -307,6 +302,55 @@ class _SweepCache:
             )
 
 
+class _ConfigCache:
+    """Thread-safe cache of the Pico dynamic configuration state and defaults."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._state: dict[str, object] = {
+            "vin_range": "low",
+            "vout_range": "low",
+            "ron_mohm": 6,
+            "max31865": False,
+            "i_max_ma": 1000,
+            "v_max_mv": 40000,
+            "psu_enabled": False,
+            "psu_open_loop": False,
+            "psu_vout_target_mv": 5000,
+            "psu_fixed_duty": 0.5,
+        }
+        self._last_applied_at: str | None = None
+        self._last_error: str | None = None
+
+    def update(self, changes: dict[str, object], error: str | None = None) -> None:
+        with self._lock:
+            for k, v in changes.items():
+                if v is not None and k in self._state:
+                    self._state[k] = v
+            self._last_applied_at = now_utc()
+            self._last_error = error
+
+    def snapshot(self) -> dict[str, object]:
+        with self._lock:
+            return {
+                "config": dict(self._state),
+                "defaults": {
+                    "vin_range": "low",
+                    "vout_range": "low",
+                    "ron_mohm": 6,
+                    "max31865": False,
+                    "i_max_ma": 1000,
+                    "v_max_mv": 40000,
+                    "psu_enabled": False,
+                    "psu_open_loop": False,
+                    "psu_vout_target_mv": 5000,
+                    "psu_fixed_duty": 0.5,
+                },
+                "last_applied_at": self._last_applied_at,
+                "last_error": self._last_error,
+            }
+
+
 # Hard ceiling on how long a live run can drive the converter, regardless
 # of what the operator asks for - the backstop against a run nobody
 # remembered to stop (a closed browser tab, a dropped connection). Also
@@ -355,7 +399,7 @@ _SIMULATED_RUN_PERIOD_S = 0.05
 # A fixed operating point for a simulated run to track - not calibrated to
 # any particular board, matching harness/panel_config.py's
 # make_static_source default.
-_SIMULATED_LOAD_RESISTANCE = 10.0
+_SIMULATED_LOAD_RESISTANCE = 41.0
 
 # Bounds on inline `curve_points` for a simulated run. A captured sweep is
 # a few dozen points; the cap only stops an oversized body from building
@@ -742,9 +786,44 @@ def _run_simulated(
     )
 
 
+def _apply_pico_config(
+    src: object, cache: _SweepCache, config_cache: _ConfigCache | None, payload: dict
+) -> None:
+    """Send one queued Pico configuration to the board. The config cache
+    changes only after the board took it, so GET /api/pico-config never
+    shows a value the board does not have."""
+    try:
+        if payload.get("reset_cutoff"):
+            reset_fn = getattr(src, "reset_cutoff", None)
+            if reset_fn is not None:
+                reset_fn()
+        cfg_fn = getattr(src, "configure", None)
+        if cfg_fn is not None:
+            cfg_fn(
+                vin_range=payload.get("vin_range"),
+                vout_range=payload.get("vout_range"),
+                ron_mohm=payload.get("ron_mohm"),
+                max31865=payload.get("max31865"),
+                i_max_ma=payload.get("i_max_ma"),
+                v_max_mv=payload.get("v_max_mv"),
+                psu_enabled=payload.get("psu_enabled"),
+                psu_open_loop=payload.get("psu_open_loop"),
+                psu_vout_target_mv=payload.get("psu_vout_target_mv"),
+                psu_fixed_duty=payload.get("psu_fixed_duty"),
+            )
+    except (RuntimeError, ValueError, OSError) as exc:
+        if config_cache is not None:
+            config_cache.update({}, error=str(exc))
+        cache.set_command_error(f"config failed: {exc}")
+        return
+    if config_cache is not None:
+        config_cache.update({k: v for k, v in payload.items() if k != "reset_cutoff"})
+    cache.set_command_error(None)
+
+
 def _poll_loop(
     cache: _SweepCache,
-    commands: queue.Queue[str],
+    commands: queue.Queue[object],
     bus: int,
     device: int,
     speed_hz: int,
@@ -753,6 +832,7 @@ def _poll_loop(
     demo: bool = False,
     run_requests: queue.Queue[_RunRequest] | None = None,
     run_cache: _LiveRunCache | None = None,
+    config_cache: _ConfigCache | None = None,
     stop_event: threading.Event | None = None,
     shutdown_event: threading.Event | None = None,
 ) -> None:
@@ -820,8 +900,13 @@ def _poll_loop(
         # about one `request_sweep()` cycle apart.
         if not commands.empty():
             cmd = commands.get_nowait()
+            if isinstance(cmd, tuple) and cmd[0] == "config":
+                _apply_pico_config(src, cache, config_cache, cmd[1])
+                cmd = None
             try:
-                if cmd == "start_sweep":
+                if cmd is None:
+                    pass
+                elif cmd == "start_sweep":
                     src.start_sweep()
                     cache.set_demo_source(False)
                 elif cmd.startswith("demo_sweep_"):
@@ -877,6 +962,26 @@ def _poll_loop(
                 # OSError, not RuntimeError) is reported and polling goes on.
                 cache.set(None, f"error: {exc}")
                 time.sleep(period_s)
+
+
+_DividerRange = Literal["low", "mid", "full", 0, 1, 2]
+
+
+class _PicoConfigRequest(BaseModel):
+    """Bounds match SpiMcuSource's setters, so a bad value is a 422 here and
+    never reaches the poll thread."""
+
+    vin_range: _DividerRange | None = None
+    vout_range: _DividerRange | None = None
+    ron_mohm: int | None = Field(default=None, ge=0, le=65535)
+    max31865: bool | None = None
+    i_max_ma: int | None = Field(default=None, ge=1, le=CUTOFF_I_MAX_CEILING_MA)
+    v_max_mv: int | None = Field(default=None, ge=1, le=CUTOFF_V_MAX_CEILING_MV)
+    reset_cutoff: bool = False
+    psu_enabled: bool | None = None
+    psu_open_loop: bool | None = None
+    psu_vout_target_mv: int | None = Field(default=None, ge=0, le=PSU_VOUT_TARGET_CEILING_MV)
+    psu_fixed_duty: float | None = Field(default=None, ge=0.0, le=0.95, allow_inf_nan=False)
 
 
 class _PanelSetupIn(BaseModel):
@@ -1298,9 +1403,10 @@ def _host_allowed(host_header: str, allowed: frozenset[str]) -> bool:
 
 def create_app(
     cache: _SweepCache,
-    commands: queue.Queue[str],
+    commands: queue.Queue[object],
     *,
     demo: bool = False,
+    config_cache: _ConfigCache | None = None,
     run_cache: _LiveRunCache | None = None,
     run_requests: queue.Queue[_RunRequest] | None = None,
     stop_event: threading.Event | None = None,
@@ -1330,6 +1436,7 @@ def create_app(
     run_cache = run_cache if run_cache is not None else _LiveRunCache()
     run_requests = run_requests if run_requests is not None else queue.Queue()
     stop_event = stop_event if stop_event is not None else threading.Event()
+    config_cache = config_cache if config_cache is not None else _ConfigCache()
     specs = {s.label.lower(): s for s in algorithm_specs()}
 
     # Seeded once, here, rather than per-request: this is "first use" of
@@ -2233,6 +2340,26 @@ def create_app(
         commands.put_nowait("release_relay")
         return Response(status_code=204)
 
+    @app.get("/api/pico-config")
+    def get_pico_config() -> dict:
+        return config_cache.snapshot()
+
+    @app.post("/api/pico-config")
+    def post_pico_config(req: _PicoConfigRequest) -> dict:
+        _refuse_if_hardware_run_in_progress()
+        payload = {k: v for k, v in req.model_dump().items() if v is not None}
+        if not payload:
+            return {"status": "ok", "message": "No parameters provided"}
+        # The cache changes in the poll thread, once the board took it.
+        commands.put_nowait(("config", payload))
+        return {"status": "ok", "applied": payload}
+
+    @app.post("/api/pico-config/reset-cutoff")
+    def post_pico_reset_cutoff() -> dict:
+        _refuse_if_hardware_run_in_progress()
+        commands.put_nowait(("config", {"reset_cutoff": True}))
+        return {"status": "ok", "message": "Cutoff reset command sent"}
+
     if _WEB_ROOT.exists():
         # Mounted last: FastAPI/Starlette match routes in registration
         # order, so the decorated /api/* routes above always win over this
@@ -2267,7 +2394,7 @@ def main() -> None:
     parser.add_argument(
         "--spi-bus",
         type=int,
-        default=_default_spi_bus(),
+        default=default_spi_bus(),
         help="SPI bus (default: 1 on a BeagleBone Black, else 0)",
     )
     parser.add_argument("--spi-device", type=int, default=0)
@@ -2294,7 +2421,8 @@ def main() -> None:
     args = parser.parse_args()
 
     cache = _SweepCache()
-    commands: queue.Queue[str] = queue.Queue()
+    commands: queue.Queue[object] = queue.Queue()
+    config_cache = _ConfigCache()
     run_cache = _LiveRunCache()
     run_requests: queue.Queue[_RunRequest] = queue.Queue()
     stop_event = threading.Event()
@@ -2313,6 +2441,7 @@ def main() -> None:
             "demo": args.demo,
             "run_requests": run_requests,
             "run_cache": run_cache,
+            "config_cache": config_cache,
             "stop_event": stop_event,
             "shutdown_event": shutdown_event,
         },
@@ -2324,6 +2453,7 @@ def main() -> None:
         cache,
         commands,
         demo=args.demo,
+        config_cache=config_cache,
         run_cache=run_cache,
         run_requests=run_requests,
         stop_event=stop_event,

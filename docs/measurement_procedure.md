@@ -18,7 +18,10 @@ Quickstart to install the `web` extra first.
   0 when:
   - the Pi sends no frame for about 500 ms,
   - the Pi sends only frames that fail their CRC for 500 ms,
-  - the INA229 gives no new reading for 50 ms.
+  - the INA229 gives no new reading for 50 ms,
+  - the panel current or a voltage goes above the hardware cutoff (default
+    1.0 A and 40 V). The cutoff latches; clear it with "Reset Tripped
+    Cutoff" in the workbench. A host can only lower these limits.
 
   The Pi side aborts the run when readings stay above v_max/i_max, when
   the converter output stays above v_out_max, or when the SPI link drops.
@@ -50,7 +53,7 @@ Quickstart to install the `web` extra first.
 
 ## Capture one curve
 
-1. Open `http://<pi-host>:8000/` (or `http://localhost:8000/` for
+1. Open `http://<host-ip>:8000/` (or `http://localhost:8000/` for
    `--demo`). The workbench opens on **Measure**.
 2. Check the connection pill, top right. It also doubles as the capture
    mode menu:

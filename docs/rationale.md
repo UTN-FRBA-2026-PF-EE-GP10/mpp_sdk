@@ -71,7 +71,7 @@ control loop needed, the RP2040 firmware has two operating modes
 (`FIRMWARE_MODE`):
 
 - **`FirmwareMode::MppTracker`**: the RP2040 acts as a pure hardware I/O
-  proxy. The algorithm on the Raspberry Pi reads $(V, I)$ and commands the
+  proxy. The algorithm on the Host/sbc reads $(V, I)$ and commands the
   duty cycle $D$ over SPI. A link-lost watchdog forces $D = 0$ if SPI
   communication drops for more than 500 ms.
 - **`FirmwareMode::PowerSupply`**: the RP2040 runs as an autonomous

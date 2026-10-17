@@ -8,6 +8,7 @@ import { getMeasurementKindInfo } from '@/types'
 
 export type Selection =
   | { root: 'measure' }
+  | { root: 'pico-config' }
   | { root: 'curves'; kind: string }
   | { root: 'runs'; date: string }
   | { root: 'new-session' }
@@ -124,6 +125,11 @@ function SidebarNav({
         label="Measure"
         selected={selection.root === 'measure'}
         onClick={() => choose({ root: 'measure' })}
+      />
+      <NavRow
+        label="Pico Config"
+        selected={selection.root === 'pico-config'}
+        onClick={() => choose({ root: 'pico-config' })}
       />
 
       <SectionHeader

@@ -78,7 +78,7 @@ Pico pins 14-18 are adjacent on the left side of the board (USB connector facing
 
 MOSI (RPi→Pico): `[ DUTY_H | DUTY_L | CHECKSUM | CMD | 0x00 x 8 ]`
 
-MISO (Pico→RPi): `[ V_H | V_L | I_H | I_L | VOUT_H | VOUT_L | TEMP_H | TEMP_L | CHECKSUM | ACK | 0x00 x 2 ]`
+MISO (Pico→RPi): `[ V_H | V_L | I_H | I_L | VOUT_H | VOUT_L | TEMP_H | TEMP_L | CHECKSUM | ACK | SETTLED | 0x00 ]`
 
 DUTY is a u16 (0 = 0 %, 65535 = 100 %). V/I/VOUT are u16, saturating: V/VOUT
 in millivolts, I in milliamperes (negative current clamps to 0). TEMP is a
@@ -87,7 +87,9 @@ the MAX31865 probe stays disabled (see "Panel temperature" below). See
 "Sensing" below for the sensor details. `CHECKSUM` is a CRC-8 (polynomial
 `0x07`, init `0xFF`) over the frame's data bytes in each direction -
 `DUTY_H`, `DUTY_L`, `CMD` for MOSI; `V_H`, `V_L`, `I_H`, `I_L`, `VOUT_H`,
-`VOUT_L`, `TEMP_H`, `TEMP_L`, `ACK` for MISO, in that order. `CMD` and
+`VOUT_L`, `TEMP_H`, `TEMP_L`, `ACK`, `SETTLED` for MISO, in that order.
+`SETTLED` is 1 on the frame that carries the settled measurement for the
+last duty, so it is covered too. `CMD` and
 `ACK` are both covered because each is a *command to the other side*
 rather than a reading: a bit flip on `CMD` would spoof a bulk-dump
 request, and one setting `ACK`'s top bit would send the Pi off to clock
@@ -108,12 +110,17 @@ construct `SpiMcuSource()` (defaults already match the firmware's
 calibrated units and this checksum).
 
 `CMD`/`ACK` are both `0x00` in normal operation - the curve-tracer
-control/bulk-read commands (see "Curve tracer" below) are the only thing
-that sets them: `0xB1` requests a bulk sweep-result dump, `0xB2` starts a
-sweep, `0xB3` releases the tracer relay, `0xB4` polls the streamed
-in-progress-sweep state (see "Curve tracer" - streaming below), `0xB5`/
-`0xB6` replay one of two stored demo curves instead of sweeping a real
-panel (see "Curve tracer" - demo sweep below).
+control/bulk-read commands (see "Curve tracer" below) and dynamic configuration
+commands are the only things that set them:
+
+- `0xB1`: requests a bulk sweep-result dump
+- `0xB2`: starts a sweep
+- `0xB3`: releases the tracer relay
+- `0xB4`: polls streamed in-progress-sweep state
+- `0xB5`/`0xB6`: replay demo curves
+- `0xC1`..`0xC9`: dynamic configuration commands (jumpers, $R_{\text{on}}$, MAX31865
+  enable, hardware cutoffs, power supply mode, Vout target, fixed duty, and cutoff
+  reset). See "Dynamic Configuration" below.
 
 **Poll faster than 100 ms**: the PIO SPI slave has a known, still-open
 defect where it cannot cleanly recover from an idle gap longer than its
@@ -252,6 +259,32 @@ Two stages (`ClosedLoopState`), at most once per fresh on-chip ADC sample
    setpoint through load/input changes afterward.
 
    `duty` is clamped to `DUTY_MAX` in both stages.
+
+## Dynamic Configuration
+
+The firmware changes its configuration over SPI, with no re-flash or reboot. Each
+value starts at a bench-safe default at boot and changes when its SPI command arrives:
+
+| Configuration Item | Command Byte | Encoding | Default Value | Description |
+|-------------------|--------------|----------|---------------|-------------|
+| **Divider Jumpers** | `0xC1` (`CMD_SET_CONFIG_JUMPERS`) | `rx[0]`: Vin range (u8)<br>`rx[1]`: Vout range (u8) | `Low` (`2`) for Vin<br>`Low` (`2`) for Vout | `0` = Full (~75.6 V max)<br>`1` = Mid (~51.5 V max)<br>`2` = Low (~27.3 V max) |
+| **MAX31865 RTD Sensor** | `0xC2` (`CMD_SET_CONFIG_MAX31865`) | `rx[1]`: enable flag (`u8 != 0`) | `false` (disabled) | Enables/disables PT100 RTD sensor polling dynamically |
+| **Current Cutoff ($I_{\max}$)** | `0xC3` (`CMD_SET_CONFIG_CUTOFF_I`) | `rx[0..2]`: $I_{\max}$ in mA (u16 big-endian) | `1000` mA ($1.0\text{ A}$) | Trips gate to 0 % if current exceeds limit |
+| **Voltage Cutoff ($V_{\max}$)** | `0xC4` (`CMD_SET_CONFIG_CUTOFF_V`) | `rx[0..2]`: $V_{\max}$ in mV (u16 big-endian) | `40000` mV ($40.0\text{ V}$) | Trips gate to 0 % if terminal voltage exceeds limit |
+| **Power Supply Mode** | `0xC5` (`CMD_SET_CONFIG_PSU`) | `rx[0]`: firmware mode (u8)<br>`rx[1]`: loop mode (u8) | `MppTracker` (`0`)<br>`ClosedLoop` (`0`) | Mode: 0 = MPPT Tracker, 1 = Power Supply<br>Loop: 0 = ClosedLoop, 1 = OpenLoop |
+| **PSU Target Voltage** | `0xC6` (`CMD_SET_CONFIG_PSU_TARGET`) | `rx[0..2]`: $V_{\text{target}}$ in mV (u16 big-endian) | `5000` mV ($5.0\text{ V}$) | Setpoint for PSU closed-loop regulation |
+| **PSU Fixed Duty** | `0xC7` (`CMD_SET_CONFIG_FIXED_DUTY`) | `rx[0..2]`: raw duty (u16 big-endian) | `32768` ($50\,\%$) | Fixed duty for PSU open-loop mode |
+| **Switch Resistance ($R_{\text{on}}$)** | `0xC8` (`CMD_SET_CONFIG_RON`) | `rx[0..2]`: $R_{\text{on}}$ in $\text{m}\Omega$ (u16 big-endian) | `6` $\text{m}\Omega$ | SEPIC MOSFET on-resistance (Infineon IPP060N06N) |
+| **Reset Cutoff** | `0xC9` (`CMD_RESET_CUTOFF`) | Payload 0 | - | Clears `CUTOFF_TRIPPED` flag and resumes normal PWM operation |
+
+### Safety Cutoff Trip and Reset Behavior
+
+- The gate loop checks the live INA229 current and voltage and the live on-chip ADC
+  Vin and Vout every tick (not during a sweep).
+- Above a limit it sets `CUTOFF_TRIPPED` and holds the gate at 0 % duty until the
+  host sends `CMD_RESET_CUTOFF` (`0xC9`). If the fault is still there, it trips again.
+- The limits have hard ceilings (1000 mA, 40000 mV; PSU target 25000 mV). A value of
+  0 or above the ceiling sets the ceiling, so a host cannot turn a cutoff off.
 
 ## What it does
 
@@ -511,13 +544,15 @@ Two independent LEDs answer two different questions:
   the main loop regardless of SPI activity - a frozen LED means a hung
   firmware, not just "no traffic right now."
 - **GPIO4 (4x WS2812 NeoPixels, `PIO1` + its own DMA channel, decoupled
-  from the SPI-slave task)**: is the Pi actually talking to me? Flashes
-  dim green briefly on every successfully-received SPI frame, dark
-  otherwise - a frozen or dark strip with the heartbeat LED still
-  blinking means the link has gone quiet (or `spi_pio_task` itself is
-  stuck), not that the whole board is down. Driven by `PACKET_COUNT`, an
-  `AtomicU32` bumped once per received frame in `spi_slave_pio.rs` -
-  nothing SPI-timing-sensitive runs on the NeoPixel's own task.
+  from the SPI-slave task)**: multi-status indicators:
+  - **LED 0**: $V_{\text{in}}$ ADC level (`ADC_PWR`).
+  - **LED 1**: $V_{\text{out}}$ ADC level (`ADC_VOUT`).
+  - **LED 2**: $I$ ADC level (`ADC_Input_Curr`).
+    - *Colors*: Green when $< 50\,\%$ of full scale, Yellow $\to$ Orange $\to$ Red for in-between
+      values, and Blinking Red when saturated / over the limit for that jumper setup ($\ge 4090$ raw
+      ADC codes).
+  - **LED 3**: SPI communication status heartbeat. Flashes green briefly on every
+    successfully-received SPI frame, dark otherwise.
 
 ## GPIO Assignments
 
@@ -527,7 +562,7 @@ Two independent LEDs answer two different questions:
 | 2   | GPIO1   | But2            | Button 2 input                |
 | 4   | GPIO2   | Tracer_En       | Curve-tracer relay enable (idle low) |
 | 5   | GPIO3   | Tracer_pwm      | Curve-tracer bleed PWM, hardware PWM (idle 0 %) |
-| 6   | GPIO4   | NeoPixel_Din    | 4x WS2812 NeoPixels, packet-receive heartbeat |
+| 6   | GPIO4   | NeoPixel_Din    | 4x WS2812 NeoPixels: Vin, Vout, I levels + SPI heartbeat |
 | 7   | GPIO5   | I2C_SDA         | I2C data                      |
 | 9   | GPIO6   | I2C_SCL         | I2C clock                     |
 | 10  | GPIO7   | GPIO7           | General purpose               |

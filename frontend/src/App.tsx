@@ -7,6 +7,7 @@ import { ImportedSessionBar } from '@/components/ImportedSessionBar'
 import { MeasurePane } from '@/components/MeasurePane'
 import { NewSessionPane } from '@/components/NewSessionPane'
 import { OpenSessionButton } from '@/components/OpenSessionButton'
+import { PicoConfigPane } from '@/components/PicoConfigPane'
 import { RunDatePane } from '@/components/RunDatePane'
 import { SessionPane } from '@/components/SessionPane'
 import { SetupModeToggle } from '@/components/SetupModeToggle'
@@ -347,6 +348,20 @@ export default function App() {
         prefill={measurePrefill}
         onPrefillApplied={() => setMeasurePrefill(null)}
       />
+    )
+  } else if (selection.root === 'pico-config') {
+    content = importedSession.active ? (
+      <Card>
+        <CardHeader>
+          <CardTitle>Configuration is unavailable</CardTitle>
+          <CardDescription>
+            Pico configuration requires a live link to the board - this is disabled while viewing an
+            imported session. Close the session (top of the page) first.
+          </CardDescription>
+        </CardHeader>
+      </Card>
+    ) : (
+      <PicoConfigPane connected={isLiveConnection(connectionStatus)} />
     )
   } else if (selection.root === 'curves') {
     content = (
