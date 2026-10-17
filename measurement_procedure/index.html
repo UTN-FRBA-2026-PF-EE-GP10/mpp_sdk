@@ -725,7 +725,63 @@
   <span class="md-ellipsis">
     
   
-    ADC calibration
+    ADC Calibration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hardware_v1/settling_time_optimization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Settling Time Optimization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hardware_v1/mppt_measurement_protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Measurement & Telemetry Protocol
   
 
     
@@ -1221,7 +1277,10 @@ Quickstart to install the <code>web</code> extra first.</p>
   0 when:</li>
 <li>the Pi sends no frame for about 500 ms,</li>
 <li>the Pi sends only frames that fail their CRC for 500 ms,</li>
-<li>the INA229 gives no new reading for 50 ms.</li>
+<li>the INA229 gives no new reading for 50 ms,</li>
+<li>the panel current or a voltage goes above the hardware cutoff (default
+    1.0 A and 40 V). The cutoff latches; clear it with "Reset Tripped
+    Cutoff" in the workbench. A host can only lower these limits.</li>
 </ul>
 <p>The Pi side aborts the run when readings stay above v_max/i_max, when
   the converter output stays above v_out_max, or when the SPI link drops.
@@ -1252,7 +1311,7 @@ Quickstart to install the <code>web</code> extra first.</p>
 </ul>
 <h2 id="capture-one-curve">Capture one curve<a class="headerlink" href="#capture-one-curve" title="Permanent link">&para;</a></h2>
 <ol>
-<li>Open <code>http://&lt;pi-host&gt;:8000/</code> (or <code>http://localhost:8000/</code> for
+<li>Open <code>http://&lt;host-ip&gt;:8000/</code> (or <code>http://localhost:8000/</code> for
    <code>--demo</code>). The workbench opens on <strong>Measure</strong>.</li>
 <li>Check the connection pill, top right. It also doubles as the capture
    mode menu:</li>

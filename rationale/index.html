@@ -697,7 +697,63 @@
   <span class="md-ellipsis">
     
   
-    ADC calibration
+    ADC Calibration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hardware_v1/settling_time_optimization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Settling Time Optimization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hardware_v1/mppt_measurement_protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Measurement & Telemetry Protocol
   
 
     
@@ -1209,7 +1265,7 @@ control loop needed, the RP2040 firmware has two operating modes
 (<code>FIRMWARE_MODE</code>):</p>
 <ul>
 <li><strong><code>FirmwareMode::MppTracker</code></strong>: the RP2040 acts as a pure hardware I/O
-  proxy. The algorithm on the Raspberry Pi reads <span class="arithmatex">\((V, I)\)</span> and commands the
+  proxy. The algorithm on the Host/sbc reads <span class="arithmatex">\((V, I)\)</span> and commands the
   duty cycle <span class="arithmatex">\(D\)</span> over SPI. A link-lost watchdog forces <span class="arithmatex">\(D = 0\)</span> if SPI
   communication drops for more than 500 ms.</li>
 <li><strong><code>FirmwareMode::PowerSupply</code></strong>: the RP2040 runs as an autonomous

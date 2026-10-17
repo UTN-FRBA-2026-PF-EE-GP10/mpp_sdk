@@ -636,7 +636,63 @@
   <span class="md-ellipsis">
     
   
-    ADC calibration
+    ADC Calibration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hardware_v1/settling_time_optimization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Settling Time Optimization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hardware_v1/mppt_measurement_protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Measurement & Telemetry Protocol
   
 
     
@@ -1047,7 +1103,7 @@ swapped.</p>
         └──────────────────┴──► RP2040 (firmware, Rust)
                                     │ SPI
                                     ▼
-                            Raspberry Pi (Python SDK)
+                            Host/sbc (Python SDK)
 </code></pre></div>
 <ul>
 <li><strong>Panels:</strong> two Hissuma PSF10MONO (10 W each) in <strong>series</strong>. Series wiring
@@ -1059,9 +1115,9 @@ swapped.</p>
 <li><strong>RP2040 (Raspberry Pi Pico):</strong> drives the converter PWM, reads voltage
   and current (an INA229 power monitor over SPI, plus an INA281 sense
   amplifier into the on-chip ADC as an analog cross-check), and talks to
-  the Pi over SPI. Firmware is in <strong>Rust</strong>. It is also the deployment
+  the Host/sbc over SPI. Firmware is in <strong>Rust</strong>. It is also the deployment
   target for the final algorithm.</li>
-<li><strong>Raspberry Pi:</strong> hosts the Python SDK, and the algorithm during
+<li><strong>Host/sbc:</strong> hosts the Python SDK, and the algorithm during
   hardware-in-the-loop (HIL) testing. See <code>AGENTS.md</code> for the target model.</li>
 </ul>
 <h2 id="the-four-sdk-pillars">The four SDK pillars<a class="headerlink" href="#the-four-sdk-pillars" title="Permanent link">&para;</a></h2>
