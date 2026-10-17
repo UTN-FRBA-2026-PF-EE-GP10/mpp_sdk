@@ -1087,19 +1087,30 @@
 
 <h1 id="mppt-measurement-protocol-closed-loop-telemetry-flow">MPPT Measurement Protocol &amp; Closed-Loop Telemetry Flow<a class="headerlink" href="#mppt-measurement-protocol-closed-loop-telemetry-flow" title="Permanent link">&para;</a></h1>
 <h2 id="1-problem-statement-higher-voltage-drift-v-v_textmpp">1. Problem Statement: Higher Voltage Drift (<span class="arithmatex">\(V &gt; V_{\text{mpp}}\)</span>)<a class="headerlink" href="#1-problem-statement-higher-voltage-drift-v-v_textmpp" title="Permanent link">&para;</a></h2>
-<p>During bench tests with MPPT algorithms (such as Perturb &amp; Observe, Incremental Conductance, and Fuzzy Logic), algorithms were observed drifting towards higher terminal voltages than the Maximum Power Point (MPP), eventually climbing towards open-circuit voltage (<span class="arithmatex">\(V_{oc}\)</span>).</p>
+<p>During bench tests with MPPT algorithms (such as Perturb &amp; Observe, Incremental Conductance, and
+Fuzzy Logic), algorithms were observed drifting towards higher terminal voltages than the Maximum
+Power Point (MPP), eventually climbing towards open-circuit voltage (<span class="arithmatex">\(V_{oc}\)</span>).</p>
 <h3 id="root-cause-analysis">Root Cause Analysis<a class="headerlink" href="#root-cause-analysis" title="Permanent link">&para;</a></h3>
 <ol>
-<li><strong>Full-Duplex SPI Pipelining Delay</strong>:</li>
-<li>The SPI bus operates in full-duplex. When the Host/sbc clocks out a 12-byte MOSI packet containing a new duty cycle <span class="arithmatex">\(D_{k}\)</span>, the Pico simultaneously clocks out a 12-byte MISO packet that was loaded into the TX FIFO <strong>prior to the transaction</strong>.</li>
 <li>
-<p>Consequently, the telemetry received during <code>source.write(D_k)</code> reflects the state under the previous duty cycle <span class="arithmatex">\(D_{k-1}\)</span> (or earlier).</p>
+<p><strong>Full-Duplex SPI Pipelining Delay</strong>:</p>
+</li>
+<li>
+<p>The SPI bus operates in full-duplex. When the Host/sbc clocks out a 12-byte MOSI packet
+     containing a new duty cycle <span class="arithmatex">\(D_{k}\)</span>, the Pico simultaneously clocks out a 12-byte MISO packet
+     that was loaded into the TX FIFO <strong>prior to the transaction</strong>.</p>
+</li>
+<li>
+<p>Consequently, the telemetry received during <code>source.write(D_k)</code> reflects the state under the
+     previous duty cycle <span class="arithmatex">\(D_{k-1}\)</span> (or earlier).</p>
 </li>
 <li>
 <p><strong>SEPIC Dynamics &amp; Sign Inversion</strong>:</p>
 </li>
-<li>On a SEPIC converter, reflected input resistance is given by:
-     $<span class="arithmatex">\(R_{\text{in}} = R_{\text{load}} \left(\frac{1 - D}{D}\right)^2\)</span>$</li>
+<li>
+<p>On a SEPIC converter, reflected input resistance is given by:
+     $<span class="arithmatex">\(R_{\text{in}} = R_{\text{load}} \left(\frac{1 - D}{D}\right)^2\)</span>$</p>
+</li>
 <li>Raising duty <span class="arithmatex">\(D\)</span> <strong>decreases</strong> panel voltage <span class="arithmatex">\(V_{\text{in}}\)</span> (pulling more current).</li>
 <li>
 <p>Lowering duty <span class="arithmatex">\(D\)</span> <strong>increases</strong> panel voltage <span class="arithmatex">\(V_{\text{in}}\)</span> towards <span class="arithmatex">\(V_{oc}\)</span>.</p>
@@ -1107,13 +1118,19 @@
 <li>
 <p><strong>Inverted Perturbation Feedback</strong>:</p>
 </li>
-<li>If the algorithm increases <span class="arithmatex">\(D\)</span> to drop the voltage towards <span class="arithmatex">\(V_{\text{mpp}}\)</span>, but immediately reads stale telemetry where the voltage hasn't dropped yet, it miscalculates power slope <span class="arithmatex">\(\frac{\mathrm{d}P}{\mathrm{d}V}\)</span> or conductance increment <span class="arithmatex">\(\frac{\mathrm{d}I}{\mathrm{d}V} + \frac{I}{V}\)</span>.</li>
-<li>The algorithm incorrectly deduces that increasing <span class="arithmatex">\(D\)</span> did not yield the expected power change, flipping its perturbation direction to decrease <span class="arithmatex">\(D\)</span>.</li>
-<li>Decreasing <span class="arithmatex">\(D\)</span> drives the SEPIC switch towards 0% duty, which raises the panel voltage all the way to <span class="arithmatex">\(V_{oc}\)</span>.</li>
+<li>If the algorithm increases <span class="arithmatex">\(D\)</span> to drop the voltage towards <span class="arithmatex">\(V_{\text{mpp}}\)</span>, but immediately
+     reads stale telemetry where the voltage hasn't dropped yet, it miscalculates power slope
+     <span class="arithmatex">\(\frac{\mathrm{d}P}{\mathrm{d}V}\)</span> or conductance increment
+     <span class="arithmatex">\(\frac{\mathrm{d}I}{\mathrm{d}V} + \frac{I}{V}\)</span>.</li>
+<li>The algorithm incorrectly deduces that increasing <span class="arithmatex">\(D\)</span> did not yield the expected power change,
+     flipping its perturbation direction to decrease <span class="arithmatex">\(D\)</span>.</li>
+<li>Decreasing <span class="arithmatex">\(D\)</span> drives the SEPIC switch towards 0% duty, which raises the panel voltage all the
+     way to <span class="arithmatex">\(V_{oc}\)</span>.</li>
 </ol>
 <hr />
 <h2 id="2-expected-system-behavior-single-measurement-on-demand">2. Expected System Behavior (Single-Measurement on Demand)<a class="headerlink" href="#2-expected-system-behavior-single-measurement-on-demand" title="Permanent link">&para;</a></h2>
-<p>To prevent cross-talk between duties and eliminate noise from continuous streaming, the measurement flow follows a strict request-response sequence:</p>
+<p>To prevent cross-talk between duties and eliminate noise from continuous streaming, the measurement
+flow follows a strict request-response sequence:</p>
 <div class="highlight"><pre><span></span><code>sequenceDiagram
     autonumber
     participant Host as Host/sbc (MPPT Controller)
@@ -1139,49 +1156,55 @@
 <h3 id="detailed-sequence-steps">Detailed Sequence Steps<a class="headerlink" href="#detailed-sequence-steps" title="Permanent link">&para;</a></h3>
 <ol>
 <li>
-<p><strong>Host/sbc sends a duty to Pico</strong>:
-   The Host/sbc calculates the next duty cycle <span class="arithmatex">\(D\)</span> and sends it to the Pico via SPI (<code>write(D)</code>).</p>
+<p><strong>Host/sbc sends a duty to Pico</strong>: The Host/sbc calculates the next duty cycle <span class="arithmatex">\(D\)</span> and sends it
+   to the Pico via SPI (<code>write(D)</code>).</p>
 </li>
 <li>
-<p><strong>Pico sets that duty and erases all buffers</strong>:
-   The Pico receives the duty, immediately zeroes all measurement registers (<code>MEAS_V_MV</code>, <code>MEAS_I_MA</code>, <code>MEAS_ADC_VOUT_MV</code>, etc.), clears <code>DUTY_SETTLED</code>, and updates the hardware PWM compare register.</p>
+<p><strong>Pico sets that duty and erases all buffers</strong>: The Pico receives the duty, immediately zeroes
+   all measurement registers (<code>MEAS_V_MV</code>, <code>MEAS_I_MA</code>, <code>MEAS_ADC_VOUT_MV</code>, etc.), clears
+   <code>DUTY_SETTLED</code>, and updates the hardware PWM compare register.</p>
 </li>
 <li>
-<p><strong>Host/sbc has a small delay and erases buffers</strong>:
-   The Host/sbc waits a settling window (<span class="arithmatex">\(\ge 5-10\,\text{ms}\)</span>) and explicitly flushes its local telemetry cache and SPI input buffers so no cross-talk or stale measurements can leak across duties.</p>
+<p><strong>Host/sbc has a small delay and erases buffers</strong>: The Host/sbc waits a settling window
+   (<span class="arithmatex">\(\ge 5-10\,\text{ms}\)</span>) and explicitly flushes its local telemetry cache and SPI input buffers so
+   no cross-talk or stale measurements can leak across duties.</p>
 </li>
 <li>
-<p><strong>Pico waits the hardware reaction delay</strong>:
-   The Pico waits <span class="arithmatex">\(2\,\text{ms}\)</span> to allow the SEPIC inductors and coupling capacitors to begin transitioning.</p>
+<p><strong>Pico waits the hardware reaction delay</strong>: The Pico waits <span class="arithmatex">\(2\,\text{ms}\)</span> to allow the SEPIC
+   inductors and coupling capacitors to begin transitioning.</p>
 </li>
 <li>
-<p><strong>Pico checks if Vin is settled</strong>:
-   The Pico monitors <span class="arithmatex">\(V_{\text{in}}\)</span> across an 8-sample rolling window until drift is <span class="arithmatex">\(&lt; 40\,\text{mV}\)</span> (up to <span class="arithmatex">\(80\,\text{ms}\)</span> ceiling).</p>
+<p><strong>Pico checks if Vin is settled</strong>: The Pico monitors <span class="arithmatex">\(V_{\text{in}}\)</span> across an 8-sample rolling
+   window until drift is <span class="arithmatex">\(&lt; 40\,\text{mV}\)</span> (up to <span class="arithmatex">\(80\,\text{ms}\)</span> ceiling).</p>
 </li>
 <li>
-<p><strong>Pico performs 25-sample filtered measurement</strong>:
-   Once steady state is reached, the Pico takes <strong>25 consecutive readings</strong> of <span class="arithmatex">\(V_{\text{in}}\)</span>, <span class="arithmatex">\(V_{\text{out}}\)</span>, and <span class="arithmatex">\(I\)</span>:</p>
+<p><strong>Pico performs 25-sample filtered measurement</strong>: Once steady state is reached, the Pico takes
+   <strong>25 consecutive readings</strong> of <span class="arithmatex">\(V_{\text{in}}\)</span>, <span class="arithmatex">\(V_{\text{out}}\)</span>, and <span class="arithmatex">\(I\)</span>:</p>
 </li>
-<li>For each channel, the 25 readings are sorted.</li>
+<li>
+<p>For each channel, the 25 readings are sorted.</p>
+</li>
 <li>The <strong>4 lowest</strong> and <strong>4 highest</strong> outliers are discarded (<span class="arithmatex">\(25 - 8 = 17\)</span> samples remaining).</li>
 <li>
 <p>The remaining <strong>17 samples</strong> are averaged (trimmed mean filter).</p>
 </li>
 <li>
-<p><strong>Pico holds the single measurement (NO streaming)</strong>:
-   The Pico stores the filtered mean into <code>MEAS_*</code>, asserts <code>DUTY_SETTLED = true</code>, and <strong>parks</strong>. The firmware does <strong>not</strong> run background sampling loops and does <strong>not</strong> overwrite the filtered result with 1 ms raw readings.</p>
+<p><strong>Pico holds the single measurement (NO streaming)</strong>: The Pico stores the filtered mean into
+   <code>MEAS_*</code>, asserts <code>DUTY_SETTLED = true</code>, and <strong>parks</strong>. The firmware does <strong>not</strong> run background
+   sampling loops and does <strong>not</strong> overwrite the filtered result with 1 ms raw readings.</p>
 </li>
 <li>
-<p><strong>Host/sbc asks for a measurement</strong>:
-   Host/sbc sends <code>_CMD_READ_MEASUREMENT</code> (<code>0x02</code>) over SPI.</p>
+<p><strong>Host/sbc asks for a measurement</strong>: Host/sbc sends <code>_CMD_READ_MEASUREMENT</code> (<code>0x02</code>) over SPI.</p>
 </li>
 <li>
-<p><strong>Pico sends the ONE measurement to the Host/sbc</strong>:
-   The Pico returns the single settled measurement frame with <code>is_settled = 1</code>. Upon delivery, Pico clears <code>DUTY_SETTLED = false</code> so it does not stream further data.</p>
+<p><strong>Pico sends the ONE measurement to the Host/sbc</strong>: The Pico returns the single settled
+   measurement frame with <code>is_settled = 1</code>. Upon delivery, Pico clears <code>DUTY_SETTLED = false</code> so it
+   does not stream further data.</p>
 </li>
 <li>
-<p><strong>Host/sbc analyzes measurements without filtering</strong>:
-    The Host/sbc / MPPT algorithm consumes the validated measurement directly, evaluating <span class="arithmatex">\(\Delta P\)</span> and <span class="arithmatex">\(\Delta V\)</span> with zero host-side filtering or averaging loops.</p>
+<p><strong>Host/sbc analyzes measurements without filtering</strong>: The Host/sbc / MPPT algorithm consumes the
+    validated measurement directly, evaluating <span class="arithmatex">\(\Delta P\)</span> and <span class="arithmatex">\(\Delta V\)</span> with zero host-side
+    filtering or averaging loops.</p>
 </li>
 </ol>
 <hr />
@@ -1242,15 +1265,14 @@
 </table>
 <hr />
 <h2 id="4-filter-specification-25-sample-trimmed-mean">4. Filter Specification (25-Sample Trimmed Mean)<a class="headerlink" href="#4-filter-specification-25-sample-trimmed-mean" title="Permanent link">&para;</a></h2>
-<p>Let <span class="arithmatex">\(S = [s_0, s_1, \dots, s_{24}]\)</span> be an array of 25 consecutive ADC readings for a given channel (<span class="arithmatex">\(V_{\text{in}}\)</span>, <span class="arithmatex">\(V_{\text{out}}\)</span>, or <span class="arithmatex">\(I\)</span>):</p>
+<p>Let <span class="arithmatex">\(S = [s_0, s_1, \dots, s_{24}]\)</span> be an array of 25 consecutive ADC readings for a given channel
+(<span class="arithmatex">\(V_{\text{in}}\)</span>, <span class="arithmatex">\(V_{\text{out}}\)</span>, or <span class="arithmatex">\(I\)</span>):</p>
 <ol>
-<li><strong>Sort</strong>:
-   $<span class="arithmatex">\(S_{\text{sorted}} = \text{sort}(S)\)</span>$</li>
+<li><strong>Sort</strong>: $<span class="arithmatex">\(S_{\text{sorted}} = \text{sort}(S)\)</span>$</li>
 <li><strong>Trim Outliers</strong>:</li>
 <li>Discard <span class="arithmatex">\(S_{\text{sorted}}[0 \dots 3]\)</span> (4 lowest)</li>
 <li>Discard <span class="arithmatex">\(S_{\text{sorted}}[21 \dots 24]\)</span> (4 highest)</li>
-<li><strong>Compute Average</strong>:
-   $<span class="arithmatex">\(\bar{S} = \frac{1}{17} \sum_{k=4}^{20} S_{\text{sorted}}[k]\)</span>$</li>
+<li><strong>Compute Average</strong>: $<span class="arithmatex">\(\bar{S} = \frac{1}{17} \sum_{k=4}^{20} S_{\text{sorted}}[k]\)</span>$</li>
 </ol>
 
 
