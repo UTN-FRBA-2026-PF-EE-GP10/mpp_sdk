@@ -16,6 +16,17 @@ Tracking** (MPPT) algorithms for photovoltaic systems.
   for capturing a curve, running a tilted series, and running a
   closed-loop run on the bench.
 
+## Hardware & Boards
+
+- **[Dual-Board Compatibility Guide](board_compatibility.md)** - how the codebase
+  seamlessly runs on both Raspberry Pi 5 and BeagleBone Black with automatic SPI bus
+  selection and cross-version compatibility.
+- **[BeagleBone Black Setup Guide](beaglebone_setup_guide.md)** - step-by-step
+  guide for flashing Debian 13 IoT, enabling the SPI1 overlay, wiring, and running
+  `mpp-sdk` on the BeagleBone Black.
+- **[ADC Calibration](hardware_v1/calibration.md)** - calibration procedure for
+  the hardware analog frontend.
+
 ## Algorithm references
 
 One page each, with the equations and references:
