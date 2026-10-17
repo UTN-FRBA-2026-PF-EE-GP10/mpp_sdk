@@ -594,7 +594,7 @@ export function PicoConfigPane({
                 <input
                   type="number"
                   min={100}
-                  max={10000}
+                  max={1000}
                   step={50}
                   value={iMaxMa}
                   onChange={(e) => {
@@ -639,7 +639,7 @@ export function PicoConfigPane({
                 <input
                   type="number"
                   min={1000}
-                  max={80000}
+                  max={40000}
                   step={500}
                   value={vMaxMv}
                   onChange={(e) => {
@@ -924,7 +924,7 @@ export function PicoConfigPane({
                 <input
                   type="number"
                   min={1000}
-                  max={50000}
+                  max={25000}
                   step={250}
                   value={psuVoutTargetMv}
                   onChange={(e) => {

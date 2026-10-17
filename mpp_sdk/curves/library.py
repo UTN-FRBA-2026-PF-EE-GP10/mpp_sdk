@@ -10,6 +10,7 @@ import re
 from collections import defaultdict
 from pathlib import Path
 
+from .._files import read_json_object, write_new
 from .record import CurveRecord
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -36,26 +37,14 @@ def save(record: CurveRecord, directory: Path | None = None) -> Path:
     collision (two saves in the same second), append `-2`, `-3`, ... rather
     than overwriting - a captured measurement is never silently lost.
 
-    Uses exclusive file creation (`open(..., "x")`) rather than a
-    check-then-write on `Path.exists()`: the server handles each request on
-    its own thread, so two saves landing in the same second must not be
-    able to race each other into overwriting one another's file."""
+    The write is atomic and never overwrites (see `mpp_sdk._files.write_new`):
+    the server handles each request on its own thread, so two saves in the
+    same second must not race into one file, and a power cut must not leave
+    a truncated record."""
     directory = directory if directory is not None else default_dir()
-    directory.mkdir(parents=True, exist_ok=True)
-
     stem = f"{record.captured_at.strftime('%Y%m%dT%H%M%SZ')}-{_slug(record.label)}"
-    body = json.dumps(record.to_dict(), indent=2) + "\n"
-    suffix = 0
-    while True:
-        name = f"{stem}.json" if suffix == 0 else f"{stem}-{suffix + 1}.json"
-        path = directory / name
-        try:
-            with path.open("x", encoding="utf-8") as f:
-                f.write(body)
-        except FileExistsError:
-            suffix += 1
-            continue
-        return path
+    body = json.dumps(record.to_dict(), indent=2, allow_nan=False) + "\n"
+    return write_new(directory, stem, body)
 
 
 def load(path: Path) -> CurveRecord:
@@ -63,10 +52,7 @@ def load(path: Path) -> CurveRecord:
     the offending field on a missing key, a bad type, or an unknown
     `schema` - these files are hand-edited by operators, not just written
     by this code."""
-    try:
-        data = json.loads(path.read_text())
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"{path}: not valid JSON: {exc}") from exc
+    data = read_json_object(path)
     try:
         return CurveRecord.from_dict(data)
     except ValueError as exc:

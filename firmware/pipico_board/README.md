@@ -110,12 +110,15 @@ calibrated units and this checksum).
 `CMD`/`ACK` are both `0x00` in normal operation - the curve-tracer
 control/bulk-read commands (see "Curve tracer" below) and dynamic configuration
 commands are the only things that set them:
+
 - `0xB1`: requests a bulk sweep-result dump
 - `0xB2`: starts a sweep
 - `0xB3`: releases the tracer relay
 - `0xB4`: polls streamed in-progress-sweep state
 - `0xB5`/`0xB6`: replay demo curves
-- `0xC1`..`0xC9`: dynamic configuration commands (jumpers, $R_{\text{on}}$, MAX31865 enable, hardware cutoffs, power supply mode, Vout target, fixed duty, and cutoff reset). See "Dynamic Configuration" below.
+- `0xC1`..`0xC9`: dynamic configuration commands (jumpers, $R_{\text{on}}$, MAX31865
+  enable, hardware cutoffs, power supply mode, Vout target, fixed duty, and cutoff
+  reset). See "Dynamic Configuration" below.
 
 **Poll faster than 100 ms**: the PIO SPI slave has a known, still-open
 defect where it cannot cleanly recover from an idle gap longer than its
@@ -257,7 +260,8 @@ Two stages (`ClosedLoopState`), at most once per fresh on-chip ADC sample
 
 ## Dynamic Configuration
 
-The firmware supports dynamic runtime reconfiguration over SPI without needing firmware re-flashing or MCU reboots. Atomic configuration variables are initialized with bench-safe defaults at boot and updated instantly upon receiving matching SPI commands:
+The firmware changes its configuration over SPI, with no re-flash or reboot. Each
+value starts at a bench-safe default at boot and changes when its SPI command arrives:
 
 | Configuration Item | Command Byte | Encoding | Default Value | Description |
 |-------------------|--------------|----------|---------------|-------------|
@@ -272,7 +276,13 @@ The firmware supports dynamic runtime reconfiguration over SPI without needing f
 | **Reset Cutoff** | `0xC9` (`CMD_RESET_CUTOFF`) | Payload 0 | - | Clears `CUTOFF_TRIPPED` flag and resumes normal PWM operation |
 
 ### Safety Cutoff Trip and Reset Behavior
-When either current or voltage breaches the configured cutoff thresholds ($I > I_{\max}$ or $V_{\text{in}} > V_{\max}$ or $V_{\text{out}} > V_{\max}$), the firmware asserts `CUTOFF_TRIPPED` atomically and latches the SEPIC gate drive to 0 % duty (`compare_b = 0`). The gate remains safely disabled until `CMD_RESET_CUTOFF` (`0xC9`) is issued by the host.
+
+- The gate loop checks the live INA229 current and voltage and the live on-chip ADC
+  Vin and Vout every tick (not during a sweep).
+- Above a limit it sets `CUTOFF_TRIPPED` and holds the gate at 0 % duty until the
+  host sends `CMD_RESET_CUTOFF` (`0xC9`). If the fault is still there, it trips again.
+- The limits have hard ceilings (1000 mA, 40000 mV; PSU target 25000 mV). A value of
+  0 or above the ceiling sets the ceiling, so a host cannot turn a cutoff off.
 
 ## What it does
 
@@ -355,9 +365,11 @@ over the second, beside the INA229: one calibration point per line. See
 
   | `AdcDividerRange` | Jumpers shorted | Divider | Full scale |
   |-------------------|------------------|---------|------------------------------|
-  | `Full` (default)  | 0 (all 3x 75k in series) | 235k/10k | ~75.6 V |
+  | `Full` (no jumper)  | 0 (all 3x 75k in series) | 235k/10k | ~75.6 V |
   | `Mid`              | 1 (2x 75k remain)        | 160k/10k | ~51.5 V |
   | `Low`              | 2 (1x 75k remains)       | 85k/10k  | ~27.3 V |
+
+  `main.rs` ships set to `Low`. A board with no jumper fitted is `Full`.
 
 - **After changing the range**, the ADC gain/zero fit above still applies -
   it describes the RP2040's own ADC, not the divider. What changing the
@@ -534,8 +546,11 @@ Two independent LEDs answer two different questions:
   - **LED 0**: $V_{\text{in}}$ ADC level (`ADC_PWR`).
   - **LED 1**: $V_{\text{out}}$ ADC level (`ADC_VOUT`).
   - **LED 2**: $I$ ADC level (`ADC_Input_Curr`).
-    - *Colors*: Green when $< 50\,\%$ of full scale, Yellow $\to$ Orange $\to$ Red for in-between values, and Blinking Red when saturated / over the limit for that jumper setup ($\ge 4090$ raw ADC codes).
-  - **LED 3**: SPI communication status heartbeat. Flashes green briefly on every successfully-received SPI frame, dark otherwise.
+    - *Colors*: Green when $< 50\,\%$ of full scale, Yellow $\to$ Orange $\to$ Red for in-between
+      values, and Blinking Red when saturated / over the limit for that jumper setup ($\ge 4090$ raw
+      ADC codes).
+  - **LED 3**: SPI communication status heartbeat. Flashes green briefly on every
+    successfully-received SPI frame, dark otherwise.
 
 ## GPIO Assignments
 
@@ -552,8 +567,8 @@ Two independent LEDs answer two different questions:
 | 11  | GPIO8   | GPIO8           | General purpose               |
 | 12  | GPIO9   | GPIO9           | General purpose               |
 | 14  | GPIO10  | SPI1_SCK        | SPI1 clock                    |
-| 15  | GPIO11  | SPI1_TX         | SPI1 MOSI                     |
-| 16  | GPIO12  | SPI1_RX         | SPI1 MISO                     |
+| 15  | GPIO11  | SPI1_TX         | SPI1 MISO (Pico drives)       |
+| 16  | GPIO12  | SPI1_RX         | SPI1 MOSI (Pi drives)         |
 | 17  | GPIO13  | SPI1_CS         | SPI1 chip select              |
 | 19  | GPIO14  | Blinky          | External heartbeat LED, ~1 Hz |
 | 20  | GPIO15  | PWM_Gate        | SEPIC gate PWM, 100 kHz (via 10R + 3.3nF) |

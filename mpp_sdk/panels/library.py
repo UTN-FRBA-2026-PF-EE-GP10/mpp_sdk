@@ -11,6 +11,7 @@ measurement.
 from __future__ import annotations
 
 import contextlib
+import dataclasses
 import json
 import logging
 import os
@@ -19,6 +20,7 @@ import tempfile
 from dataclasses import replace
 from pathlib import Path
 
+from .._files import read_json_object
 from .defaults import list_default_panels
 from .record import PanelModelRecord
 
@@ -110,14 +112,17 @@ def load(path: Path) -> PanelModelRecord:
     and the offending field on a missing key, a bad type, or an unknown
     `schema` - these files are hand-editable, not just written by this
     code."""
+    data = read_json_object(path)
     try:
-        data = json.loads(path.read_text())
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"{path}: not valid JSON: {exc}") from exc
-    try:
-        return PanelModelRecord.from_dict(data)
+        record = PanelModelRecord.from_dict(data)
     except ValueError as exc:
         raise ValueError(f"{path}: {exc}") from exc
+    # The file name is the record's identity: `update` writes to
+    # `{id}.json`. A copied or renamed file keeps the old id in its body,
+    # and an update would then overwrite the original file.
+    if record.id != path.stem:
+        record = dataclasses.replace(record, id=path.stem)
+    return record
 
 
 def update(record: PanelModelRecord, directory: Path | None = None) -> Path:
@@ -190,7 +195,7 @@ def _read_seeded(directory: Path) -> set[str]:
         if not isinstance(ids, list):
             return set()
         return {i for i in ids if isinstance(i, str)}
-    except (OSError, ValueError, KeyError, TypeError):
+    except OSError, ValueError, KeyError, TypeError:
         return set()
 
 

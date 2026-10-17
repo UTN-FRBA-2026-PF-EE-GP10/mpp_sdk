@@ -12,8 +12,8 @@ hardware-abstraction seam so the same controller code drives a simulation
 today and a real SEPIC converter on a Host/sbc tomorrow.
 
 See [`AGENTS.md`](./AGENTS.md) for architectural pillars and contribution
-guidelines, and [`PLAN.md`](./PLAN.md) for the full roadmap and viability
-assessment.
+guidelines. Open work is tracked in the
+[project tracker issue](https://github.com/UTN-FRBA-2026-PF-EE-GP10/mpp_sdk/issues/128).
 
 ## Why
 
@@ -51,8 +51,9 @@ reproduce [Subudhi & Pradhan 2013].
 > design constraint: it favors fixed-step, minimal-state methods, which
 > also happen to be the easiest to analyse.
 
-The full viability assessment, related-work survey, and risk mitigations
-live in [`PLAN.md`](./PLAN.md).
+The design reasoning and the related-work background live in
+[`docs/rationale.md`](docs/rationale.md) and
+[`docs/general_information.md`](docs/general_information.md).
 
 ## Installation
 
@@ -147,16 +148,24 @@ the live board for a while, recording `(t, V, I, D)`. Plot it with
 
 ```text
 mpp_sdk/
-├── models/         # Solar panel I-V models  (PanelModel ABC; ideal, pvlib, string, tabulated)
+├── models/         # Solar panel I-V models  (PanelModel ABC; ideal, pvlib, string, tabulated, measured)
 ├── converters/     # Power-stage models      (SEPICConverter)
 ├── algorithms/     # MPPT controllers        (MPPTAlgorithm ABC; P&O, InCond, fuzzy, scan, PSO)
-├── io/             # Hardware-abstraction    (SignalSource ABC; simulated, dynamic)
+├── io/             # Hardware-abstraction    (SignalSource ABC; simulated, dynamic, noisy, SPI to the Pico)
 ├── curves/         # Captured I-V curve library (CurveRecord, feeds MeasuredPanel)
+├── runs/           # Captured closed-loop runs (RunRecord)
+├── sessions/       # Bench session checklists and their templates
+├── panels/         # Panel model library (label values)
 ├── metrics.py      # Comparison metrics
 └── visualization.py
 
 harness/            # Comparison scripts (static, dynamic, live, cyclic ranking, sim-to-real bank)
-docs/               # Algorithm references, rationale, general information
+scripts/            # Bench tools and the workbench server (FastAPI)
+frontend/           # Workbench UI (React); its build is committed to scripts/curve_tracer_web/
+firmware/           # RP2040 firmware (Rust) and its host-tested safety-checks crate
+hardware/           # KiCad board
+data/               # Bench data (see data/README.md)
+docs/               # Algorithm references, rationale, procedures
 ```
 
 The control variable is always the SEPIC **duty cycle**. The measured
@@ -189,102 +198,37 @@ replacement:
 | Panel I-V physics (single / two-diode)   | yes (canonical)  | minimal in-tree    |
 | Partial shading via `bishop88`           | yes              | wraps pvlib        |
 | Closed-loop MPPT controllers (P&O, …)    | **no**           | **yes**            |
-| Boost-converter / power-stage model      | no               | yes                |
-| Hardware abstraction (`SignalSource`)    | no               | yes (RPi5 planned) |
+| SEPIC / power-stage model                | no               | yes                |
+| Hardware abstraction (`SignalSource`)    | no               | yes (Pi + Pico)    |
 | Algorithm benchmark / comparison harness | no               | yes                |
 
 The `PvlibPanelModel(PanelModel)` adapter (shipped) drops any pvlib-grade
 model behind our controller and converter pipeline, unchanged. We do not
 re-implement panel physics that pvlib already provides.
 
-## Roadmap
+## Status
 
-What's shipped and what's next. The full plan - phases, milestones, verification
-expectations, contributor liability, and LLM-usage policy - lives in
-[`PLAN.md`](./PLAN.md).
+- **Shipped:** panel models (ideal, pvlib, string, measured), five
+  algorithms, the comparison harness, the curve tracer, the web
+  workbench, and the Pi + Pico firmware.
+- **On hardware:** curves are good. Closed-loop runs work for P&O. The
+  other algorithms need a slower, settled control loop first.
+- **Open:** a valid hardware comparison, the algorithm port to the Pico,
+  and the thesis figures.
 
-### Models
-
-- [x] `IdealSingleDiode` - explicit closed-form I(V) (in-tree, pedagogical)
-- [x] `PvlibPanelModel` - pvlib De Soto adapter, temperature/irradiance aware
-      (optional `mpp-sdk[pvlib]`); `from_datasheet` + `hissuma_psf10mono`
-- [x] `PvString` - series panels with bypass diodes → multi-modal P-V curves
-- [x] `TabulatedPanel` - cached I-V curve for fast repeated lookups
-- [ ] `SingleDiodeWithLosses` - in-tree `R_s` / `R_sh` (implicit I-V)
-
-### Algorithms
-
-- [x] Perturb & Observe
-- [x] Incremental Conductance
-- [x] Fuzzy-logic (local tracker)
-- [x] Scan-and-track (global MPPT)
-- [x] Particle Swarm Optimization (global MPPT)
-- [ ] Adaptive-step P&O; own model-informed candidate scan
-- [ ] Data-driven / RL baseline
-
-### Comparison harness
-
-- [x] Static, dynamic, and live interactive (`harness/`)
-- [x] Preliminary metrics - tracking efficiency, settling time, ripple, overshoot,
-      trap depth (`mpp_sdk.metrics`)
-- [x] Cyclic irradiance profile for a valid dynamic efficiency measurement
-      (`harness/compare_cyclic.py`, `metrics.energy_efficiency`)
-- [x] Fixed sim-to-real test-case bank (`harness/compare_bank.py`) with
-      (t, V, I, D) trace dumps for PLECS / bench replay
-- [ ] Auto-generated paper figures
-
-### Curve tracer
-
-Captures real panel I-V curves and replays them through the same
-comparison harness as any synthetic model - the seam [`AGENTS.md`](./AGENTS.md)
-exists to protect. See [`frontend/README.md`](frontend/README.md) for the
-UI and [`firmware/pipico_board/README.md`](firmware/pipico_board/README.md)'s
-"Curve tracer" section for the sweep engine.
-
-- [x] On-disk curve library with measurement metadata (`mpp_sdk.curves`)
-- [x] `MeasuredPanel(PanelModel)` - a captured curve replays through the
-      algorithm benchmark (`mpp-sdk compare-measured`) with zero algorithm
-      changes
-- [x] FastAPI backend + React frontend (`mpp-sdk curve-tracer-web`;
-      `--demo` mode needs no hardware; on-target capture round trip
-      unverified)
-- [x] Firmware streams sweep points as they're captured (code complete,
-      on-target verification pending)
-- [ ] Controllable dimmer for repeatable illumination sweeps (design spike)
-
-### Hardware (future - see [`PLAN.md`](./PLAN.md))
-
-The power stage is driven by an **RP2040 (Pi Pico, firmware in Rust)** connected
-to the Host/sbc over SPI. The MCU isolates the fast-switching side *and* is
-the deployment target for the final algorithm. See
-[`firmware/pipico_board/README.md`](firmware/pipico_board/README.md) for
-build/flash/calibration instructions.
-
-- [x] SPI-slave firmware scaffold (PIO)
-- [x] `SpiMcuSource(SignalSource)` - Host-side SPI wrapper (`mpp-sdk[hardware]`)
-- [x] MCU firmware (HIL mode): ADC + PWM + SPI-slave as an I/O proxy
-- [x] Calibration (ADC scale/offset, INA229 calibration, PWM freq, duty
-      limits) - the INA281 analog cross-check still needs its gain/shunt
-      resolved
-- [ ] Algorithm port to RP2040 + cross-validation against the Python reference
-- [ ] Bench and outdoor validation against the simulator
-
-### Infrastructure
-
-- [x] `tests/` - unit tests per pillar (`pytest`)
-- [x] CI workflow (`uv sync`, `pytest`, demo smoke run)
-- [x] `data/` - provenanced benchmark profiles and panel curves
-- [x] `mpp-sdk` CLI - single dispatcher over every harness/example/script
-- [x] Curve-tracer web workbench - `frontend/` (React) + FastAPI backend,
-      `mpp-sdk curve-tracer-web [--demo]`
+Open work is tracked in the [project tracker issue](https://github.com/UTN-FRBA-2026-PF-EE-GP10/mpp_sdk/issues/128).
 
 ## Context
 
 This SDK supports an **Electronics Engineering thesis** on MPPT algorithm
-comparison. [`PLAN.md`](./PLAN.md) has the full project plan: the
-contributor-liability statement, the LLM-usage disclosure policy, the
-viability and related-work analysis, and one hard rule - **each part of
-the SDK must work and be verified in isolation** before it is integrated.
+comparison. One hard rule applies: **each part of the SDK must work and be
+verified in isolation** before it is integrated (see
+[`AGENTS.md`](./AGENTS.md), "Definition of done").
+
+The MIT license (see [`LICENSE`](./LICENSE)) covers redistribution. It is
+not a warranty: whoever wires this code to real hardware is responsible
+for electrical safety and for checking the code against their own
+measurements.
 
 ## On the use of AI
 
@@ -301,12 +245,18 @@ same reason we use `pvlib` instead of re-implementing single-diode
 physics: the leverage is real, and the alternative is to do less
 science.
 
-That choice has explicit guardrails: disclosure, human verification of
-every change, citation of the underlying references, and human
-authorship of all numerical results, experimental claims, and
-conclusions. The full policy, with a per-layer table of where AI helped
-and where it did not, lives in
-[`PLAN.md`](./PLAN.md#use-of-large-language-models).
+That choice has explicit guardrails:
+
+- **Disclose.** The thesis names the LLMs used and the tasks they helped
+  with.
+- **Verify.** A person reads, understands, and tests every LLM-assisted
+  change before it merges.
+- **Cite.** When an LLM reproduces a known algorithm or formula, the
+  change cites the primary reference.
+- **Author.** A person is the author of every commit and is accountable
+  for it.
+- **Off-limits.** Numerical results, measured data, experimental claims,
+  and conclusions are written and checked by the human authors.
 
 ## References
 

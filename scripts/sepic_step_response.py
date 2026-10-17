@@ -33,8 +33,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-# Auto-detect default SPI bus: BeagleBone Black uses SPI1 (bus=1), RPi uses SPI0 (bus=0).
-DEFAULT_BUS = 1 if not Path("/dev/spidev0.0").exists() and Path("/dev/spidev1.0").exists() else 0
+from mpp_sdk.io.board import default_spi_bus
+
+DEFAULT_BUS = default_spi_bus()
 DEFAULT_DEVICE = 0
 
 # Maximum duty cycle cap allowed by the test script (allows up to 70% duty).
@@ -257,7 +258,8 @@ def calculate_step_metrics(
 
     Separates the capture into:
       1. Settling phase (t_step -> t_step + settle_s): records step transient and ts.
-      2. Ripple phase (t_step + settle_s -> t_step + settle_s + ripple_s): 1s steady-state ripple window.
+      2. Ripple phase (t_step + settle_s -> t_step + settle_s + ripple_s): 1s steady-state
+         ripple window.
     """
     if window_s is not None:
         settle_s = window_s * 0.8 if (settle_s == 1.0 and ripple_s == 1.0) else settle_s
@@ -360,7 +362,8 @@ def run_step_response_test(
     tolerance_pct: float = 2.0,
     wait: Callable[[float], None] = time.sleep,
 ) -> list[StepMetrics]:
-    """Execute duty cycle step sequence, waiting settle_s (1s) for settling and ripple_s (1s) for ripple."""
+    """Execute duty cycle step sequence, waiting settle_s (1s) for settling and ripple_s
+    (1s) for ripple."""
     if len(steps) < 2:
         raise ValueError("At least 2 duty steps required to form a step transition")
 
@@ -440,12 +443,17 @@ def print_report(results: list[StepMetrics], tolerance_pct: float) -> None:
     )
     print("-" * 102)
     for r in results:
-        ts_str = f"{r.settling_time_ms:6.1f} ms" if r.settling_time_ms is not None else "> window (unsettled)"
+        ts_str = (
+            f"{r.settling_time_ms:6.1f} ms"
+            if r.settling_time_ms is not None
+            else "> window (unsettled)"
+        )
         vout_str = f"{r.v_out_initial:5.2f} V -> {r.v_out_final:5.2f} V"
         duty_str = f"{r.duty_initial:4.2f} -> {r.duty_target:4.2f}"
         print(
             f"{r.step_idx:4d}  {duty_str:^15}  {r.v_in_mean:7.2f} V  "
-            f"{vout_str:^19}  {r.ripple_pp_mv:9.1f} mVpp  {r.v_in_ripple_pp_mv:9.1f} mVpp  {ts_str:>13}"
+            f"{vout_str:^19}  {r.ripple_pp_mv:9.1f} mVpp  "
+            f"{r.v_in_ripple_pp_mv:9.1f} mVpp  {ts_str:>13}"
         )
     print("=" * 102)
     print()
@@ -454,7 +462,8 @@ def print_report(results: list[StepMetrics], tolerance_pct: float) -> None:
         print(
             f"Step {r.duty_initial:.2f} -> {r.duty_target:.2f} | "
             f"Vout: {r.v_out_initial:.2f}V -> {r.v_out_final:.2f}V | "
-            f"Vout Ripple: {r.ripple_pp_mv:.0f} mVpp | Vin Ripple: {r.v_in_ripple_pp_mv:.0f} mVpp | Settling Time: {ts_str}"
+            f"Vout Ripple: {r.ripple_pp_mv:.0f} mVpp | "
+            f"Vin Ripple: {r.v_in_ripple_pp_mv:.0f} mVpp | Settling Time: {ts_str}"
         )
     print()
 
@@ -515,7 +524,10 @@ def plot_step_responses(
 
     for idx, r in enumerate(results):
         ax = axes[idx, 0]
-        t_step = min((s.timestamp for s in r.samples if s.duty == r.duty_target), default=r.samples[0].timestamp)
+        t_step = min(
+            (s.timestamp for s in r.samples if s.duty == r.duty_target),
+            default=r.samples[0].timestamp,
+        )
         t_rel_ms = [(s.timestamp - t_step) * 1000.0 for s in r.samples]
         v_out_vals = [s.v_out for s in r.samples]
 
@@ -527,7 +539,9 @@ def plot_step_responses(
 
         # Target steady state & tolerance band
         tol_abs = max(abs(r.v_out_final) * (r.tolerance_pct / 100.0), 0.05)
-        ax.axhline(r.v_out_final, color="#2ca02c", linestyle=":", label=f"Vss = {r.v_out_final:.2f} V")
+        ax.axhline(
+            r.v_out_final, color="#2ca02c", linestyle=":", label=f"Vss = {r.v_out_final:.2f} V"
+        )
         ax.axhspan(
             r.v_out_final - tol_abs,
             r.v_out_final + tol_abs,
@@ -538,10 +552,18 @@ def plot_step_responses(
 
         # Settling point annotation
         if r.settling_time_ms is not None:
-            ax.axvline(r.settling_time_ms, color="#2ca02c", linestyle="--", alpha=0.9, label=f"ts = {r.settling_time_ms:.1f} ms")
+            ax.axvline(
+                r.settling_time_ms,
+                color="#2ca02c",
+                linestyle="--",
+                alpha=0.9,
+                label=f"ts = {r.settling_time_ms:.1f} ms",
+            )
             ax.plot([r.settling_time_ms], [r.v_out_final], marker="o", color="#2ca02c")
             ax.annotate(
-                f"ts={r.settling_time_ms:.1f} ms\nVout Ripple={r.ripple_pp_mv:.0f} mVpp\nVin Ripple={r.v_in_ripple_pp_mv:.0f} mVpp",
+                f"ts={r.settling_time_ms:.1f} ms\n"
+                f"Vout Ripple={r.ripple_pp_mv:.0f} mVpp\n"
+                f"Vin Ripple={r.v_in_ripple_pp_mv:.0f} mVpp",
                 xy=(r.settling_time_ms, r.v_out_final),
                 xytext=(r.settling_time_ms + 15, r.v_out_final + tol_abs * 1.5),
                 arrowprops={"arrowstyle": "->", "color": "#2ca02c"},
@@ -550,7 +572,8 @@ def plot_step_responses(
             )
 
         ax.set_title(
-            f"Step {r.step_idx}: D = {r.duty_initial:.2f} -> {r.duty_target:.2f} (Vin ~ {r.v_in_mean:.1f} V)",
+            f"Step {r.step_idx}: D = {r.duty_initial:.2f} -> {r.duty_target:.2f} "
+            f"(Vin ~ {r.v_in_mean:.1f} V)",
             fontsize=11,
             fontweight="bold",
         )
@@ -580,20 +603,36 @@ def main() -> None:
         default="0.40,0.45,0.50,0.55,0.60,0.65,0.70",
         help=f"comma-separated duty steps (0..{MAX_DUTY})",
     )
-    parser.add_argument("--settle-s", type=float, default=1.0, help="duration to observe settling response (s)")
-    parser.add_argument("--ripple-s", type=float, default=1.0, help="duration to observe steady-state ripple (s)")
+    parser.add_argument(
+        "--settle-s", type=float, default=1.0, help="duration to observe settling response (s)"
+    )
+    parser.add_argument(
+        "--ripple-s", type=float, default=1.0, help="duration to observe steady-state ripple (s)"
+    )
     parser.add_argument("--hold-s", type=float, default=1.0, help="pre-step hold duration (s)")
-    parser.add_argument("--window-ms", type=float, default=None, help="override total post-step capture window (ms)")
-    parser.add_argument("--poll-period-ms", type=float, default=3.0, help="poller sampling interval (ms)")
-    parser.add_argument("--tolerance-pct", type=float, default=2.0, help="settling time error band (%%)")
+    parser.add_argument(
+        "--window-ms", type=float, default=None, help="override total post-step capture window (ms)"
+    )
+    parser.add_argument(
+        "--poll-period-ms", type=float, default=3.0, help="poller sampling interval (ms)"
+    )
+    parser.add_argument(
+        "--tolerance-pct", type=float, default=2.0, help="settling time error band (%%)"
+    )
     parser.add_argument("--load-ohms", type=float, default=10.0, help="output load resistor (Ohms)")
     parser.add_argument("--i-in-max", type=float, default=10.0, help="safety current limit (A)")
-    parser.add_argument("--v-in-max", type=float, default=26.0, help="safety input voltage limit (V)")
-    parser.add_argument("--v-out-max", type=float, default=26.0, help="safety output voltage limit (V)")
+    parser.add_argument(
+        "--v-in-max", type=float, default=26.0, help="safety input voltage limit (V)"
+    )
+    parser.add_argument(
+        "--v-out-max", type=float, default=26.0, help="safety output voltage limit (V)"
+    )
     parser.add_argument("--out", type=Path, default=None, help="CSV output file path")
     parser.add_argument("--plot", action="store_true", help="render matplotlib plots")
     parser.add_argument("--plot-out", type=Path, default=None, help="save plot image to file")
-    parser.add_argument("--sim", action="store_true", help="run against software simulated SEPIC model")
+    parser.add_argument(
+        "--sim", action="store_true", help="run against software simulated SEPIC model"
+    )
     parser.add_argument("--bus", type=int, default=DEFAULT_BUS, help="SPI bus index")
     parser.add_argument("--device", type=int, default=DEFAULT_DEVICE, help="SPI device index")
     parser.add_argument("--speed-hz", type=int, default=200_000, help="SPI clock frequency (Hz)")
@@ -639,8 +678,7 @@ def main() -> None:
                         "[WARNING] 'mpp-web.service' is running in the background!\n"
                         "It accesses SPI every 50 ms and commands duty=0, which will corrupt\n"
                         "step response measurements. Stop it with:\n"
-                        "    sudo systemctl stop mpp-web.service\n"
-                        + "!" * 80 + "\n"
+                        "    sudo systemctl stop mpp-web.service\n" + "!" * 80 + "\n"
                     )
             except Exception:
                 pass

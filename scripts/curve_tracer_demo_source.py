@@ -119,7 +119,9 @@ class DemoSweepSource:
             index=index, voltage=v, current=i, active=active, final_point=not active
         )
 
-    def set_divider_ranges(self, vin_range: str | int = "low", vout_range: str | int = "low") -> None:
+    def set_divider_ranges(
+        self, vin_range: str | int = "low", vout_range: str | int = "low"
+    ) -> None:
         self._vin_range = vin_range
         self._vout_range = vout_range
 
@@ -179,4 +181,3 @@ class DemoSweepSource:
             self._psu_vout_target_mv = int(kwargs["psu_vout_target_mv"])  # type: ignore[arg-type]
         if "psu_fixed_duty" in kwargs and kwargs["psu_fixed_duty"] is not None:
             self._psu_fixed_duty = float(kwargs["psu_fixed_duty"])  # type: ignore[arg-type]
-

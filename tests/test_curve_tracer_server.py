@@ -12,6 +12,7 @@ import queue
 import sys
 import threading
 import time
+import types
 from dataclasses import replace
 from pathlib import Path
 
@@ -32,6 +33,7 @@ from mpp_sdk.runs import load as load_run  # noqa: E402
 from mpp_sdk.runs import save as save_run  # noqa: E402
 from mpp_sdk.sessions import FieldDef, get_template  # noqa: E402
 from scripts.curve_tracer_server import (  # noqa: E402
+    _CURVE_LABEL_MAX_LEN,
     _DEFAULT_I_MAX,
     _DEFAULT_RUN_DURATION_S,
     _DEFAULT_V_MAX,
@@ -42,10 +44,12 @@ from scripts.curve_tracer_server import (  # noqa: E402
     _PANEL_MODEL_MAX_LEN,
     _PANEL_NAME_MAX_LEN,
     _PANEL_NOTES_MAX_LEN,
+    _RUN_LABEL_MAX_LEN,
     _SESSION_FIELD_VALUE_MAX_LEN,
     _SESSION_MAX_LINKED_IDS,
     _SESSION_NOTES_MAX_LEN,
     _SESSION_TITLE_MAX_LEN,
+    _SWEEP_PENDING_TIMEOUT_S,
     _curve_path,
     _downsample_samples,
     _LiveRunCache,
@@ -2848,14 +2852,14 @@ def test_get_pico_config_returns_defaults(client):
     assert data["defaults"]["vin_range"] == "low"
 
 
-def test_post_pico_config_updates_and_enqueues(client):
+def test_post_pico_config_enqueues_and_caches_only_after_apply(client):
     r = client.post(
         "/api/pico-config",
         json={
             "vin_range": "mid",
             "ron_mohm": 12,
             "max31865": True,
-            "i_max_ma": 1500,
+            "i_max_ma": 900,
         },
     )
     assert r.status_code == 200
@@ -2864,22 +2868,65 @@ def test_post_pico_config_updates_and_enqueues(client):
     assert body["applied"]["vin_range"] == "mid"
     assert body["applied"]["ron_mohm"] == 12
 
-    # Check that command was enqueued
     cmd = client.commands.get_nowait()
     assert isinstance(cmd, tuple)
     assert cmd[0] == "config"
     assert cmd[1]["vin_range"] == "mid"
-    assert cmd[1]["ron_mohm"] == 12
-    assert cmd[1]["max31865"] is True
-    assert cmd[1]["i_max_ma"] == 1500
+    assert cmd[1]["i_max_ma"] == 900
 
-    # Verify that GET now reflects the updated cached state
-    get_r = client.get("/api/pico-config")
-    cfg = get_r.json()["config"]
-    assert cfg["vin_range"] == "mid"
-    assert cfg["ron_mohm"] == 12
-    assert cfg["max31865"] is True
-    assert cfg["i_max_ma"] == 1500
+    # Not applied to the board yet, so GET still shows the old value.
+    assert client.get("/api/pico-config").json()["config"]["vin_range"] == "low"
+
+
+class _ConfigSource:
+    def __init__(self, fail: Exception | None = None):
+        self.fail = fail
+        self.calls: list[dict] = []
+
+    def configure(self, **kwargs):
+        if self.fail is not None:
+            raise self.fail
+        self.calls.append(kwargs)
+
+    def reset_cutoff(self):
+        self.calls.append({"reset_cutoff": True})
+
+
+def test_apply_pico_config_updates_the_cache_after_the_board_takes_it():
+    cache = _SweepCache()
+    config = server_module._ConfigCache()
+    src = _ConfigSource()
+    server_module._apply_pico_config(src, cache, config, {"vin_range": "mid", "i_max_ma": 900})
+    assert src.calls[0]["vin_range"] == "mid"
+    snap = config.snapshot()["config"]
+    assert snap["vin_range"] == "mid"
+    assert snap["i_max_ma"] == 900
+
+
+@pytest.mark.parametrize("exc", [ValueError("bad"), OSError("EIO"), RuntimeError("spi")])
+def test_apply_pico_config_failure_keeps_the_cache_and_reports(exc):
+    cache = _SweepCache()
+    config = server_module._ConfigCache()
+    server_module._apply_pico_config(_ConfigSource(fail=exc), cache, config, {"vin_range": "mid"})
+    assert config.snapshot()["config"]["vin_range"] == "low"
+    assert "config failed" in (cache.snapshot().command_error or "")
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"i_max_ma": 0},
+        {"i_max_ma": 1500},
+        {"v_max_mv": 99999},
+        {"vin_range": "bogus"},
+        {"psu_vout_target_mv": 30000},
+        {"psu_fixed_duty": 1.0},
+    ],
+)
+def test_post_pico_config_refuses_out_of_range_values(client, body):
+    r = client.post("/api/pico-config", json=body)
+    assert r.status_code == 422
+    assert client.commands.empty()
 
 
 def test_post_pico_reset_cutoff_enqueues(client):
@@ -2902,4 +2949,199 @@ def test_post_pico_config_refuses_when_hardware_run_in_progress(client):
         client.run_cache.finish(aborted=True, reason="test", saved_run_id=None)
 
 
+# ------------------------------------------------------------------
+# Sweep pending, poll thread faults, input bounds, bad library files
+# ------------------------------------------------------------------
 
+
+def test_start_run_refuses_after_the_sweep_command_left_the_queue(client):
+    """The poll thread takes the command off the queue at once, but the
+    sweep shows `active` only at its first point, one to three seconds
+    later. A run accepted in that gap records duty the firmware never
+    applies."""
+    assert client.post("/api/start-sweep").status_code == 204
+    client.commands.get_nowait()  # what the poll thread does
+    r = client.post("/api/runs/start", json={"algorithm": "P&O"})
+    assert r.status_code == 409
+    assert client.run_requests.empty()
+
+
+def test_start_run_is_allowed_once_the_pending_sweep_result_lands(client):
+    client.post("/api/start-sweep")
+    client.commands.get_nowait()
+    client.cache.set([(21.3, 0.006), (18.0, 0.195)], "ok")
+    r = client.post("/api/runs/start", json={"algorithm": "P&O"})
+    assert r.status_code == 200
+
+
+def test_sweep_pending_ignores_a_stale_inactive_frame_before_the_sweep_starts():
+    cache = _SweepCache()
+    cache.mark_sweep_pending()
+    cache.set_progress(_FakeProgress(19, 0.03, 0.12, active=False))
+    assert cache.sweep_pending()
+    cache.set_progress(_FakeProgress(0, 21.3, 0.006, active=True))
+    assert cache.sweep_pending()
+    cache.set_progress(_FakeProgress(19, 0.03, 0.12, active=False))
+    assert not cache.sweep_pending()
+
+
+def test_sweep_pending_times_out_when_the_sweep_never_starts(monkeypatch):
+    """A dark-panel sweep aborts before its first point and never goes
+    active, so only the timeout clears it."""
+    now = [100.0]
+    monkeypatch.setattr(server_module.time, "monotonic", lambda: now[0])
+    cache = _SweepCache()
+    cache.mark_sweep_pending()
+    now[0] += _SWEEP_PENDING_TIMEOUT_S - 1
+    assert cache.sweep_pending()
+    now[0] += 2
+    assert not cache.sweep_pending()
+
+
+def test_poll_loop_keeps_running_after_an_oserror(monkeypatch):
+    """spidev raises OSError, not RuntimeError. Before, one such error
+    ended the only thread that may touch the board."""
+    shutdown = threading.Event()
+    calls = {"n": 0}
+
+    class _FlakySource:
+        consecutive_bad_frames = 0
+
+        def __init__(self, **_kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_exc):
+            return False
+
+        def poll_sweep_progress(self):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise OSError("EIO")
+            shutdown.set()
+            return None
+
+        def request_sweep(self):
+            return None
+
+    fake_module = types.ModuleType("mpp_sdk.io.spi_mcu")
+    fake_module.SpiMcuSource = _FlakySource
+    monkeypatch.setitem(sys.modules, "mpp_sdk.io.spi_mcu", fake_module)
+    cache = _SweepCache()
+    _poll_loop(cache, queue.Queue(), 0, 0, 200_000, 0.0, shutdown_event=shutdown)
+    assert calls["n"] == 2
+    assert cache.snapshot().link == "waiting for sweep"
+
+
+def test_run_live_finishes_the_run_when_the_relay_release_fails(client):
+    """Before, the exception left the run slot "running" for good, so every
+    later start returned 409 until a server restart."""
+
+    class _BrokenRelaySource(_FakeRunSource):
+        def release_relay(self):
+            raise OSError("SPI gone")
+
+    request = _RunRequest(
+        spec=_po_spec(), duration_s=0.02, v_max=40.0, i_max=0.9, curve_ref=None, label="bench"
+    )
+    assert client.run_cache.try_start(algorithm="P&O", label="bench", curve_ref=None)
+    _run_live(_BrokenRelaySource(), client.cache, client.run_cache, request, client.stop_event)
+    live = client.get("/api/runs/live").json()
+    assert live["status"] == "done"
+    assert live["aborted"] is True
+    assert "relay release failed" in live["abort_reason"]
+
+
+def test_save_curve_refuses_a_non_finite_tilt(client):
+    client.cache.set([(21.3, 0.006), (18.0, 0.195)], "ok")
+    r = client.post(
+        "/api/save-curve",
+        content='{"panels": [{"id": "A", "tilt_deg": NaN}]}',
+        headers={"content-type": "application/json"},
+    )
+    assert r.status_code == 400
+
+
+def test_save_curve_refuses_an_oversized_label(client):
+    client.cache.set([(21.3, 0.006), (18.0, 0.195)], "ok")
+    r = client.post("/api/save-curve", json={"label": "x" * (_CURVE_LABEL_MAX_LEN + 1)})
+    assert r.status_code == 400
+
+
+def test_start_run_refuses_an_oversized_label(client):
+    r = client.post(
+        "/api/runs/start",
+        json={"algorithm": "P&O", "simulated": True, "label": "x" * (_RUN_LABEL_MAX_LEN + 1)},
+    )
+    assert r.status_code == 400
+
+
+def test_a_curve_file_that_is_not_an_object_shows_as_an_error_entry(client, tmp_path):
+    """Before, one such file made GET /api/curves return 500 for the whole
+    library."""
+    _save(tmp_path, label="good")
+    (tmp_path / "bad.json").write_text("[]")
+    r = client.get("/api/curves")
+    assert r.status_code == 200
+
+
+def test_run_config_current_limit_is_below_the_sensor_maximum(client):
+    assert client.get("/api/run-config").json()["default_i_max"] < 0.999
+
+
+# ------------------------------------------------------------------
+# Cross-site requests (Origin) and DNS rebinding (Host)
+# ------------------------------------------------------------------
+
+
+def test_a_state_changing_request_from_another_site_is_refused(client):
+    r = client.post("/api/start-sweep", headers={"origin": "http://evil.example"})
+    assert r.status_code == 403
+    assert client.commands.empty()
+
+
+def test_a_same_origin_request_is_allowed(client):
+    r = client.post("/api/start-sweep", headers={"origin": "http://testserver"})
+    assert r.status_code == 204
+
+
+def test_a_request_without_origin_is_allowed(client):
+    """curl, scripts and the tests send no Origin header."""
+    assert client.post("/api/start-sweep").status_code == 204
+
+
+def test_a_cross_site_read_is_not_blocked_by_the_origin_check(client):
+    """The browser keeps a cross-site page from reading the answer; the
+    Origin check only guards requests that change state."""
+    r = client.get("/api/data", headers={"origin": "http://evil.example"})
+    assert r.status_code == 200
+
+
+def _client_with_allowed_hosts(monkeypatch, tmp_path, allowed):
+    monkeypatch.setenv("MPP_SDK_CURVE_DIR", str(tmp_path))
+    monkeypatch.setenv("MPP_SDK_PANEL_DIR", str(tmp_path / "panels"))
+    app = create_app(_SweepCache(), queue.Queue(), allowed_hosts=frozenset(allowed))
+    return TestClient(app)
+
+
+@pytest.mark.parametrize(
+    "host", ["bench-pi.local:8000", "localhost:8000", "10.0.0.5:8000", "[::1]:8000"]
+)
+def test_allowed_hosts_accepts_known_names_and_any_ip(monkeypatch, tmp_path, host):
+    test_client = _client_with_allowed_hosts(monkeypatch, tmp_path, {"localhost", "bench-pi.local"})
+    assert test_client.get("/api/data", headers={"host": host}).status_code == 200
+
+
+def test_allowed_hosts_refuses_an_unknown_name(monkeypatch, tmp_path):
+    """A DNS-rebinding page reaches the server under the attacker's name."""
+    test_client = _client_with_allowed_hosts(monkeypatch, tmp_path, {"localhost"})
+    r = test_client.get("/api/data", headers={"host": "rebind.evil.example:8000"})
+    assert r.status_code == 403
+
+
+def test_default_allowed_hosts_include_this_machine(monkeypatch):
+    monkeypatch.setattr(server_module.socket, "gethostname", lambda: "Bench-Pi")
+    hosts = server_module._default_allowed_hosts(["lab-host"])
+    assert {"localhost", "bench-pi", "bench-pi.local", "lab-host"} <= hosts

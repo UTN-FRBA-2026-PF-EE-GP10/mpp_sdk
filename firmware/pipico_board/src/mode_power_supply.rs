@@ -4,9 +4,9 @@
 //! watchdog does not apply here, since this mode must keep running with
 //! no Pi attached.
 
-use portable_atomic::{AtomicU16, AtomicU8, Ordering};
+use portable_atomic::{AtomicU8, AtomicU16, Ordering};
 
-use crate::{ADC_SAMPLE_COUNT, DUTY_MAX, MEAS_ADC_VOUT_MV, MEAS_V_MV};
+use crate::{ADC_SAMPLE_COUNT, DUTY_MAX, INA_LIVE_V_MV, MEAS_ADC_VOUT_MV};
 
 /// `OpenLoop` checks the SEPIC transfer-ratio math and ADC/PWM wiring
 /// before trusting `ClosedLoop`'s feedback.
@@ -44,7 +44,7 @@ const GAIN_DIVISOR: u16 = 20;
 const MIN_STEP: u16 = 1;
 const MAX_STEP: u16 = 800;
 
-/// Below this, treat `MEAS_V_MV` as not-yet-real (its default before the
+/// Below this, treat `INA_LIVE_V_MV` as not-yet-real (its default before the
 /// first successful read is 0), not a real near-zero Vin. Otherwise
 /// `feedforward_duty` computes near-100 % duty as Vin -> 0.
 const MIN_VALID_VIN_MV: u16 = 500;
@@ -100,7 +100,7 @@ impl ClosedLoopState {
         let target_mv = POWER_SUPPLY_VOUT_MV.load(Ordering::Relaxed);
         if !self.seeded {
             // No-op until Vin looks real — see MIN_VALID_VIN_MV.
-            let vin_mv = MEAS_V_MV.load(Ordering::Relaxed);
+            let vin_mv = INA_LIVE_V_MV.load(Ordering::Relaxed);
             if vin_mv >= MIN_VALID_VIN_MV {
                 self.ps_duty = feedforward_duty(vin_mv, target_mv);
                 self.seeded = true;
@@ -123,7 +123,9 @@ impl ClosedLoopState {
 pub fn compute_duty(closed_loop: &mut ClosedLoopState) -> u16 {
     let loop_mode = PowerSupplyLoop::from_u8(POWER_SUPPLY_LOOP.load(Ordering::Relaxed));
     match loop_mode {
-        PowerSupplyLoop::OpenLoop => POWER_SUPPLY_FIXED_DUTY.load(Ordering::Relaxed).min(DUTY_MAX),
+        PowerSupplyLoop::OpenLoop => POWER_SUPPLY_FIXED_DUTY
+            .load(Ordering::Relaxed)
+            .min(DUTY_MAX),
         PowerSupplyLoop::ClosedLoop => closed_loop.step(),
     }
 }

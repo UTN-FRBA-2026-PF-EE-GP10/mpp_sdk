@@ -6,6 +6,7 @@ fake is injected into ``sys.modules`` before importing
 ``mpp_sdk.io.spi_mcu`` so these tests run everywhere.
 """
 
+import math
 import sys
 import types
 
@@ -222,6 +223,16 @@ def test_write_clamps_duty(spi_mcu_source, requested, expected):
     src = spi_mcu_source()
     src.write(requested)
     assert src.duty == pytest.approx(expected)
+
+
+@pytest.mark.parametrize("requested", [float("nan"), float("inf"), float("-inf")])
+def test_write_sends_zero_duty_for_a_non_finite_request(spi_mcu_source, requested):
+    """min(1.0, nan) is 1.0, so a plain clamp would send full duty."""
+    src = spi_mcu_source()
+    src.write(requested)
+    assert src.duty == 0.0
+    duty_h, duty_l = src._spi.sent[-1][0], src._spi.sent[-1][1]
+    assert (duty_h, duty_l) == (0, 0)
 
 
 # ------------------------------------------------------------------
@@ -623,6 +634,44 @@ def test_read_waits_for_settled_flag_when_duty_changed(spi_mcu_source):
     assert i == pytest.approx(0.6)
 
 
+def _fast_settle_timeout(monkeypatch):
+    module = sys.modules["mpp_sdk.io.spi_mcu"]
+    monkeypatch.setattr(module, "_SETTLE_FIRST_POLL_S", 0.0)
+    monkeypatch.setattr(module, "_SETTLE_POLL_INTERVAL_S", 0.0)
+    monkeypatch.setattr(module, "_SETTLE_TIMEOUT_S", 0.02)
+
+
+def test_read_never_applies_an_unsettled_frame(spi_mcu_source, monkeypatch):
+    """The firmware zeroes its telemetry on a duty change. Before, read()
+    applied those frames and returned 0 V / 0 A as a measurement."""
+    src = spi_mcu_source(settling_time_s=0.05)
+    _fast_settle_timeout(monkeypatch)
+    src._spi.responses = [
+        _miso_frame(v_raw=0, i_raw=0, vout_raw=0, temp_raw=0, settled=0),
+        _miso_frame(v_raw=0, i_raw=0, vout_raw=0, temp_raw=0, settled=0),
+        _miso_frame(v_raw=9000, i_raw=400, vout_raw=0, temp_raw=0, settled=1),
+    ]
+    src.write(0.4)
+    v, i = src.read()
+    assert v == pytest.approx(9.0)
+    assert i == pytest.approx(0.4)
+
+
+def test_read_returns_nan_when_no_settled_frame_arrives_and_retries(spi_mcu_source, monkeypatch):
+    src = spi_mcu_source(settling_time_s=0.05)
+    _fast_settle_timeout(monkeypatch)
+    src._spi.next_rx = _miso_frame(v_raw=0, i_raw=0, vout_raw=0, temp_raw=0, settled=0)
+    src.write(0.4)
+    v, i = src.read()
+    assert math.isnan(v)
+    assert math.isnan(i)
+
+    # The next read asks again instead of serving the NaN for good.
+    src._spi.next_rx = _miso_frame(v_raw=9000, i_raw=400, vout_raw=0, temp_raw=0, settled=1)
+    v, i = src.read()
+    assert v == pytest.approx(9.0)
+
+
 def test_default_dynamic_config_properties(spi_mcu_source):
     src = spi_mcu_source()
     assert src.vin_range == "low"
@@ -708,16 +757,16 @@ def test_set_cutoffs_and_reset(spi_mcu_source):
 
     src = spi_mcu_source()
     src._spi.next_rx = _miso_frame(1000, 100, 0, 0)
-    src.set_cutoffs(i_max_ma=2500, v_max_mv=35000)
+    src.set_cutoffs(i_max_ma=900, v_max_mv=35000)
 
     # Two frames sent: CMD_SET_CONFIG_CUTOFF_I and CMD_SET_CONFIG_CUTOFF_V
     tx_i = src._spi.sent[-2]
     tx_v = src._spi.sent[-1]
 
     assert tx_i[3] == 0xC3
-    assert ((tx_i[0] << 8) | tx_i[1]) == 2500
+    assert ((tx_i[0] << 8) | tx_i[1]) == 900
     assert tx_i[2] == crc8([tx_i[0], tx_i[1], 0xC3])
-    assert src.cutoff_i_max_ma == 2500
+    assert src.cutoff_i_max_ma == 900
 
     assert tx_v[3] == 0xC4
     assert ((tx_v[0] << 8) | tx_v[1]) == 35000
@@ -736,6 +785,13 @@ def test_set_cutoffs_and_reset(spi_mcu_source):
         src.set_cutoffs(i_max_ma=-1)
     with pytest.raises(ValueError):
         src.set_cutoffs(v_max_mv=70000)
+    # 0 used to turn the firmware check off; above the ceiling was unlimited.
+    with pytest.raises(ValueError):
+        src.set_cutoffs(i_max_ma=0)
+    with pytest.raises(ValueError):
+        src.set_cutoffs(i_max_ma=1001)
+    with pytest.raises(ValueError):
+        src.set_cutoffs(v_max_mv=40001)
 
 
 def test_power_supply_mode(spi_mcu_source):
@@ -774,12 +830,11 @@ def test_batch_configure(spi_mcu_source):
         vin_range="mid",
         ron_mohm=12,
         max31865=True,
-        i_max_ma=1500,
+        i_max_ma=900,
         psu_enabled=True,
     )
     assert src.vin_range == "mid"
     assert src.ron_mohm == 12
     assert src.max31865_enabled is True
-    assert src.cutoff_i_max_ma == 1500
+    assert src.cutoff_i_max_ma == 900
     assert src.psu_enabled is True
-

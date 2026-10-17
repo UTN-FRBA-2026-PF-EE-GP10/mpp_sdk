@@ -49,15 +49,18 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import ipaddress
 import math
 import queue
 import re
+import socket
 import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import TYPE_CHECKING, NamedTuple
+from typing import TYPE_CHECKING, Literal, NamedTuple
+from urllib.parse import urlsplit
 
 import numpy as np
 
@@ -66,6 +69,12 @@ from mpp_sdk import IdealSingleDiode, MeasuredPanel, SEPICConverter, SimulatedSo
 from mpp_sdk.curves import MEASUREMENT_KINDS, CurveRecord, PanelSetup
 from mpp_sdk.curves import library as curve_library
 from mpp_sdk.curves.record import now_utc
+from mpp_sdk.io.board import (
+    CUTOFF_I_MAX_CEILING_MA,
+    CUTOFF_V_MAX_CEILING_MV,
+    PSU_VOUT_TARGET_CEILING_MV,
+    default_spi_bus,
+)
 from mpp_sdk.panels import library as panel_library
 from mpp_sdk.runs import RunRecord
 from mpp_sdk.runs import library as run_library
@@ -84,12 +93,18 @@ from mpp_sdk.sessions.templates import get_template as get_session_template
 # poll period, not a live run's much tighter control loop - see
 # _RUN_BAD_FRAMES_LINK_DOWN below.
 from scripts.run_algorithm import _BAD_FRAMES_LINK_DOWN as _RUN_BAD_FRAMES_LINK_DOWN
-from scripts.run_algorithm import run_control_loop
+from scripts.run_algorithm import (
+    BOARD_I_MAX,
+    BOARD_V_MAX,
+    BOARD_V_OUT_MAX,
+    run_control_loop,
+)
 
 try:
-    from fastapi import FastAPI, HTTPException, Response
+    from fastapi import FastAPI, HTTPException, Request, Response
+    from fastapi.responses import JSONResponse
     from fastapi.staticfiles import StaticFiles
-    from pydantic import BaseModel
+    from pydantic import BaseModel, Field
 except ModuleNotFoundError as exc:  # pragma: no cover
     raise ModuleNotFoundError(
         "fastapi is required for the curve-tracer server. "
@@ -102,8 +117,6 @@ if TYPE_CHECKING:
 
 _WEB_ROOT = Path(__file__).parent / "curve_tracer_web"
 
-# Auto-detect default SPI bus: BeagleBone Black uses SPI1 (bus=1), RPi uses SPI0 (bus=0).
-_DEFAULT_SPI_BUS = 1 if not Path("/dev/spidev0.0").exists() and Path("/dev/spidev1.0").exists() else 0
 
 # Consecutive failed frames before the link is reported down. At the
 # default poll period this is well under a second, fast enough to notice
@@ -169,10 +182,37 @@ class _SweepCache:
         # board is involved at all. Distinct from _data_demo_source, which
         # means a real board replaying a curve it has stored.
         self._simulated = False
+        # A sweep was commanded and has not visibly ended yet. A sweep
+        # shows as `active` only at its first progress frame, which comes
+        # after auto-range (one to three seconds). A run accepted in that
+        # gap queues its relay release behind the sweep, and records duty
+        # the firmware never applies. Monotonic time of the command, or
+        # None when no sweep is pending.
+        self._sweep_pending_since: float | None = None
+        self._pending_seen_active = False
+
+    def mark_sweep_pending(self) -> None:
+        """Call when a sweep command is queued, before it reaches the firmware."""
+        with self._lock:
+            self._sweep_pending_since = time.monotonic()
+            self._pending_seen_active = False
+
+    def sweep_pending(self) -> bool:
+        """True from `mark_sweep_pending` until the sweep ends: its result
+        lands, it goes active then inactive, or `_SWEEP_PENDING_TIMEOUT_S`
+        passes (a dark-panel sweep aborts before any active frame)."""
+        with self._lock:
+            if self._sweep_pending_since is None:
+                return False
+            if time.monotonic() - self._sweep_pending_since > _SWEEP_PENDING_TIMEOUT_S:
+                self._sweep_pending_since = None
+                return False
+            return True
 
     def set(self, points: list[tuple[float, float]] | None, link: str) -> None:
         with self._lock:
             if points is not None:
+                self._sweep_pending_since = None
                 self._points = points
                 self._seq += 1
                 # The pending command's provenance becomes the data's
@@ -224,7 +264,14 @@ class _SweepCache:
                 if not self._active or not self._partial or progress.index < max(self._partial):
                     self._partial = {}
                 self._partial[progress.index] = (progress.voltage, progress.current)
+                self._pending_seen_active = True
             else:
+                # Only an inactive frame that follows an active one ends a
+                # pending sweep. Before the new sweep starts, the poll can
+                # still return the previous sweep's last inactive frame.
+                if self._pending_seen_active:
+                    self._sweep_pending_since = None
+                    self._pending_seen_active = False
                 # `partial` only means anything mid-sweep. A sweep that
                 # aborts with zero points (e.g. a dark/disconnected panel)
                 # publishes only this one inactive update, with no prior
@@ -321,16 +368,20 @@ _DEFAULT_RUN_DURATION_S = 10.0
 # rather than fixed at whatever the first run happened to use.
 _DEFAULT_INITIAL_DUTY = 0.5
 
-# Safety bounds a run is held to unless the operator narrows them. These
-# are the board's documented limits - see run_algorithm.py. Served by
-# GET /api/run-config so the page shows the values actually enforced.
-_DEFAULT_V_MAX = 40.0
-_DEFAULT_I_MAX = 1.0
-# The converter output. The SEPIC has no output limit of its own: with a
-# light or missing load its output climbs far past the input. 25 V stays
-# under the on-chip ADC's `Low` range (~27 V), so the reading that trips
-# this is still a real one, and well under C15's 100 V rating.
-_DEFAULT_V_OUT_MAX = 25.0
+# Safety bounds a run is held to unless the operator narrows them: the
+# board limits from run_algorithm.py, so the CLI and the UI enforce the
+# same values. Served by GET /api/run-config so the page shows the values
+# actually enforced. The converter output limit stays under the on-chip
+# ADC's `Low` range (~27 V), so the reading that trips it is a real one,
+# and well under C15's 100 V rating.
+_DEFAULT_V_MAX = BOARD_V_MAX
+_DEFAULT_I_MAX = BOARD_I_MAX
+_DEFAULT_V_OUT_MAX = BOARD_V_OUT_MAX
+
+# How long a commanded sweep can block a run start without showing any
+# progress. Longer than auto-range (one to three seconds); a sweep that
+# aborts before its first point (a dark panel) only clears this way.
+_SWEEP_PENDING_TIMEOUT_S = 15.0
 
 # Live /api/runs/live polling only ever needs enough points to draw a
 # chart, not the full record (that's what the saved RunRecord is for) -
@@ -566,7 +617,8 @@ def _execute_run(
         )
         try:
             path = run_library.save(record)
-        except OSError as exc:
+        except (OSError, ValueError) as exc:
+            # ValueError: a non-finite value the JSON writer refuses.
             run_cache.finish(
                 aborted=aborted,
                 reason=f"{reason or 'completed'}; failed to save: {exc}",
@@ -635,7 +687,16 @@ def _run_live(
     # which has no relay to release.
     release_relay = getattr(src, "release_relay", None)
     if release_relay is not None:
-        release_relay()
+        try:
+            release_relay()
+        except Exception as exc:
+            # The run never started driving, but its slot is claimed.
+            # Without this the slot stays "running" and every later start
+            # gets 409 until the server restarts.
+            run_cache.finish(
+                aborted=True, reason=f"error: relay release failed: {exc}", saved_run_id=None
+            )
+            return
     _execute_run(
         src,
         run_cache,
@@ -725,6 +786,41 @@ def _run_simulated(
     )
 
 
+def _apply_pico_config(
+    src: object, cache: _SweepCache, config_cache: _ConfigCache | None, payload: dict
+) -> None:
+    """Send one queued Pico configuration to the board. The config cache
+    changes only after the board took it, so GET /api/pico-config never
+    shows a value the board does not have."""
+    try:
+        if payload.get("reset_cutoff"):
+            reset_fn = getattr(src, "reset_cutoff", None)
+            if reset_fn is not None:
+                reset_fn()
+        cfg_fn = getattr(src, "configure", None)
+        if cfg_fn is not None:
+            cfg_fn(
+                vin_range=payload.get("vin_range"),
+                vout_range=payload.get("vout_range"),
+                ron_mohm=payload.get("ron_mohm"),
+                max31865=payload.get("max31865"),
+                i_max_ma=payload.get("i_max_ma"),
+                v_max_mv=payload.get("v_max_mv"),
+                psu_enabled=payload.get("psu_enabled"),
+                psu_open_loop=payload.get("psu_open_loop"),
+                psu_vout_target_mv=payload.get("psu_vout_target_mv"),
+                psu_fixed_duty=payload.get("psu_fixed_duty"),
+            )
+    except (RuntimeError, ValueError, OSError) as exc:
+        if config_cache is not None:
+            config_cache.update({}, error=str(exc))
+        cache.set_command_error(f"config failed: {exc}")
+        return
+    if config_cache is not None:
+        config_cache.update({k: v for k, v in payload.items() if k != "reset_cutoff"})
+    cache.set_command_error(None)
+
+
 def _poll_loop(
     cache: _SweepCache,
     commands: queue.Queue[object],
@@ -781,114 +877,111 @@ def _poll_loop(
         def fetch_sweep(src: SpiMcuSource) -> list[tuple[float, float]] | None:
             return src.request_sweep()
 
+    def poll_once(src) -> None:
+        # A live run displaces normal polling entirely for its whole
+        # duration (see _run_live's docstring) - checked first and,
+        # unlike `commands` below, not capped to one per iteration:
+        # there is only ever one run in flight (POST /api/runs/start
+        # refuses a second one via _LiveRunCache.try_start), so there
+        # is nothing to desync by draining it eagerly. In --demo mode
+        # this queue never receives anything: that route rejects a
+        # start request before it ever reaches here (no board to run
+        # against), so this is simply never true there.
+        if run_requests is not None and not run_requests.empty():
+            request = run_requests.get_nowait()
+            _run_live(src, cache, run_cache, request, stop_event)
+            return
+
+        # At most one queued command per iteration, not a drain loop:
+        # the firmware's TRACER_COMMAND signal is single-slot ("latest
+        # wins"), so two commands sent back-to-back with no SPI round
+        # trip in between risk the second silently overwriting the
+        # first before it is consumed. This bounds each command to
+        # about one `request_sweep()` cycle apart.
+        if not commands.empty():
+            cmd = commands.get_nowait()
+            if isinstance(cmd, tuple) and cmd[0] == "config":
+                _apply_pico_config(src, cache, config_cache, cmd[1])
+                cmd = None
+            try:
+                if cmd is None:
+                    pass
+                elif cmd == "start_sweep":
+                    src.start_sweep()
+                    cache.set_demo_source(False)
+                elif cmd.startswith("demo_sweep_"):
+                    src.start_demo_sweep(bright=cmd.endswith("bright"))
+                    cache.set_demo_source(True)
+                elif cmd == "release_relay":
+                    src.release_relay()
+            except RuntimeError as exc:
+                # A transient SPI fault must not kill this thread, or
+                # every future command and sweep result silently stops
+                # working with no visible error. Still falls through
+                # to the request_sweep() poll and the sleep below,
+                # rather than looping tightly on a persistent fault.
+                cache.set_command_error(f"{cmd} failed: {exc}")
+            else:
+                cache.set_command_error(None)
+        # Progress first, and it decides whether the bulk fetch below
+        # runs at all. Never raises (see its docstring): a dropped or
+        # corrupted progress poll is reported as None, not an error.
+        cache.set_progress(src.poll_sweep_progress())
+        sweeping = cache.snapshot().active
+
+        # Mid-sweep there is no result to collect, and asking costs the
+        # live draw: request_sweep() holds the link for up to 20 x 50 ms
+        # per call, which starved progress polling down to about four
+        # samples across a six-second sweep - the page sat on a few
+        # points and then jumped to the finished curve. Skipping it
+        # while a sweep runs turns that into one sample per point.
+        #
+        # It cannot simply be made non-blocking instead: the bulk-dump
+        # handshake has to complete inside a single request_sweep()
+        # call, because the gap between calls exceeds the firmware's
+        # frame timeout and an armed result is dropped when that fires
+        # (see --poll-period-s on why the gap has to stay that large).
+        if not sweeping:
+            try:
+                result = fetch_sweep(src)
+            except RuntimeError as exc:
+                cache.set(None, f"error: {exc}")
+            else:
+                cache.set(result, link_for(result, src))
+
+        time.sleep(period_s)
+
     with source_cm as src:
         while shutdown_event is None or not shutdown_event.is_set():
-            # A live run displaces normal polling entirely for its whole
-            # duration (see _run_live's docstring) - checked first and,
-            # unlike `commands` below, not capped to one per iteration:
-            # there is only ever one run in flight (POST /api/runs/start
-            # refuses a second one via _LiveRunCache.try_start), so there
-            # is nothing to desync by draining it eagerly. In --demo mode
-            # this queue never receives anything: that route rejects a
-            # start request before it ever reaches here (no board to run
-            # against), so this is simply never true there.
-            if run_requests is not None and not run_requests.empty():
-                request = run_requests.get_nowait()
-                _run_live(src, cache, run_cache, request, stop_event)
-                continue
+            try:
+                poll_once(src)
+            except Exception as exc:
+                # This thread is the only one that may touch the board. If
+                # it dies, every later sweep and run request is dropped
+                # with no visible error, so any fault (spidev raises
+                # OSError, not RuntimeError) is reported and polling goes on.
+                cache.set(None, f"error: {exc}")
+                time.sleep(period_s)
 
-            # At most one queued command per iteration, not a drain loop:
-            # the firmware's TRACER_COMMAND signal is single-slot ("latest
-            # wins"), so two commands sent back-to-back with no SPI round
-            # trip in between risk the second silently overwriting the
-            # first before it is consumed. This bounds each command to
-            # about one `request_sweep()` cycle apart.
-            if not commands.empty():
-                cmd = commands.get_nowait()
-                if isinstance(cmd, tuple) and cmd[0] == "config":
-                    payload = cmd[1]
-                    try:
-                        if payload.get("reset_cutoff"):
-                            reset_fn = getattr(src, "reset_cutoff", None)
-                            if reset_fn is not None:
-                                reset_fn()
-                        cfg_fn = getattr(src, "configure", None)
-                        if cfg_fn is not None:
-                            cfg_fn(
-                                vin_range=payload.get("vin_range"),
-                                vout_range=payload.get("vout_range"),
-                                ron_mohm=payload.get("ron_mohm"),
-                                max31865=payload.get("max31865"),
-                                i_max_ma=payload.get("i_max_ma"),
-                                v_max_mv=payload.get("v_max_mv"),
-                                psu_enabled=payload.get("psu_enabled"),
-                                psu_open_loop=payload.get("psu_open_loop"),
-                                psu_vout_target_mv=payload.get("psu_vout_target_mv"),
-                                psu_fixed_duty=payload.get("psu_fixed_duty"),
-                            )
-                        if config_cache is not None:
-                            config_cache.update(payload)
-                    except RuntimeError as exc:
-                        if config_cache is not None:
-                            config_cache.update({}, error=str(exc))
-                        cache.set_command_error(f"config failed: {exc}")
-                    else:
-                        cache.set_command_error(None)
-                else:
-                    try:
-                        if cmd == "start_sweep":
-                            src.start_sweep()
-                            cache.set_demo_source(False)
-                        elif str(cmd).startswith("demo_sweep_"):
-                            src.start_demo_sweep(bright=str(cmd).endswith("bright"))
-                            cache.set_demo_source(True)
-                        elif cmd == "release_relay":
-                            src.release_relay()
-                    except RuntimeError as exc:
-                        cache.set_command_error(f"{cmd} failed: {exc}")
-                    else:
-                        cache.set_command_error(None)
-            # Progress first, and it decides whether the bulk fetch below
-            # runs at all. Never raises (see its docstring): a dropped or
-            # corrupted progress poll is reported as None, not an error.
-            cache.set_progress(src.poll_sweep_progress())
-            sweeping = cache.snapshot().active
 
-            # Mid-sweep there is no result to collect, and asking costs the
-            # live draw: request_sweep() holds the link for up to 20 x 50 ms
-            # per call, which starved progress polling down to about four
-            # samples across a six-second sweep - the page sat on a few
-            # points and then jumped to the finished curve. Skipping it
-            # while a sweep runs turns that into one sample per point.
-            #
-            # It cannot simply be made non-blocking instead: the bulk-dump
-            # handshake has to complete inside a single request_sweep()
-            # call, because the gap between calls exceeds the firmware's
-            # frame timeout and an armed result is dropped when that fires
-            # (see --poll-period-s on why the gap has to stay that large).
-            if not sweeping:
-                try:
-                    result = fetch_sweep(src)
-                except RuntimeError as exc:
-                    cache.set(None, f"error: {exc}")
-                else:
-                    cache.set(result, link_for(result, src))
-
-            time.sleep(period_s)
+_DividerRange = Literal["low", "mid", "full", 0, 1, 2]
 
 
 class _PicoConfigRequest(BaseModel):
-    vin_range: str | int | None = None
-    vout_range: str | int | None = None
-    ron_mohm: int | None = None
+    """Bounds match SpiMcuSource's setters, so a bad value is a 422 here and
+    never reaches the poll thread."""
+
+    vin_range: _DividerRange | None = None
+    vout_range: _DividerRange | None = None
+    ron_mohm: int | None = Field(default=None, ge=0, le=65535)
     max31865: bool | None = None
-    i_max_ma: int | None = None
-    v_max_mv: int | None = None
+    i_max_ma: int | None = Field(default=None, ge=1, le=CUTOFF_I_MAX_CEILING_MA)
+    v_max_mv: int | None = Field(default=None, ge=1, le=CUTOFF_V_MAX_CEILING_MV)
     reset_cutoff: bool = False
     psu_enabled: bool | None = None
     psu_open_loop: bool | None = None
-    psu_vout_target_mv: int | None = None
-    psu_fixed_duty: float | None = None
+    psu_vout_target_mv: int | None = Field(default=None, ge=0, le=PSU_VOUT_TARGET_CEILING_MV)
+    psu_fixed_duty: float | None = Field(default=None, ge=0.0, le=0.95, allow_inf_nan=False)
 
 
 class _PanelSetupIn(BaseModel):
@@ -1057,6 +1150,11 @@ _PANEL_NOTES_MAX_LEN = 2000
 # String/list size bounds for POST/PATCH /api/sessions - an operator types
 # these by hand, so a mistaken paste or a runaway client script must not
 # be able to grow a session file without limit.
+_CURVE_LABEL_MAX_LEN = 200
+_CURVE_NOTES_MAX_LEN = 5000
+_CURVE_PANELS_MAX = 16
+_CURVE_PANEL_ID_MAX_LEN = 50
+_RUN_LABEL_MAX_LEN = 200
 _SESSION_TITLE_MAX_LEN = 200
 _SESSION_NOTES_MAX_LEN = 5000
 _SESSION_FIELD_VALUE_MAX_LEN = 500
@@ -1278,6 +1376,31 @@ def _run_duration_s(samples: tuple[RunSample, ...]) -> float:
     return samples[-1].t - samples[0].t if len(samples) >= 2 else 0.0
 
 
+# Methods that change state. A cross-site page can send these as "simple"
+# requests with no CORS preflight (a POST with no body, for example).
+_SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+
+
+def _default_allowed_hosts(extra: list[str]) -> frozenset[str]:
+    """Host names a browser may use to reach this server, besides any IP
+    address: localhost, this machine's name with and without `.local`
+    (mDNS, as on the bench Pi), and any `--allowed-host` values."""
+    name = socket.gethostname().lower()
+    return frozenset({"localhost", name, f"{name}.local", *(h.lower() for h in extra)})
+
+
+def _host_allowed(host_header: str, allowed: frozenset[str]) -> bool:
+    """True if the Host header names an IP address or an allowed name.
+    A DNS-rebinding page reaches the server under the attacker's own
+    domain name, so its Host header fails this check."""
+    hostname = urlsplit(f"//{host_header}").hostname or ""
+    try:
+        ipaddress.ip_address(hostname)
+    except ValueError:
+        return hostname in allowed
+    return True
+
+
 def create_app(
     cache: _SweepCache,
     commands: queue.Queue[object],
@@ -1287,6 +1410,7 @@ def create_app(
     run_cache: _LiveRunCache | None = None,
     run_requests: queue.Queue[_RunRequest] | None = None,
     stop_event: threading.Event | None = None,
+    allowed_hosts: frozenset[str] | None = None,
 ) -> FastAPI:
     """Build the FastAPI app against given cache/command objects - taken
     as parameters rather than module globals so tests can construct one
@@ -1301,6 +1425,13 @@ def create_app(
     predates live runs) keep working unchanged; a real server passes the
     same instances given to `_poll_loop` so a request thread's start/stop
     actually reaches the run executing there.
+
+    Any web page the operator opens can send requests to this server, and
+    the server drives real hardware. Two checks stop that: a state-changing
+    request whose `Origin` names another site gets 403, and, when
+    `allowed_hosts` is given, a request whose `Host` is neither an IP
+    address nor in `allowed_hosts` gets 403 (DNS rebinding). Tests leave
+    `allowed_hosts` as None; `main()` always passes it.
     """
     run_cache = run_cache if run_cache is not None else _LiveRunCache()
     run_requests = run_requests if run_requests is not None else queue.Queue()
@@ -1315,7 +1446,27 @@ def create_app(
     # restart - see mpp_sdk/panels/library.py's ensure_defaults_seeded.
     panel_library.ensure_defaults_seeded()
 
+    # Session and panel PATCH load a file, change it, and write it back. FastAPI
+    # runs plain `def` routes on a thread pool, so two PATCHes on one record
+    # (a debounced note and a status click) can interleave and one edit is
+    # lost. One lock for both is enough at bench request rates.
+    patch_lock = threading.Lock()
+
     app = FastAPI(title="curve-tracer")
+
+    @app.middleware("http")
+    async def refuse_cross_site(request: Request, call_next):
+        host = request.headers.get("host", "")
+        if allowed_hosts is not None and not _host_allowed(host, allowed_hosts):
+            return JSONResponse(status_code=403, content={"detail": "host not allowed"})
+        origin = request.headers.get("origin")
+        if (
+            request.method not in _SAFE_METHODS
+            and origin is not None
+            and urlsplit(origin).netloc.lower() != host.lower()
+        ):
+            return JSONResponse(status_code=403, content={"detail": "cross-site request refused"})
+        return await call_next(request)
 
     @app.get("/api/data")
     def get_data() -> dict:
@@ -1417,6 +1568,25 @@ def create_app(
         if not snap.points:
             raise HTTPException(status_code=409, detail="no sweep captured yet")
         _validate_active_session_id(body.session_id)
+        if len(body.label) > _CURVE_LABEL_MAX_LEN:
+            raise HTTPException(
+                status_code=400, detail=f"label must be at most {_CURVE_LABEL_MAX_LEN} characters"
+            )
+        if len(body.notes) > _CURVE_NOTES_MAX_LEN:
+            raise HTTPException(
+                status_code=400, detail=f"notes must be at most {_CURVE_NOTES_MAX_LEN} characters"
+            )
+        if len(body.panels) > _CURVE_PANELS_MAX:
+            raise HTTPException(
+                status_code=400, detail=f"at most {_CURVE_PANELS_MAX} panels per curve"
+            )
+        for p in body.panels:
+            if len(p.id) > _CURVE_PANEL_ID_MAX_LEN or not math.isfinite(p.tilt_deg):
+                raise HTTPException(
+                    status_code=400,
+                    detail="each panel needs an id of at most "
+                    f"{_CURVE_PANEL_ID_MAX_LEN} characters and a finite tilt_deg",
+                )
         record = CurveRecord(
             captured_at=now_utc(),
             label=body.label,
@@ -1496,6 +1666,10 @@ def create_app(
 
     @app.patch("/api/panels/{panel_id}")
     def patch_panel(panel_id: str, body: _PatchPanelRequest) -> dict:
+        with patch_lock:
+            return _patch_panel(panel_id, body)
+
+    def _patch_panel(panel_id: str, body: _PatchPanelRequest) -> dict:
         """Partial update: only the fields given in the body change.
         Written through `panel_library.update`, which replaces the file
         atomically (temp file + `os.replace`) - editing a panel model
@@ -1685,6 +1859,10 @@ def create_app(
 
     @app.patch("/api/sessions/{session_id}")
     def patch_session(session_id: str, body: _PatchSessionRequest) -> dict:
+        with patch_lock:
+            return _patch_session(session_id, body)
+
+    def _patch_session(session_id: str, body: _PatchSessionRequest) -> dict:
         """Partial update: only the fields given in the body change.
         `updated_at` is always stamped here, server-side - never taken
         from the request, so a client can't backdate or freeze it.
@@ -1885,7 +2063,9 @@ def create_app(
         # up as active until the poll thread dispatches it and a progress
         # frame confirms it - a run accepted in that gap would still
         # collide with it.
-        if not body.simulated and (not commands.empty() or cache.snapshot().active):
+        if not body.simulated and (
+            not commands.empty() or cache.snapshot().active or cache.sweep_pending()
+        ):
             raise HTTPException(
                 status_code=409,
                 detail="a curve-tracer sweep is in progress - wait for it to finish "
@@ -2005,6 +2185,10 @@ def create_app(
         i_max = min(body.i_max, _DEFAULT_I_MAX)
         v_out_max = min(body.v_out_max, _DEFAULT_V_OUT_MAX)
         label = body.label.strip() or spec.label
+        if len(label) > _RUN_LABEL_MAX_LEN:
+            raise HTTPException(
+                status_code=400, detail=f"label must be at most {_RUN_LABEL_MAX_LEN} characters"
+            )
 
         if not run_cache.try_start(
             algorithm=spec.label,
@@ -2137,6 +2321,7 @@ def create_app(
     @app.post("/api/start-sweep", status_code=204, response_class=Response)
     def post_start_sweep() -> Response:
         _refuse_if_hardware_run_in_progress()
+        cache.mark_sweep_pending()
         commands.put_nowait("start_sweep")
         return Response(status_code=204)
 
@@ -2146,6 +2331,7 @@ def create_app(
         whole loop be worked on with no panel and no lamp. Distinct from
         the server's own --demo flag, which never touches the board."""
         _refuse_if_hardware_run_in_progress()
+        cache.mark_sweep_pending()
         commands.put_nowait("demo_sweep_bright" if bright else "demo_sweep_dim")
         return Response(status_code=204)
 
@@ -2164,7 +2350,7 @@ def create_app(
         payload = {k: v for k, v in req.model_dump().items() if v is not None}
         if not payload:
             return {"status": "ok", "message": "No parameters provided"}
-        config_cache.update(payload)
+        # The cache changes in the poll thread, once the board took it.
         commands.put_nowait(("config", payload))
         return {"status": "ok", "applied": payload}
 
@@ -2189,9 +2375,28 @@ def main() -> None:
     import uvicorn
 
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--host", default="0.0.0.0")
+    parser.add_argument(
+        "--host",
+        default="0.0.0.0",
+        help="address to listen on. 0.0.0.0 (default) lets other machines on the "
+        "network open the workbench - the normal setup for the bench Pi. Use "
+        "127.0.0.1 to reach it only from this machine",
+    )
+    parser.add_argument(
+        "--allowed-host",
+        action="append",
+        default=[],
+        metavar="NAME",
+        help="extra host name a browser may use to reach the server (repeatable). "
+        "IP addresses, localhost and this machine's own name always work",
+    )
     parser.add_argument("--port", type=int, default=8000)
-    parser.add_argument("--spi-bus", type=int, default=_DEFAULT_SPI_BUS, help=f"SPI bus (default: {_DEFAULT_SPI_BUS})")
+    parser.add_argument(
+        "--spi-bus",
+        type=int,
+        default=default_spi_bus(),
+        help="SPI bus (default: 1 on a BeagleBone Black, else 0)",
+    )
     parser.add_argument("--spi-device", type=int, default=0)
     parser.add_argument("--spi-speed-hz", type=int, default=200_000)
     parser.add_argument(
@@ -2252,6 +2457,7 @@ def main() -> None:
         run_cache=run_cache,
         run_requests=run_requests,
         stop_event=stop_event,
+        allowed_hosts=_default_allowed_hosts(args.allowed_host),
     )
     mode = " [DEMO MODE - simulated sweeps, no hardware]" if args.demo else ""
     print(f"Serving curve-tracer UI on http://{args.host}:{args.port}/{mode} (Ctrl+C to stop)")

@@ -9,7 +9,7 @@ MD013:
   code_blocks: false
   tables: false
 
-MD033: false   # inline HTML (used in PLAN.md badges / details blocks)
+MD033: false   # inline HTML (README.md centered header and badges)
 
 MD025: false   # pandoc academic papers use multiple # sections (maps to \section{})
 

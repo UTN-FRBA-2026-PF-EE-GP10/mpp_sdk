@@ -170,7 +170,7 @@ physics the algorithm sees.
 ## On the use of AI
 
 The project uses LLM assistance as a deliberate productivity choice,
-under an explicit policy (disclosed in `PLAN.md`): every change is
+under an explicit policy (see `README.md`, "On the use of AI"): every change is
 human-reviewed and tested, and the human author stays accountable for
 correctness. The framework and scaffolding are AI-leveraged so the
 team's limited hours go to the original contributions: hardware design,

@@ -8,12 +8,10 @@ from pathlib import Path
 import pytest
 
 from scripts.sepic_step_response import (
-    MAX_DUTY,
     Limits,
     Poller,
     Sample,
     SimulatedSepicStepSource,
-    StepAborted,
     StepMetrics,
     calculate_step_metrics,
     export_csv,
@@ -94,8 +92,7 @@ def test_calculate_step_metrics_unsettled_returns_none():
     window_s = 0.1
     # Samples ramp continuously without settling
     samples = [
-        Sample(timestamp=0.01 * i, duty=0.2, v_in=12.0, i_in=0.1, v_out=float(i))
-        for i in range(11)
+        Sample(timestamp=0.01 * i, duty=0.2, v_in=12.0, i_in=0.1, v_out=float(i)) for i in range(11)
     ]
     metrics = calculate_step_metrics(
         samples,
@@ -249,6 +246,5 @@ def test_export_csv(tmp_path: Path):
 
 def test_run_step_response_requires_two_steps():
     src = FakeSepicHardware()
-    with Poller(src, LIMITS) as poller:
-        with pytest.raises(ValueError, match="At least 2"):
-            run_step_response_test(poller, [0.1])
+    with Poller(src, LIMITS) as poller, pytest.raises(ValueError, match="At least 2"):
+        run_step_response_test(poller, [0.1])

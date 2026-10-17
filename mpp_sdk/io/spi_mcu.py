@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
+import math
 import time
 from collections.abc import Sequence
 from dataclasses import dataclass
 
 from .base import SignalSource
+from .board import (
+    CUTOFF_I_MAX_CEILING_MA,
+    CUTOFF_V_MAX_CEILING_MV,
+    PSU_VOUT_TARGET_CEILING_MV,
+)
 
 # spidev is Linux-only and lives in the optional [hardware] extra.
 try:
@@ -86,6 +92,14 @@ _BULK_READ_ARM_DELAY_S = 0.002
 # timing out between our frames instead of exchanging with us. Kept a
 # little under 100 ms for margin.
 _MAX_POLL_INTERVAL_S = 0.08
+
+# read() after a duty change: the firmware waits 2 ms, then up to 80 ms for
+# Vin to settle, then takes 25 samples. So the first poll waits a little,
+# and the timeout covers the worst case with margin.
+_SETTLE_FIRST_POLL_S = 0.015
+_SETTLE_POLL_INTERVAL_S = 0.004
+_SETTLE_TIMEOUT_S = 0.150
+_SETTLE_MAX_BAD_FRAMES = 20
 
 
 def crc8(data: Sequence[int]) -> int:
@@ -213,9 +227,10 @@ class SpiMcuSource(SignalSource):
         initial_duty:
             Duty cycle sent on the first ``write()`` (0.0 - 1.0).
         settling_time_s:
-            Maximum settling observation timeout in seconds (default: 0.03 s / 30 ms).
-            When > 0, read() waits for RP2040 hardware settling verification.
-            When <= 0, read() returns immediate telemetry without waiting.
+            When > 0 (default), read() after a duty change waits for the
+            firmware's settled measurement, up to ``_SETTLE_TIMEOUT_S``, and
+            returns NaN if none arrives. When <= 0, read() returns the
+            telemetry of the last frame without waiting.
         oversample_count:
             Deprecated parameter retained for backwards compatibility.
         """
@@ -345,37 +360,55 @@ class SpiMcuSource(SignalSource):
         if not self._has_read and not self._duty_changed:
             raise RuntimeError("SpiMcuSource.read() called before the first write()")
 
-        # If duty changed and settling requested, wait reaction delay and ask for settled measurement
         if self._duty_changed and self._settling_time_s > 0:
-            elapsed = time.monotonic() - getattr(self, "_last_write_time", 0.0)
-            if elapsed < 0.015:
-                time.sleep(0.015 - elapsed)
+            elapsed = time.monotonic() - self._last_write_time
+            if elapsed < _SETTLE_FIRST_POLL_S:
+                time.sleep(_SETTLE_FIRST_POLL_S - elapsed)
 
-            self._settled = False
-            start_t = time.monotonic()
-            while not self._settled:
-                self._send_cmd(cmd=_CMD_READ_MEASUREMENT)
+            deadline = time.monotonic() + _SETTLE_TIMEOUT_S
+            settled = False
+            while True:
+                # Only a frame with the settled flag carries the new
+                # measurement. The firmware zeroes its telemetry on a duty
+                # change, so an unsettled frame reads as 0 V / 0 A.
+                self._settled = False
+                v_raw, i_raw, vout_raw, temp_raw, _ack = self._transact(
+                    self._duty, cmd=_CMD_READ_MEASUREMENT
+                )
                 if self._settled:
+                    self._apply_telemetry(v_raw, i_raw, vout_raw, temp_raw)
+                    settled = True
                     break
-                if self._consecutive_bad_frames >= 20:
+                if self._consecutive_bad_frames >= _SETTLE_MAX_BAD_FRAMES:
                     break
-                if time.monotonic() - start_t > 0.150:  # 150 ms timeout
+                if time.monotonic() > deadline:
                     break
-                time.sleep(0.004)
-            self._duty_changed = False
+                time.sleep(_SETTLE_POLL_INTERVAL_S)
+            if settled:
+                self._duty_changed = False
+            else:
+                # NaN, not the last value: the caller must see that this
+                # step has no measurement (run_control_loop aborts on a
+                # sustained invalid reading). _duty_changed stays set, so
+                # the next read() asks again.
+                self._v = math.nan
+                self._i = math.nan
 
         return self._v, self._i
 
     def write(self, duty_cycle: float) -> None:
         """Send *duty_cycle* to the Pico.
 
-        Flow:
-          1. Send commanded duty cycle over SPI.
-          2. The RP2040 firmware sets PWM duty, clears old measurements, waits 2ms delay,
-             evaluates Vin settling drift, and filters 25 samples.
-          3. If duty changed (or first write), mark settling pending so read()
-             queries the fresh settled measurement from the Pico.
+        The duty cycle is clamped to [0.0, 1.0]. A value that is not a
+        finite number is sent as 0.0: ``min(1.0, nan)`` is 1.0, so a plain
+        clamp would turn a NaN into full duty.
+
+        The firmware applies the duty, clears its old measurement, waits for
+        the converter to settle and takes one filtered measurement. If the
+        duty changed, the next ``read()`` asks for that measurement.
         """
+        if not math.isfinite(duty_cycle):
+            duty_cycle = 0.0
         new_duty = max(0.0, min(1.0, duty_cycle))
         duty_changed = abs(new_duty - self._duty) > 1e-4
         self._duty = new_duty
@@ -557,9 +590,13 @@ class SpiMcuSource(SignalSource):
         vin_key = vin_range.lower() if isinstance(vin_range, str) else vin_range
         vout_key = vout_range.lower() if isinstance(vout_range, str) else vout_range
         if vin_key not in _DIVIDER_RANGE_MAP:
-            raise ValueError(f"Invalid vin_range '{vin_range}'. Expected 'full', 'mid', 'low', or 0, 1, 2")
+            raise ValueError(
+                f"Invalid vin_range '{vin_range}'. Expected 'full', 'mid', 'low', or 0, 1, 2"
+            )
         if vout_key not in _DIVIDER_RANGE_MAP:
-            raise ValueError(f"Invalid vout_range '{vout_range}'. Expected 'full', 'mid', 'low', or 0, 1, 2")
+            raise ValueError(
+                f"Invalid vout_range '{vout_range}'. Expected 'full', 'mid', 'low', or 0, 1, 2"
+            )
 
         vin_val = _DIVIDER_RANGE_MAP[vin_key]
         vout_val = _DIVIDER_RANGE_MAP[vout_key]
@@ -604,21 +641,24 @@ class SpiMcuSource(SignalSource):
         Parameters
         ----------
         i_max_ma:
-            Maximum allowed inductor/panel current in mA (0..65535). Default: 1000 mA (1.0 A).
-            If None, current cutoff is left unchanged.
+            Maximum panel current in mA, 1..``CUTOFF_I_MAX_CEILING_MA``.
+            Default: 1000 mA (1.0 A). If None, it is left unchanged.
         v_max_mv:
-            Maximum allowed terminal voltage in mV (0..65535). Default: 40000 mV (40 V).
-            If None, voltage cutoff is left unchanged.
+            Maximum panel or output voltage in mV, 1..``CUTOFF_V_MAX_CEILING_MV``.
+            Default: 40000 mV (40 V). If None, it is left unchanged.
+
+        The firmware applies the same ceilings, so a host can only make the
+        cutoffs tighter, never turn them off.
         """
         if i_max_ma is not None:
-            if not (0 <= i_max_ma <= 65535):
-                raise ValueError(f"i_max_ma={i_max_ma} out of range 0..65535")
+            if not (1 <= i_max_ma <= CUTOFF_I_MAX_CEILING_MA):
+                raise ValueError(f"i_max_ma={i_max_ma} out of range 1..{CUTOFF_I_MAX_CEILING_MA}")
             self._cutoff_i_max_ma = i_max_ma
             self._send_config_cmd(_CMD_SET_CONFIG_CUTOFF_I, i_max_ma)
 
         if v_max_mv is not None:
-            if not (0 <= v_max_mv <= 65535):
-                raise ValueError(f"v_max_mv={v_max_mv} out of range 0..65535")
+            if not (1 <= v_max_mv <= CUTOFF_V_MAX_CEILING_MV):
+                raise ValueError(f"v_max_mv={v_max_mv} out of range 1..{CUTOFF_V_MAX_CEILING_MV}")
             self._cutoff_v_max_mv = v_max_mv
             self._send_config_cmd(_CMD_SET_CONFIG_CUTOFF_V, v_max_mv)
 
@@ -632,10 +672,13 @@ class SpiMcuSource(SignalSource):
         Parameters
         ----------
         vout_target_mv:
-            Target voltage in mV (0..65535). Default: 5000 mV (5.0 V).
+            Target voltage in mV, 0..``PSU_VOUT_TARGET_CEILING_MV``.
+            Default: 5000 mV (5.0 V).
         """
-        if not (0 <= vout_target_mv <= 65535):
-            raise ValueError(f"vout_target_mv={vout_target_mv} out of range 0..65535")
+        if not (0 <= vout_target_mv <= PSU_VOUT_TARGET_CEILING_MV):
+            raise ValueError(
+                f"vout_target_mv={vout_target_mv} out of range 0..{PSU_VOUT_TARGET_CEILING_MV}"
+            )
         self._psu_vout_target_mv = vout_target_mv
         self._send_config_cmd(_CMD_SET_CONFIG_PSU_TARGET, vout_target_mv)
 
@@ -647,7 +690,10 @@ class SpiMcuSource(SignalSource):
         fixed_duty:
             Duty cycle (0.0..1.0). Default: 0.5 (50%).
         """
-        clamped = max(0.0, min(1.0, float(fixed_duty)))
+        fixed_duty = float(fixed_duty)
+        if not math.isfinite(fixed_duty):
+            fixed_duty = 0.0
+        clamped = max(0.0, min(1.0, fixed_duty))
         self._psu_fixed_duty = clamped
         duty_u16 = round(clamped * 65535)
         self._send_config_cmd(_CMD_SET_CONFIG_FIXED_DUTY, duty_u16)
