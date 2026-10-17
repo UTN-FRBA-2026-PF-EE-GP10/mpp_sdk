@@ -20,6 +20,10 @@
   at 90, 60 and 30 degrees) and one P&O run, two panels in series into a
   10 Ohm load. Scrubbed copies in the curve and run record format, with a
   report of what failed (corrupted readings, run aborts, tracking).
+- `data/bench/two_panels_50R_20261017/` - two sweeps (panel B at 90 and 45
+  degrees), 15 closed-loop runs and the filled session, two panels in
+  series into a 50 Ohm load, with settled per-step measurements. Compares
+  the five algorithms on one and two peaks, and P&O by start duty.
 - `data/curves/` - captured curve-tracer sweeps, one JSON file per sweep,
   written by `mpp_sdk.curves.library.save`. Git-ignored: this is operator
   measurement data, not repo content. Each file holds `schema`,

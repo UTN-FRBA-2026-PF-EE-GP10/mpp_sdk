@@ -1,0 +1,291 @@
+{
+  "schema": 1,
+  "id": "session",
+  "title": "Full setup, B at 90 and 45 degrees, 50 Ohm load",
+  "template_id": "full-setup-characterization",
+  "template_version": 5,
+  "setup": "full",
+  "created_at": "2026-10-17T00:00:00+00:00",
+  "updated_at": "2026-10-17T00:00:00+00:00",
+  "fields": {
+    "panel_a": "Hissuma PSF10MONO, 10 W",
+    "panel_a_model_voc": "",
+    "panel_a_model_isc": "",
+    "panel_a_model_vmp": "",
+    "panel_a_model_imp": "",
+    "panel_b": "Hissuma PSF10MONO, 10 W",
+    "panel_b_model_voc": "",
+    "panel_b_model_isc": "",
+    "panel_b_model_vmp": "",
+    "panel_b_model_imp": "",
+    "light_source": "Halogen lamp, fixed setting",
+    "distance": "",
+    "load_resistor": "50 Ohm, rated 50 W or more",
+    "adc_range": "Mid",
+    "supply_used": "",
+    "firmware_commit": "3129c01 (Python side 1fa6bfc)",
+    "operator": ""
+  },
+  "steps": [
+    {
+      "id": "adc-range-mid-and-recalibration",
+      "section": "Before energizing",
+      "title": "ADC range and check",
+      "instructions": "Switch the ADC range to Mid: two panels in series reach roughly 34-44 V, past the Low range. Check the ADC reading against a meter (see docs/hardware_v1/calibration.md, \"Changing the ADC range\"). Pass: the range is Mid and the check agrees with the meter within about 1%.",
+      "kind": "check",
+      "status": "done",
+      "value": null,
+      "unit": null,
+      "notes": "Mid jumpers, Mid set in the Pico Configuration tab. Meter cross-check not recorded.",
+      "curve_ids": [],
+      "run_ids": [],
+      "repeats": 1
+    },
+    {
+      "id": "firmware-config",
+      "section": "Before energizing",
+      "title": "Firmware configuration",
+      "instructions": "Check the firmware is built as MppTracker, with ADC_DIVIDER_RANGE = Mid and MAX31865_ENABLED = false. Check the boot log shows the range and T=n/a. Pass: both match.",
+      "kind": "check",
+      "status": "done",
+      "value": null,
+      "unit": null,
+      "notes": "MppTracker, MAX31865 off. Divider range is now set over SPI, not a build constant.",
+      "curve_ids": [],
+      "run_ids": [],
+      "repeats": 1
+    },
+    {
+      "id": "bypass-diode-check",
+      "section": "Before energizing",
+      "title": "Bypass diode check",
+      "instructions": "Check each panel's bypass diode is present and correctly oriented. With two panels in series, a shaded panel without a working bypass diode can be driven into reverse breakdown. Pass: both diodes check out.",
+      "kind": "check",
+      "status": "todo",
+      "value": null,
+      "unit": null,
+      "notes": "",
+      "curve_ids": [],
+      "run_ids": [],
+      "repeats": 1
+    },
+    {
+      "id": "load-on-output",
+      "section": "Before energizing",
+      "title": "Load on the output",
+      "instructions": "Connect two 10 Ohm, 10 W resistors in series (20 Ohm total) to the converter output on J4. Pass: the load is connected and rated for the expected power.",
+      "kind": "check",
+      "status": "done",
+      "value": null,
+      "unit": null,
+      "notes": "50 Ohm, rated 50 W or more, instead of the template's 20 Ohm.",
+      "curve_ids": [],
+      "run_ids": [],
+      "repeats": 1
+    },
+    {
+      "id": "full-mode-pico-connected",
+      "section": "Before energizing",
+      "title": "Workbench mode and connection",
+      "instructions": "Check the workbench is in Full mode. Check the PICO connected pill is shown. Pass: both are true.",
+      "kind": "check",
+      "status": "done",
+      "value": null,
+      "unit": null,
+      "notes": "",
+      "curve_ids": [],
+      "run_ids": [],
+      "repeats": 1
+    },
+    {
+      "id": "run-config-limits",
+      "section": "Link and limits",
+      "title": "Run config limits",
+      "instructions": "Open the run config and check it shows v_max 40 V, i_max 0.9 A, v_out_max 25 V. Pass: all three match.",
+      "kind": "check",
+      "status": "done",
+      "value": null,
+      "unit": null,
+      "notes": "Server defaults: 40 V, 0.9 A, 25 V.",
+      "curve_ids": [],
+      "run_ids": [],
+      "repeats": 1
+    },
+    {
+      "id": "link-waiting-for-sweep",
+      "section": "Link and limits",
+      "title": "Link status before a sweep",
+      "instructions": "With nothing running, open the connection menu (top right of the workbench) and read the raw link line. Pass: it reads \"waiting for sweep\".",
+      "kind": "check",
+      "status": "done",
+      "value": null,
+      "unit": null,
+      "notes": "",
+      "curve_ids": [],
+      "run_ids": [],
+      "repeats": 1
+    },
+    {
+      "id": "baseline-curve",
+      "section": "Light and curve",
+      "title": "Baseline curve",
+      "instructions": "Save 3 sweeps with both panels at 90 degrees, one after the other, as the baseline curves. The session shows the median and spread of Voc, Isc and P at the MPP. Pass: the 3 curves are saved and linked here.",
+      "kind": "curve",
+      "status": "done",
+      "value": null,
+      "unit": null,
+      "notes": "One sweep, not three. MPP 7.69 W at 29.2 V / 0.263 A. One 10 s run per algorithm on it, start duty 0.45 (S&T and PSO scan from their own seed): all held 100 % of the curve MPP in the last 30 % of the run.",
+      "curve_ids": [
+        "curve_B90"
+      ],
+      "run_ids": [
+        "run_po_B90",
+        "run_incond_B90",
+        "run_fuzzy_B90",
+        "run_scan_track_B90",
+        "run_pso_B90"
+      ],
+      "repeats": 3
+    },
+    {
+      "id": "tilt-curve-70",
+      "section": "Light and curve",
+      "title": "Curve at B = 70 degrees",
+      "instructions": "Tilt panel B to 70 degrees, panel A stays at 90. Save 3 sweeps, one after the other. Pass: the 3 curves are saved and linked here.",
+      "kind": "curve",
+      "status": "skipped",
+      "value": null,
+      "unit": null,
+      "notes": "Not measured this session.",
+      "curve_ids": [],
+      "run_ids": [],
+      "repeats": 3
+    },
+    {
+      "id": "tilt-curve-60",
+      "section": "Light and curve",
+      "title": "Curve at B = 60 degrees",
+      "instructions": "Tilt panel B to 60 degrees, panel A stays at 90. Save 3 sweeps, one after the other. Pass: the 3 curves are saved and linked here.",
+      "kind": "curve",
+      "status": "skipped",
+      "value": null,
+      "unit": null,
+      "notes": "Not measured this session.",
+      "curve_ids": [],
+      "run_ids": [],
+      "repeats": 3
+    },
+    {
+      "id": "tilt-curve-45",
+      "section": "Light and curve",
+      "title": "Curve at B = 45 degrees",
+      "instructions": "Tilt panel B to 45 degrees, panel A stays at 90. Save 3 sweeps, one after the other. Pass: the 3 curves are saved and linked here.",
+      "kind": "curve",
+      "status": "done",
+      "value": null,
+      "unit": null,
+      "notes": "One sweep. Two peaks: 4.03 W at 32.2 V (high-voltage peak) and 3.80 W at 14.1 V. The 20-point sweep has no point between 32.2 V and 16.0 V, so it underestimates the high-voltage peak: runs held 4.29 W there.",
+      "curve_ids": [
+        "curve_B45"
+      ],
+      "run_ids": [],
+      "repeats": 3
+    },
+    {
+      "id": "tilt-curve-30",
+      "section": "Light and curve",
+      "title": "Curve at B = 30 degrees",
+      "instructions": "Tilt panel B to 30 degrees, panel A stays at 90. Save 3 sweeps, one after the other. Pass: the 3 curves are saved and linked here, and they show two local maxima (partial shading).",
+      "kind": "curve",
+      "status": "skipped",
+      "value": null,
+      "unit": null,
+      "notes": "Not measured. The runs below use the B = 45 degree curve, which already shows two peaks.",
+      "curve_ids": [],
+      "run_ids": [],
+      "repeats": 3
+    },
+    {
+      "id": "po-run-two-peak",
+      "section": "Runs (on the B = 30 degree curve)",
+      "title": "P&O run",
+      "instructions": "Start a Perturb & Observe run with the B = 30 degree curve as reference, 10 s duration, starting duty 0.5. Pass: recorded and linked here, noting which peak it settles on. Do it 3 times and link every run: the session shows the median and spread of the results.",
+      "kind": "run",
+      "status": "done",
+      "value": null,
+      "unit": null,
+      "notes": "On the B = 45 curve, start duty 0.50. P&O (30 s), InCond and Fuzzy (10 s) all settled on the low-voltage peak: 3.72-3.77 W, 92-94 % of the curve MPP, duty 0.44-0.50.",
+      "curve_ids": [],
+      "run_ids": [
+        "run_po_B45_d050_30s",
+        "run_incond_B45",
+        "run_fuzzy_B45"
+      ],
+      "repeats": 3
+    },
+    {
+      "id": "scan-and-track-run-two-peak",
+      "section": "Runs (on the B = 30 degree curve)",
+      "title": "Scan & Track run",
+      "instructions": "Start a Scan & Track run with the same settings (B = 30 degree curve, 10 s, starting duty 0.5). Pass: recorded and linked here, noting which peak it settles on. Do it 3 times and link every run: the session shows the median and spread of the results.",
+      "kind": "run",
+      "status": "done",
+      "value": null,
+      "unit": null,
+      "notes": "Found the high-voltage (global) peak: 4.29 W, 106 % of the sweep MPP.",
+      "curve_ids": [],
+      "run_ids": [
+        "run_scan_track_B45"
+      ],
+      "repeats": 3
+    },
+    {
+      "id": "pso-run-two-peak",
+      "section": "Runs (on the B = 30 degree curve)",
+      "title": "Particle Swarm run",
+      "instructions": "Start a Particle Swarm run with the same settings (B = 30 degree curve, 10 s, starting duty 0.5). Pass: recorded and linked here, noting which peak it settles on. Do it 3 times and link every run: the session shows the median and spread of the results.",
+      "kind": "run",
+      "status": "done",
+      "value": null,
+      "unit": null,
+      "notes": "Settled on the low-voltage peak in both runs (10 s and 20 s): 3.79-3.81 W, 94-95 %.",
+      "curve_ids": [],
+      "run_ids": [
+        "run_pso_B45",
+        "run_pso_B45_20s"
+      ],
+      "repeats": 3
+    },
+    {
+      "id": "seed-test-lower-peak",
+      "section": "Runs (on the B = 30 degree curve)",
+      "title": "Seed test near the lower peak",
+      "instructions": "Start a P&O run seeded at a starting duty near the lower peak of the B = 30 degree curve. Pass: recorded and linked here, noting which peak it settles on. Do it 3 times and link every run: the session shows the median and spread of the results.",
+      "kind": "run",
+      "status": "done",
+      "value": null,
+      "unit": null,
+      "notes": "P&O, 10 s each, by start duty: 0.20 -> 4.27 W, 0.25 -> 4.29 W, 0.35 -> 4.29 W (high-voltage peak, 106 %); 0.45 -> 3.76 W (low-voltage peak, 93 %). P&O stays on the peak nearest its start duty.",
+      "curve_ids": [],
+      "run_ids": [
+        "run_po_B45_d020",
+        "run_po_B45_d025",
+        "run_po_B45_d035",
+        "run_po_B45_d045"
+      ],
+      "repeats": 3
+    }
+  ],
+  "open_questions": [
+    {
+      "id": "temperature",
+      "text": "Panel temperature is not measured (no PT100 fitted; the MAX31865 is off). Voc falls with temperature, so curves taken at different times are not strictly comparable. How to record it: a contact thermometer on the panel back, an IR thermometer, or a fitted PT100?",
+      "answer": ""
+    },
+    {
+      "id": "unexpected-behaviour",
+      "text": "Was there any unexpected behaviour during the session?",
+      "answer": "Early runs logged 0 V / 0 A on held duties (fixed in #133). With the debug probe attached the whole time, about 1 in 10 Pi frames failed the CRC and the duty did not follow the algorithm; detaching the probe fixed it (firmware hardening in #134, not yet flashed). Runs before the baseline curve are not part of this session."
+    }
+  ]
+}
