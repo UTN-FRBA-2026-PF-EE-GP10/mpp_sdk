@@ -593,3 +593,17 @@ def test_shipped_defaults_load_from_a_built_wheel(tmp_path):
     )
     assert "hissuma-psf10mono" in result.stdout
     assert "luxen-ln-10p" in result.stdout
+
+
+def test_load_takes_the_id_from_the_file_name_not_the_body(tmp_path):
+    """Same rule as sessions: `update` writes to `{id}.json`, so a copied
+    file must load under its own file name, or an update would overwrite
+    the original."""
+    _saved, path = panel_library.save(_record(), tmp_path)
+    copy = tmp_path / "copied-panel.json"
+    copy.write_text(path.read_text())
+    loaded = panel_library.load(copy)
+    assert loaded.id == "copied-panel"
+    panel_library.update(replace(loaded, name="Edited copy"), directory=tmp_path)
+    assert panel_library.load(copy).name == "Edited copy"
+    assert panel_library.load(path).name == _record().name

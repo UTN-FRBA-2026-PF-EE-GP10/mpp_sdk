@@ -334,9 +334,11 @@ over the second, beside the INA229: one calibration point per line. See
 
   | `AdcDividerRange` | Jumpers shorted | Divider | Full scale |
   |-------------------|------------------|---------|------------------------------|
-  | `Full` (default)  | 0 (all 3x 75k in series) | 235k/10k | ~75.6 V |
+  | `Full` (no jumper)  | 0 (all 3x 75k in series) | 235k/10k | ~75.6 V |
   | `Mid`              | 1 (2x 75k remain)        | 160k/10k | ~51.5 V |
   | `Low`              | 2 (1x 75k remains)       | 85k/10k  | ~27.3 V |
+
+  `main.rs` ships set to `Low`. A board with no jumper fitted is `Full`.
 
 - **After changing the range**, the ADC gain/zero fit above still applies -
   it describes the RP2040's own ADC, not the divider. What changing the
@@ -532,8 +534,8 @@ Two independent LEDs answer two different questions:
 | 11  | GPIO8   | GPIO8           | General purpose               |
 | 12  | GPIO9   | GPIO9           | General purpose               |
 | 14  | GPIO10  | SPI1_SCK        | SPI1 clock                    |
-| 15  | GPIO11  | SPI1_TX         | SPI1 MOSI                     |
-| 16  | GPIO12  | SPI1_RX         | SPI1 MISO                     |
+| 15  | GPIO11  | SPI1_TX         | SPI1 MISO (Pico drives)       |
+| 16  | GPIO12  | SPI1_RX         | SPI1 MOSI (Pi drives)         |
 | 17  | GPIO13  | SPI1_CS         | SPI1 chip select              |
 | 19  | GPIO14  | Blinky          | External heartbeat LED, ~1 Hz |
 | 20  | GPIO15  | PWM_Gate        | SEPIC gate PWM, 100 kHz (via 10R + 3.3nF) |

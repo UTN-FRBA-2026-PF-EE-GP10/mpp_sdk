@@ -6,14 +6,17 @@ Read this before any structural change.
 ## What this project is
 
 `mpp-sdk` is a Python SDK for MPPT (Maximum Power Point Tracking) algorithms
-for photovoltaic systems. The same controller code runs in simulation today.
-It will run on a real **SEPIC** converter later, driven by a **Raspberry Pi
-5 and an RP2040 (Pi Pico)** over SPI. The RP2040 (firmware in **Rust**)
+for photovoltaic systems. The same controller code runs in simulation and
+on a real **SEPIC** converter, driven by a **Raspberry Pi 5 and an RP2040
+(Pi Pico)** over SPI. The RP2040 (firmware in **Rust**)
 drives the power stage. It is the final deployment target for the chosen
 algorithm - the thesis's headline deliverable.
 
 See `docs/rationale.md` for the design reasoning, `docs/general_information.md`
-for the system overview and PV theory, and `PLAN.md` for the roadmap.
+for the system overview and PV theory, and the
+[project tracker issue](https://github.com/UTN-FRBA-2026-PF-EE-GP10/mpp_sdk/issues/128)
+for open work. Track new work there, as a box in that issue or as a linked
+issue - not as plan files in the repo.
 
 ## Architectural pillars
 
@@ -27,6 +30,8 @@ mpp_sdk/
 ├── io/             # Hardware-abstraction     (SignalSource ABC)
 ├── curves/         # Captured I-V curve library (CurveRecord, feeds MeasuredPanel)
 ├── runs/           # Captured closed-loop MPPT runs (RunRecord)
+├── sessions/       # Bench session checklists (SessionRecord, templates)
+├── panels/         # Panel model library (label values)
 ├── metrics.py      # Comparison metrics
 └── visualization.py
 ```
@@ -122,7 +127,7 @@ this rule - only the algorithm leaves the Pi.
 - Tests use `pytest`, under `tests/` - one file per module, exercising the
   public API in isolation. pvlib-dependent tests call `importorskip` first.
 
-## Hardware target (future)
+## Hardware target
 
 **Raspberry Pi 5 and RP2040.** The Pi 5 hosts the SDK, the harness, and (in
 HIL mode) the algorithm. It is not responsible for hard-real-time signals.
@@ -131,13 +136,14 @@ for `(V, I)`, hardware PWM for the SEPIC switch, SPI-slave to the Pi. It
 isolates the fast-switching side and is also the deployment target. See
 `firmware/pipico_board/README.md` for build, flash, and calibration steps.
 
-Two phases (see `PLAN.md`, Phase 5):
+Two phases:
 
-1. **HIL bringup (in progress).** `SpiMcuSource(SignalSource)` (shipped,
-   under `mpp_sdk/io/`, gated by `mpp-sdk[hardware]`) wraps the SPI
-   protocol. The firmware runs the curve-tracer sweep and the SEPIC drive;
-   the MPPT algorithm still runs on the Pi. A closed-loop MPPT run on the
-   real converter has not happened yet.
+1. **HIL (in progress).** `SpiMcuSource(SignalSource)` (shipped, under
+   `mpp_sdk/io/`, gated by `mpp-sdk[hardware]`) wraps the SPI protocol.
+   The firmware runs the curve-tracer sweep and the SEPIC drive; the MPPT
+   algorithm runs on the Pi. Closed-loop runs on the real converter work
+   for P&O. A valid comparison of all algorithms on hardware is still
+   open.
 2. **Deployed mode.** The validated algorithm is ported to RP2040 firmware
    and cross-checked against the Python reference, on recorded `(V, I, D)`
    traces.

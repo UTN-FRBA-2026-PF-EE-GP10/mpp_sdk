@@ -24,7 +24,7 @@ running the mpp-sdk.
 > **You don't need to compile Linux.** BeagleBoard.org ships pre-built
 > Debian images — just download, flash, and boot.
 
-Go to **https://www.beagleboard.org/distros** and download:
+Go to **<https://www.beagleboard.org/distros>** and download:
 
 - **Debian 13 (Trixie) IoT** image for the AM335x (BeagleBone Black)
 - Pick the **IoT** (non-GUI) variant — you don't need a desktop, and it
@@ -65,7 +65,7 @@ Replace `/dev/sdX` with your actual SD card device (`lsblk` to find it).
 ```bash
 # The BBB creates a USB network interface at 192.168.7.2
 ssh debian@192.168.7.2
-# Default password: temppwd (check your image's release notes)
+# Default login: see your image's release notes
 ```
 
 ### Or via Ethernet
@@ -149,6 +149,7 @@ uv --version
 > (64-bit). Most Python packages have wheels for armhf, but some may need
 > to compile from source — `numpy` in particular might take a few minutes to
 > build. Install build dependencies just in case:
+>
 > ```bash
 > sudo apt install -y build-essential python3-dev libopenblas-dev gfortran
 > ```
@@ -227,7 +228,8 @@ P9.1 or P9.2  (GND) ────────────────► GND
 
 ### 7b — SWD flashing & debug wiring (optional but recommended)
 
-Allows flashing firmware remotely and reading high-speed `defmt` debug logs without touching the Pico or plugging in USB cables:
+Allows flashing firmware remotely and reading high-speed `defmt` debug logs without touching the
+Pico or plugging in USB cables:
 
 ```text
 BeagleBone Black (P9 header)          RP2040 Pico Debug Header / Pads
@@ -260,7 +262,9 @@ P9.1 or P9.2  (GND) ────────────────► GND   (m
 ```
 
 #### Pico Debug Pads Location
+
 On the Raspberry Pi Pico, the 3-pin debug header/pads are located at the bottom edge opposite the USB connector:
+
 ```text
   ┌────────────────────────────────────────────────────────┐
   │ [USB]                                     [SWCLK GND SWDIO] │
@@ -361,7 +365,8 @@ sudo systemctl start spi1-pins.service
 
 ## Step 11 — Remote firmware flashing via OpenOCD SWD
 
-With SWD connected (Step 7b), you can build the firmware on your PC (fast) and flash the Pico over the network via the BeagleBone Black — no need to unplug wires or hold the BOOTSEL button.
+With SWD connected (Step 7b), you can build the firmware on your PC (fast) and flash the Pico
+over the network via the BeagleBone Black — no need to unplug wires or hold the BOOTSEL button.
 
 ### 11a — Install OpenOCD on the BeagleBone Black
 
@@ -403,6 +408,7 @@ ssh debian@<bbb-ip> "sudo openocd -f /etc/openocd/rp2040_swd.cfg -c 'program /tm
 > [!TIP]
 > **One-step build & flash:** You can configure Cargo on your PC to flash automatically when you type `cargo run --release`.
 > In `firmware/pipico_board/.cargo/config.toml`, set:
+>
 > ```toml
 > [target.thumbv6m-none-eabi]
 > runner = "bash -c 'scp $0 debian@<bbb-ip>:/tmp/mpp-firmware.elf && ssh debian@<bbb-ip> \"sudo openocd -f /etc/openocd/rp2040_swd.cfg -c \\\"program /tmp/mpp-firmware.elf verify reset exit\\\"\"'"
@@ -412,7 +418,9 @@ ssh debian@<bbb-ip> "sudo openocd -f /etc/openocd/rp2040_swd.cfg -c 'program /tm
 
 ## Step 12 — Stream live debug logs (defmt over RTT)
 
-The firmware logs telemetry (voltage, current, temperature, ADC calibration) via `defmt` over SEGGER RTT using the SWD pins. You can stream these logs live to your PC over Ethernet without needing a serial/UART cable.
+The firmware logs telemetry (voltage, current, temperature, ADC calibration) via `defmt` over
+SEGGER RTT using the SWD pins. You can stream these logs live to your PC over Ethernet without
+needing a serial/UART cable.
 
 ### 12a — Setup host PC tools
 
@@ -445,8 +453,12 @@ EOF
 
 > [!IMPORTANT]
 > **Critical BBB CPU optimization:**
-> - `poll off` disables OpenOCD's continuous GDB core polling. Without this, constant SWD bitbang traffic wakes up BeagleBoard's `gpio-manager` system service, pegging the single CPU core at 100%.
-> - `rtt polling_interval 1000` polls the RTT buffer once per second instead of the default ~1 ms, which matches the ~1 Hz sensor logging rate and drops CPU usage down to ~10–15%.
+>
+> - `poll off` disables OpenOCD's continuous GDB core polling. Without this, constant SWD
+>   bitbang traffic wakes up BeagleBoard's `gpio-manager` system service, pegging the single CPU
+>   core at 100%.
+> - `rtt polling_interval 1000` polls the RTT buffer once per second instead of the default ~1
+>   ms, which matches the ~1 Hz sensor logging rate and drops CPU usage down to ~10–15%.
 
 ### 12c — Start the RTT server on the BBB
 
@@ -469,6 +481,7 @@ nc <bbb-ip> 9999 | defmt-print -e firmware/pipico_board/target/thumbv6m-none-eab
 ```
 
 You will see live decoded firmware logs in your terminal:
+
 ```text
 INFO  V=0 mV I=0 mA T=n/a
 INFO  ADC_PWR=0 mV ADC_VOUT=8 mV ADC_Input_Curr=3 mV (INA229 V=0 mV I=0 mA)

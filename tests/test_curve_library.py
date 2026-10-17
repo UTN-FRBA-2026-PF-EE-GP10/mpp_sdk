@@ -256,3 +256,17 @@ def test_a_session_id_that_is_not_a_string_or_null_is_rejected(tmp_path, bad):
 
     with pytest.raises(ValueError, match="session_id"):
         load(path)
+
+
+@pytest.mark.parametrize("text", ["[]", "null"])
+def test_load_rejects_a_file_that_is_not_a_json_object(tmp_path, text):
+    """One such file used to crash the whole listing with a 500."""
+    path = tmp_path / "bad.json"
+    path.write_text(text)
+    with pytest.raises(ValueError, match="expected a JSON object"):
+        load(path)
+
+
+def test_save_leaves_no_temp_file_behind(tmp_path):
+    save(_record(), tmp_path)
+    assert all(p.suffix == ".json" for p in tmp_path.iterdir())

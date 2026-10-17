@@ -41,6 +41,13 @@ pub static DUTY: AtomicU16 = AtomicU16::new(0); // 0 % initial - safe boot state
 // current unbounded. spi_slave_pio.rs guards frame integrity; this guards
 // the value it carries.
 const DUTY_MAX: u16 = 62258;
+// MppTracker mode drives the gate from the Pi, and the Pi's only view of
+// the converter is the INA229. If that sensor stops publishing (init never
+// finished, reads failing, device reset), the Pi keeps seeing the last V/I
+// and every Pi-side limit is blind. So the gate is held at 0 once no fresh
+// INA229 sample has landed for this many gate-loop ticks (~1 ms each).
+// sensors_task publishes about every 1-2 ms, so this is many missed reads.
+const INA_STALE_TICKS: u32 = 50;
 pub static MEAS_V_MV: AtomicU16 = AtomicU16::new(0);
 pub static MEAS_I_MA: AtomicU16 = AtomicU16::new(0);
 pub static MEAS_T_CC: AtomicI16 = AtomicI16::new(spi_slave_pio::TEMP_NOT_AVAILABLE_CC);
@@ -430,6 +437,8 @@ async fn main(spawner: Spawner) {
     let mut tick: u32 = 0;
     let mut psu_closed_loop = mode_power_supply::ClosedLoopState::new();
     let mut tracer_holding_panel = false;
+    let mut last_ina_count = mode_curve_tracer::INA_SAMPLE_COUNT.load(Ordering::Relaxed);
+    let mut ina_stale_ticks: u32 = 0;
 
     loop {
         // The gate must stay off both while a sweep is running
@@ -439,6 +448,23 @@ async fn main(spawner: Spawner) {
         // on the bleed path would switch into a disconnected input.
         let tracer_holds_panel =
             TRACER_ACTIVE.load(Ordering::Relaxed) || RELAY_ENGAGED.load(Ordering::Relaxed);
+        let ina_count = mode_curve_tracer::INA_SAMPLE_COUNT.load(Ordering::Relaxed);
+        if ina_count != last_ina_count {
+            last_ina_count = ina_count;
+            if ina_stale_ticks >= INA_STALE_TICKS {
+                defmt::info!("INA229 samples back, gate released");
+            }
+            ina_stale_ticks = 0;
+        } else {
+            ina_stale_ticks = ina_stale_ticks.saturating_add(1);
+            if ina_stale_ticks == INA_STALE_TICKS {
+                defmt::error!(
+                    "INA229 has not published a sample for {} ms, gate held at 0",
+                    INA_STALE_TICKS
+                );
+            }
+        }
+        let ina_stale = ina_stale_ticks >= INA_STALE_TICKS;
         let duty = if tracer_holds_panel {
             0
         } else {
@@ -455,6 +481,7 @@ async fn main(spawner: Spawner) {
             match FIRMWARE_MODE {
                 // Apply the Pi's commanded SPI duty directly, clamped as
                 // defense-in-depth against SEPIC inductor current runaway.
+                FirmwareMode::MppTracker if ina_stale => 0,
                 FirmwareMode::MppTracker => DUTY.load(Ordering::Relaxed).min(DUTY_MAX),
                 FirmwareMode::PowerSupply => mode_power_supply::compute_duty(&mut psu_closed_loop),
             }
