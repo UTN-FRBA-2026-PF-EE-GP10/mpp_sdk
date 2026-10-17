@@ -137,8 +137,11 @@ a loop that reattaches.
 Use narrow filters. A filter that passes every log line floods and is
 stopped.
 
-- Pico log: `probe-rs attach ... | grep -E "ERROR|panic|fault|booted|sweep aborted|[2-9] consecutive"`
-  in a `while true` loop with `sleep 5`.
+- **Do not keep the debug probe attached during sweeps or runs.** A
+  permanent `probe-rs attach` loop broke runs on the bench: the Pico
+  rejected about 1 in 10 Pi frames and the duty stopped following the
+  algorithm. Check the Pico only between runs, with one short attach:
+  `timeout 6 probe-rs attach ... | grep -E "ERROR|panic|fault|cutoff|stale|mismatch|[2-9] consecutive"`.
 - Pi: every 5 s print `vcgencmd get_throttled` and the run status and abort
   reason from `/api/runs/live`; print only when the text changes.
 

@@ -706,6 +706,34 @@ def test_write_without_settling_sends_a_plain_frame(spi_mcu_source):
     assert src.read() == (pytest.approx(17.0), pytest.approx(0.26))
 
 
+def test_read_resends_the_duty_once_when_no_settled_measurement_arrives(
+    spi_mcu_source, monkeypatch
+):
+    """A duty frame lost on the wire leaves the firmware on the old duty with
+    no new measurement. read() sends the duty again before it gives up."""
+    src = spi_mcu_source(settling_time_s=0.05)
+    _fast_settle_timeout(monkeypatch)
+    unsettled = _miso_frame(v_raw=0, i_raw=0, vout_raw=0, temp_raw=0, settled=0)
+    src._spi.next_rx = unsettled
+    src.write(0.42)
+    # Unsettled until the resend, then settled.
+    src._spi.responses = [unsettled] * 3
+    real_xfer = src._spi.xfer2
+
+    def xfer(tx):
+        if tx[3] == 0x01 and len(src._spi.sent) > 1:
+            src._spi.responses = [
+                unsettled,
+                _miso_frame(v_raw=17000, i_raw=260, vout_raw=0, temp_raw=0, settled=1),
+            ]
+        return real_xfer(tx)
+
+    src._spi.xfer2 = xfer
+    v, i = src.read()
+    assert v == pytest.approx(17.0)
+    assert sum(1 for tx in src._spi.sent if tx[3] == 0x01) == 2
+
+
 def test_default_dynamic_config_properties(spi_mcu_source):
     src = spi_mcu_source()
     assert src.vin_range == "low"

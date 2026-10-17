@@ -100,6 +100,8 @@ _SETTLE_FIRST_POLL_S = 0.015
 _SETTLE_POLL_INTERVAL_S = 0.004
 _SETTLE_TIMEOUT_S = 0.150
 _SETTLE_MAX_BAD_FRAMES = 20
+# A second try resends the duty first, for a duty frame lost on the wire.
+_SETTLE_ATTEMPTS = 2
 
 
 def crc8(data: Sequence[int]) -> int:
@@ -367,25 +369,17 @@ class SpiMcuSource(SignalSource):
             if elapsed < _SETTLE_FIRST_POLL_S:
                 time.sleep(_SETTLE_FIRST_POLL_S - elapsed)
 
-            deadline = time.monotonic() + _SETTLE_TIMEOUT_S
             settled = False
-            while True:
-                # Only a frame with the settled flag carries the new
-                # measurement. The firmware zeroes its telemetry on a duty
-                # change, so an unsettled frame reads as 0 V / 0 A.
-                self._settled = False
-                v_raw, i_raw, vout_raw, temp_raw, _ack = self._transact(
-                    self._duty, cmd=_CMD_READ_MEASUREMENT
-                )
-                if self._settled:
-                    self._apply_telemetry(v_raw, i_raw, vout_raw, temp_raw)
-                    settled = True
+            for attempt in range(_SETTLE_ATTEMPTS):
+                if attempt > 0:
+                    # The duty frame may have been lost: the firmware drops
+                    # a frame that fails its CRC and keeps the old duty.
+                    # Send it again and wait once more.
+                    self._transact(self._duty, cmd=_CMD_SET_DUTY)
+                    time.sleep(_SETTLE_FIRST_POLL_S)
+                settled = self._poll_settled()
+                if settled or self._consecutive_bad_frames >= _SETTLE_MAX_BAD_FRAMES:
                     break
-                if self._consecutive_bad_frames >= _SETTLE_MAX_BAD_FRAMES:
-                    break
-                if time.monotonic() > deadline:
-                    break
-                time.sleep(_SETTLE_POLL_INTERVAL_S)
             if settled:
                 self._duty_changed = False
             else:
@@ -397,6 +391,27 @@ class SpiMcuSource(SignalSource):
                 self._i = math.nan
 
         return self._v, self._i
+
+    def _poll_settled(self) -> bool:
+        """Ask for the settled measurement until it arrives or
+        ``_SETTLE_TIMEOUT_S`` passes. Applies it and returns True on success."""
+        deadline = time.monotonic() + _SETTLE_TIMEOUT_S
+        while True:
+            # Only a frame with the settled flag carries the new
+            # measurement. The firmware zeroes its telemetry on a duty
+            # change, so an unsettled frame reads as 0 V / 0 A.
+            self._settled = False
+            v_raw, i_raw, vout_raw, temp_raw, _ack = self._transact(
+                self._duty, cmd=_CMD_READ_MEASUREMENT
+            )
+            if self._settled:
+                self._apply_telemetry(v_raw, i_raw, vout_raw, temp_raw)
+                return True
+            if self._consecutive_bad_frames >= _SETTLE_MAX_BAD_FRAMES:
+                return False
+            if time.monotonic() > deadline:
+                return False
+            time.sleep(_SETTLE_POLL_INTERVAL_S)
 
     def write(self, duty_cycle: float) -> None:
         """Send *duty_cycle* to the Pico.

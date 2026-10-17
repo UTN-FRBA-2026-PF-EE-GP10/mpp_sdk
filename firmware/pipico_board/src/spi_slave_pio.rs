@@ -536,6 +536,12 @@ fn apply_duty_frame(
         // than apply garbage, and don't act on `cmd` either -
         // a corrupted frame's command byte is not trustworthy. Rate
         // limited - a jammed link could otherwise flood RTT every frame.
+        //
+        // It may have been a new duty, so the held measurement is no
+        // longer known to match what the Pi asked for. Clearing the flag
+        // makes the Pi's poll wait and send the duty again, instead of
+        // taking the old measurement as the new one.
+        crate::DUTY_SETTLED.store(false, Ordering::Relaxed);
         health.checksum_failures += 1;
         if health.checksum_failures == 1 || health.checksum_failures.is_multiple_of(100) {
             defmt::warn!(
@@ -694,6 +700,9 @@ pub async fn spi_pio_task(
             // DUTY is left untouched by a single torn frame (see doc
             // comment above) but forced to 0 if the master appears gone.
             consecutive_timeouts += 1;
+            // A torn frame may have been a new duty: same reason as the
+            // checksum-failure path in apply_duty_frame.
+            crate::DUTY_SETTLED.store(false, Ordering::Relaxed);
             // Rate-limited like MOSI checksum failures - a sustained
             // outage would otherwise flood RTT every 100 ms.
             if log_link_state
