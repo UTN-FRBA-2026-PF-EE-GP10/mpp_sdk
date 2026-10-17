@@ -672,6 +672,40 @@ def test_read_returns_nan_when_no_settled_frame_arrives_and_retries(spi_mcu_sour
     assert v == pytest.approx(9.0)
 
 
+def test_a_held_duty_still_waits_for_a_fresh_settled_measurement(spi_mcu_source, monkeypatch):
+    """Found on the bench: InCond and P&O hold the duty sometimes. The
+    write exchange then returned the firmware's zeroed telemetry and read()
+    passed it on as 0 V / 0 A, while the scope showed no drop."""
+    src = spi_mcu_source(settling_time_s=0.05)
+    _fast_settle_timeout(monkeypatch)
+    src._spi.responses = [
+        _miso_frame(v_raw=0, i_raw=0, vout_raw=0, temp_raw=0, settled=0),
+        _miso_frame(v_raw=17000, i_raw=260, vout_raw=0, temp_raw=0, settled=1),
+    ]
+    src.write(0.42)
+    assert src.read() == (pytest.approx(17.0), pytest.approx(0.26))
+
+    src._spi.responses = [
+        _miso_frame(v_raw=0, i_raw=0, vout_raw=0, temp_raw=0, settled=0),
+        _miso_frame(v_raw=0, i_raw=0, vout_raw=0, temp_raw=0, settled=0),
+        _miso_frame(v_raw=16900, i_raw=261, vout_raw=0, temp_raw=0, settled=1),
+    ]
+    src.write(0.42)  # same duty
+    write_tx = src._spi.sent[-1]
+    assert write_tx[3] == 0x01  # CMD_SET_DUTY: the firmware measures again
+    v, i = src.read()
+    assert v == pytest.approx(16.9)
+    assert i == pytest.approx(0.261)
+
+
+def test_write_without_settling_sends_a_plain_frame(spi_mcu_source):
+    src = spi_mcu_source(settling_time_s=0.0)
+    src._spi.next_rx = _miso_frame(v_raw=17000, i_raw=260, vout_raw=0, temp_raw=0)
+    src.write(0.42)
+    assert src._spi.sent[-1][3] == 0x00
+    assert src.read() == (pytest.approx(17.0), pytest.approx(0.26))
+
+
 def test_default_dynamic_config_properties(spi_mcu_source):
     src = spi_mcu_source()
     assert src.vin_range == "low"

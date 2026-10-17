@@ -405,21 +405,25 @@ class SpiMcuSource(SignalSource):
         finite number is sent as 0.0: ``min(1.0, nan)`` is 1.0, so a plain
         clamp would turn a NaN into full duty.
 
-        The firmware applies the duty, clears its old measurement, waits for
-        the converter to settle and takes one filtered measurement. If the
-        duty changed, the next ``read()`` asks for that measurement.
+        With settling on, every write is a ``CMD_SET_DUTY`` frame, also when
+        the duty did not change. The firmware then clears its old
+        measurement, waits for the converter to settle and takes one
+        filtered measurement, and the next ``read()`` waits for it. The
+        frame this exchange returns is not applied: it can carry the
+        zeroed telemetry of a measurement in progress. Before, a held duty
+        (P&O at a duty limit, InCond at dI = dV = 0) skipped the wait and
+        read() returned those zeros as 0 V / 0 A.
         """
         if not math.isfinite(duty_cycle):
             duty_cycle = 0.0
-        new_duty = max(0.0, min(1.0, duty_cycle))
-        duty_changed = abs(new_duty - self._duty) > 1e-4
-        self._duty = new_duty
-        self._send_cmd()
-
-        if duty_changed:
-            self._duty_changed = True
-            self._settled = False
-            self._last_write_time = time.monotonic()
+        self._duty = max(0.0, min(1.0, duty_cycle))
+        if self._settling_time_s <= 0:
+            self._send_cmd()
+            return
+        self._transact(self._duty, cmd=_CMD_SET_DUTY)
+        self._duty_changed = True
+        self._settled = False
+        self._last_write_time = time.monotonic()
 
     # ── extras ───────────────────────────────────────────────────────────────
 
