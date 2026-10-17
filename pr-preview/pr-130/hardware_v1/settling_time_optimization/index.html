@@ -1,0 +1,1481 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="MPPT algorithm SDK — references, rationale, and general information">
+      
+      
+      
+        <link rel="canonical" href="https://utn-frba-2026-pf-ee-gp10.github.io/mpp_sdk/hardware_v1/settling_time_optimization/">
+      
+      
+        <link rel="prev" href="../calibration/">
+      
+      
+        <link rel="next" href="../mppt_measurement_protocol/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Settling Time Optimization - mpp-sdk docs</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#sepic-settling-time-and-capacitor-analysis" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="mpp-sdk docs" class="md-header__button md-logo" aria-label="mpp-sdk docs" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            mpp-sdk docs
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Settling Time Optimization
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/UTN-FRBA-2026-PF-EE-GP10/mpp_sdk" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    mpp-sdk
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="mpp-sdk docs" class="md-nav__button md-logo" aria-label="mpp-sdk docs" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    mpp-sdk docs
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/UTN-FRBA-2026-PF-EE-GP10/mpp_sdk" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    mpp-sdk
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../general_information/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    General Information
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../rationale/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rationale
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../methodology/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Methodology
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../measurement_procedure/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Measurement Procedure
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware & Boards
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Hardware & Boards
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../board_compatibility/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dual-Board Compatibility
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../beaglebone_setup_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    BeagleBone Black Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../calibration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADC Calibration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Settling Time Optimization
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Settling Time Optimization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#problem-statement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Problem Statement
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-physics-of-the-1000mutextf-input-capacitor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Physics of the \(1000\,\mu\text{F}\) Input Capacitor
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#options-to-improve-speed-without-losing-accuracy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Options to Improve Speed Without Losing Accuracy
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Options to Improve Speed Without Losing Accuracy">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#option-a-reduce-the-input-capacitor-hardware-highly-recommended" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Option A: Reduce the Input Capacitor (Hardware - Highly Recommended)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#option-b-adaptive-step-size-softwarealgorithmic" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Option B: Adaptive Step Size (Software/Algorithmic)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#option-c-dynamic-settling-detection-firmwaresoftware" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Option C: Dynamic Settling Detection (Firmware/Software)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#conclusion-hardware-evolution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conclusion &amp; Hardware Evolution
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#bench-verification-results-across-optimizations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bench Verification Results Across Optimizations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Bench Verification Results Across Optimizations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-comparative-evolution-table" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Comparative Evolution Table
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-analysis-of-the-429textms-settling-time" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Analysis of the \(42.9\,\text{ms}\) Settling Time
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-key-observations-improvements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Key Observations &amp; Improvements
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-analog-divider-jumper-selection-full-vs-low" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Analog Divider Jumper Selection (Full vs Low)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mppt_measurement_protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Measurement & Telemetry Protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algorithms
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Algorithms
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/perturb_observe/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Perturb & Observe
+  
+
+    
+      <br>
+      <small>MPPT algorithm reference</small>
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/incremental_conductance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Incremental Conductance
+  
+
+    
+      <br>
+      <small>MPPT algorithm reference</small>
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/fuzzy_logic/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fuzzy Logic
+  
+
+    
+      <br>
+      <small>MPPT algorithm reference</small>
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/scan_and_track/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scan-and-Track
+  
+
+    
+      <br>
+      <small>MPPT algorithm reference</small>
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/particle_swarm/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Particle Swarm
+  
+
+    
+      <br>
+      <small>MPPT algorithm reference</small>
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/restart_policy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Restart policy
+  
+
+    
+      <br>
+      <small>MPPT algorithm reference</small>
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#problem-statement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Problem Statement
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-physics-of-the-1000mutextf-input-capacitor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Physics of the \(1000\,\mu\text{F}\) Input Capacitor
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#options-to-improve-speed-without-losing-accuracy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Options to Improve Speed Without Losing Accuracy
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Options to Improve Speed Without Losing Accuracy">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#option-a-reduce-the-input-capacitor-hardware-highly-recommended" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Option A: Reduce the Input Capacitor (Hardware - Highly Recommended)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#option-b-adaptive-step-size-softwarealgorithmic" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Option B: Adaptive Step Size (Software/Algorithmic)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#option-c-dynamic-settling-detection-firmwaresoftware" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Option C: Dynamic Settling Detection (Firmware/Software)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#conclusion-hardware-evolution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conclusion &amp; Hardware Evolution
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#bench-verification-results-across-optimizations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bench Verification Results Across Optimizations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Bench Verification Results Across Optimizations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-comparative-evolution-table" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Comparative Evolution Table
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-analysis-of-the-429textms-settling-time" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Analysis of the \(42.9\,\text{ms}\) Settling Time
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-key-observations-improvements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Key Observations &amp; Improvements
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-analog-divider-jumper-selection-full-vs-low" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Analog Divider Jumper Selection (Full vs Low)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="sepic-settling-time-and-capacitor-analysis">SEPIC Settling Time and Capacitor Analysis<a class="headerlink" href="#sepic-settling-time-and-capacitor-analysis" title="Permanent link">&para;</a></h1>
+<p><strong>Date:</strong> 2026-10-07</p>
+<h2 id="problem-statement">Problem Statement<a class="headerlink" href="#problem-statement" title="Permanent link">&para;</a></h2>
+<p>The current hardware setup exhibits a very slow settling time (<span class="arithmatex">\(\sim 100\,\text{ms}\)</span>) when a step response is applied to the SEPIC converter duty cycle. At a <span class="arithmatex">\(50\,\text{kHz}\)</span> switching frequency, one switching cycle takes <span class="arithmatex">\(20\,\mu\text{s}\)</span>. Waiting <span class="arithmatex">\(100\,\text{ms}\)</span> means waiting <strong><span class="arithmatex">\(5,000\)</span> switching cycles</strong> for the system to settle. For a typical DC-DC converter, settling should happen in tens or hundreds of cycles (around <span class="arithmatex">\(1\,\text{ms}\)</span> to <span class="arithmatex">\(5\,\text{ms}\)</span>).</p>
+<h2 id="the-physics-of-the-1000mutextf-input-capacitor">The Physics of the <span class="arithmatex">\(1000\,\mu\text{F}\)</span> Input Capacitor<a class="headerlink" href="#the-physics-of-the-1000mutextf-input-capacitor" title="Permanent link">&para;</a></h2>
+<p>The <span class="arithmatex">\(1000\,\mu\text{F}\)</span> input capacitor (in parallel with the solar panel) is almost certainly the main reason for this slow settling time. </p>
+<p>When the MPPT algorithm changes the SEPIC's duty cycle (<span class="arithmatex">\(D\)</span>), it changes the equivalent resistance that the solar panel "sees". The solar panel then wants to move to a new voltage and current point on its I-V curve. </p>
+<p>However, before the <em>measured</em> voltage can reach that new steady state, the <span class="arithmatex">\(1000\,\mu\text{F}\)</span> capacitor has to charge or discharge to the new voltage level. Because a solar panel has a limited current output, it takes a long time to fill or drain that massive <span class="arithmatex">\(1000\,\mu\text{F}\)</span> energy buffer.</p>
+<p><strong>Can it be removed?</strong>
+No. You <strong>cannot remove it completely</strong>. Without an input capacitor, the solar panel would see the raw <span class="arithmatex">\(50\,\text{kHz}\)</span> switching ripple (switching between drawing zero current and peak inductor current). Solar panels do not operate efficiently under high-ripple pulsating currents, and ADC measurements would be heavily distorted.</p>
+<h2 id="options-to-improve-speed-without-losing-accuracy">Options to Improve Speed Without Losing Accuracy<a class="headerlink" href="#options-to-improve-speed-without-losing-accuracy" title="Permanent link">&para;</a></h2>
+<h3 id="option-a-reduce-the-input-capacitor-hardware-highly-recommended">Option A: Reduce the Input Capacitor (Hardware - Highly Recommended)<a class="headerlink" href="#option-a-reduce-the-input-capacitor-hardware-highly-recommended" title="Permanent link">&para;</a></h3>
+<p>You don't need <span class="arithmatex">\(1000\,\mu\text{F}\)</span> to filter out a <span class="arithmatex">\(50\,\text{kHz}\)</span> ripple. 
+* <strong>The Fix</strong>: Swap the <span class="arithmatex">\(1000\,\mu\text{F}\)</span> capacitor for a much smaller one. A value between <strong><span class="arithmatex">\(22\,\mu\text{F}\)</span> and <span class="arithmatex">\(100\,\mu\text{F}\)</span></strong> (preferably a low-ESR ceramic or good quality electrolytic) should be more than enough to smooth the <span class="arithmatex">\(50\,\text{kHz}\)</span> switching ripple.
+* <strong>The Result</strong>: The time constant will drop by a factor of 10 to 50. The settling time could drop from <span class="arithmatex">\(100\,\text{ms}\)</span> down to <span class="arithmatex">\(5\,\text{ms}\)</span> or <span class="arithmatex">\(10\,\text{ms}\)</span>, allowing the algorithm to run <span class="arithmatex">\(10\times\)</span> faster natively.</p>
+<h3 id="option-b-adaptive-step-size-softwarealgorithmic">Option B: Adaptive Step Size (Software/Algorithmic)<a class="headerlink" href="#option-b-adaptive-step-size-softwarealgorithmic" title="Permanent link">&para;</a></h3>
+<p>If you cannot change the hardware right now, you have to accept that every step takes <span class="arithmatex">\(100\,\text{ms}\)</span>. To make the <em>overall</em> algorithm find the MPP faster, you must take fewer steps.
+* <strong>The Fix</strong>: Implement an Adaptive Perturb &amp; Observe (P&amp;O) algorithm. If the change in power (<span class="arithmatex">\(\Delta P\)</span>) is large, take a large duty cycle step (e.g., <code>0.05</code>). When <span class="arithmatex">\(\Delta P\)</span> gets very small (indicating you are near the peak), shrink the step size (e.g., <code>0.005</code>).
+* <strong>The Result</strong>: You reach the Maximum Power Point in 5-10 iterations instead of 50. </p>
+<h3 id="option-c-dynamic-settling-detection-firmwaresoftware">Option C: Dynamic Settling Detection (Firmware/Software)<a class="headerlink" href="#option-c-dynamic-settling-detection-firmwaresoftware" title="Permanent link">&para;</a></h3>
+<p>Instead of hardcoding a blind <code>0.10s</code> wait time, we can dynamically detect when the system has settled.
+* <strong>The Fix</strong>: In the firmware or the Python loop, start taking measurements after <span class="arithmatex">\(5\,\text{ms}\)</span>. Keep a rolling buffer of readings. If the difference between the maximum and minimum of those readings is less than a small threshold (e.g., less than the known ripple), assume it has settled and return the value early.
+* <strong>The Result</strong>: Small duty cycle steps will return quickly (maybe <span class="arithmatex">\(20\,\text{ms}\)</span>), while large steps will dynamically wait longer (up to <span class="arithmatex">\(100\,\text{ms}\)</span>) only when necessary.</p>
+<h2 id="conclusion-hardware-evolution">Conclusion &amp; Hardware Evolution<a class="headerlink" href="#conclusion-hardware-evolution" title="Permanent link">&para;</a></h2>
+<p>Solving the settling time and closed-loop control dynamics evolved across four distinct optimizations:</p>
+<ol>
+<li><strong>Hardware Fix (Capacitor Downsizing)</strong>: Swapping the <span class="arithmatex">\(1000\,\mu\text{F}\)</span> electrolytic capacitor for a <span class="arithmatex">\(22\,\mu\text{F}\)</span> low-ESR ceramic/electrolytic capacitor reduced the fundamental electrical RC time constant by <span class="arithmatex">\(\sim 5\times\)</span>, lowering maximum physical hardware lag from <span class="arithmatex">\(68.4\,\text{ms}\)</span> to <span class="arithmatex">\(\sim 15\,\text{ms}\)</span>.</li>
+<li><strong>Signal Conditioning &amp; Mains Rejection (20 ms Notch Filter)</strong>: While the capacitor swap cured the electrical tank sluggishness, fast bench tests revealed phase aliasing from the <span class="arithmatex">\(100\,\text{Hz}\)</span> full-wave rectified ripple produced by the laboratory solar simulator lamps (<span class="arithmatex">\(\pm 30-50\,\text{mV}\)</span>). Bursts of <span class="arithmatex">\(25\)</span> samples captured over only <span class="arithmatex">\(1.25\,\text{ms}\)</span> (<span class="arithmatex">\(50\,\mu\text{s}\)</span> spacing) captured instantaneous phase offsets that inverted <span class="arithmatex">\(\Delta V\)</span> slopes during fine MPPT steps (<span class="arithmatex">\(0.2\% - 0.5\%\)</span>), causing voltage drift towards <span class="arithmatex">\(V_{oc}\)</span>. By spacing the 25 samples by <span class="arithmatex">\(800\,\mu\text{s}\)</span> (<code>Timer::after_micros(800).await;</code>), the sampling window spans exactly <span class="arithmatex">\(20\,\text{ms}\)</span> (<span class="arithmatex">\(1\)</span> cycle of 50 Hz, <span class="arithmatex">\(2\)</span> cycles of 100 Hz), mathematically cancelling the sinusoidal AC ripple (<span class="arithmatex">\(\int_0^{20\,\text{ms}} \sin(\omega t)\,dt = 0\)</span>) and dropping steady-state ripple to <span class="arithmatex">\(0.0\,\text{mV}_\text{pp}\)</span>.</li>
+<li><strong>Firmware Outlier Rejection &amp; Flush Protocol</strong>: The RP2040 firmware implements a 25-sample trimmed mean (dropping the 4 lowest and 4 highest samples, averaging the middle 17). Furthermore, on receiving a duty change command, the Pico wipes its measurement buffers, waits the hardware transition, computes the settled value, and holds the single measurement without streaming raw noisy readings.</li>
+<li><strong>Driver Raw Mode &amp; Step Size Tuning</strong>:</li>
+<li><code>SpiMcuSource</code> supports raw mode (<code>settling_time_s = 0.0</code>) to allow dynamic benchmark utilities (<code>scripts/sepic_step_response.py</code>) to record continuous high-speed transients every 3 ms without blocking.</li>
+<li>For closed-loop tracking, algorithms configured with <span class="arithmatex">\(\Delta D = 0.002\)</span> (<span class="arithmatex">\(0.2\%\)</span>) converge cleanly to <span class="arithmatex">\(V_\text{mpp} \approx 14.30\,\text{V}\)</span> (<span class="arithmatex">\(&lt;0.6\%\)</span> error relative to sweep peak) with a tight <span class="arithmatex">\(\sim 1.0\,\text{V}\)</span> oscillation span.</li>
+</ol>
+<h2 id="bench-verification-results-across-optimizations">Bench Verification Results Across Optimizations<a class="headerlink" href="#bench-verification-results-across-optimizations" title="Permanent link">&para;</a></h2>
+<h3 id="1-comparative-evolution-table">1. Comparative Evolution Table<a class="headerlink" href="#1-comparative-evolution-table" title="Permanent link">&para;</a></h3>
+<p>Executed across duty cycles <span class="arithmatex">\(0.40 \to 0.70\)</span> on a <span class="arithmatex">\(10\,\Omega\)</span> load:</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: center;">Step</th>
+<th style="text-align: center;">Duty Transition</th>
+<th style="text-align: center;"><span class="arithmatex">\(V_\text{in}\)</span> Mean</th>
+<th style="text-align: center;"><span class="arithmatex">\(V_\text{out}\)</span> Transition</th>
+<th style="text-align: center;"><span class="arithmatex">\(T_s\)</span> (<span class="arithmatex">\(1000\,\mu\text{F}\)</span>, Unfiltered)</th>
+<th style="text-align: center;"><span class="arithmatex">\(T_s\)</span> (<span class="arithmatex">\(22\,\mu\text{F}\)</span>, Burst <span class="arithmatex">\(1.25\text{ ms}\)</span>)</th>
+<th style="text-align: center;"><span class="arithmatex">\(T_s\)</span> (<span class="arithmatex">\(22\,\mu\text{F}\)</span> + <span class="arithmatex">\(20\text{ ms}\)</span> Notch Filter)</th>
+<th style="text-align: center;"><span class="arithmatex">\(V_\text{out}\)</span> Ripple</th>
+<th style="text-align: center;"><span class="arithmatex">\(V_\text{in}\)</span> Ripple</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: center;">1</td>
+<td style="text-align: center;"><span class="arithmatex">\(0.40 \to 0.45\)</span></td>
+<td style="text-align: center;"><span class="arithmatex">\(15.50\text{ V}\)</span></td>
+<td style="text-align: center;"><span class="arithmatex">\(11.57\text{ V} \to 13.52\text{ V}\)</span></td>
+<td style="text-align: center;"><span class="arithmatex">\(7.3\text{ ms}\)</span></td>
+<td style="text-align: center;"><span class="arithmatex">\(14.1\text{ ms}\)</span></td>
+<td style="text-align: center;"><strong><span class="arithmatex">\(41.1\text{ ms}\)</span></strong></td>
+<td style="text-align: center;"><span class="arithmatex">\(0.0\text{ mV}_\text{pp}\)</span></td>
+<td style="text-align: center;"><span class="arithmatex">\(0.0\text{ mV}_\text{pp}\)</span></td>
+</tr>
+<tr>
+<td style="text-align: center;">2</td>
+<td style="text-align: center;"><span class="arithmatex">\(0.45 \to 0.50\)</span></td>
+<td style="text-align: center;"><span class="arithmatex">\(13.74\text{ V}\)</span></td>
+<td style="text-align: center;"><span class="arithmatex">\(13.52\text{ V} \to 14.53\text{ V}\)</span></td>
+<td style="text-align: center;"><span class="arithmatex">\(23.8\text{ ms}\)</span></td>
+<td style="text-align: center;"><span class="arithmatex">\(5.5\text{ ms}\)</span></td>
+<td style="text-align: center;"><strong><span class="arithmatex">\(45.6\text{ ms}\)</span></strong></td>
+<td style="text-align: center;"><span class="arithmatex">\(0.0\text{ mV}_\text{pp}\)</span></td>
+<td style="text-align: center;"><span class="arithmatex">\(0.0\text{ mV}_\text{pp}\)</span></td>
+</tr>
+<tr>
+<td style="text-align: center;">3</td>
+<td style="text-align: center;"><span class="arithmatex">\(0.50 \to 0.55\)</span></td>
+<td style="text-align: center;"><span class="arithmatex">\(9.58\text{ V}\)</span></td>
+<td style="text-align: center;"><span class="arithmatex">\(14.53\text{ V} \to 12.15\text{ V}\)</span></td>
+<td style="text-align: center;"><span class="arithmatex">\(68.4\text{ ms}\)</span></td>
+<td style="text-align: center;"><span class="arithmatex">\(14.6\text{ ms}\)</span></td>
+<td style="text-align: center;"><strong><span class="arithmatex">\(42.0\text{ ms}\)</span></strong></td>
+<td style="text-align: center;"><span class="arithmatex">\(0.0\text{ mV}_\text{pp}\)</span></td>
+<td style="text-align: center;"><span class="arithmatex">\(0.0\text{ mV}_\text{pp}\)</span></td>
+</tr>
+<tr>
+<td style="text-align: center;">4</td>
+<td style="text-align: center;"><span class="arithmatex">\(0.55 \to 0.60\)</span></td>
+<td style="text-align: center;"><span class="arithmatex">\(6.55\text{ V}\)</span></td>
+<td style="text-align: center;"><span class="arithmatex">\(12.15\text{ V} \to 10.05\text{ V}\)</span></td>
+<td style="text-align: center;"><span class="arithmatex">\(55.3\text{ ms}\)</span></td>
+<td style="text-align: center;"><span class="arithmatex">\(14.6\text{ ms}\)</span></td>
+<td style="text-align: center;"><strong><span class="arithmatex">\(44.5\text{ ms}\)</span></strong></td>
+<td style="text-align: center;"><span class="arithmatex">\(0.0\text{ mV}_\text{pp}\)</span></td>
+<td style="text-align: center;"><span class="arithmatex">\(0.0\text{ mV}_\text{pp}\)</span></td>
+</tr>
+<tr>
+<td style="text-align: center;">5</td>
+<td style="text-align: center;"><span class="arithmatex">\(0.60 \to 0.65\)</span></td>
+<td style="text-align: center;"><span class="arithmatex">\(4.38\text{ V}\)</span></td>
+<td style="text-align: center;"><span class="arithmatex">\(10.05\text{ V} \to 8.12\text{ V}\)</span></td>
+<td style="text-align: center;"><span class="arithmatex">\(41.7\text{ ms}\)</span></td>
+<td style="text-align: center;"><span class="arithmatex">\(0.0\text{ ms}^*\)</span></td>
+<td style="text-align: center;"><strong><span class="arithmatex">\(42.1\text{ ms}\)</span></strong></td>
+<td style="text-align: center;"><span class="arithmatex">\(0.0\text{ mV}_\text{pp}\)</span></td>
+<td style="text-align: center;"><span class="arithmatex">\(0.0\text{ mV}_\text{pp}\)</span></td>
+</tr>
+<tr>
+<td style="text-align: center;">6</td>
+<td style="text-align: center;"><span class="arithmatex">\(0.65 \to 0.70\)</span></td>
+<td style="text-align: center;"><span class="arithmatex">\(2.87\text{ V}\)</span></td>
+<td style="text-align: center;"><span class="arithmatex">\(8.12\text{ V} \to 6.44\text{ V}\)</span></td>
+<td style="text-align: center;"><span class="arithmatex">\(28.2\text{ ms}\)</span></td>
+<td style="text-align: center;"><span class="arithmatex">\(0.0\text{ ms}^*\)</span></td>
+<td style="text-align: center;"><strong><span class="arithmatex">\(42.0\text{ ms}\)</span></strong></td>
+<td style="text-align: center;"><span class="arithmatex">\(0.0\text{ mV}_\text{pp}\)</span></td>
+<td style="text-align: center;"><span class="arithmatex">\(0.0\text{ mV}_\text{pp}\)</span></td>
+</tr>
+</tbody>
+</table>
+<p><em>* Note: The <span class="arithmatex">\(0.0\text{ ms}\)</span> settling times recorded during earlier burst tests were artifacts of AC ripple phase aliasing masking the dynamic transition.</em></p>
+<h3 id="2-analysis-of-the-429textms-settling-time">2. Analysis of the <span class="arithmatex">\(42.9\,\text{ms}\)</span> Settling Time<a class="headerlink" href="#2-analysis-of-the-429textms-settling-time" title="Permanent link">&para;</a></h3>
+<p>The measured settling time is remarkably consistent across all operating points: <strong><span class="arithmatex">\(41.1\,\text{ms} - 45.6\,\text{ms}\)</span></strong> (mean <strong><span class="arithmatex">\(42.9\,\text{ms}\)</span></strong>). This value decomposes cleanly into two physical domains:</p>
+<ol>
+<li><strong>Physical SEPIC Power Stage Settling (<span class="arithmatex">\(\sim 22\,\text{ms}\)</span>)</strong>: The hardware L-C-L energy storage tank and coupling capacitor settle to within the <span class="arithmatex">\(\pm 2\%\)</span> steady-state band in approximately <span class="arithmatex">\(20 - 23\,\text{ms}\)</span> with the <span class="arithmatex">\(22\,\mu\text{F}\)</span> input capacitor.</li>
+<li><strong>Measurement Notch Filter Window (<span class="arithmatex">\(20\,\text{ms}\)</span>)</strong>: The moving window of <span class="arithmatex">\(25 \text{ samples} \times 800\,\mu\text{s} = 20.0\,\text{ms}\)</span> required to cancel 50 Hz and 100 Hz mains ripple.</li>
+</ol>
+<p>Total observed step response settling time:
+$<span class="arithmatex">\(T_s \approx T_{\text{hardware}} + T_{\text{filter}} \approx 22.9\,\text{ms} + 20.0\,\text{ms} = 42.9\,\text{ms}\)</span>$</p>
+<h3 id="3-key-observations-improvements">3. Key Observations &amp; Improvements<a class="headerlink" href="#3-key-observations-improvements" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Complete AC Mains Ripple Suppression</strong>: Telemetry ripple dropped from <span class="arithmatex">\(\pm 50\,\text{mV}_\text{pp}\)</span> to <strong><span class="arithmatex">\(0.0\,\text{mV}_\text{pp}\)</span></strong>, enabling high-resolution MPPT steps down to <span class="arithmatex">\(0.2\%\)</span>.</li>
+<li><strong>No False Instantaneous or Stalled Settling</strong>: In contrast to earlier tests where noise caused erratic readings (<span class="arithmatex">\(0.0\text{ ms}\)</span> or false triggers), all transitions settle within a predictable, uniform <span class="arithmatex">\(42.9\,\text{ms}\)</span> window.</li>
+<li><strong>Power Peak Alignment</strong>: Output voltage <span class="arithmatex">\(V_\text{out}\)</span> reaches its peak (<span class="arithmatex">\(14.53\,\text{V}\)</span>, yielding <span class="arithmatex">\(P \approx 21.1\,\text{W}\)</span> into <span class="arithmatex">\(10\,\Omega\)</span>) at <span class="arithmatex">\(D=0.50\)</span> (<span class="arithmatex">\(V_\text{in} \approx 13.74\,\text{V}\)</span>), matching the panel's physical maximum power point.</li>
+<li><strong>SDK Configuration</strong>: <code>settling_time_s</code> in <code>SpiMcuSource</code> is set to <code>0.05</code> (<span class="arithmatex">\(50\,\text{ms}\)</span>) for closed-loop MPPT tracking to ensure full filter and hardware stabilization, with <code>settling_time_s = 0.0</code> available for raw high-speed telemetry polling.</li>
+</ul>
+<h3 id="4-analog-divider-jumper-selection-full-vs-low">4. Analog Divider Jumper Selection (<code>Full</code> vs <code>Low</code>)<a class="headerlink" href="#4-analog-divider-jumper-selection-full-vs-low" title="Permanent link">&para;</a></h3>
+<p>Switching the analog divider jumpers from <code>Full</code> (<span class="arithmatex">\(23.5\times\)</span>) to <code>Low</code> (<span class="arithmatex">\(8.5\times\)</span>) provides a <strong><span class="arithmatex">\(2.76\times\)</span> gain in ADC voltage resolution</strong>, substantially lowering quantization noise in the measurement:</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Metric</th>
+<th style="text-align: left;"><code>Full</code> Divider Range (<span class="arithmatex">\(235\text{ k}\Omega / 10\text{ k}\Omega\)</span>)</th>
+<th style="text-align: left;"><code>Low</code> Divider Range (<span class="arithmatex">\(85\text{ k}\Omega / 10\text{ k}\Omega\)</span>)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>Divider Ratio</strong></td>
+<td style="text-align: left;"><span class="arithmatex">\(23.5\times\)</span></td>
+<td style="text-align: left;"><span class="arithmatex">\(8.5\times\)</span></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Full Scale Ceiling</strong></td>
+<td style="text-align: left;"><span class="arithmatex">\(\sim 75.6\text{ V}\)</span></td>
+<td style="text-align: left;"><span class="arithmatex">\(\sim 27.3\text{ V}\)</span></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Quantization Step (1 LSB)</strong></td>
+<td style="text-align: left;"><span class="arithmatex">\(\sim 23.5\text{ mV}\)</span></td>
+<td style="text-align: left;"><span class="arithmatex">\(\sim 8.5\text{ mV}\)</span></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Step 1 Ripple (<span class="arithmatex">\(0.40 \to 0.45\)</span>)</strong></td>
+<td style="text-align: left;"><span class="arithmatex">\(94.0\text{ mV}_\text{pp}\)</span> (<span class="arithmatex">\(\sim 4\)</span> LSBs)</td>
+<td style="text-align: left;"><strong><span class="arithmatex">\(43.0\text{ mV}_\text{pp}\)</span></strong> (<span class="arithmatex">\(\sim 5\)</span> LSBs)</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Step 2 Ripple (<span class="arithmatex">\(0.45 \to 0.50\)</span>)</strong></td>
+<td style="text-align: left;"><span class="arithmatex">\(212.0\text{ mV}_\text{pp}\)</span></td>
+<td style="text-align: left;"><strong><span class="arithmatex">\(51.0\text{ mV}_\text{pp}\)</span></strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Step 4 Ripple (<span class="arithmatex">\(0.55 \to 0.60\)</span>)</strong></td>
+<td style="text-align: left;"><span class="arithmatex">\(517.0\text{ mV}_\text{pp}\)</span></td>
+<td style="text-align: left;"><strong><span class="arithmatex">\(77.0\text{ mV}_\text{pp}\)</span></strong></td>
+</tr>
+</tbody>
+</table>
+<p>For 1-panel and 2-panel configurations (<span class="arithmatex">\(V_{\text{oc}} \le 27.3\,\text{V}\)</span>), the <code>Low</code> setting provides optimal gradient sensitivity for fine-step MPPT tracking.</p>
+<hr />
+<p>For the complete closed-loop timing sequence diagram and single-measurement request-response protocol, see <a href="../mppt_measurement_protocol/"><code>docs/hardware_v1/mppt_measurement_protocol.md</code></a>.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/UTN-FRBA-2026-PF-EE-GP10/mpp_sdk" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "content.code.copy", "search.suggest"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+    
+  </body>
+</html>
