@@ -86,7 +86,12 @@ cd <repo> && git status --short && git fetch -q && git log --oneline -1 && git r
 
 ## Step 4: the workbench server
 
-It is started by hand, not as a service. A Pi reboot stops it.
+First check for the boot service (`scripts/install_workbench_service.sh`):
+`systemctl is-active mpp-workbench`. If it is active, do not start a second
+server. Restart it with `sudo systemctl restart mpp-workbench` (ask first,
+same idle rule as below) and read its log with `journalctl -u mpp-workbench`.
+
+Without the service, it is started by hand. A Pi reboot stops it.
 
 ```bash
 ss -ltn | grep :8000; curl -s -m 3 localhost:8000/api/data | head -c 200
