@@ -51,6 +51,32 @@ Quickstart to install the `web` extra first.
   `mpp-sdk curve-tracer-web --demo` (practice run, any machine, no board -
   useful for rehearsing this checklist first).
 
+## Start the workbench at boot (optional)
+
+Run this once on the host SBC, from the repo checkout:
+
+```bash
+scripts/install_workbench_service.sh
+```
+
+- It installs and starts the `mpp-workbench` systemd service. The server
+  then starts at every boot, with no PC and no ssh session.
+- Open `http://<host-ip>:8000/` from any device on the bench network, for
+  example a phone.
+- The server does not need the Pico at start. The connection pill shows
+  an error until the board answers, then changes to **PICO connected**.
+- Nothing drives the converter until you start a sweep or a run.
+- Stop the service before you start the server by hand. Both use port
+  8000 and the SPI link.
+
+| Task | Command |
+| --- | --- |
+| Status | `systemctl status mpp-workbench` |
+| Log | `journalctl -u mpp-workbench -f` |
+| Restart (after `git pull` and `uv sync`) | `sudo systemctl restart mpp-workbench` |
+| Stop until next boot | `sudo systemctl stop mpp-workbench` |
+| Remove | `scripts/install_workbench_service.sh --remove` |
+
 ## Capture one curve
 
 1. Open `http://<host-ip>:8000/` (or `http://localhost:8000/` for
