@@ -36,6 +36,7 @@ nav:
       - ADC Calibration: hardware_v1/calibration.md
       - Settling Time Optimization: hardware_v1/settling_time_optimization.md
       - Measurement & Telemetry Protocol: hardware_v1/mppt_measurement_protocol.md
+      - Bench Session Metrics: hardware_v1/bench_session_metrics.md
   - Algorithms:
       - Perturb & Observe: algorithms/perturb_observe.md
       - Incremental Conductance: algorithms/incremental_conductance.md
