@@ -35,6 +35,7 @@ use embassy_rp::{Peri, bind_interrupts};
 use embassy_time::{Duration, Instant, with_timeout};
 use portable_atomic::Ordering;
 
+use crate::dimmer::{self, StatusReply};
 use crate::mode_curve_tracer::{
     self, SweepProgress, SweepResult, TRACER_SWEEP_POINTS, TracerCommand,
 };
@@ -70,6 +71,11 @@ pub const CMD_SET_CONFIG_PSU_TARGET: u8 = 0xC6;
 pub const CMD_SET_CONFIG_FIXED_DUTY: u8 = 0xC7;
 pub const CMD_SET_CONFIG_RON: u8 = 0xC8;
 pub const CMD_RESET_CUTOFF: u8 = 0xC9;
+/// Dimmer commands, see docs/hardware_v1/dimmer_link.md.
+const CMD_DIMMER_SET: u8 = 0xD1;
+const CMD_DIMMER_STATUS: u8 = 0xD2;
+/// First byte of the `CMD_DIMMER_STATUS` reply.
+const DIMMER_MAGIC: u8 = 0xD2;
 
 /// MOSI command value (one of the 9 spare bytes, index 3) requesting a
 /// bulk-dump; unlikely to appear from a zeroed/uninitialized buffer.
@@ -364,6 +370,36 @@ fn build_progress_tx_frame(progress: &SweepProgress) -> [u32; FRAME_LEN] {
     words
 }
 
+/// Build a dimmer status TX frame: `[ 0xD2 | FLAGS | SET_H | SET_L | APPLIED_H
+/// | APPLIED_L | AGE | 0 | CHECKSUM | ACK | 0 x 2 ]`. Same checksum and ack
+/// layout as `build_progress_tx_frame`.
+fn build_dimmer_tx_frame(reply: &StatusReply) -> [u32; FRAME_LEN] {
+    let set = reply.set.to_be_bytes();
+    let applied = reply.applied.to_be_bytes();
+    let bytes = [
+        DIMMER_MAGIC,
+        reply.flags,
+        set[0],
+        set[1],
+        applied[0],
+        applied[1],
+        reply.age,
+        0,
+    ];
+    let ack = 0u8;
+    let checksum = miso_checksum(&bytes, ack, 0);
+
+    let mut words = [0u32; FRAME_LEN];
+    let all = bytes
+        .iter()
+        .chain(core::iter::once(&checksum))
+        .chain(core::iter::once(&ack));
+    for (word, byte) in words.iter_mut().zip(all) {
+        *word = (*byte as u32) << 24;
+    }
+    words
+}
+
 /// How long the first PowerSupply request stays armed, waiting for the
 /// confirming second one.
 const PSU_ARM_WINDOW: Duration = Duration::from_millis(1000);
@@ -477,6 +513,7 @@ enum BulkState {
     SendAck(SweepResult),
     DoBulk(SweepResult),
     SendProgress(SweepProgress),
+    SendDimmer(StatusReply),
 }
 
 /// Applies one `FRAME_LEN` exchange's RX as a normal duty-update frame -
@@ -505,6 +542,7 @@ fn apply_duty_frame(
         PACKET_COUNT.fetch_add(1, Ordering::Relaxed);
         health.last_valid = Instant::now();
         health.duty_forced_off = false;
+        dimmer::set_link_lost(false);
 
         if cmd == 0 || cmd == CMD_SET_DUTY {
             let old_duty = DUTY.swap(duty, Ordering::Relaxed);
@@ -555,6 +593,7 @@ fn apply_duty_frame(
                 defmt::error!("spi_pio_task: no valid MOSI frame for 500 ms, forcing duty to 0");
                 health.duty_forced_off = true;
             }
+            dimmer::set_link_lost(true);
         }
         None
     }
@@ -573,6 +612,9 @@ fn build_tx_buf_for_state(state: &BulkState) -> [u32; MAX_FRAME_LEN] {
         }
         BulkState::SendProgress(progress) => {
             buf[..FRAME_LEN].copy_from_slice(&build_progress_tx_frame(progress));
+        }
+        BulkState::SendDimmer(reply) => {
+            buf[..FRAME_LEN].copy_from_slice(&build_dimmer_tx_frame(reply));
         }
         BulkState::SendAck(sweep) => {
             let v = MEAS_V_MV.load(Ordering::Relaxed);
@@ -668,9 +710,10 @@ pub async fn spi_pio_task(
 
         let (this_frame_len, frame_timeout) = match &bulk_state {
             BulkState::DoBulk(_) => (BULK_FRAME_LEN, BULK_FRAME_TIMEOUT),
-            BulkState::Idle | BulkState::SendAck(_) | BulkState::SendProgress(_) => {
-                (FRAME_LEN, FRAME_TIMEOUT)
-            }
+            BulkState::Idle
+            | BulkState::SendAck(_)
+            | BulkState::SendProgress(_)
+            | BulkState::SendDimmer(_) => (FRAME_LEN, FRAME_TIMEOUT),
         };
 
         let mut rx = [0u32; MAX_FRAME_LEN];
@@ -721,6 +764,7 @@ pub async fn spi_pio_task(
             }
             if consecutive_timeouts >= LINK_LOST_TIMEOUTS {
                 DUTY.store(0, Ordering::Relaxed);
+                dimmer::set_link_lost(true);
             }
             // A torn/aborted frame mid bulk-read handshake must not leave
             // this task expecting a frame shape the Pi has moved on from -
@@ -740,7 +784,7 @@ pub async fn spi_pio_task(
                 // Nothing to restore: `peek_progress()` doesn't consume,
                 // so a dropped `SendProgress` frame just means the next
                 // poll re-reads the same (still-current) snapshot.
-                BulkState::Idle | BulkState::SendProgress(_) => {}
+                BulkState::Idle | BulkState::SendProgress(_) | BulkState::SendDimmer(_) => {}
             }
             tx_buf = build_tx_buf_for_state(&bulk_state);
             continue;
@@ -755,6 +799,10 @@ pub async fn spi_pio_task(
             BulkState::SendAck(sweep) => {
                 apply_duty_frame(&rx, &mut last_logged_duty, &mut mosi_health);
                 BulkState::DoBulk(sweep)
+            }
+            BulkState::SendDimmer(_) => {
+                apply_duty_frame(&rx, &mut last_logged_duty, &mut mosi_health);
+                BulkState::Idle
             }
             BulkState::SendProgress(_) => {
                 // Same shape as SendAck above: this exchange's RX is a
@@ -787,6 +835,12 @@ pub async fn spi_pio_task(
                             });
                         BulkState::SendProgress(progress)
                     }
+                    Some(CMD_DIMMER_SET) => {
+                        let val = ((rx[0] as u16) << 8) | (rx[1] as u16);
+                        dimmer::host_set_alpha(val);
+                        BulkState::Idle
+                    }
+                    Some(CMD_DIMMER_STATUS) => BulkState::SendDimmer(dimmer::status_reply()),
                     Some(CMD_SET_CONFIG_JUMPERS) => {
                         let duty_h = rx[0] as u8;
                         let duty_l = rx[1] as u8;

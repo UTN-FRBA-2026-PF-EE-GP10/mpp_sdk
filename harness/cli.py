@@ -19,6 +19,7 @@ _COMMANDS: dict[str, tuple[str, bool]] = {
     "compare-dynamic": ("harness.compare_dynamic", False),
     "compare-cyclic": ("harness.compare_cyclic", False),
     "compare-noise": ("harness.compare_noise", False),
+    "compare-bench-like": ("harness.compare_bench_like", False),
     "compare-rescan": ("harness.compare_rescan", False),
     "compare-bank": ("harness.compare_bank", False),
     "compare-seeds": ("harness.compare_seeds", False),
