@@ -77,11 +77,13 @@ def test_lag_reaches_63_percent_after_tau():
         settle_tau_s=tau,
         exchange_period_s=1e-3,
     )
-    v0, _ = src.read()
+    v0, i0 = src.read()
     for _ in range(10):  # 10 ms = tau
         src.write(0.9)
     frac = (src.read()[0] - v0) / (9.0 - v0)
     assert frac == pytest.approx(1.0 - math.exp(-1.0), abs=1e-9)
+    frac_i = (src.read()[1] - i0) / (0.9 - i0)
+    assert frac_i == pytest.approx(1.0 - math.exp(-1.0), abs=1e-9)
     for _ in range(100):
         src.write(0.9)
     assert src.read()[0] == pytest.approx(9.0, abs=1e-3)
@@ -120,3 +122,19 @@ def test_duty_and_source_passthrough():
     src.write(0.42)
     assert src.duty == 0.42
     assert isinstance(src.source, _Step)
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf")])
+@pytest.mark.parametrize("v_step", [0.0, 1e-3])
+def test_non_finite_inner_reading_is_held(bad, v_step):
+    inner = _Step()
+    src = BenchLikeSource(inner, sample_period_s=1e-3, v_step=v_step, settle_tau_s=0.0)
+    src.write(0.6)
+    good = src.read()
+    inner.read = lambda: (bad, bad)
+    src.write(0.7)
+    assert src.read() == good
+    del inner.read
+    src.write(0.8)
+    assert all(math.isfinite(x) for x in src.read())
+    assert src.read()[0] == pytest.approx(8.0, abs=1e-6)

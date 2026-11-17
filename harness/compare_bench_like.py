@@ -6,6 +6,8 @@ trackers run on the plain source and on the bench-like source at a fast and a
 slow decision rate, so the effect of "decisions faster than the converter
 settles" can be seen. The table sweeps the exchange period.
 
+Needs the pvlib extra (``uv sync --extra pvlib``).
+
 Saves a PNG to ``harness/output/compare_bench_like.png``.
 
 Run with::
@@ -58,7 +60,10 @@ def run(make_ctl, panel, exchange_s: float | None, tau_s: float = SETTLE_TAU_S):
 
 
 def main() -> None:
-    panel = _panel()
+    try:
+        panel = _panel()
+    except ImportError as exc:
+        raise SystemExit(f"{exc}") from exc
     specs = common.algorithm_specs()[:3]
     cases = (
         ("plain simulated source", None),

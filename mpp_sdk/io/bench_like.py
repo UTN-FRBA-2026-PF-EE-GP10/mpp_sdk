@@ -95,8 +95,11 @@ class BenchLikeSource(SignalSource):
     def write(self, duty_cycle: float) -> None:
         self._source.write(duty_cycle)
         tv, ti = self._source.read()
-        self._fv += self._alpha * (tv - self._fv)
-        self._fi += self._alpha * (ti - self._fi)
+        # A bad reading from the wrapped source must not poison the lag state;
+        # skip the update and keep the last good value.
+        if math.isfinite(tv) and math.isfinite(ti):
+            self._fv += self._alpha * (tv - self._fv)
+            self._fi += self._alpha * (ti - self._fi)
         self._n += 1
         # Small offset keeps exact multiples (e.g. 2 ms / 1 ms) off float edges.
         index = math.floor(self._n * self._dt / self._sample_period + 1e-9)
