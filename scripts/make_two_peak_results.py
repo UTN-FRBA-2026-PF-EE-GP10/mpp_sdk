@@ -36,13 +36,35 @@ FOUND_RATIO = 0.98  # final power vs global MPP to count as "found"
 SETTLE_BAND = 0.01  # power stays within 1 % of its final value
 
 
-def local_maxima(panel: MeasuredPanel, n: int = 800) -> list[tuple[float, float]]:
-    """Return (V, P) of interior local maxima above 5 % of the global peak."""
+def interpolated_mpp(panel: MeasuredPanel, n: int = 800) -> float:
+    """Global power peak of the interpolated curve, the target the algorithms see."""
     v = np.linspace(0.0, panel.open_circuit_voltage, n)
-    p = v * np.asarray(panel.current(v))
-    floor = 0.05 * p.max()
-    idx = [k for k in range(1, n - 1) if p[k] >= p[k - 1] and p[k] > p[k + 1] and p[k] > floor]
-    return [(float(v[k]), float(p[k])) for k in idx]
+    return float(np.max(v * np.asarray(panel.current(v))))
+
+
+def local_maxima(record, min_fraction: float = 0.05) -> list[tuple[float, float]]:
+    """Return (V, P) of local maxima among the measured samples only.
+
+    A hump that exists only between two far-apart samples comes from linear
+    interpolation, so it is not counted.
+    """
+    by_v: dict[float, list[float]] = {}
+    for v, i in record.points:
+        by_v.setdefault(v, []).append(i)
+    vs = sorted(by_v)
+    ps = [v * float(np.mean(by_v[v])) for v in vs]
+    floor = min_fraction * max(ps)
+    return [
+        (vs[k], ps[k])
+        for k in range(1, len(vs) - 1)
+        if ps[k] >= ps[k - 1] and ps[k] > ps[k + 1] and ps[k] > floor
+    ]
+
+
+def largest_gap(record) -> tuple[float, float]:
+    """Return the widest voltage interval with no measured sample."""
+    vs = sorted({v for v, _ in record.points})
+    return max(zip(vs, vs[1:], strict=False), key=lambda ab: ab[1] - ab[0])
 
 
 def run_one(make_ctl, panel, load: float, duty: float, n_steps: int) -> tuple[float, int]:
@@ -64,9 +86,11 @@ def evaluate(curves, n_steps: int = N_STEPS, starts=START_DUTIES) -> list[dict]:
     rows = []
     specs = common.algorithm_specs()
     for name, path, load in curves:
-        panel = MeasuredPanel(library.load(Path(path)))
-        peaks = local_maxima(panel)
-        p_mpp = max((p for _, p in peaks), default=0.0)
+        record = library.load(Path(path))
+        panel = MeasuredPanel(record)
+        peaks = local_maxima(record)
+        p_mpp = interpolated_mpp(panel)
+        gap = largest_gap(record)
         peak_text = "; ".join(f"{v:.1f} V, {p:.2f} W" for v, p in peaks)
         for spec in specs:
             for d0 in starts:
@@ -75,6 +99,7 @@ def evaluate(curves, n_steps: int = N_STEPS, starts=START_DUTIES) -> list[dict]:
                     {
                         "curve": name,
                         "peaks": peak_text,
+                        "gap": f"{gap[0]:.1f} to {gap[1]:.1f} V",
                         "algorithm": spec.label,
                         "start": d0,
                         "p_final": p_f,
