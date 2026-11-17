@@ -9,6 +9,7 @@ also expose them, so either of these is fine:
 """
 
 from . import metrics
+from .algorithms.adaptive_perturb_observe import AdaptivePerturbAndObserve
 from .algorithms.base import MPPTAlgorithm
 from .algorithms.fuzzy import FuzzyLogic
 from .algorithms.incremental_conductance import IncrementalConductance
@@ -31,6 +32,7 @@ from .visualization import LivePanelView, plot_iv_with_operating_point
 __version__ = "0.1.0"
 
 __all__ = [
+    "AdaptivePerturbAndObserve",
     "MPPTAlgorithm",
     "FuzzyLogic",
     "IncrementalConductance",

@@ -38,6 +38,7 @@ nav:
       - Measurement & Telemetry Protocol: hardware_v1/mppt_measurement_protocol.md
   - Algorithms:
       - Perturb & Observe: algorithms/perturb_observe.md
+      - Adaptive Perturb & Observe: algorithms/adaptive_perturb_observe.md
       - Incremental Conductance: algorithms/incremental_conductance.md
       - Fuzzy Logic: algorithms/fuzzy_logic.md
       - Scan-and-Track: algorithms/scan_and_track.md

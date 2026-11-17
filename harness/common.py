@@ -79,6 +79,13 @@ def algorithm_specs(
             ),
         ),
         AlgorithmSpec(
+            "Adaptive P&O",
+            "tab:cyan",
+            lambda d: mpp_sdk.AdaptivePerturbAndObserve(
+                initial_duty=d, max_step=0.002, min_duty=0.1, max_duty=0.9
+            ),
+        ),
+        AlgorithmSpec(
             "InCond",
             "tab:red",
             lambda d: mpp_sdk.IncrementalConductance(
