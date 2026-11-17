@@ -16,7 +16,7 @@
         <link rel="prev" href="../mppt_measurement_protocol/">
       
       
-        <link rel="next" href="../../algorithms/perturb_observe/">
+        <link rel="next" href="../../results/two_peak_compare/">
       
       
         
@@ -790,7 +790,7 @@
   <span class="md-ellipsis">
     
   
-    Algorithms
+    Results
   
 
     
@@ -803,6 +803,93 @@
         
         <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Results
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../results/two_peak_compare/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Two-peak curve comparison
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algorithms
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1260,7 +1347,8 @@
   bit 1 mains, bit 2 locked, bit 3 timed out.</li>
 <li>The CRC covers bytes 0 to 7, then <code>ACK</code> (byte 9), then byte 10 (<code>SETTLED</code>, always <code>0</code> here), in that order.
   Every MISO frame does the same.</li>
-<li><code>SET</code> is the last alpha the Pi sent. <code>APPLIED</code> is the angle the dimmer reported.</li>
+<li><code>SET</code> is the alpha the Pico holds now.
+  It is the last alpha the Pi sent, or <code>18000</code> after a timeout or a link loss. <code>APPLIED</code> is the angle the dimmer reported.</li>
 <li><code>AGE</code> is the time since the last good status read, in 100 ms units, saturating at 255.</li>
 </ul>
 <h2 id="lamp-power">Lamp power<a class="headerlink" href="#lamp-power" title="Permanent link">&para;</a></h2>
