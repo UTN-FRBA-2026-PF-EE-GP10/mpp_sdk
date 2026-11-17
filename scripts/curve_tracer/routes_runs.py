@@ -14,6 +14,7 @@ from mpp_sdk.curves import CurveRecord
 from mpp_sdk.curves import library as curve_library
 from mpp_sdk.curves.record import now_utc
 from mpp_sdk.runs import library as run_library
+from mpp_sdk.runs.loop import MAX_CONTROL_PERIOD_MS
 from scripts.curve_tracer.cache import _SweepCache
 from scripts.curve_tracer.library_paths import (
     _curve_path,
@@ -42,7 +43,6 @@ from scripts.curve_tracer.live_run import (
 )
 from scripts.curve_tracer.models import _BatchDeleteRequest, _StartRunRequest
 from scripts.curve_tracer.run_exec import _builtin_reference_points, _run_simulated
-from scripts.run_algorithm import MAX_CONTROL_PERIOD_MS
 
 
 def register_run_routes(

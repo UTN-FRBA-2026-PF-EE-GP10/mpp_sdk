@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import re
 
-from scripts.run_algorithm import BOARD_I_MAX, BOARD_V_MAX, BOARD_V_OUT_MAX
+from mpp_sdk.runs.loop import BOARD_I_MAX, BOARD_V_MAX, BOARD_V_OUT_MAX
 
 # Hard ceiling on how long a live run can drive the converter, regardless
 # of what the operator asks for - the backstop against a run nobody
@@ -25,7 +25,7 @@ _DEFAULT_RUN_DURATION_S = 10.0
 _DEFAULT_INITIAL_DUTY = 0.5
 
 # Safety bounds a run is held to unless the operator narrows them: the
-# board limits from run_algorithm.py, so the CLI and the UI enforce the
+# board limits from mpp_sdk/runs/loop.py, so the CLI and the UI enforce the
 # same values. Served by GET /api/run-config so the page shows the values
 # actually enforced. The converter output limit stays under the on-chip
 # ADC's `Low` range (~27 V), so the reading that trips it is a real one,

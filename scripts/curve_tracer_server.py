@@ -13,7 +13,7 @@ release-relay/runs-start routes hand their request off through a queue
 instead of calling into it directly from a request-handling thread.
 
 A live closed-loop MPPT run (`POST /api/runs/start`) executes on that same
-thread, via `_run_live`/`run_control_loop` (`scripts/run_algorithm.py`) -
+thread, via `_run_live`/`run_control_loop` (`mpp_sdk/runs/loop.py`) -
 for the run's whole duration, normal curve-tracer polling is displaced,
 not merely delayed, since a run and a sweep cannot share the one SPI link
 at once. `GET /api/data` reports this (see `_run_live`) rather than

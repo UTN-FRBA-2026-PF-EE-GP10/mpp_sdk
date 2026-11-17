@@ -13,6 +13,15 @@ from mpp_sdk.curves import library as curve_library
 from mpp_sdk.curves.record import now_utc
 from mpp_sdk.runs import RunRecord
 from mpp_sdk.runs import library as run_library
+
+# run_control_loop is the one control loop and abort path shared by the
+# CLI (scripts/run_algorithm.py) and this server - a live run started from
+# the web UI must not reimplement it. _BAD_FRAMES_LINK_DOWN is aliased
+# because that module's own constant is tuned for this server's ~50 ms
+# poll period, not a live run's much tighter control loop - see
+# _RUN_BAD_FRAMES_LINK_DOWN below.
+from mpp_sdk.runs.loop import _BAD_FRAMES_LINK_DOWN as _RUN_BAD_FRAMES_LINK_DOWN
+from mpp_sdk.runs.loop import build_run_settings, run_control_loop
 from mpp_sdk.runs.record import RunSample
 from mpp_sdk.runs.record import now_utc as runs_now_utc
 from mpp_sdk.sessions import library as session_library
@@ -24,15 +33,6 @@ from scripts.curve_tracer.limits import (
     _SIMULATED_RUN_PERIOD_S,
 )
 from scripts.curve_tracer.live_run import _LiveRunCache, _RunRequest
-
-# run_control_loop is the one control loop and abort path shared by the
-# CLI (scripts/run_algorithm.py) and this server - a live run started from
-# the web UI must not reimplement it. _BAD_FRAMES_LINK_DOWN is aliased
-# because that module's own constant is tuned for this server's ~50 ms
-# poll period, not a live run's much tighter control loop - see
-# _RUN_BAD_FRAMES_LINK_DOWN below.
-from scripts.run_algorithm import _BAD_FRAMES_LINK_DOWN as _RUN_BAD_FRAMES_LINK_DOWN
-from scripts.run_algorithm import build_run_settings, run_control_loop
 
 
 def _execute_run(
@@ -52,7 +52,7 @@ def _execute_run(
     caller decides it, never the request body, so a run can't misreport
     what actually drove it.
 
-    Reuses `run_control_loop` (`scripts/run_algorithm.py`) unchanged - one
+    Reuses `run_control_loop` (`mpp_sdk/runs/loop.py`) unchanged - one
     control loop and one abort path for the CLI and every caller here.
     """
     algorithm = request.spec.make(request.initial_duty)
