@@ -314,6 +314,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "dimmer-link"
+version = "0.1.0"
+
+[[package]]
 name = "document-features"
 version = "0.2.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -805,6 +809,7 @@ dependencies = [
  "critical-section",
  "defmt",
  "defmt-rtt",
+ "dimmer-link",
  "embassy-executor",
  "embassy-futures",
  "embassy-rp",

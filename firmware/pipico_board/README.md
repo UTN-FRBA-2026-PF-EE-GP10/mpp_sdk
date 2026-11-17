@@ -121,6 +121,10 @@ commands are the only things that set them:
 - `0xC1`..`0xC9`: dynamic configuration commands (jumpers, $R_{\text{on}}$, MAX31865
   enable, hardware cutoffs, power supply mode, Vout target, fixed duty, and cutoff
   reset). See "Dynamic Configuration" below.
+- `0xD1`: sets the dimmer alpha (first two payload bytes, big-endian, 0.01 degree)
+- `0xD2`: requests the dimmer status, sent in the next exchange's MISO
+
+See "Dimmer" below.
 
 **Poll faster than 100 ms**: the PIO SPI slave has a known, still-open
 defect where it cannot cleanly recover from an idle gap longer than its
@@ -565,6 +569,17 @@ Two independent LEDs answer two different questions:
   - **LED 3**: SPI communication status heartbeat. Flashes green briefly on every
     successfully-received SPI frame, dark otherwise.
 
+## Dimmer
+
+`src/dimmer.rs` drives the halogen lamp dimmer over I2C and sets its firing angle from the Pi.
+
+- GPIO5 and GPIO6 cannot be an I2C pair on the RP2040, so the master is bit-banged
+  (open drain, timer awaits between bits, clock-stretch timeout, bus recovery).
+- The lamp is off at boot, when the SPI link is lost, and 3 s after the last valid `0xD1`.
+- Wiring, I2C frames, safety rules and the `0xD1`/`0xD2` byte layouts:
+  [docs/hardware_v1/dimmer_link.md](../../docs/hardware_v1/dimmer_link.md).
+- The decision logic is in `firmware/dimmer-link/src/master.rs`, with host unit tests.
+
 ## GPIO Assignments
 
 | Pin | GPIO    | Net Name        | Function / Notes              |
@@ -574,8 +589,8 @@ Two independent LEDs answer two different questions:
 | 4   | GPIO2   | Tracer_En       | Curve-tracer relay enable (idle low) |
 | 5   | GPIO3   | Tracer_pwm      | Curve-tracer bleed PWM, hardware PWM (idle 0 %) |
 | 6   | GPIO4   | NeoPixel_Din    | 4x WS2812 NeoPixels: Vin, Vout, I levels + SPI heartbeat |
-| 7   | GPIO5   | I2C_SDA         | I2C data                      |
-| 9   | GPIO6   | I2C_SCL         | I2C clock                     |
+| 7   | GPIO5   | I2C_SDA         | I2C data (bit-banged, dimmer) |
+| 9   | GPIO6   | I2C_SCL         | I2C clock (bit-banged, dimmer)|
 | 10  | GPIO7   | GPIO7           | General purpose               |
 | 11  | GPIO8   | GPIO8           | General purpose               |
 | 12  | GPIO9   | GPIO9           | General purpose               |
