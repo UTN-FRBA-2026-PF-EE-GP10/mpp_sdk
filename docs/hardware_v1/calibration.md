@@ -6,32 +6,22 @@ this page explains why and how.
 
 ## What it does
 
-The ADC gives a raw code (0 to 4095) for the voltage on its pin. The
-firmware turns that code into volts with one straight line:
+- The ADC gives a raw code (0 to 4095). The firmware converts it with one
+  straight line, then multiplies by the divider ratio (8.5 on `Low`):
 
-```text
-pin voltage = 0.79322 mV x (code - 13.19)
-```
+  ```text
+  pin voltage = 0.79322 mV x (code - 13.19)
+  ```
 
-Then it multiplies by the divider ratio (8.5 on the `Low` range) to get the
-voltage at the terminals.
+- The gain (0.79322 mV per code) and the zero (13.19 codes) are in
+  `firmware/pipico_board/src/adc_cal.rs`. `ADC_PWR`, `ADC_VOUT` and
+  `ADC_Input_Curr` share one ADC, so they share the line.
+- The ADC reads about 13 codes at 0 V. On `Low` that is about 90 mV at the
+  terminals. Before the calibration, V out showed 85-95 mV with 0 V on the
+  output, and readings below 1.2 V were 6-16 % high. From 3 V to 18 V they
+  were within 0.5 %.
 
-The two numbers are the **gain** (0.79322 mV per code) and the **zero**
-(13.19 codes). They are in `firmware/pipico_board/src/adc_cal.rs`. The
-same line is used for `ADC_PWR`, `ADC_VOUT` and `ADC_Input_Curr`: they
-share one ADC.
-
-## Why it is needed
-
-The ADC reads about **13 codes at 0 V**. On the `Low` range that is about
-**90 mV at the terminals**. Before the calibration:
-
-- V out showed 85-95 mV with the converter off and 0 V on the output.
-- Below 1.2 V, readings were 6-16 % too high.
-- From 3 V to 18 V, readings were already within 0.5 %.
-
-So the calibration matters most near 0 V and at low voltage. Measured on
-2026-09-19, against a multimeter:
+Check against a multimeter (2026-09-19):
 
 | Test | Meter | ADC_VOUT |
 |------|-------|----------|
@@ -113,11 +103,10 @@ The board has three ranges: `Low`, `Mid`, `Full`. Each range trades full-scale
 voltage for ADC resolution. `Low` gives the most resolution but the lowest
 ceiling; `Full` gives the highest ceiling but the least resolution per volt.
 
-| Range | Full scale | When to use it |
-|-------|-----------|-----------------|
-| `Low` | about 27.3 V | one panel (the firmware setting today) |
-| `Mid` | about 51.5 V | two panels in series (about 35 V open-circuit) |
-| `Full` | about 75.6 V | highest input the board can see |
+The full-scale values (`Low` about 27.3 V, `Mid` about 51.5 V, `Full` about
+75.6 V) are in the range table in `firmware/pipico_board/README.md`. Use
+`Low` for one panel (the firmware default) and `Mid` for two panels in
+series (about 35 V open-circuit).
 
 This needs four steps: move the jumpers, set the constant, reflash, and
 check the result against a meter. It does **not** need a new gain/zero fit
