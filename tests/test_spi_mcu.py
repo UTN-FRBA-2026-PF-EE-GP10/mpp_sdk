@@ -932,3 +932,17 @@ def test_batch_configure(spi_mcu_source):
     assert src.max31865_enabled is True
     assert src.cutoff_i_max_ma == 900
     assert src.psu_enabled is True
+
+
+def test_bad_frames_is_a_running_total_that_never_resets(spi_mcu_source):
+    src = spi_mcu_source()
+    assert src.bad_frames == 0
+    src._spi.responses = [[0xFF] * 12, [0xFF] * 12]
+    src.write(0.0)
+    src.write(0.0)
+    src._spi.next_rx = _miso_frame(v_raw=5000, i_raw=250, vout_raw=3300, temp_raw=0)
+    src.write(0.0)
+    assert src.consecutive_bad_frames == 0
+    assert src.bad_frames == 2
+    with pytest.raises(AttributeError):
+        src.bad_frames = 0

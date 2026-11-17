@@ -579,3 +579,130 @@ def test_the_default_current_limit_is_below_the_sensor_maximum():
     can never trip on a real reading."""
     sensor_max_a = 1000 * (2**19 - 1) / 2**19 / 1000
     assert sensor_max_a > BOARD_I_MAX
+
+
+# ------------------------------------------------------------------
+# control period, run_info, settings
+# ------------------------------------------------------------------
+
+
+def test_control_period_keeps_steps_at_least_that_far_apart():
+    clock = _FakeClock()
+    info: dict = {}
+    samples, _, _ = run_control_loop(
+        _FakeSource(),
+        _FixedDutyAlgorithm(0.25),
+        duration_s=0.1,
+        v_max=100.0,
+        i_max=100.0,
+        clock=clock,
+        sleep=clock.advance,
+        control_period_ms=20.0,
+        run_info=info,
+    )
+    assert len(samples) == 5
+    assert info["step_period_mean_ms"] == pytest.approx(20.0)
+    assert info["step_period_max_ms"] == pytest.approx(20.0)
+
+
+def test_no_control_period_does_not_sleep():
+    clock = _FakeClock()
+    slept: list[float] = []
+    steps = 0
+
+    def should_stop():
+        nonlocal steps
+        steps += 1
+        return steps > 3
+
+    run_control_loop(
+        _FakeSource(),
+        _FixedDutyAlgorithm(0.25),
+        duration_s=1.0,
+        v_max=100.0,
+        i_max=100.0,
+        clock=clock,
+        sleep=slept.append,
+        should_stop=should_stop,
+    )
+    assert slept == []
+
+
+@pytest.mark.parametrize("value", [0.0, -1.0, math.nan])
+def test_a_bad_control_period_raises_before_any_write(value):
+    source = _FakeSource()
+    with pytest.raises(ValueError, match="control_period_ms"):
+        run_control_loop(
+            source,
+            _FixedDutyAlgorithm(0.3),
+            duration_s=1.0,
+            v_max=100.0,
+            i_max=100.0,
+            control_period_ms=value,
+        )
+    assert source.writes == []
+
+
+def test_run_info_counts_bad_frames_of_this_run_only():
+    class _Counting(_FakeSource):
+        bad_frames = 7
+
+        def read(self):
+            self.bad_frames += 2
+            return super().read()
+
+    clock = _FakeClock()
+    info: dict = {}
+    run_control_loop(
+        _Counting(),
+        _FixedDutyAlgorithm(0.25),
+        duration_s=0.3,
+        v_max=100.0,
+        i_max=100.0,
+        clock=clock,
+        sleep=clock.advance,
+        period_s=0.1,
+        run_info=info,
+    )
+    assert info["bad_frames"] == 6
+
+
+def test_run_info_bad_frames_is_none_for_a_source_without_the_counter():
+    info: dict = {}
+    run_control_loop(
+        _FakeSource(),
+        _FixedDutyAlgorithm(0.25),
+        duration_s=0.0,
+        v_max=100.0,
+        i_max=100.0,
+        run_info=info,
+    )
+    assert info["bad_frames"] is None
+    assert info["step_period_mean_ms"] is None
+
+
+def test_build_run_settings_reads_what_is_known_and_nulls_the_rest():
+    from mpp_sdk.algorithms import PerturbAndObserve
+    from scripts.run_algorithm import build_run_settings
+
+    class _Src:
+        vin_range = "low"
+        vout_range = "mid"
+
+    s = build_run_settings(
+        _Src(),
+        PerturbAndObserve(step_size=0.002),
+        control_period_ms=10.0,
+        session_fields={"load_resistor": "50 Ohm", "firmware_commit": "abc1234"},
+    )
+    assert s["algorithm_params"]["step_size"] == 0.002
+    assert s["adc_divider_range"] == {"vin": "low", "vout": "mid"}
+    assert s["load"] == "50 Ohm"
+    assert s["firmware_commit"] == "abc1234"
+    assert s["control_period_ms"] == 10.0
+    assert s["averaging"] is None
+
+    bare = build_run_settings(_FakeSource(), _FixedDutyAlgorithm(0.3), control_period_ms=None)
+    assert bare["adc_divider_range"] is None
+    assert bare["load"] is None
+    assert bare["firmware_commit"] is None

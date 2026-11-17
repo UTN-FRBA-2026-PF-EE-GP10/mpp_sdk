@@ -210,3 +210,25 @@ def test_load_rejects_a_file_that_is_not_a_json_object(tmp_path, text):
 def test_save_leaves_no_temp_file_behind(tmp_path):
     save(_record(), tmp_path)
     assert all(p.suffix == ".json" for p in tmp_path.iterdir())
+
+
+def test_settings_and_timing_round_trip(tmp_path):
+    record = _record(
+        settings={"control_period_ms": 10.0, "load": "50 Ohm"},
+        step_period_mean_ms=10.2,
+        step_period_max_ms=14.0,
+        bad_frames=3,
+    )
+    assert load(save(record, tmp_path)) == record
+
+
+def test_old_file_without_settings_loads_with_defaults(tmp_path):
+    data = _record().to_dict()
+    for key in ("settings", "step_period_mean_ms", "step_period_max_ms", "bad_frames"):
+        del data[key]
+    path = tmp_path / "old.json"
+    path.write_text(json.dumps(data))
+    loaded = load(path)
+    assert loaded.settings is None
+    assert loaded.bad_frames is None
+    assert loaded.step_period_mean_ms is None

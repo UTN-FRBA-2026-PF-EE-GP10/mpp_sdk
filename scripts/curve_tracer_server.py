@@ -49,6 +49,7 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import contextlib
 import ipaddress
 import math
 import queue
@@ -97,6 +98,7 @@ from scripts.run_algorithm import (
     BOARD_I_MAX,
     BOARD_V_MAX,
     BOARD_V_OUT_MAX,
+    build_run_settings,
     run_control_loop,
 )
 
@@ -436,6 +438,7 @@ class _RunRequest:
     # see _SaveCurveRequest.session_id's own doc comment. Stamped onto the
     # saved RunRecord in save_and_finish below.
     session_id: str | None = None
+    control_period_ms: float | None = None
 
 
 class _LiveRunCache:
@@ -603,6 +606,13 @@ def _execute_run(
         # than raising.
         run_cache.add_sample(sample, vout=getattr(src, "vout", None))
 
+    run_info: dict = {}
+    session_fields: dict[str, str] = {}
+    if request.session_id is not None:
+        # A session that cannot be read must not block the run.
+        with contextlib.suppress(Exception):
+            session_fields = session_library.load(_session_path(request.session_id)).fields
+
     def save_and_finish(samples: tuple[RunSample, ...], aborted: bool, reason: str | None) -> None:
         record = RunRecord(
             captured_at=runs_now_utc(),
@@ -614,6 +624,15 @@ def _execute_run(
             notes=reason or "",
             source=source,
             session_id=request.session_id,
+            settings=build_run_settings(
+                src,
+                algorithm,
+                control_period_ms=request.control_period_ms,
+                session_fields=session_fields,
+            ),
+            step_period_mean_ms=run_info.get("step_period_mean_ms"),
+            step_period_max_ms=run_info.get("step_period_max_ms"),
+            bad_frames=run_info.get("bad_frames"),
         )
         try:
             path = run_library.save(record)
@@ -641,6 +660,8 @@ def _execute_run(
             on_sample=on_sample,
             period_s=period_s,
             samples=collected,
+            control_period_ms=request.control_period_ms,
+            run_info=run_info,
         )
     except Exception as exc:
         # run_control_loop's own `finally` has already driven duty to zero
@@ -1120,6 +1141,8 @@ class _StartRunRequest(BaseModel):
     # own doc comment. Validated the same way, stamped onto the saved
     # RunRecord the same way, by post_start_run/_execute_run below.
     session_id: str | None = None
+    # Minimum time between algorithm steps; None keeps one step per exchange.
+    control_period_ms: float | None = None
 
 
 # A run's URL id is its filename stem (library.save's naming scheme), never
@@ -2089,6 +2112,11 @@ def create_app(
             ("v_out_max", body.v_out_max),
             ("initial_duty", body.initial_duty),
             *(() if body.duration_s is None else (("duration_s", body.duration_s),)),
+            *(
+                ()
+                if body.control_period_ms is None
+                else (("control_period_ms", body.control_period_ms),)
+            ),
         ):
             if not math.isfinite(value):
                 raise HTTPException(status_code=400, detail=f"{field_name} must be finite")
@@ -2181,6 +2209,8 @@ def create_app(
         # module docstring); the firmware has no on-target cutoff for this
         # case. Non-positive is rejected outright rather than clamped: a
         # v_max of 0 isn't a limit, it's an immediate abort mislabeled as one.
+        if body.control_period_ms is not None and body.control_period_ms <= 0:
+            raise HTTPException(status_code=400, detail="control_period_ms must be positive")
         if body.v_max <= 0:
             raise HTTPException(status_code=400, detail="v_max must be positive")
         if body.i_max <= 0:
@@ -2216,6 +2246,7 @@ def create_app(
             label=label,
             curve_points=curve_points,
             session_id=body.session_id,
+            control_period_ms=body.control_period_ms,
         )
         if body.simulated:
             # Never touches spidev, so it does not need to wait for the
@@ -2289,6 +2320,10 @@ def create_app(
             "notes": r.notes,
             "source": r.source,
             "session_id": r.session_id,
+            "settings": r.settings,
+            "step_period_mean_ms": r.step_period_mean_ms,
+            "step_period_max_ms": r.step_period_max_ms,
+            "bad_frames": r.bad_frames,
             "n_samples": len(r.samples),
             "duration_s": _run_duration_s(r.samples),
             "downsampled": downsampled,

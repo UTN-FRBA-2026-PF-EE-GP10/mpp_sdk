@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import inspect
 import logging
 import math
 import time
@@ -99,6 +100,8 @@ def run_control_loop(
     max_consecutive_bad_frames: int = _BAD_FRAMES_LINK_DOWN,
     on_sample: Callable[[RunSample], None] | None = None,
     samples: list[RunSample] | None = None,
+    control_period_ms: float | None = None,
+    run_info: dict | None = None,
 ) -> tuple[list[RunSample], bool, str | None]:
     """Run `algorithm` against `source` for `duration_s` seconds,
     recording one `RunSample` per control step. Returns
@@ -147,6 +150,17 @@ def run_control_loop(
     do not reimplement this loop elsewhere; extend it here instead so the
     CLI and any other caller keep exactly one abort path.
 
+    `control_period_ms`, if given, keeps the algorithm steps at least this
+    far apart: the loop sleeps off the rest of the period after each step.
+    `None` (default) runs one step per source exchange, as before. The
+    sensor gives a new V/I pair only every few ms, so steps faster than
+    that act on repeated readings.
+
+    `run_info`, if given, is filled at the end (also on an exception) with
+    `step_period_mean_ms`, `step_period_max_ms` (None below two steps) and
+    `bad_frames` (frames the source rejected during this run, None if the
+    source does not count them).
+
     `period_s > 0` adds a `sleep()` pad between steps; 0 (default) runs as
     fast as `source.read()/write()` allow. `on_sample`, if given, is
     called with each `RunSample` as it's recorded - for a caller (e.g. a
@@ -159,7 +173,11 @@ def run_control_loop(
         _check_positive_finite("v_out_max", v_out_max)
     if not (math.isfinite(initial_duty) and 0.0 <= initial_duty < 1.0):
         raise ValueError(f"initial_duty must be a finite number in [0, 1); got {initial_duty!r}")
+    if control_period_ms is not None:
+        _check_positive_finite("control_period_ms", control_period_ms)
     samples = [] if samples is None else samples
+    bad_frames_start = getattr(source, "bad_frames", None)
+    step_starts: list[float] = []
     start = clock()
     aborted = False
     reason: str | None = None
@@ -225,15 +243,75 @@ def run_control_loop(
             samples.append(sample)
             if on_sample is not None:
                 on_sample(sample)
+            step_starts.append(t)
             if period_s > 0:
                 sleep(period_s)
+            if control_period_ms is not None:
+                remaining = t + control_period_ms / 1000.0 - (clock() - start)
+                if remaining > 0:
+                    sleep(remaining)
     finally:
         # Zeroing duty is the priority on the way out; a broken write here
         # must not mask whatever exception is already propagating (or
         # silently replace a clean return with a spurious one).
         with contextlib.suppress(Exception):
             source.write(0.0)
+        if run_info is not None:
+            gaps = [(b - a) * 1000.0 for a, b in zip(step_starts, step_starts[1:], strict=False)]
+            run_info["step_period_mean_ms"] = sum(gaps) / len(gaps) if gaps else None
+            run_info["step_period_max_ms"] = max(gaps) if gaps else None
+            bad_frames_end = getattr(source, "bad_frames", None)
+            run_info["bad_frames"] = (
+                bad_frames_end - bad_frames_start
+                if bad_frames_start is not None and bad_frames_end is not None
+                else None
+            )
     return samples, aborted, reason
+
+
+def _algorithm_params(algorithm) -> dict:
+    """Constructor parameters of `algorithm` that it still holds as a plain
+    number, read by name (`step_size` or `_step_size`). Algorithms keep no
+    public parameter list, so a parameter held under another name is left
+    out rather than guessed."""
+    params: dict = {}
+    try:
+        names = inspect.signature(type(algorithm).__init__).parameters
+    except TypeError, ValueError:
+        return params
+    for name in names:
+        if name in ("self", "initial_duty"):
+            continue
+        for attr in (name, f"_{name}"):
+            value = getattr(algorithm, attr, None)
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                params[name] = value
+                break
+    return params
+
+
+def build_run_settings(
+    source,
+    algorithm,
+    *,
+    control_period_ms: float | None,
+    session_fields: dict[str, str] | None = None,
+) -> dict:
+    """The `RunRecord.settings` block. Anything the source or the session
+    does not know is None. The firmware has no version readout, so its
+    commit and the load come only from the session checklist fields."""
+    fields = session_fields or {}
+    ranges = (getattr(source, "vin_range", None), getattr(source, "vout_range", None))
+    return {
+        "algorithm_params": _algorithm_params(algorithm),
+        "averaging": getattr(source, "averaging", None),
+        "adc_divider_range": (
+            {"vin": ranges[0], "vout": ranges[1]} if None not in ranges else None
+        ),
+        "load": fields.get("load_resistor") or None,
+        "firmware_commit": fields.get("firmware_commit") or None,
+        "control_period_ms": control_period_ms,
+    }
 
 
 def _sweep_and_save_curve(src, *, timeout_s: float, poll_interval_s: float, label: str) -> str:
@@ -280,6 +358,12 @@ def main() -> None:
         default=BOARD_V_OUT_MAX,
         help="converter output limit (below the ADC Low range, ~27 V)",
     )
+    parser.add_argument(
+        "--control-period-ms",
+        type=float,
+        default=None,
+        help="minimum time between algorithm steps in ms (default: one step per exchange)",
+    )
     parser.add_argument("--no-sweep", action="store_true", help="skip the curve sweep")
     parser.add_argument("--curve", default=None, help="existing curve filename (with --no-sweep)")
     parser.add_argument(
@@ -317,6 +401,7 @@ def main() -> None:
 
         print(f"Running {spec.label} for {args.duration_s}s...")
         algorithm = spec.make(0.5)
+        run_info: dict = {}
         samples, aborted, reason = run_control_loop(
             src,
             algorithm,
@@ -324,7 +409,10 @@ def main() -> None:
             v_max=args.v_max,
             i_max=args.i_max,
             v_out_max=args.v_out_max,
+            control_period_ms=args.control_period_ms,
+            run_info=run_info,
         )
+        settings = build_run_settings(src, algorithm, control_period_ms=args.control_period_ms)
 
     record = RunRecord(
         captured_at=runs_now_utc(),
@@ -337,6 +425,10 @@ def main() -> None:
         # This script only ever runs against a real board (it needs
         # spidev), so the run it saves always drove real hardware.
         source="hardware",
+        settings=settings,
+        step_period_mean_ms=run_info.get("step_period_mean_ms"),
+        step_period_max_ms=run_info.get("step_period_max_ms"),
+        bad_frames=run_info.get("bad_frames"),
     )
     path = runs_save(record)
 

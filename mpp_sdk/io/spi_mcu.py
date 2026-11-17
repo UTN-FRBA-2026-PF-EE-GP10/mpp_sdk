@@ -262,6 +262,7 @@ class SpiMcuSource(SignalSource):
         # last-good telemetry forever. Counting the failures is what lets
         # a caller tell "the board is talking" from "nothing is there".
         self._consecutive_bad_frames = 0
+        self._bad_frames = 0
         self._settled = True
         self._duty_changed = False
         self._last_write_time: float = 0.0
@@ -291,6 +292,7 @@ class SpiMcuSource(SignalSource):
         # taken as the one measurement for the new duty.
         if rx[8] != crc8(rx[0:8] + [rx[9], rx[10]]):
             self._consecutive_bad_frames += 1
+            self._bad_frames += 1
             return None
         self._consecutive_bad_frames = 0
         self._settled = bool(rx[10] & 0x01)
@@ -898,6 +900,13 @@ class SpiMcuSource(SignalSource):
         this is reset.
         """
         return self._consecutive_bad_frames
+
+    @property
+    def bad_frames(self) -> int:
+        """Total frames rejected for a bad checksum since this source was
+        opened. A caller takes the difference between two reads to count
+        one run."""
+        return self._bad_frames
 
     @property
     def duty(self) -> float:

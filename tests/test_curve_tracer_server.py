@@ -3169,3 +3169,35 @@ def test_default_allowed_hosts_include_this_machine(monkeypatch):
     monkeypatch.setattr(server_module.socket, "gethostname", lambda: "Bench-Pi")
     hosts = server_module._default_allowed_hosts(["lab-host"])
     assert {"localhost", "bench-pi", "bench-pi.local", "lab-host"} <= hosts
+
+
+def test_simulated_run_saves_settings_control_period_and_timing(client):
+    r = client.post(
+        "/api/runs/start",
+        json={
+            "algorithm": "P&O",
+            "simulated": True,
+            "duration_s": 0.1,
+            "control_period_ms": 5,
+        },
+    )
+    assert r.status_code == 200
+    _wait_for_run_done(client)
+    live = client.get("/api/runs/live").json()
+    record = load_run(client.run_dir / f"{live['saved_run_id']}.json")
+    assert record.settings["control_period_ms"] == 5
+    assert "step_size" in record.settings["algorithm_params"]
+    assert record.settings["firmware_commit"] is None
+    assert record.step_period_mean_ms >= 5.0
+    assert record.step_period_max_ms >= record.step_period_mean_ms
+    assert record.bad_frames is None
+    saved = client.get(f"/api/runs/{live['saved_run_id']}").json()
+    assert saved["settings"]["control_period_ms"] == 5
+
+
+def test_start_run_rejects_a_non_positive_control_period(client):
+    r = client.post(
+        "/api/runs/start",
+        json={"algorithm": "P&O", "simulated": True, "control_period_ms": 0},
+    )
+    assert r.status_code == 400

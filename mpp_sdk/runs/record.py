@@ -75,6 +75,18 @@ class RunRecord:
     # mpp_sdk/curves/record.py. Left dangling, not cleaned up, if that
     # session is later deleted.
     session_id: str | None = field(default=None)
+    # How the run was taken, so runs can be compared later. Keys:
+    # algorithm_params, averaging, adc_divider_range, load,
+    # firmware_commit, control_period_ms. An unknown value is None. The
+    # whole block is None in a file written before it existed.
+    settings: dict | None = field(default=None)
+    # Measured time between control steps, in ms. None if unknown or
+    # fewer than two steps.
+    step_period_mean_ms: float | None = field(default=None)
+    step_period_max_ms: float | None = field(default=None)
+    # SPI frames rejected during the run (bad CRC). None for a source
+    # that has no frames to reject, or in an old file.
+    bad_frames: int | None = field(default=None)
 
     def to_dict(self) -> dict:
         return {
@@ -87,6 +99,10 @@ class RunRecord:
             "notes": self.notes,
             "source": self.source,
             "session_id": self.session_id,
+            "settings": self.settings,
+            "step_period_mean_ms": self.step_period_mean_ms,
+            "step_period_max_ms": self.step_period_max_ms,
+            "bad_frames": self.bad_frames,
             "samples": [s.to_dict() for s in self.samples],
         }
 
@@ -109,6 +125,10 @@ class RunRecord:
                 source=d.get("source", "unknown"),
                 # Absent in files written before this field existed.
                 session_id=_optional_session_id(d.get("session_id")),
+                settings=d.get("settings"),
+                step_period_mean_ms=d.get("step_period_mean_ms"),
+                step_period_max_ms=d.get("step_period_max_ms"),
+                bad_frames=d.get("bad_frames"),
             )
         except KeyError as exc:
             raise ValueError(f"run record missing field {exc.args[0]!r}") from exc
