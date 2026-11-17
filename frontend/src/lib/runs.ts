@@ -40,7 +40,7 @@ export interface RunSample {
   d: number
 }
 
-/** One of the abort paths `run_control_loop` (scripts/run_algorithm.py)
+/** One of the abort paths `run_control_loop` (mpp_sdk/runs/loop.py)
  * can trip - or an open string for the rarer cases the server reports as
  * free text (an unexpected exception, or a save that failed after an
  * otherwise clean run). Kept as an open union, same pattern as

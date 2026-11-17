@@ -12,9 +12,9 @@ safety cutoff for this continuous-drive use case (unlike the curve
 tracer's own `breach()` check), so this script adds a client-side abort:
 if readings stay above `--v-max`/`--i-max` (defaults: the board limits
 `BOARD_V_MAX`/`BOARD_I_MAX`), or the link looks down (a sustained
-run of corrupt SPI frames - see `_BAD_FRAMES_LINK_DOWN` in `mpp_sdk/runs/loop.py`), duty is
-driven to zero and the run is marked aborted. `run_control_loop` is also
-what `scripts/curve_tracer_server.py` calls to drive a run started from
+run of corrupt SPI frames - see `_BAD_FRAMES_LINK_DOWN` in
+`mpp_sdk/runs/loop.py`), duty is driven to zero and the run is marked aborted.
+`run_control_loop` is also what `scripts/curve_tracer_server.py` calls to drive a run started from
 the web UI - one control loop, one abort path, shared by both.
 
 Usage::
