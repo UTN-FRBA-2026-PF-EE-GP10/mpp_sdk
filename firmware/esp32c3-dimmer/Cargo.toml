@@ -16,7 +16,12 @@ opt-level = "s"
 debug = true    # Symbols are nice, and they don't increase the size on Flash
 opt-level = "z"
 
+[features]
+# Wi-Fi access point and web page. Off by default: the default build is I2C only.
+wifi = []
+
 [dependencies]
+dimmer-link = { path = "../dimmer-link" }
 log = "0.4"
 esp-idf-svc = "0.52.1"
 anyhow = "1"

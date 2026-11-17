@@ -2,7 +2,7 @@
 
 <!-- markdownlint-disable MD013 -->
 
-Rust (ESP-IDF `std`) phase-control firmware for the 220 Vac halogen dimmer, controlled from a phone over Wi-Fi.
+Rust (ESP-IDF `std`) phase-control firmware for the 220 Vac halogen dimmer. The Pico controls it over I2C. A phone can control it over Wi-Fi in the optional `wifi` build.
 
 > **Mains voltage.** The dimmer is an uncertified prototype. Read the [design calculations](../../hardware/dimmer/docs/DESIGN_CALCULATIONS.md) and follow the bring-up order below. Never touch the board, the lamp terminals or any probe while it is connected to mains.
 
@@ -21,18 +21,30 @@ Rust (ESP-IDF `std`) phase-control firmware for the 220 Vac halogen dimmer, cont
 
 Prerequisites are the same as the [photodiode lab firmware](../esp32c3-bpw34/README.md).
 
-The Wi-Fi password is not in the source. Set `DIMMER_AP_PASS` when you build. The build fails if it is not set. WPA2 needs 8 to 63 characters.
+The default build has I2C control only. It has no Wi-Fi and needs no password:
 
 **Flash with mains disconnected.** Unplug J2, disconnect J1 and remove the JP1 shunt (as printed on the board), then connect USB:
 
 ```sh
 cd firmware/esp32c3-dimmer
-DIMMER_AP_PASS=<your password> cargo run --release
+cargo run --release
 ```
 
-## Control
+For the Wi-Fi access point and web page, build with the `wifi` feature. The password is not in the source. Set `DIMMER_AP_PASS` when you build. The build fails if it is not set. WPA2 needs 8 to 63 characters.
 
-- I2C slave control (the Pico as master) is planned, in a following change.
+```sh
+DIMMER_AP_PASS=<your password> cargo run --release --features wifi
+```
+
+## Control over I2C
+
+- The board is an I2C slave at address `0x2A` on IO6 (SDA) and IO7 (SCL), J1 pins 3 and 4. The internal pull-ups are off: the pull-ups are on the Pico board.
+- The frames, the safety rules and the wiring are in the [dimmer link](../../docs/hardware_v1/dimmer_link.md) document. The frame code is in the `firmware/dimmer-link` crate.
+- The lamp is off at boot.
+- After the first valid *Set alpha*, the lamp goes off if no valid *Set alpha* arrives for 2 s. The main loop checks this, not the I2C task.
+- With the `wifi` feature, `POST /level` answers 409 `I2C control active` after the first I2C command.
+
+## Control over Wi-Fi (`wifi` feature)
 
 The SuperMini's blue LED shows the state without a cable: three quick flashes at boot, then one short flash per second once the Wi-Fi network is up. Repeated triple flashes mean the board keeps resetting, usually from a weak supply.
 
@@ -48,6 +60,11 @@ The board creates the Wi-Fi network `esp32-dimmer` (the password you set at buil
 ## Bring-up and testing
 
 Do the steps in order. Each step only adds one hazard.
+
+- Order: SELV only first (steps 1 and 2), then the Pico link without mains, then mains (steps 3 and 4).
+- Pico link without mains: connect J1 to the Pico board, leave J2 unplugged. Send *Request status* and check that `FLAGS` is 0 and `ALPHA` is `0xFFFF`. Send *Set alpha* and stop: after 2 s `FLAGS` bit 2 (timed out) must be set. FIRE (GPIO4) must stay at 0 V all the time.
+- Steps 1 and 2 below use the Wi-Fi page, so build with the `wifi` feature for them.
+- Mains steps: control the lamp from the Pico. Keep the lamp under watch.
 
 ### 1. SELV only, no mains
 
