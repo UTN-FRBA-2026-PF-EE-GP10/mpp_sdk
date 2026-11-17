@@ -59,8 +59,15 @@ Status (master reads 8 bytes, at least 3 ms after Request status):
 ## Safety
 
 - The dimmer is off after boot.
-- The Pico repeats the last Set alpha every 500 ms. The dimmer turns the lamp off after 2 s without a valid Set alpha.
-- The Pico sets alpha to off when the SPI link to the Pi is lost, and after boot until the Pi sends a value.
+- The Pico repeats the last Set alpha every 500 ms.
+  The dimmer turns the lamp off after 2 s without a valid Set alpha.
+- The dimmer checks this timeout in its own loop, not in the I2C code, so a stalled I2C driver cannot keep the lamp on.
+  The timeout also releases the full-on state.
+- A new valid Set alpha clears the `TIMED_OUT` flag and the lamp follows the new angle.
+- The Pi repeats `0xD1` at least every second while the lamp is on.
+  The Pico sets alpha to off after 3 s without a valid `0xD1`.
+  A stopped or crashed Pi program switches the lamp off.
+- The Pico sets alpha to off at boot and when the SPI link to the Pi is lost.
 - The dimmer firmware limits the firing delay, so the real range is about 25 to 153 degrees at 50 Hz.
   The angles `0` (full on) and `18000` (off) are the exceptions.
   Read `ALPHA` in the status to see the real value.
@@ -84,6 +91,8 @@ The reply to `0xD2` is in the MISO of the next exchange, like the sweep progress
 - `FLAGS` bit 0: the I2C link works (a status read succeeded in the last second).
   Bits 1 to 3 are the dimmer flags from above, shifted up by one:
   bit 1 mains, bit 2 locked, bit 3 timed out.
+- The CRC covers bytes 0 to 7, then `ACK` (byte 9), then byte 10 (`SETTLED`, always `0` here), in that order.
+  Every MISO frame does the same.
 - `SET` is the last alpha the Pi sent. `APPLIED` is the angle the dimmer reported.
 - `AGE` is the time since the last good status read, in 100 ms units, saturating at 255.
 

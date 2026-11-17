@@ -19,6 +19,8 @@ pub const APPLIED_NONE: u16 = u16::MAX;
 
 /// The dimmer turns the lamp off when no valid `SetAlpha` arrives for this long.
 pub const COMMAND_TIMEOUT_MS: u32 = 2_000;
+/// The Pico turns the lamp off when the Pi sends no valid alpha command for this long.
+pub const HOST_TIMEOUT_MS: u32 = 3_000;
 /// The master repeats the last `SetAlpha` this often, also when nothing changed.
 pub const KEEPALIVE_MS: u32 = 500;
 /// The master waits this long between `RequestStatus` and the read.
@@ -148,11 +150,21 @@ pub fn decode_status(frame: &[u8]) -> Result<Status, Error> {
     })
 }
 
-/// Firing angle as a fraction of the half-period in Q16 (0..=65536), the
+/// Firing delay fraction that means full on (the firing pulse is held).
+pub const FRACTION_FULL: u32 = 0;
+/// Firing delay fraction that means off (never fire). Not a valid Q16 value,
+/// so it cannot be mistaken for a late firing angle.
+pub const FRACTION_OFF: u32 = u32::MAX;
+
+/// Firing angle as a fraction of the half-period in Q16 (0..=65535), the
 /// unit the dimmer firmware uses for its firing delay. The angle runs from 0
-/// to 180 degrees over one half-period.
-pub fn alpha_to_q16(alpha: u16) -> u32 {
-    (alpha.min(ALPHA_OFF) as u32 * 65_536 + ALPHA_OFF as u32 / 2) / ALPHA_OFF as u32
+/// to 180 degrees over one half-period. Alpha 0 gives `FRACTION_FULL` and
+/// `ALPHA_OFF` or more gives `FRACTION_OFF`.
+pub fn alpha_to_fraction(alpha: u16) -> u32 {
+    if alpha >= ALPHA_OFF {
+        return FRACTION_OFF;
+    }
+    (alpha as u32 * 65_536 + ALPHA_OFF as u32 / 2) / ALPHA_OFF as u32
 }
 
 #[cfg(test)]
@@ -269,9 +281,21 @@ mod tests {
 
     #[test]
     fn alpha_maps_to_the_half_period_fraction() {
-        assert_eq!(alpha_to_q16(0), 0);
-        assert_eq!(alpha_to_q16(9_000), 32_768);
-        assert_eq!(alpha_to_q16(ALPHA_OFF), 65_536);
-        assert_eq!(alpha_to_q16(u16::MAX), 65_536);
+        assert_eq!(alpha_to_fraction(0), FRACTION_FULL);
+        assert_eq!(alpha_to_fraction(9_000), 32_768);
+        assert_eq!(alpha_to_fraction(17_999), 65_532);
+    }
+
+    #[test]
+    fn off_is_never_a_firing_fraction() {
+        assert_eq!(alpha_to_fraction(ALPHA_OFF), FRACTION_OFF);
+        assert_eq!(alpha_to_fraction(u16::MAX), FRACTION_OFF);
+    }
+
+    #[test]
+    fn only_alpha_zero_is_full_on() {
+        for alpha in 1..ALPHA_OFF {
+            assert_ne!(alpha_to_fraction(alpha), FRACTION_FULL, "alpha {alpha}");
+        }
     }
 }
