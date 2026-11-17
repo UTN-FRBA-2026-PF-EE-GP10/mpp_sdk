@@ -27,6 +27,7 @@ def register_status_routes(app: FastAPI, cache: _SweepCache) -> None:
             "active": snap.active,
             "link": snap.link,
             "seq": snap.seq,
+            "sweep_id": snap.seq,
             "command_error": snap.command_error,
             "demo_source": snap.demo_source,
         }

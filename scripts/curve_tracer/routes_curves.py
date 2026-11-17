@@ -86,6 +86,11 @@ def register_curve_routes(app: FastAPI, cache: _SweepCache) -> None:
         snap = cache.snapshot()
         if not snap.points:
             raise HTTPException(status_code=409, detail="no sweep captured yet")
+        if body.sweep_id is not None and body.sweep_id != snap.seq:
+            raise HTTPException(
+                status_code=409,
+                detail="the sweep on screen is no longer the latest sweep - nothing was saved",
+            )
         _validate_active_session_id(body.session_id)
         if len(body.label) > _CURVE_LABEL_MAX_LEN:
             raise HTTPException(
@@ -120,4 +125,4 @@ def register_curve_routes(app: FastAPI, cache: _SweepCache) -> None:
             session_id=body.session_id,
         )
         path = curve_library.save(record)
-        return {"path": str(path), "id": path.stem}
+        return {"path": str(path), "id": path.stem, "sweep_id": snap.seq}

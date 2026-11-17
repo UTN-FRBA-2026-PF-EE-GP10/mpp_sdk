@@ -57,6 +57,9 @@ class _SaveCurveRequest(BaseModel):
     # stamped onto the saved CurveRecord verbatim - see
     # _validate_active_session_id.
     session_id: str | None = None
+    # Sweep number (`sweep_id` of GET /api/data) the client saw. When given
+    # and no longer the sweep held by the server, the save is refused.
+    sweep_id: int | None = None
 
 
 class _CreatePanelRequest(BaseModel):
