@@ -31,14 +31,19 @@ nav:
   - Methodology: methodology.md
   - Measurement Procedure: measurement_procedure.md
   - Hardware & Boards:
+      - Raspberry Pi Setup: pi_setup.md
       - Dual-Board Compatibility: board_compatibility.md
       - BeagleBone Black Setup: beaglebone_setup_guide.md
       - ADC Calibration: hardware_v1/calibration.md
       - Settling Time Optimization: hardware_v1/settling_time_optimization.md
       - Measurement & Telemetry Protocol: hardware_v1/mppt_measurement_protocol.md
+      - Dimmer Link: hardware_v1/dimmer_link.md
       - Bench Session Metrics: hardware_v1/bench_session_metrics.md
+  - Results:
+      - Two-peak curve comparison: results/two_peak_compare.md
   - Algorithms:
       - Perturb & Observe: algorithms/perturb_observe.md
+      - Adaptive Perturb & Observe: algorithms/adaptive_perturb_observe.md
       - Incremental Conductance: algorithms/incremental_conductance.md
       - Fuzzy Logic: algorithms/fuzzy_logic.md
       - Scan-and-Track: algorithms/scan_and_track.md

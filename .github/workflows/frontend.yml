@@ -48,3 +48,9 @@ jobs:
 
       - name: Build (typecheck + vite build)
         run: pnpm build
+
+      - name: Check the committed bundle is up to date
+        working-directory: .
+        run: |
+          git add --intent-to-add scripts/curve_tracer_web
+          git diff --exit-code -- scripts/curve_tracer_web

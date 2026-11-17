@@ -121,31 +121,30 @@ commands are the only things that set them:
 - `0xC1`..`0xC9`: dynamic configuration commands (jumpers, $R_{\text{on}}$, MAX31865
   enable, hardware cutoffs, power supply mode, Vout target, fixed duty, and cutoff
   reset). See "Dynamic Configuration" below.
+- `0xD1`: sets the dimmer alpha (first two payload bytes, big-endian, 0.01 degree)
+- `0xD2`: requests the dimmer status, sent in the next exchange's MISO
 
-**Poll faster than 100 ms**: the PIO SPI slave has a known, still-open
-defect where it cannot cleanly recover from an idle gap longer than its
-own `FRAME_TIMEOUT` (100 ms, `spi_slave_pio.rs`) - at a 0.5-2 s polling
-cadence roughly half of all frames came back torn on the bench. Keep the
-Pi's poll interval below 100 ms until the firmware-side recovery is
-fixed; `SpiMcuSource`/`spi_test.py` default to 0.05 s for this reason.
+See "Dimmer" below.
 
-**Master clock speed**: 8 MHz is unreliable (occasional torn/garbled
-frames) - the GPIO input synchronizer latency eats too much of the 125 ns
-bit period, worse on jumper-wire signal integrity than a real PCB trace
-would be. 1 MHz was bench-validated as reliable, before the GPIO4
-NeoPixel strip was wired in.
+**Poll faster than 100 ms**: the PIO SPI slave cannot recover cleanly from an
+idle gap longer than its `FRAME_TIMEOUT` (100 ms, `spi_slave_pio.rs`). This
+defect is still open. At a 0.5-2 s poll interval, about half of the frames
+came back torn on the bench. Keep the Pi poll interval below 100 ms.
+`SpiMcuSource` and `spi_test.py` default to 0.05 s.
 
-With the NeoPixels actively switching, 1 MHz started producing
-corrupted-but-complete MISO frames (e.g. `I_raw` reading exactly `0x8000`,
-a single bit, not random noise) - most likely electrical crosstalk from
-the NeoPixels' fast switching onto nearby breadboard SPI1 wiring, not a
-firmware bug (the firmware's `current_raw_to_ma()` math cannot itself
-produce `0x8000` from any real INA229 reading, given `I_MAX_MA = 1000`).
-**200 kHz is bench-confirmed clean with the NeoPixels active** -
-`scripts/spi_test.py` defaults to 200 kHz for this reason. If the
-NeoPixel wiring is ever rerouted away from the SPI1 wires (or moved onto
-a real PCB), this may be revisitable back toward 1 MHz - not yet
-retested.
+**Master clock speed**:
+
+- 8 MHz is unreliable (torn frames). The GPIO input synchronizer latency
+  uses too much of the 125 ns bit period, and jumper wires make it worse.
+- 1 MHz was reliable before the GPIO4 NeoPixel strip was wired in.
+- With the NeoPixels switching, 1 MHz gave corrupted but complete MISO
+  frames (for example `I_raw` exactly `0x8000`, a single bit). The likely
+  cause is crosstalk from the NeoPixels onto the breadboard SPI1 wires. It
+  is not a firmware bug: `current_raw_to_ma()` cannot produce `0x8000` from
+  any real INA229 reading, given `I_MAX_MA = 1000`.
+- 200 kHz is clean with the NeoPixels active. `scripts/spi_test.py`
+  defaults to 200 kHz. A reroute of the NeoPixel wiring, or a real PCB,
+  may allow 1 MHz again. This is not retested.
 
 #### 4. Flash and stream logs
 
@@ -565,6 +564,17 @@ Two independent LEDs answer two different questions:
   - **LED 3**: SPI communication status heartbeat. Flashes green briefly on every
     successfully-received SPI frame, dark otherwise.
 
+## Dimmer
+
+`src/dimmer.rs` drives the halogen lamp dimmer over I2C and sets its firing angle from the Pi.
+
+- GPIO5 and GPIO6 cannot be an I2C pair on the RP2040, so the master is bit-banged
+  (open drain, timer awaits between bits, clock-stretch timeout, bus recovery).
+- The lamp is off at boot, when the SPI link is lost, and 3 s after the last valid `0xD1`.
+- Wiring, I2C frames, safety rules and the `0xD1`/`0xD2` byte layouts:
+  [docs/hardware_v1/dimmer_link.md](../../docs/hardware_v1/dimmer_link.md).
+- The decision logic is in `firmware/dimmer-link/src/master.rs`, with host unit tests.
+
 ## GPIO Assignments
 
 | Pin | GPIO    | Net Name        | Function / Notes              |
@@ -574,8 +584,8 @@ Two independent LEDs answer two different questions:
 | 4   | GPIO2   | Tracer_En       | Curve-tracer relay enable (idle low) |
 | 5   | GPIO3   | Tracer_pwm      | Curve-tracer bleed PWM, hardware PWM (idle 0 %) |
 | 6   | GPIO4   | NeoPixel_Din    | 4x WS2812 NeoPixels: Vin, Vout, I levels + SPI heartbeat |
-| 7   | GPIO5   | I2C_SDA         | I2C data                      |
-| 9   | GPIO6   | I2C_SCL         | I2C clock                     |
+| 7   | GPIO5   | I2C_SDA         | I2C data (bit-banged, dimmer) |
+| 9   | GPIO6   | I2C_SCL         | I2C clock (bit-banged, dimmer)|
 | 10  | GPIO7   | GPIO7           | General purpose               |
 | 11  | GPIO8   | GPIO8           | General purpose               |
 | 12  | GPIO9   | GPIO9           | General purpose               |

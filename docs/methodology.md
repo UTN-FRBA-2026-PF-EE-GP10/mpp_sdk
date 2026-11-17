@@ -158,7 +158,7 @@ runs (`RunRecord`, `mpp-sdk run-algorithm`).
 
 Every stochastic element is seeded: the cyclic schedule, the PSO swarm,
 the noise stream. Re-running any harness reproduces its numbers exactly.
-Changing a seed is a deliberate, visible act. This is a PLAN-level rule,
-because every figure in the paper must be regenerable from a command.
+Changing a seed is a deliberate, visible act. Every figure in the paper must be
+regenerable from a command.
 Stochastic algorithms are reported as mean ± std over 30 seeds
 (`compare_seeds.py`), never a single seed.

@@ -29,7 +29,7 @@ def algorithm_specs(
     rescan_period: int | None = None,
     pso_particles: int = 5,
 ) -> list[AlgorithmSpec]:
-    """The five registered MPPT algorithms, configured for one call site.
+    """The registered MPPT algorithms, configured for one call site.
 
     ``rescan_period`` and ``pso_particles`` map onto today's call sites:
 
@@ -76,6 +76,13 @@ def algorithm_specs(
             "tab:blue",
             lambda d: mpp_sdk.PerturbAndObserve(
                 initial_duty=d, step_size=0.002, min_duty=0.1, max_duty=0.9
+            ),
+        ),
+        AlgorithmSpec(
+            "Adaptive P&O",
+            "tab:cyan",
+            lambda d: mpp_sdk.AdaptivePerturbAndObserve(
+                initial_duty=d, max_step=0.002, min_duty=0.1, max_duty=0.9
             ),
         ),
         AlgorithmSpec(
