@@ -176,3 +176,22 @@ range's ratio in `firmware/pipico_board/src/adc_cal.rs`
 (`RATIO_LOW_X100`/`RATIO_MID_X100`/`RATIO_FULL_X100`) to the measured
 value. Do not touch the gain or zero: those describe the RP2040's ADC, not
 the divider, and a range change does not affect them.
+
+## Input resistance against the ideal SEPIC formula
+
+Check with `uv run python scripts/check_rin_model.py`. It uses the committed 10 Ohm duty sweep (5 V in, D 0.05 to 0.45)
+and the two long holds. Measured R_in is V_in / I_in. `SEPICConverter` is lossless, so it gives the same numbers
+as the ideal formula `R_load * ((1 - D) / D)^2`.
+
+- Median relative error is 5.2 %. The maximum is 409 % (at D 0.05).
+- The ideal formula is within 10 % from D 0.25 to 0.45 (errors 5.2 % at 0.25, 1.2 % at 0.30, -0.9 % at 0.35,
+  -2.5 % to 7.8 % at 0.40, -3.3 % at 0.45).
+- Below D 0.25 the formula is too high: 13 % at D 0.20, 35 % at 0.15, 94 % at 0.10, 409 % at 0.05. The measured
+  R_in is lower because the converter draws more input current than the lossless ratio gives.
+- Fixed losses dominate at low duty. Efficiency (V_out^2 / R_load over V_in * I_in) is 28 % at D 0.05
+  (35 mW in, 9.9 mW out), 43 % at 0.10, 64 % at 0.20 and 82 % at 0.45. The loss is 25 to 35 mW at D 0.05 to
+  0.10. A lossless converter would give 2529 Ohm at D 0.05 against 709 Ohm measured.
+- DCM may add to this at low duty, but it is not proven: the data has no inductor current.
+- I_in is only about 7 mA at D 0.05 (1 mA resolution, about 14 % there). This does not explain the 409 %.
+- `load_ohms` comes from the typed `--load-ohms` argument of `scripts/duty_sweep.py`, not from a measurement.
+- Use the formula for D above about 0.25 on this bench. Below that, do not rely on it.
