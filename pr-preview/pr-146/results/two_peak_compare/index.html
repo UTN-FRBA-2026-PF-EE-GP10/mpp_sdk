@@ -13,7 +13,7 @@
         <link rel="canonical" href="https://utn-frba-2026-pf-ee-gp10.github.io/mpp_sdk/results/two_peak_compare/">
       
       
-        <link rel="prev" href="../../hardware_v1/mppt_measurement_protocol/">
+        <link rel="prev" href="../../hardware_v1/dimmer_link/">
       
       
         <link rel="next" href="../../algorithms/perturb_observe/">
@@ -449,6 +449,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../pi_setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Raspberry Pi Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../board_compatibility/" class="md-nav__link">
         
   
@@ -569,6 +597,34 @@
     
   
     Measurement & Telemetry Protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../hardware_v1/dimmer_link/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dimmer Link
   
 
     
@@ -1070,18 +1126,25 @@
 <li>"Global peak" is yes if final power is at least 98 % of the global peak.</li>
 <li>"Steps" is the last step where power was more than 1 % from its final value.
   A value near 2000 means the algorithm never settled (it keeps scanning or dithering).</li>
+<li>Final power and efficiency come from the last sample. For an algorithm that never settles (steps near 1999)
+  the value is one point of an oscillation, not a steady value.</li>
+<li>Peaks are local maxima of the measured samples. A hump that only comes from interpolation is not counted.</li>
 <li>Regenerate with <code>uv run python scripts/make_two_peak_results.py</code>.</li>
 </ul>
 <p><img alt="Final power of each algorithm on the three curves, start duty 0.5" src="../two_peak_compare.png" /></p>
 <h2 id="what-this-shows">What this shows<a class="headerlink" href="#what-this-shows" title="Permanent link">&para;</a></h2>
-<p>On the 10 Ohm B 60 curve (peaks 4.75 W at 13.9 V and 6.35 W at 30.4 V), P&amp;O, InCond and Fuzzy stop on the
-local peak at 4.74 W (74.6 to 74.8 % of the global peak) from all three start duties. Scan&amp;Track and PSO find
-the global peak (98.7 and 98.8 %), but they do not settle inside 1 % in 2000 steps. On the B 30 curve the
-second peak is weak (1.98 W against 4.74 W), so every algorithm ends at 100.0 %: it is not a real test. On the
-50 Ohm B 45 curve the peaks are close (3.80 W and 4.03 W), so getting stuck costs only about 6 %. P&amp;O, InCond
-and Fuzzy find the global peak from start duty 0.3 but end on the local one (94.3 to 94.4 %) from 0.5 and 0.7.
-Scan&amp;Track and PSO find it from every start (100.0 and 99.9 %). Only one curve has a clear gap (B 60), so
-this is a small sample. These are static simulations on measured curves, not closed-loop bench runs.</p>
+<p>Important limit: the valley between the two peaks is not measured. B 60 has no samples between 15.28 V and
+30.38 V, B 30 none between 16.27 V and 32.54 V, and B 45 none between 15.99 V and 32.24 V. The algorithms see
+a straight line across this gap, so whether P&amp;O "gets stuck" on the local peak depends on that interpolation.</p>
+<p>On the 10 Ohm B 60 curve (sample peaks 4.75 W at 13.8 V and 6.35 W at 30.4 V), P&amp;O, InCond and Fuzzy stop on
+the local peak at 4.74 W (74.6 to 74.8 % of the global peak) from all three start duties. Scan&amp;Track and PSO
+find the global peak (98.7 and 98.8 %), but they do not settle inside 1 % in 2000 steps. B 30 is effectively
+single-peak: its only other sample peak is one point (1.82 W at 32.5 V) at the edge of the gap, against 4.74 W,
+so every algorithm ends at 100.0 % and it is not a real test. On the 50 Ohm B 45 curve the peaks are close
+(3.80 W and 4.03 W), so getting stuck costs only about 6 %. P&amp;O, InCond and Fuzzy find the global peak from
+start duty 0.3 but end on the local one (94.3 to 94.4 %) from 0.5 and 0.7. Scan&amp;Track and PSO find it from
+every start (100.0 and 99.9 %). Only B 60 has a clear gap, so this is a small sample. These are static
+simulations on measured curves, not closed-loop bench runs.</p>
 <h2 id="table">Table<a class="headerlink" href="#table" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -1099,7 +1162,7 @@ this is a small sample. These are static simulations on measured curves, not clo
 <tbody>
 <tr>
 <td>10 Ohm, B 60</td>
-<td>13.9 V, 4.75 W; 30.4 V, 6.35 W</td>
+<td>13.8 V, 4.75 W; 30.4 V, 6.35 W</td>
 <td>P&amp;O</td>
 <td>0.3</td>
 <td>4.736</td>
@@ -1109,7 +1172,7 @@ this is a small sample. These are static simulations on measured curves, not clo
 </tr>
 <tr>
 <td>10 Ohm, B 60</td>
-<td>13.9 V, 4.75 W; 30.4 V, 6.35 W</td>
+<td>13.8 V, 4.75 W; 30.4 V, 6.35 W</td>
 <td>P&amp;O</td>
 <td>0.5</td>
 <td>4.736</td>
@@ -1119,7 +1182,7 @@ this is a small sample. These are static simulations on measured curves, not clo
 </tr>
 <tr>
 <td>10 Ohm, B 60</td>
-<td>13.9 V, 4.75 W; 30.4 V, 6.35 W</td>
+<td>13.8 V, 4.75 W; 30.4 V, 6.35 W</td>
 <td>P&amp;O</td>
 <td>0.7</td>
 <td>4.736</td>
@@ -1129,7 +1192,7 @@ this is a small sample. These are static simulations on measured curves, not clo
 </tr>
 <tr>
 <td>10 Ohm, B 60</td>
-<td>13.9 V, 4.75 W; 30.4 V, 6.35 W</td>
+<td>13.8 V, 4.75 W; 30.4 V, 6.35 W</td>
 <td>InCond</td>
 <td>0.3</td>
 <td>4.736</td>
@@ -1139,7 +1202,7 @@ this is a small sample. These are static simulations on measured curves, not clo
 </tr>
 <tr>
 <td>10 Ohm, B 60</td>
-<td>13.9 V, 4.75 W; 30.4 V, 6.35 W</td>
+<td>13.8 V, 4.75 W; 30.4 V, 6.35 W</td>
 <td>InCond</td>
 <td>0.5</td>
 <td>4.736</td>
@@ -1149,7 +1212,7 @@ this is a small sample. These are static simulations on measured curves, not clo
 </tr>
 <tr>
 <td>10 Ohm, B 60</td>
-<td>13.9 V, 4.75 W; 30.4 V, 6.35 W</td>
+<td>13.8 V, 4.75 W; 30.4 V, 6.35 W</td>
 <td>InCond</td>
 <td>0.7</td>
 <td>4.736</td>
@@ -1159,7 +1222,7 @@ this is a small sample. These are static simulations on measured curves, not clo
 </tr>
 <tr>
 <td>10 Ohm, B 60</td>
-<td>13.9 V, 4.75 W; 30.4 V, 6.35 W</td>
+<td>13.8 V, 4.75 W; 30.4 V, 6.35 W</td>
 <td>Fuzzy</td>
 <td>0.3</td>
 <td>4.745</td>
@@ -1169,7 +1232,7 @@ this is a small sample. These are static simulations on measured curves, not clo
 </tr>
 <tr>
 <td>10 Ohm, B 60</td>
-<td>13.9 V, 4.75 W; 30.4 V, 6.35 W</td>
+<td>13.8 V, 4.75 W; 30.4 V, 6.35 W</td>
 <td>Fuzzy</td>
 <td>0.5</td>
 <td>4.748</td>
@@ -1179,7 +1242,7 @@ this is a small sample. These are static simulations on measured curves, not clo
 </tr>
 <tr>
 <td>10 Ohm, B 60</td>
-<td>13.9 V, 4.75 W; 30.4 V, 6.35 W</td>
+<td>13.8 V, 4.75 W; 30.4 V, 6.35 W</td>
 <td>Fuzzy</td>
 <td>0.7</td>
 <td>4.745</td>
@@ -1189,7 +1252,7 @@ this is a small sample. These are static simulations on measured curves, not clo
 </tr>
 <tr>
 <td>10 Ohm, B 60</td>
-<td>13.9 V, 4.75 W; 30.4 V, 6.35 W</td>
+<td>13.8 V, 4.75 W; 30.4 V, 6.35 W</td>
 <td>Scan&amp;Track</td>
 <td>0.3</td>
 <td>6.266</td>
@@ -1199,7 +1262,7 @@ this is a small sample. These are static simulations on measured curves, not clo
 </tr>
 <tr>
 <td>10 Ohm, B 60</td>
-<td>13.9 V, 4.75 W; 30.4 V, 6.35 W</td>
+<td>13.8 V, 4.75 W; 30.4 V, 6.35 W</td>
 <td>Scan&amp;Track</td>
 <td>0.5</td>
 <td>6.266</td>
@@ -1209,7 +1272,7 @@ this is a small sample. These are static simulations on measured curves, not clo
 </tr>
 <tr>
 <td>10 Ohm, B 60</td>
-<td>13.9 V, 4.75 W; 30.4 V, 6.35 W</td>
+<td>13.8 V, 4.75 W; 30.4 V, 6.35 W</td>
 <td>Scan&amp;Track</td>
 <td>0.7</td>
 <td>6.266</td>
@@ -1219,7 +1282,7 @@ this is a small sample. These are static simulations on measured curves, not clo
 </tr>
 <tr>
 <td>10 Ohm, B 60</td>
-<td>13.9 V, 4.75 W; 30.4 V, 6.35 W</td>
+<td>13.8 V, 4.75 W; 30.4 V, 6.35 W</td>
 <td>PSO</td>
 <td>0.3</td>
 <td>6.273</td>
@@ -1229,7 +1292,7 @@ this is a small sample. These are static simulations on measured curves, not clo
 </tr>
 <tr>
 <td>10 Ohm, B 60</td>
-<td>13.9 V, 4.75 W; 30.4 V, 6.35 W</td>
+<td>13.8 V, 4.75 W; 30.4 V, 6.35 W</td>
 <td>PSO</td>
 <td>0.5</td>
 <td>6.273</td>
@@ -1239,7 +1302,7 @@ this is a small sample. These are static simulations on measured curves, not clo
 </tr>
 <tr>
 <td>10 Ohm, B 60</td>
-<td>13.9 V, 4.75 W; 30.4 V, 6.35 W</td>
+<td>13.8 V, 4.75 W; 30.4 V, 6.35 W</td>
 <td>PSO</td>
 <td>0.7</td>
 <td>6.273</td>
@@ -1249,7 +1312,7 @@ this is a small sample. These are static simulations on measured curves, not clo
 </tr>
 <tr>
 <td>10 Ohm, B 30</td>
-<td>13.7 V, 4.74 W; 25.4 V, 1.98 W</td>
+<td>13.7 V, 4.74 W; 32.5 V, 1.82 W</td>
 <td>P&amp;O</td>
 <td>0.3</td>
 <td>4.739</td>
@@ -1259,7 +1322,7 @@ this is a small sample. These are static simulations on measured curves, not clo
 </tr>
 <tr>
 <td>10 Ohm, B 30</td>
-<td>13.7 V, 4.74 W; 25.4 V, 1.98 W</td>
+<td>13.7 V, 4.74 W; 32.5 V, 1.82 W</td>
 <td>P&amp;O</td>
 <td>0.5</td>
 <td>4.739</td>
@@ -1269,7 +1332,7 @@ this is a small sample. These are static simulations on measured curves, not clo
 </tr>
 <tr>
 <td>10 Ohm, B 30</td>
-<td>13.7 V, 4.74 W; 25.4 V, 1.98 W</td>
+<td>13.7 V, 4.74 W; 32.5 V, 1.82 W</td>
 <td>P&amp;O</td>
 <td>0.7</td>
 <td>4.739</td>
@@ -1279,7 +1342,7 @@ this is a small sample. These are static simulations on measured curves, not clo
 </tr>
 <tr>
 <td>10 Ohm, B 30</td>
-<td>13.7 V, 4.74 W; 25.4 V, 1.98 W</td>
+<td>13.7 V, 4.74 W; 32.5 V, 1.82 W</td>
 <td>InCond</td>
 <td>0.3</td>
 <td>4.739</td>
@@ -1289,7 +1352,7 @@ this is a small sample. These are static simulations on measured curves, not clo
 </tr>
 <tr>
 <td>10 Ohm, B 30</td>
-<td>13.7 V, 4.74 W; 25.4 V, 1.98 W</td>
+<td>13.7 V, 4.74 W; 32.5 V, 1.82 W</td>
 <td>InCond</td>
 <td>0.5</td>
 <td>4.739</td>
@@ -1299,7 +1362,7 @@ this is a small sample. These are static simulations on measured curves, not clo
 </tr>
 <tr>
 <td>10 Ohm, B 30</td>
-<td>13.7 V, 4.74 W; 25.4 V, 1.98 W</td>
+<td>13.7 V, 4.74 W; 32.5 V, 1.82 W</td>
 <td>InCond</td>
 <td>0.7</td>
 <td>4.739</td>
@@ -1309,7 +1372,7 @@ this is a small sample. These are static simulations on measured curves, not clo
 </tr>
 <tr>
 <td>10 Ohm, B 30</td>
-<td>13.7 V, 4.74 W; 25.4 V, 1.98 W</td>
+<td>13.7 V, 4.74 W; 32.5 V, 1.82 W</td>
 <td>Fuzzy</td>
 <td>0.3</td>
 <td>4.740</td>
@@ -1319,7 +1382,7 @@ this is a small sample. These are static simulations on measured curves, not clo
 </tr>
 <tr>
 <td>10 Ohm, B 30</td>
-<td>13.7 V, 4.74 W; 25.4 V, 1.98 W</td>
+<td>13.7 V, 4.74 W; 32.5 V, 1.82 W</td>
 <td>Fuzzy</td>
 <td>0.5</td>
 <td>4.740</td>
@@ -1329,7 +1392,7 @@ this is a small sample. These are static simulations on measured curves, not clo
 </tr>
 <tr>
 <td>10 Ohm, B 30</td>
-<td>13.7 V, 4.74 W; 25.4 V, 1.98 W</td>
+<td>13.7 V, 4.74 W; 32.5 V, 1.82 W</td>
 <td>Fuzzy</td>
 <td>0.7</td>
 <td>4.740</td>
@@ -1339,7 +1402,7 @@ this is a small sample. These are static simulations on measured curves, not clo
 </tr>
 <tr>
 <td>10 Ohm, B 30</td>
-<td>13.7 V, 4.74 W; 25.4 V, 1.98 W</td>
+<td>13.7 V, 4.74 W; 32.5 V, 1.82 W</td>
 <td>Scan&amp;Track</td>
 <td>0.3</td>
 <td>4.739</td>
@@ -1349,7 +1412,7 @@ this is a small sample. These are static simulations on measured curves, not clo
 </tr>
 <tr>
 <td>10 Ohm, B 30</td>
-<td>13.7 V, 4.74 W; 25.4 V, 1.98 W</td>
+<td>13.7 V, 4.74 W; 32.5 V, 1.82 W</td>
 <td>Scan&amp;Track</td>
 <td>0.5</td>
 <td>4.739</td>
@@ -1359,7 +1422,7 @@ this is a small sample. These are static simulations on measured curves, not clo
 </tr>
 <tr>
 <td>10 Ohm, B 30</td>
-<td>13.7 V, 4.74 W; 25.4 V, 1.98 W</td>
+<td>13.7 V, 4.74 W; 32.5 V, 1.82 W</td>
 <td>Scan&amp;Track</td>
 <td>0.7</td>
 <td>4.739</td>
@@ -1369,7 +1432,7 @@ this is a small sample. These are static simulations on measured curves, not clo
 </tr>
 <tr>
 <td>10 Ohm, B 30</td>
-<td>13.7 V, 4.74 W; 25.4 V, 1.98 W</td>
+<td>13.7 V, 4.74 W; 32.5 V, 1.82 W</td>
 <td>PSO</td>
 <td>0.3</td>
 <td>4.740</td>
@@ -1379,7 +1442,7 @@ this is a small sample. These are static simulations on measured curves, not clo
 </tr>
 <tr>
 <td>10 Ohm, B 30</td>
-<td>13.7 V, 4.74 W; 25.4 V, 1.98 W</td>
+<td>13.7 V, 4.74 W; 32.5 V, 1.82 W</td>
 <td>PSO</td>
 <td>0.5</td>
 <td>4.740</td>
@@ -1389,7 +1452,7 @@ this is a small sample. These are static simulations on measured curves, not clo
 </tr>
 <tr>
 <td>10 Ohm, B 30</td>
-<td>13.7 V, 4.74 W; 25.4 V, 1.98 W</td>
+<td>13.7 V, 4.74 W; 32.5 V, 1.82 W</td>
 <td>PSO</td>
 <td>0.7</td>
 <td>4.740</td>
