@@ -68,6 +68,83 @@ def delete(path: Path, directory: Path | None = None) -> bool:
     return True
 
 
+_INDEX_NAME = ".summary-index"
+
+
+def summarize(record: RunRecord) -> dict:
+    """The fields a run listing shows, without the sample arrays."""
+    samples = record.samples
+    return {
+        "captured_at": record.captured_at.isoformat(),
+        "label": record.label,
+        "algorithm": record.algorithm,
+        "n_samples": len(samples),
+        "duration_s": samples[-1].t - samples[0].t if len(samples) >= 2 else 0.0,
+        "aborted": record.aborted,
+        "curve_ref": record.curve_ref,
+        "notes": record.notes,
+        "source": record.source,
+        "session_id": record.session_id,
+    }
+
+
+def _read_index(directory: Path) -> dict:
+    try:
+        data = json.loads((directory / _INDEX_NAME).read_text())
+    except OSError, ValueError:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _write_index(directory: Path, index: dict) -> None:
+    # Only a cache: a failed write just means the next listing rebuilds it.
+    tmp = directory / f"{_INDEX_NAME}.tmp"
+    try:
+        tmp.write_text(json.dumps(index))
+        os.replace(tmp, directory / _INDEX_NAME)
+    except OSError:
+        pass
+
+
+def list_summaries(directory: Path | None = None) -> list[tuple[Path, dict | str]]:
+    """One `(path, summary)` per run file, sorted by name. The summary
+    comes from a sidecar index when the file's mtime and size still match;
+    otherwise the full file is parsed and the index refreshed. A file that
+    cannot be parsed gives its error message instead of a summary."""
+    directory = directory if directory is not None else default_dir()
+    if not directory.exists():
+        return []
+    index = _read_index(directory)
+    fresh: dict = {}
+    out: list[tuple[Path, dict | str]] = []
+    for path in sorted(directory.glob("*.json")):
+        try:
+            st = path.stat()
+        except OSError as exc:
+            out.append((path, str(exc)))
+            continue
+        cached = index.get(path.name)
+        if (
+            isinstance(cached, dict)
+            and cached.get("mtime_ns") == st.st_mtime_ns
+            and cached.get("size") == st.st_size
+            and isinstance(cached.get("summary"), dict)
+        ):
+            fresh[path.name] = cached
+            out.append((path, cached["summary"]))
+            continue
+        try:
+            summary = summarize(load(path))
+        except ValueError as exc:
+            out.append((path, str(exc)))
+            continue
+        fresh[path.name] = {"mtime_ns": st.st_mtime_ns, "size": st.st_size, "summary": summary}
+        out.append((path, summary))
+    if fresh != index:
+        _write_index(directory, fresh)
+    return out
+
+
 def load_all(directory: Path | None = None) -> list[RunRecord]:
     directory = directory if directory is not None else default_dir()
     if not directory.exists():

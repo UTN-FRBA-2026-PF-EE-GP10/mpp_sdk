@@ -62,33 +62,15 @@ def register_run_routes(
         records one per control-loop step), so a listing that embedded
         them would be far too large for a page that only needs to show
         what's available."""
-        directory = run_library.default_dir()
-        paths = sorted(directory.glob("*.json")) if directory.exists() else []
         entries = []
-        for path in paths:
+        for path, summary in run_library.list_summaries():
             # Run files, like curve files, are hand-editable JSON - a
             # single malformed one must not take the whole listing down
             # (see get_curves above for the same pattern).
-            try:
-                r = run_library.load(path)
-                entries.append(
-                    {
-                        "id": path.stem,
-                        "path": str(path),
-                        "captured_at": r.captured_at.isoformat(),
-                        "label": r.label,
-                        "algorithm": r.algorithm,
-                        "n_samples": len(r.samples),
-                        "duration_s": _run_duration_s(r.samples),
-                        "aborted": r.aborted,
-                        "curve_ref": r.curve_ref,
-                        "notes": r.notes,
-                        "source": r.source,
-                        "session_id": r.session_id,
-                    }
-                )
-            except ValueError as exc:
-                entries.append({"id": path.stem, "path": str(path), "error": str(exc)})
+            if isinstance(summary, str):
+                entries.append({"id": path.stem, "path": str(path), "error": summary})
+            else:
+                entries.append({"id": path.stem, "path": str(path), **summary})
         return entries
 
     @app.post("/api/runs/start")
