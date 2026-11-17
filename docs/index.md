@@ -18,6 +18,8 @@ Tracking** (MPPT) algorithms for photovoltaic systems.
 
 ## Hardware & Boards
 
+- **[Raspberry Pi Setup](pi_setup.md)** - enable SPI, install the SDK, wire the
+  Pico, start the workbench server and install the boot service.
 - **[Dual-Board Compatibility Guide](board_compatibility.md)** - how the codebase
   seamlessly runs on both Raspberry Pi 5 and BeagleBone Black with automatic SPI bus
   selection and cross-version compatibility.

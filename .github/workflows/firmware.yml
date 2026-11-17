@@ -67,3 +67,35 @@ jobs:
 
       - name: Test
         run: cargo test --locked
+
+  dimmer-link:
+    name: dimmer-link unit tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: firmware/dimmer-link
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: thumbv6m-none-eabi
+          components: rustfmt, clippy
+
+      - name: Cache cargo registry and build artefacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: firmware/dimmer-link
+
+      - name: Format check
+        run: cargo fmt --check
+
+      - name: Clippy
+        run: cargo clippy --locked -- -D warnings
+
+      - name: Test
+        run: cargo test --locked
+
+      - name: Build for the Pico (no_std)
+        run: cargo build --release --locked --target thumbv6m-none-eabi
