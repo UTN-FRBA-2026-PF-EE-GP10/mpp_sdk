@@ -451,6 +451,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../pi_setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Raspberry Pi Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../board_compatibility/" class="md-nav__link">
         
   
@@ -745,6 +773,34 @@
     
   
     Measurement & Telemetry Protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dimmer_link/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dimmer Link
   
 
     
@@ -1408,11 +1464,14 @@ as the ideal formula <code>R_load * ((1 - D) / D)^2</code>.</p>
 <li>Median relative error is 5.2 %. The maximum is 409 % (at D 0.05).</li>
 <li>The ideal formula is within 10 % from D 0.25 to 0.45 (errors 5.2 % at 0.25, 1.2 % at 0.30, -0.9 % at 0.35,
   -2.5 % to 7.8 % at 0.40, -3.3 % at 0.45).</li>
-<li>Below D 0.25 it fails: 13 % at D 0.20, 35 % at 0.15, 94 % at 0.10, 409 % at 0.05. The measured R_in is far
-  lower than the formula. At low duty the converter is most likely in discontinuous conduction (DCM) and the
-  input current is not set by the CCM ratio. The data does not prove DCM: it has no inductor current.</li>
-<li>Losses show as a gap in power, not as a large R_in error. Efficiency is 43 % at D 0.10 and 82 % at D 0.45
-  (see <code>data/README.md</code>). The model has no loss terms.</li>
+<li>Below D 0.25 the formula is too high: 13 % at D 0.20, 35 % at 0.15, 94 % at 0.10, 409 % at 0.05. The measured
+  R_in is lower because the converter draws more input current than the lossless ratio gives.</li>
+<li>Fixed losses dominate at low duty. Efficiency (V_out^2 / R_load over V_in * I_in) is 28 % at D 0.05
+  (35 mW in, 9.9 mW out), 43 % at 0.10, 64 % at 0.20 and 82 % at 0.45. The loss is 25 to 35 mW at D 0.05 to
+  0.10. A lossless converter would give 2529 Ohm at D 0.05 against 709 Ohm measured.</li>
+<li>DCM may add to this at low duty, but it is not proven: the data has no inductor current.</li>
+<li>I_in is only about 7 mA at D 0.05 (1 mA resolution, about 14 % there). This does not explain the 409 %.</li>
+<li><code>load_ohms</code> comes from the typed <code>--load-ohms</code> argument of <code>scripts/duty_sweep.py</code>, not from a measurement.</li>
 <li>Use the formula for D above about 0.25 on this bench. Below that, do not rely on it.</li>
 </ul>
 
