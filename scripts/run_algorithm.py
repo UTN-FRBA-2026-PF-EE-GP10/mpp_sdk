@@ -74,6 +74,10 @@ BOARD_V_MAX = 40.0
 BOARD_I_MAX = 0.9
 BOARD_V_OUT_MAX = 25.0
 
+# Longest allowed control period, and the longest single sleep inside it.
+MAX_CONTROL_PERIOD_MS = 1000.0
+_WAIT_SLICE_S = 0.05
+
 _log = logging.getLogger(__name__)
 
 
@@ -175,8 +179,29 @@ def run_control_loop(
         raise ValueError(f"initial_duty must be a finite number in [0, 1); got {initial_duty!r}")
     if control_period_ms is not None:
         _check_positive_finite("control_period_ms", control_period_ms)
+        if control_period_ms > MAX_CONTROL_PERIOD_MS:
+            raise ValueError(
+                f"control_period_ms must be at most {MAX_CONTROL_PERIOD_MS}; "
+                f"got {control_period_ms!r}"
+            )
     samples = [] if samples is None else samples
+    suspect_total = 0
+
+    def wait_until(step_t: float) -> None:
+        # Short slices: the converter holds its last duty while we wait, so
+        # a stop request or the run end must not wait out a whole period.
+        if control_period_ms is None:
+            return
+        while True:
+            remaining = step_t + control_period_ms / 1000.0 - (clock() - start)
+            if remaining <= 0 or clock() - start >= duration_s:
+                return
+            if should_stop is not None and should_stop():
+                return
+            sleep(min(remaining, _WAIT_SLICE_S))
+
     bad_frames_start = getattr(source, "bad_frames", None)
+    settle_start = getattr(source, "settle_failures", None)
     step_starts: list[float] = []
     start = clock()
     aborted = False
@@ -204,6 +229,7 @@ def run_control_loop(
                 suspect = "output-overvoltage"
             over_limit = over_limit + 1 if suspect else 0
             if suspect:
+                suspect_total += 1
                 streak.append((round(t, 4), voltage, current, v_out, duty, suspect))
             elif streak:
                 _log.warning("ignored %d suspect reading(s): %s", len(streak), streak)
@@ -231,6 +257,7 @@ def run_control_loop(
                 source.write(duty)
                 if period_s > 0:
                     sleep(period_s)
+                wait_until(t)
                 continue
             next_duty = algorithm.step(voltage, current)
             if not math.isfinite(next_duty):
@@ -246,10 +273,7 @@ def run_control_loop(
             step_starts.append(t)
             if period_s > 0:
                 sleep(period_s)
-            if control_period_ms is not None:
-                remaining = t + control_period_ms / 1000.0 - (clock() - start)
-                if remaining > 0:
-                    sleep(remaining)
+            wait_until(t)
     finally:
         # Zeroing duty is the priority on the way out; a broken write here
         # must not mask whatever exception is already propagating (or
@@ -258,6 +282,13 @@ def run_control_loop(
             source.write(0.0)
         if run_info is not None:
             gaps = [(b - a) * 1000.0 for a, b in zip(step_starts, step_starts[1:], strict=False)]
+            run_info["suspect_readings"] = suspect_total
+            run_info["settle_failures"] = (
+                settle_end - settle_start
+                if settle_start is not None
+                and (settle_end := getattr(source, "settle_failures", None)) is not None
+                else None
+            )
             run_info["step_period_mean_ms"] = sum(gaps) / len(gaps) if gaps else None
             run_info["step_period_max_ms"] = max(gaps) if gaps else None
             bad_frames_end = getattr(source, "bad_frames", None)

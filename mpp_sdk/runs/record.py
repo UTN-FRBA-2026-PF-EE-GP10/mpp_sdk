@@ -87,6 +87,10 @@ class RunRecord:
     # SPI frames rejected during the run (bad CRC). None for a source
     # that has no frames to reject, or in an old file.
     bad_frames: int | None = field(default=None)
+    # Reads with no settled measurement (SpiMcuSource.settle_failures) and
+    # readings the loop dropped as suspect. None if unknown or old file.
+    settle_failures: int | None = field(default=None)
+    suspect_readings: int | None = field(default=None)
 
     def to_dict(self) -> dict:
         return {
@@ -103,6 +107,8 @@ class RunRecord:
             "step_period_mean_ms": self.step_period_mean_ms,
             "step_period_max_ms": self.step_period_max_ms,
             "bad_frames": self.bad_frames,
+            "settle_failures": self.settle_failures,
+            "suspect_readings": self.suspect_readings,
             "samples": [s.to_dict() for s in self.samples],
         }
 
@@ -129,6 +135,8 @@ class RunRecord:
                 step_period_mean_ms=d.get("step_period_mean_ms"),
                 step_period_max_ms=d.get("step_period_max_ms"),
                 bad_frames=d.get("bad_frames"),
+                settle_failures=d.get("settle_failures"),
+                suspect_readings=d.get("suspect_readings"),
             )
         except KeyError as exc:
             raise ValueError(f"run record missing field {exc.args[0]!r}") from exc

@@ -232,3 +232,13 @@ def test_old_file_without_settings_loads_with_defaults(tmp_path):
     assert loaded.settings is None
     assert loaded.bad_frames is None
     assert loaded.step_period_mean_ms is None
+
+
+def test_new_counters_round_trip_and_default_to_none(tmp_path):
+    record = _record(settle_failures=2, suspect_readings=5)
+    assert load(save(record, tmp_path)) == record
+    data = _record().to_dict()
+    del data["settle_failures"], data["suspect_readings"]
+    path = tmp_path / "old2.json"
+    path.write_text(json.dumps(data))
+    assert load(path).settle_failures is None

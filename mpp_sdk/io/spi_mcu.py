@@ -263,6 +263,7 @@ class SpiMcuSource(SignalSource):
         # a caller tell "the board is talking" from "nothing is there".
         self._consecutive_bad_frames = 0
         self._bad_frames = 0
+        self._settle_failures = 0
         self._settled = True
         self._duty_changed = False
         self._last_write_time: float = 0.0
@@ -391,6 +392,7 @@ class SpiMcuSource(SignalSource):
                 # the next read() asks again.
                 self._v = math.nan
                 self._i = math.nan
+                self._settle_failures += 1
 
         return self._v, self._i
 
@@ -903,10 +905,16 @@ class SpiMcuSource(SignalSource):
 
     @property
     def bad_frames(self) -> int:
-        """Total frames rejected for a bad checksum since this source was
-        opened. A caller takes the difference between two reads to count
-        one run."""
+        """Total frames rejected for a bad checksum (CRC) since this source
+        was opened. A corrupted frame that passes its CRC is not counted.
+        A caller takes the difference between two reads to count one run."""
         return self._bad_frames
+
+    @property
+    def settle_failures(self) -> int:
+        """Total ``read()`` calls that got no settled measurement (timeout or
+        exhausted polls) and returned NaN since this source was opened."""
+        return self._settle_failures
 
     @property
     def duty(self) -> float:

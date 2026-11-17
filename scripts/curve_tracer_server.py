@@ -98,6 +98,7 @@ from scripts.run_algorithm import (
     BOARD_I_MAX,
     BOARD_V_MAX,
     BOARD_V_OUT_MAX,
+    MAX_CONTROL_PERIOD_MS,
     build_run_settings,
     run_control_loop,
 )
@@ -106,7 +107,7 @@ try:
     from fastapi import FastAPI, HTTPException, Request, Response
     from fastapi.responses import JSONResponse
     from fastapi.staticfiles import StaticFiles
-    from pydantic import BaseModel, Field
+    from pydantic import BaseModel, Field, StrictFloat, StrictInt
 except ModuleNotFoundError as exc:  # pragma: no cover
     raise ModuleNotFoundError(
         "fastapi is required for the curve-tracer server. "
@@ -633,6 +634,8 @@ def _execute_run(
             step_period_mean_ms=run_info.get("step_period_mean_ms"),
             step_period_max_ms=run_info.get("step_period_max_ms"),
             bad_frames=run_info.get("bad_frames"),
+            settle_failures=run_info.get("settle_failures"),
+            suspect_readings=run_info.get("suspect_readings"),
         )
         try:
             path = run_library.save(record)
@@ -1142,7 +1145,7 @@ class _StartRunRequest(BaseModel):
     # RunRecord the same way, by post_start_run/_execute_run below.
     session_id: str | None = None
     # Minimum time between algorithm steps; None keeps one step per exchange.
-    control_period_ms: float | None = None
+    control_period_ms: StrictFloat | StrictInt | None = None
 
 
 # A run's URL id is its filename stem (library.save's naming scheme), never
@@ -2209,8 +2212,13 @@ def create_app(
         # module docstring); the firmware has no on-target cutoff for this
         # case. Non-positive is rejected outright rather than clamped: a
         # v_max of 0 isn't a limit, it's an immediate abort mislabeled as one.
-        if body.control_period_ms is not None and body.control_period_ms <= 0:
-            raise HTTPException(status_code=400, detail="control_period_ms must be positive")
+        if body.control_period_ms is not None and not (
+            0 < body.control_period_ms <= MAX_CONTROL_PERIOD_MS
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail=f"control_period_ms must be above 0 and at most {MAX_CONTROL_PERIOD_MS:g}",
+            )
         if body.v_max <= 0:
             raise HTTPException(status_code=400, detail="v_max must be positive")
         if body.i_max <= 0:
@@ -2324,6 +2332,8 @@ def create_app(
             "step_period_mean_ms": r.step_period_mean_ms,
             "step_period_max_ms": r.step_period_max_ms,
             "bad_frames": r.bad_frames,
+            "settle_failures": r.settle_failures,
+            "suspect_readings": r.suspect_readings,
             "n_samples": len(r.samples),
             "duration_s": _run_duration_s(r.samples),
             "downsampled": downsampled,

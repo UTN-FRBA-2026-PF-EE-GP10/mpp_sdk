@@ -946,3 +946,10 @@ def test_bad_frames_is_a_running_total_that_never_resets(spi_mcu_source):
     assert src.bad_frames == 2
     with pytest.raises(AttributeError):
         src.bad_frames = 0
+
+
+def test_settle_failures_is_a_read_only_counter(spi_mcu_source):
+    src = spi_mcu_source()
+    assert src.settle_failures == 0
+    with pytest.raises(AttributeError):
+        src.settle_failures = 1

@@ -3201,3 +3201,12 @@ def test_start_run_rejects_a_non_positive_control_period(client):
         json={"algorithm": "P&O", "simulated": True, "control_period_ms": 0},
     )
     assert r.status_code == 400
+
+
+@pytest.mark.parametrize("value", [1000.5, 1e9, 1e300, 0, -3, True, "5"])
+def test_start_run_rejects_a_bad_control_period(client, value):
+    r = client.post(
+        "/api/runs/start",
+        json={"algorithm": "P&O", "simulated": True, "control_period_ms": value},
+    )
+    assert r.status_code in (400, 422)

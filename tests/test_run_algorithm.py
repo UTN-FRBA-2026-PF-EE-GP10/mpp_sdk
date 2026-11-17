@@ -706,3 +706,76 @@ def test_build_run_settings_reads_what_is_known_and_nulls_the_rest():
     assert bare["adc_divider_range"] is None
     assert bare["load"] is None
     assert bare["firmware_commit"] is None
+
+
+@pytest.mark.parametrize("value", [1000.1, 1e9, 1e300])
+def test_a_control_period_above_the_limit_raises(value):
+    with pytest.raises(ValueError, match="at most"):
+        run_control_loop(
+            _FakeSource(),
+            _FixedDutyAlgorithm(0.3),
+            duration_s=1.0,
+            v_max=100.0,
+            i_max=100.0,
+            control_period_ms=value,
+        )
+
+
+def test_should_stop_during_the_wait_ends_the_run_within_one_slice():
+    clock = _FakeClock()
+
+    def should_stop():
+        return clock() >= 0.2
+
+    _, aborted, reason = run_control_loop(
+        _FakeSource(),
+        _FixedDutyAlgorithm(0.25),
+        duration_s=100.0,
+        v_max=100.0,
+        i_max=100.0,
+        clock=clock,
+        sleep=clock.advance,
+        control_period_ms=1000.0,
+        should_stop=should_stop,
+    )
+    assert (aborted, reason) == (True, "stopped")
+    assert clock() <= 0.2 + 0.05 + 1e-9
+
+
+def test_duration_end_cuts_the_wait_short():
+    clock = _FakeClock()
+    run_control_loop(
+        _FakeSource(),
+        _FixedDutyAlgorithm(0.25),
+        duration_s=0.1,
+        v_max=100.0,
+        i_max=100.0,
+        clock=clock,
+        sleep=clock.advance,
+        control_period_ms=1000.0,
+    )
+    assert clock() < 0.2
+
+
+def test_suspect_readings_are_counted_and_paced():
+    clock = _FakeClock()
+    slept: list[float] = []
+
+    def sleep(dt):
+        slept.append(dt)
+        clock.advance(dt)
+
+    info: dict = {}
+    run_control_loop(
+        _ScriptedSource({1}, (20.0, 6.0)),
+        _FixedDutyAlgorithm(0.3),
+        duration_s=0.05,
+        v_max=100.0,
+        i_max=1.0,
+        clock=clock,
+        sleep=sleep,
+        control_period_ms=10.0,
+        run_info=info,
+    )
+    assert info["suspect_readings"] == 1
+    assert slept
