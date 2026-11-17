@@ -606,17 +606,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#why-it-is-needed" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Why it is needed
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#when-to-redo-it" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -998,6 +987,37 @@
   
   
     <li class="md-nav__item">
+      <a href="../../algorithms/adaptive_perturb_observe/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adaptive Perturb & Observe
+  
+
+    
+      <br>
+      <small>MPPT algorithm reference</small>
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../algorithms/incremental_conductance/" class="md-nav__link">
         
   
@@ -1191,17 +1211,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#why-it-is-needed" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Why it is needed
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#when-to-redo-it" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1331,26 +1340,22 @@
 on-chip ADC. The INA229 needs no calibration. The on-chip ADC does, and
 this page explains why and how.</p>
 <h2 id="what-it-does">What it does<a class="headerlink" href="#what-it-does" title="Permanent link">&para;</a></h2>
-<p>The ADC gives a raw code (0 to 4095) for the voltage on its pin. The
-firmware turns that code into volts with one straight line:</p>
+<ul>
+<li>The ADC gives a raw code (0 to 4095). The firmware converts it with one
+  straight line, then multiplies by the divider ratio (8.5 on <code>Low</code>):</li>
+</ul>
 <div class="highlight"><pre><span></span><code>pin voltage = 0.79322 mV x (code - 13.19)
 </code></pre></div>
-<p>Then it multiplies by the divider ratio (8.5 on the <code>Low</code> range) to get the
-voltage at the terminals.</p>
-<p>The two numbers are the <strong>gain</strong> (0.79322 mV per code) and the <strong>zero</strong>
-(13.19 codes). They are in <code>firmware/pipico_board/src/adc_cal.rs</code>. The
-same line is used for <code>ADC_PWR</code>, <code>ADC_VOUT</code> and <code>ADC_Input_Curr</code>: they
-share one ADC.</p>
-<h2 id="why-it-is-needed">Why it is needed<a class="headerlink" href="#why-it-is-needed" title="Permanent link">&para;</a></h2>
-<p>The ADC reads about <strong>13 codes at 0 V</strong>. On the <code>Low</code> range that is about
-<strong>90 mV at the terminals</strong>. Before the calibration:</p>
 <ul>
-<li>V out showed 85-95 mV with the converter off and 0 V on the output.</li>
-<li>Below 1.2 V, readings were 6-16 % too high.</li>
-<li>From 3 V to 18 V, readings were already within 0.5 %.</li>
+<li>The gain (0.79322 mV per code) and the zero (13.19 codes) are in
+  <code>firmware/pipico_board/src/adc_cal.rs</code>. <code>ADC_PWR</code>, <code>ADC_VOUT</code> and
+  <code>ADC_Input_Curr</code> share one ADC, so they share the line.</li>
+<li>The ADC reads about 13 codes at 0 V. On <code>Low</code> that is about 90 mV at the
+  terminals. Before the calibration, V out showed 85-95 mV with 0 V on the
+  output, and readings below 1.2 V were 6-16 % high. From 3 V to 18 V they
+  were within 0.5 %.</li>
 </ul>
-<p>So the calibration matters most near 0 V and at low voltage. Measured on
-2026-09-19, against a multimeter:</p>
+<p>Check against a multimeter (2026-09-19):</p>
 <table>
 <thead>
 <tr>
@@ -1451,32 +1456,10 @@ switches, put a load resistor on the output (10 Ohm, 10 W) and use
 <p>The board has three ranges: <code>Low</code>, <code>Mid</code>, <code>Full</code>. Each range trades full-scale
 voltage for ADC resolution. <code>Low</code> gives the most resolution but the lowest
 ceiling; <code>Full</code> gives the highest ceiling but the least resolution per volt.</p>
-<table>
-<thead>
-<tr>
-<th>Range</th>
-<th>Full scale</th>
-<th>When to use it</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>Low</code></td>
-<td>about 27.3 V</td>
-<td>one panel (the firmware setting today)</td>
-</tr>
-<tr>
-<td><code>Mid</code></td>
-<td>about 51.5 V</td>
-<td>two panels in series (about 35 V open-circuit)</td>
-</tr>
-<tr>
-<td><code>Full</code></td>
-<td>about 75.6 V</td>
-<td>highest input the board can see</td>
-</tr>
-</tbody>
-</table>
+<p>The full-scale values (<code>Low</code> about 27.3 V, <code>Mid</code> about 51.5 V, <code>Full</code> about
+75.6 V) are in the range table in <code>firmware/pipico_board/README.md</code>. Use
+<code>Low</code> for one panel (the firmware default) and <code>Mid</code> for two panels in
+series (about 35 V open-circuit).</p>
 <p>This needs four steps: move the jumpers, set the constant, reflash, and
 check the result against a meter. It does <strong>not</strong> need a new gain/zero fit
 (see "When to redo it" above).</p>

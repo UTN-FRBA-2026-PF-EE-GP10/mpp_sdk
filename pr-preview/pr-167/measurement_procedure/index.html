@@ -1046,6 +1046,37 @@
   
   
     <li class="md-nav__item">
+      <a href="../algorithms/adaptive_perturb_observe/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adaptive Perturb & Observe
+  
+
+    
+      <br>
+      <small>MPPT algorithm reference</small>
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../algorithms/incremental_conductance/" class="md-nav__link">
         
   
@@ -1547,34 +1578,33 @@ Quickstart to install the <code>web</code> extra first.</p>
    below, and under <strong>Curves &gt; Baseline</strong> in the sidebar.</li>
 </ol>
 <h2 id="the-tilted-panel-procedure">The tilted-panel procedure<a class="headerlink" href="#the-tilted-panel-procedure" title="Permanent link">&para;</a></h2>
-<p><strong>Why</strong>: this bench's array is two panels and a lamp. The light travels
-from 180 degrees toward 0 degrees; 90 degrees is vertical and faces the
-light squarely, so 90 is the <em>untilted</em> reference, not zero. Panel A is
-always fixed at 90 degrees - it is the unshaded reference panel and is
-never adjusted. Panel B is the one that moves, on a mount with five fixed
-detents: 90, 70, 60, 45, 30 degrees. Lower numbers tilt panel B further
-right, away from the light, so it receives less illumination. A single
-tilted capture and a full sweep across panel B's angles are the same
-physical setup, just one point or several - hence one measurement kind,
-<code>tilted</code>, for both. It lets <code>mpp-sdk compare-measured</code> (see
-<code>docs/methodology.md</code>'s "Measured curves" section) grade an algorithm's
-partial-shading behavior against a real, physically varying array shape
-instead of an inferred one.</p>
-<p><strong>Procedure for a sweep</strong>: repeat "Capture one curve" once per angle,
-with two changes each time: physically set panel B to the next detent
-before clicking <strong>Start Measurement</strong>, and select the <strong>Tilted</strong> tab
-(not <strong>Baseline</strong>) so the save request's measurement kind matches. The
-save form's panel B selector is restricted to the five valid detents, so
-picking the wrong angle by typo is not possible - just make sure the
-selected value matches where the panel physically is. Use the same label
-prefix for the whole series with the angle appended, e.g.
-<code>"2026-09-08 tilted 45deg"</code>, so the saved-curves table stays readable.
-Keep every other condition (lighting, panel A) constant across the whole
-series. Sweeps run back-to-back here - see the Safety section above about
-Q3's heatsink.</p>
-<p><strong>After the series</strong>: run <code>mpp-sdk compare-measured</code> (see
-<code>docs/methodology.md</code>) - it groups saved curves by measurement kind, so a
-consistently labeled tilted series shows up together automatically.</p>
+<p>Setup facts:</p>
+<ul>
+<li>The array is two panels and a lamp. Light travels from 180 degrees
+  toward 0 degrees. 90 degrees is vertical and faces the light, so 90 is
+  the untilted reference, not zero.</li>
+<li>Panel A is fixed at 90 degrees. It is the unshaded reference.</li>
+<li>Panel B moves on a mount with five detents: 90, 70, 60, 45, 30 degrees.
+  A lower number tilts B further from the light, so it gets less light.</li>
+<li>One tilted capture and a full sweep of angles are the same setup. Both
+  use one measurement kind, <code>tilted</code>. <code>mpp-sdk compare-measured</code> (see
+  <code>docs/methodology.md</code>, "Measured curves") then grades an algorithm on a
+  real partial-shading curve.</li>
+</ul>
+<p>For a sweep of angles, repeat "Capture one curve" for each angle:</p>
+<ol>
+<li>Set panel B to the next detent by hand.</li>
+<li>Select the <strong>Tilted</strong> tab, not <strong>Baseline</strong>.</li>
+<li>Click <strong>Start Measurement</strong>.</li>
+<li>In the save form, pick the same angle for panel B. The selector allows
+   only the five detents.</li>
+<li>Use one label prefix for the series, with the angle added, for example
+   <code>"2026-09-08 tilted 45deg"</code>.</li>
+<li>Keep the lighting and panel A the same for the whole series.</li>
+<li>Sweeps run back-to-back. See the Safety section about the Q3 heatsink.</li>
+</ol>
+<p>After the series, run <code>mpp-sdk compare-measured</code>. It groups saved curves
+by measurement kind, so the series shows up together.</p>
 <h2 id="where-the-files-land">Where the files land<a class="headerlink" href="#where-the-files-land" title="Permanent link">&para;</a></h2>
 <p>Captured curves live under <code>data/curves/</code>, one JSON file per sweep
 (git-ignored - see <code>data/README.md</code>). Closed-loop runs (below) live under
@@ -1654,54 +1684,57 @@ Set it from the dropdown next to the step. Steps come in four kinds:</p>
 <p>Notes are free text under each step, for anything the checklist itself
 does not capture.</p>
 <h3 id="repeats-and-statistics">Repeats and statistics<a class="headerlink" href="#repeats-and-statistics" title="Permanent link">&para;</a></h3>
-<p>A curve or run step can ask for more than one repeat, e.g. "3 curves, one
-after the other"). The step shows how many are
-linked against how many are asked for, e.g. "2 / 3 repeats". Once two or
-more are linked, the workbench shows the median, mean, standard
-deviation, min, and max for each number that matters: Voc, Isc, and P at
-MPP for curves; held power, P over MPP_th, and time to converge for runs.
-With only one linked, it shows that value alone, with no spread.</p>
-<h3 id="printing-and-downloads">Printing and downloads<a class="headerlink" href="#printing-and-downloads" title="Permanent link">&para;</a></h3>
-<p><strong>Expand all</strong> opens every linked curve's and run's chart at once - do
-this before printing (Ctrl+P/Cmd+P), though the workbench also expands
-them on its own when the print dialog opens, so nothing is missing from
-the printout. <strong>Collapse all</strong> puts them back.</p>
-<p><strong>Download JSON</strong> saves the session record as-is. <strong>Download Markdown</strong>
-saves a readable summary: every step, its value and notes, and the
-statistics above, as plain text - paste it into a lab notebook or a PR
-description. Both downloads hold the session alone, without the curves
-and runs it links.</p>
-<h2 id="sharing-a-session-file">Sharing a session file<a class="headerlink" href="#sharing-a-session-file" title="Permanent link">&para;</a></h2>
-<p>A session file bundles curves and runs (and, from a session, the session
-itself) into one file, so someone else can open the workbench with no
-board and no saved library and still see the whole picture.</p>
-<p><strong>Export from a session</strong>: open the session, click <strong>Export session
-file</strong>. The file holds the session record plus every curve and run its
-steps link. A linked curve or run since deleted from the library is
-listed as missing in the file, rather than silently left out.</p>
-<p><strong>Export loose curves or runs</strong>: in <strong>Curves</strong> or <strong>Runs</strong>, click
-<strong>Select</strong>, tick the items you want, then <strong>Export N selected</strong>. Type a
-title when asked - this becomes the file name. This file holds no
-session; it is exactly the curves or runs you picked.</p>
-<p>Either way, the browser downloads <code>&lt;title&gt;.mppsession.json</code>.</p>
-<p><strong>Open</strong>: start the workbench on any machine with
-<code>mpp-sdk curve-tracer-web --demo</code> (no board needed), open it in a browser,
-then click <strong>Open session</strong> in the header, or drag the file onto the
-page. The workbench switches to a read-only view of that file: a
-<strong>Viewing: <code>&lt;title&gt;</code></strong> banner appears at the top, with a <strong>Close</strong> button
-that returns to the normal view. While viewing an imported session:</p>
 <ul>
-<li>Capture, starting a run, deleting, and remeasuring are all off - nothing
-  in the file can be changed, and nothing is sent to a server.</li>
-<li>The curve and run views work the same as usual, including opening a run
-  in the player - the player reads the run's samples straight from the
-  file.</li>
-<li>If the file carries a session, <strong>View session</strong> opens it read-only, the
-  same document view as a live session, fed entirely from the file - no
-  board and no saved library needed.</li>
+<li>A curve or run step can ask for more than one repeat, for example 3
+  curves one after the other. The step shows "2 / 3 repeats".</li>
+<li>With two or more linked, the workbench shows median, mean, standard
+  deviation, min and max. For curves: Voc, Isc, P at MPP. For runs: held
+  power, P over MPP_th, time to converge.</li>
+<li>With one linked, it shows that value alone.</li>
 </ul>
-<p>A bad file (wrong format, too large, or corrupted) shows an error message
-and leaves the current view untouched.</p>
+<h3 id="printing-and-downloads">Printing and downloads<a class="headerlink" href="#printing-and-downloads" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Expand all</strong> opens every linked chart. Use it before you print
+  (Ctrl+P or Cmd+P). The workbench also expands them when the print
+  dialog opens. <strong>Collapse all</strong> closes them.</li>
+<li><strong>Download JSON</strong> saves the session record.</li>
+<li><strong>Download Markdown</strong> saves a readable summary: each step, its value and
+  notes, and the statistics.</li>
+<li>Both downloads hold the session alone, without the linked curves and
+  runs.</li>
+</ul>
+<h2 id="sharing-a-session-file">Sharing a session file<a class="headerlink" href="#sharing-a-session-file" title="Permanent link">&para;</a></h2>
+<p>A session file bundles curves and runs, and optionally the session, into
+one file. Someone else can open it with no board and no saved library.</p>
+<p>Export from a session:</p>
+<ol>
+<li>Open the session and click <strong>Export session file</strong>.</li>
+<li>The file holds the session record and every linked curve and run. A
+   linked item that was deleted is listed as missing.</li>
+</ol>
+<p>Export loose curves or runs:</p>
+<ol>
+<li>In <strong>Curves</strong> or <strong>Runs</strong>, click <strong>Select</strong> and tick the items.</li>
+<li>Click <strong>Export N selected</strong> and type a title. The title is the file
+   name. The file holds no session.</li>
+</ol>
+<p>The browser downloads <code>&lt;title&gt;.mppsession.json</code>.</p>
+<p>Open a file:</p>
+<ol>
+<li>Start <code>mpp-sdk curve-tracer-web --demo</code> on any machine.</li>
+<li>Click <strong>Open session</strong> in the header, or drag the file onto the page.</li>
+<li>A <strong>Viewing: <code>&lt;title&gt;</code></strong> banner shows. Click <strong>Close</strong> to leave.</li>
+</ol>
+<p>While you view a file:</p>
+<ul>
+<li>Capture, starting a run, deleting and remeasuring are off. Nothing is
+  sent to a server.</li>
+<li>Curve and run views work as usual. The player reads the run samples from
+  the file.</li>
+<li><strong>View session</strong> opens the session read-only, if the file has one.</li>
+</ul>
+<p>A bad file (wrong format, too large, corrupted) shows an error. The current
+view stays as it was.</p>
 
 
 
