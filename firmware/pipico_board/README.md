@@ -122,30 +122,25 @@ commands are the only things that set them:
   enable, hardware cutoffs, power supply mode, Vout target, fixed duty, and cutoff
   reset). See "Dynamic Configuration" below.
 
-**Poll faster than 100 ms**: the PIO SPI slave has a known, still-open
-defect where it cannot cleanly recover from an idle gap longer than its
-own `FRAME_TIMEOUT` (100 ms, `spi_slave_pio.rs`) - at a 0.5-2 s polling
-cadence roughly half of all frames came back torn on the bench. Keep the
-Pi's poll interval below 100 ms until the firmware-side recovery is
-fixed; `SpiMcuSource`/`spi_test.py` default to 0.05 s for this reason.
+**Poll faster than 100 ms**: the PIO SPI slave cannot recover cleanly from an
+idle gap longer than its `FRAME_TIMEOUT` (100 ms, `spi_slave_pio.rs`). This
+defect is still open. At a 0.5-2 s poll interval, about half of the frames
+came back torn on the bench. Keep the Pi poll interval below 100 ms.
+`SpiMcuSource` and `spi_test.py` default to 0.05 s.
 
-**Master clock speed**: 8 MHz is unreliable (occasional torn/garbled
-frames) - the GPIO input synchronizer latency eats too much of the 125 ns
-bit period, worse on jumper-wire signal integrity than a real PCB trace
-would be. 1 MHz was bench-validated as reliable, before the GPIO4
-NeoPixel strip was wired in.
+**Master clock speed**:
 
-With the NeoPixels actively switching, 1 MHz started producing
-corrupted-but-complete MISO frames (e.g. `I_raw` reading exactly `0x8000`,
-a single bit, not random noise) - most likely electrical crosstalk from
-the NeoPixels' fast switching onto nearby breadboard SPI1 wiring, not a
-firmware bug (the firmware's `current_raw_to_ma()` math cannot itself
-produce `0x8000` from any real INA229 reading, given `I_MAX_MA = 1000`).
-**200 kHz is bench-confirmed clean with the NeoPixels active** -
-`scripts/spi_test.py` defaults to 200 kHz for this reason. If the
-NeoPixel wiring is ever rerouted away from the SPI1 wires (or moved onto
-a real PCB), this may be revisitable back toward 1 MHz - not yet
-retested.
+- 8 MHz is unreliable (torn frames). The GPIO input synchronizer latency
+  uses too much of the 125 ns bit period, and jumper wires make it worse.
+- 1 MHz was reliable before the GPIO4 NeoPixel strip was wired in.
+- With the NeoPixels switching, 1 MHz gave corrupted but complete MISO
+  frames (for example `I_raw` exactly `0x8000`, a single bit). The likely
+  cause is crosstalk from the NeoPixels onto the breadboard SPI1 wires. It
+  is not a firmware bug: `current_raw_to_ma()` cannot produce `0x8000` from
+  any real INA229 reading, given `I_MAX_MA = 1000`.
+- 200 kHz is clean with the NeoPixels active. `scripts/spi_test.py`
+  defaults to 200 kHz. A reroute of the NeoPixel wiring, or a real PCB,
+  may allow 1 MHz again. This is not retested.
 
 #### 4. Flash and stream logs
 

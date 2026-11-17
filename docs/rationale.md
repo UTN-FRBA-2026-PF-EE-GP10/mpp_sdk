@@ -142,7 +142,7 @@ Measurement noise belongs to the acquisition chain, not the plant or the
 controller. `NoisySource` wraps any `SignalSource` and perturbs only what
 the controller *sees*. That keeps models and algorithms free of noise
 flags, and makes the noise level an explicit, seeded experiment
-parameter. The same wrapper doubles as a bench sanity check later:
+parameter. The same wrapper doubles as a bench sanity check:
 measure the real sense chain's sigma, run the harness at that level, and
 the simulated degradation should bracket the measured one.
 
