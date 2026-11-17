@@ -80,3 +80,95 @@ def test_irradiance_and_temperature_are_mutable():
     panel.irradiance = 1000.0
     panel.temperature = 60.0
     assert panel.open_circuit_voltage != pytest.approx(voc_cold)  # I_0 is fixed, only V_t moves
+
+
+# ------------------------------------------------------------------
+# Accuracy against an independent root finder
+# ------------------------------------------------------------------
+
+
+def _reference_current(panel, v):
+    """Root of the implicit equation by scipy brentq, clamped at 0 like the model."""
+    brentq = pytest.importorskip("scipy.optimize").brentq
+    a = panel.module_thermal_voltage
+    g = 1.0 / panel.shunt_resistance
+    iph = panel.photocurrent * panel.irradiance / 1000.0
+
+    def f(i):
+        x = v + i * panel.series_resistance
+        return iph - panel.saturation_current * np.expm1(min(x / a, 700.0)) - x * g - i
+
+    hi = iph + 1.0 + max(-v, 0.0) * g
+    if f(0.0) <= 0.0:
+        return 0.0
+    return brentq(f, 0.0, hi, xtol=1e-14, rtol=1e-14, maxiter=500)
+
+
+def test_random_parameters_match_reference():
+    rng = np.random.default_rng(1234)
+    for _ in range(300):
+        panel = SingleDiodeWithLosses(
+            photocurrent=rng.uniform(0.5, 10.0),
+            saturation_current=10 ** rng.uniform(-11, -7),
+            ideality_factor=rng.uniform(1.0, 2.0),
+            cells_in_series=int(rng.integers(10, 80)),
+            series_resistance=rng.uniform(0.0, 20.0),
+            shunt_resistance=10 ** rng.uniform(0.5, 3.5),
+            irradiance=rng.uniform(100.0, 1100.0),
+            temperature=rng.uniform(0.0, 70.0),
+        )
+        voc = panel.open_circuit_voltage
+        v = np.concatenate([rng.uniform(-2.0, 1.5 * voc, 8), [-2.0, 0.0, voc, 1.5 * voc]])
+        got = panel.current(v)
+        want = np.array([_reference_current(panel, x) for x in v])
+        assert got == pytest.approx(want, abs=1e-9)
+
+
+def test_stiff_large_series_resistance_reverse_voltage():
+    panel = SingleDiodeWithLosses(series_resistance=10.8, shunt_resistance=8.9)
+    for v in (-2.0, -1.0, -0.1):
+        assert panel.current(v) == pytest.approx(_reference_current(panel, v), abs=1e-9)
+
+
+def test_stiff_large_series_resistance_near_voc():
+    panel = SingleDiodeWithLosses(series_resistance=20.0, shunt_resistance=3.0)
+    voc = panel.open_circuit_voltage
+    v = voc * np.array([0.9, 0.99, 1.0, 1.01, 1.2])
+    want = [_reference_current(panel, x) for x in v]
+    assert panel.current(v) == pytest.approx(want, abs=1e-9)
+
+
+def test_newton_crawl_case_needs_bisection():
+    # x / a is about 1500 at the first guess, so plain Newton loses one
+    # thermal voltage per step and cannot finish inside the iteration cap.
+    panel = SingleDiodeWithLosses(
+        photocurrent=10.0,
+        ideality_factor=1.0,
+        cells_in_series=10,
+        series_resistance=20.0,
+        shunt_resistance=1.0,
+    )
+    for v in (-10.0, -5.0, -1.0, 0.5):
+        assert panel.current(v) == pytest.approx(_reference_current(panel, v), abs=1e-9)
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"shunt_resistance": 0.0},
+        {"shunt_resistance": -5.0},
+        {"shunt_resistance": float("nan")},
+        {"series_resistance": -0.1},
+        {"series_resistance": float("nan")},
+        {"series_resistance": float("inf")},
+    ],
+)
+def test_invalid_resistance_raises(kwargs):
+    with pytest.raises(ValueError):
+        SingleDiodeWithLosses(**kwargs)
+
+
+@pytest.mark.parametrize("v", [float("inf"), float("-inf"), float("nan")])
+def test_non_finite_voltage_raises(v):
+    with pytest.raises(ValueError):
+        SingleDiodeWithLosses().current(v)
