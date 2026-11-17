@@ -36,3 +36,31 @@ here's which is which.
 
 Regenerate the PDFs and JLCPCB outputs after any schematic/layout change -
 don't let them drift from the source files.
+
+## Dimmer board
+
+The 220 Vac halogen dimmer that lights the panels on the bench. It has its
+own KiCad project in `dimmer/`. See `dimmer/README.md` for the board and the
+mains safety warning.
+
+### Dimmer source (edit these)
+
+- `dimmer/esp32_dimmer.kicad_pro`, `.kicad_pcb`, `.kicad_sch`, `.kicad_dru` -
+  project, layout, schematic and design rules.
+- `dimmer/libraries/` - project-local symbols, footprints and 3D model.
+- `dimmer/fp-lib-table`, `dimmer/sym-lib-table` - library tables. They point
+  to `shared/` with `${KIPRJMOD}/../shared/...`, so keep that folder in place.
+- `shared/` - ESP32-C3 SuperMini symbol, footprint and 3D model.
+- `dimmer/docs/*.md` - design notes and calculations.
+
+### Dimmer generated (regenerate, do not hand-edit)
+
+- `dimmer/docs/schematic.pdf`, `dimmer/docs/BOM.csv`, `dimmer/docs/board-3d.png`
+  - exports from the KiCad project. Regenerate after any change:
+
+  ```sh
+  kicad-cli sch export pdf dimmer/esp32_dimmer.kicad_sch \
+      -o dimmer/docs/schematic.pdf
+  ```
+
+- `dimmer/docs/photo.jpg` - photo of the assembled board, metadata removed.
