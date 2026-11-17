@@ -710,6 +710,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#input-resistance-against-the-ideal-sepic-formula" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Input resistance against the ideal SEPIC formula
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -840,7 +851,7 @@
   <span class="md-ellipsis">
     
   
-    Algorithms
+    Results
   
 
     
@@ -853,6 +864,93 @@
         
         <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Results
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../results/two_peak_compare/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Two-peak curve comparison
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algorithms
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1197,6 +1295,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#input-resistance-against-the-ideal-sepic-formula" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Input resistance against the ideal SEPIC formula
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1434,6 +1543,24 @@ range's ratio in <code>firmware/pipico_board/src/adc_cal.rs</code>
 (<code>RATIO_LOW_X100</code>/<code>RATIO_MID_X100</code>/<code>RATIO_FULL_X100</code>) to the measured
 value. Do not touch the gain or zero: those describe the RP2040's ADC, not
 the divider, and a range change does not affect them.</p>
+<h2 id="input-resistance-against-the-ideal-sepic-formula">Input resistance against the ideal SEPIC formula<a class="headerlink" href="#input-resistance-against-the-ideal-sepic-formula" title="Permanent link">&para;</a></h2>
+<p>Check with <code>uv run python scripts/check_rin_model.py</code>. It uses the committed 10 Ohm duty sweep (5 V in, D 0.05 to 0.45)
+and the two long holds. Measured R_in is V_in / I_in. <code>SEPICConverter</code> is lossless, so it gives the same numbers
+as the ideal formula <code>R_load * ((1 - D) / D)^2</code>.</p>
+<ul>
+<li>Median relative error is 5.2 %. The maximum is 409 % (at D 0.05).</li>
+<li>The ideal formula is within 10 % from D 0.25 to 0.45 (errors 5.2 % at 0.25, 1.2 % at 0.30, -0.9 % at 0.35,
+  -2.5 % to 7.8 % at 0.40, -3.3 % at 0.45).</li>
+<li>Below D 0.25 the formula is too high: 13 % at D 0.20, 35 % at 0.15, 94 % at 0.10, 409 % at 0.05. The measured
+  R_in is lower because the converter draws more input current than the lossless ratio gives.</li>
+<li>Fixed losses dominate at low duty. Efficiency (V_out^2 / R_load over V_in * I_in) is 28 % at D 0.05
+  (35 mW in, 9.9 mW out), 43 % at 0.10, 64 % at 0.20 and 82 % at 0.45. The loss is 25 to 35 mW at D 0.05 to
+  0.10. A lossless converter would give 2529 Ohm at D 0.05 against 709 Ohm measured.</li>
+<li>DCM may add to this at low duty, but it is not proven: the data has no inductor current.</li>
+<li>I_in is only about 7 mA at D 0.05 (1 mA resolution, about 14 % there). This does not explain the 409 %.</li>
+<li><code>load_ohms</code> comes from the typed <code>--load-ohms</code> argument of <code>scripts/duty_sweep.py</code>, not from a measurement.</li>
+<li>Use the formula for D above about 0.25 on this bench. Below that, do not rely on it.</li>
+</ul>
 
 
 
