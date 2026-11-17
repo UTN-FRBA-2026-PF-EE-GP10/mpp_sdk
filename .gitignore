@@ -48,3 +48,7 @@ firmware/Cargo.lock
 target/
 **/target/
 *.cfg
+
+# KiCad backups and editor history
+hardware/*-backups/
+.history/

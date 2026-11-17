@@ -1,7 +1,7 @@
 # Comparison methodology
 
 How the harness measures MPPT performance, what each number means, and how
-the simulation results will be reproduced on PLECS and on the bench. For
+how the simulation results are checked against PLECS and the bench. For
 the system overview see `general_information.md`; for design decisions,
 `rationale.md`.
 
@@ -158,7 +158,7 @@ runs (`RunRecord`, `mpp-sdk run-algorithm`).
 
 Every stochastic element is seeded: the cyclic schedule, the PSO swarm,
 the noise stream. Re-running any harness reproduces its numbers exactly.
-Changing a seed is a deliberate, visible act. This is a PLAN-level rule,
-because every figure in the paper must be regenerable from a command.
+Changing a seed is a deliberate, visible act. Every figure in the paper must be
+regenerable from a command.
 Stochastic algorithms are reported as mean ± std over 30 seeds
 (`compare_seeds.py`), never a single seed.
