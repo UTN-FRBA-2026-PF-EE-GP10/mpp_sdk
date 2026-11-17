@@ -93,9 +93,23 @@ The reply to `0xD2` is in the MISO of the next exchange, like the sweep progress
   bit 1 mains, bit 2 locked, bit 3 timed out.
 - The CRC covers bytes 0 to 7, then `ACK` (byte 9), then byte 10 (`SETTLED`, always `0` here), in that order.
   Every MISO frame does the same.
-- `SET` is the last alpha the Pi sent. `APPLIED` is the angle the dimmer reported.
+- `SET` is the alpha the Pico holds now.
+  It is the last alpha the Pi sent, or `18000` after a timeout or a link loss. `APPLIED` is the angle the dimmer reported.
 - `AGE` is the time since the last good status read, in 100 ms units, saturating at 255.
 
 ## Lamp power
 
 For a resistive lamp the power fraction at angle `alpha` is `P = 1 - alpha/pi + sin(2 alpha)/(2 pi)`.
+
+## Python use
+
+- `SpiMcuSource` sends the commands.
+- A thread repeats the last alpha every second (the `dimmer_keepalive_s` argument, at most 2 s).
+- `close()` and `dimmer_off()` stop the thread and switch the lamp off.
+- `scripts/dimmer_set.py` does the same from the command line.
+
+```python
+with SpiMcuSource() as src:
+    src.set_dimmer_power(0.5)  # or set_dimmer_alpha(90.0)
+    print(src.dimmer_status())
+```

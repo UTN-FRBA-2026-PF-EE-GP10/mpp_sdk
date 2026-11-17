@@ -39,6 +39,7 @@ def test_unknown_subcommand_exits_nonzero():
         "compare-dynamic",
         "compare-cyclic",
         "compare-noise",
+        "compare-bench-like",
         "compare-rescan",
         "compare-bank",
         "compare-seeds",

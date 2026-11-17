@@ -17,6 +17,7 @@ from .algorithms.perturb_observe import PerturbAndObserve
 from .algorithms.scan_and_track import ScanAndTrack
 from .converters.sepic import SEPICConverter
 from .io.base import SignalSource
+from .io.bench_like import BenchLikeSource
 from .io.dynamic import DynamicSimulatedSource
 from .io.noisy import NoisySource
 from .io.simulated import SimulatedSource
@@ -42,6 +43,7 @@ __all__ = [
     "SimulatedSource",
     "DynamicSimulatedSource",
     "NoisySource",
+    "BenchLikeSource",
     "PanelModel",
     "IdealSingleDiode",
     "MeasuredPanel",
