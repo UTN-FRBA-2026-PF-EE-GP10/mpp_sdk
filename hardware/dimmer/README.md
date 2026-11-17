@@ -8,7 +8,7 @@ Two-layer 100 x 100 mm phase-control dimmer for a nominal 220 Vac, 50 Hz, 1000 W
 
 - It is the lamp dimmer for the panel bench. It lights the PV panels.
 - An ESP32-C3 SuperMini controls it. The ESP32-C3 is an I2C slave.
-- The Pico on the main board is the I2C master. The link document is planned: `docs/hardware_v1/dimmer_link.md`.
+- The Pico on the main board is the I2C master. The link is described in [dimmer_link.md](../../docs/hardware_v1/dimmer_link.md).
 - A MOC3052M gives random-phase optical triggering.
 - An H11AA1 detects the zero crossings.
 - A BTA16-800BW switches the load.
@@ -36,7 +36,7 @@ The ESP32-C3 gets its 3.3 V power and its I2C bus from J1 (SELV side).
 - `libraries/` - project-local symbols, footprints and 3D model
 - `../shared/` - ESP32-C3 SuperMini symbol, footprint and 3D model
 
-The firmware is in `firmware/esp32c3-dimmer/` (separate change).
+The firmware is in [firmware/esp32c3-dimmer/](../../firmware/esp32c3-dimmer/).
 
 ## Origin
 

@@ -1,6 +1,6 @@
 <!-- markdownlint-disable MD013 -->
 
-# Revision J — snubberless triac
+# Revision J - snubberless triac
 
 The design uses ST's **BTA16-800BW**. `BTA` identifies the insulated-tab package, `16` the series current class, `800` the repetitive peak off-state voltage rating, `B` the 50 mA trigger-current class, and `W` the Snubberless™ family. The `W` suffix is essential: BTA16-800B without `W` is the standard family, while BTA16-800BW is the snubberless one. Do not substitute the standard part without reviewing the RC network and commutation margins.
 
