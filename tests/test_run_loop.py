@@ -1,4 +1,4 @@
-"""Tests for `scripts.run_algorithm.run_control_loop` only - not `main()`,
+"""Tests for `mpp_sdk.runs.loop.run_control_loop` only - not `main()`,
 not the sweep/save half (both need real hardware). A minimal in-test fake
 source is enough since this function only calls `.read()`/`.write()` (and,
 for the link-down abort, reads `.consecutive_bad_frames` if present),
@@ -9,7 +9,7 @@ import math
 
 import pytest
 
-from scripts.run_algorithm import BOARD_I_MAX, run_control_loop
+from mpp_sdk.runs.loop import BOARD_I_MAX, run_control_loop
 
 
 class _FakeSource:
@@ -683,7 +683,7 @@ def test_run_info_bad_frames_is_none_for_a_source_without_the_counter():
 
 def test_build_run_settings_reads_what_is_known_and_nulls_the_rest():
     from mpp_sdk.algorithms import PerturbAndObserve
-    from scripts.run_algorithm import build_run_settings
+    from mpp_sdk.runs.loop import build_run_settings
 
     class _Src:
         vin_range = "low"

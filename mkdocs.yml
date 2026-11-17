@@ -42,6 +42,7 @@ nav:
       - Two-peak curve comparison: results/two_peak_compare.md
   - Algorithms:
       - Perturb & Observe: algorithms/perturb_observe.md
+      - Adaptive Perturb & Observe: algorithms/adaptive_perturb_observe.md
       - Incremental Conductance: algorithms/incremental_conductance.md
       - Fuzzy Logic: algorithms/fuzzy_logic.md
       - Scan-and-Track: algorithms/scan_and_track.md

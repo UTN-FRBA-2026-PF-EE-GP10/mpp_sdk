@@ -1014,11 +1014,11 @@ def test_downsample_samples_below_the_cap_is_unchanged():
 
 class _FakeRunSource:
     """Minimal fake board for `_run_live`: `read()`/`write()` like
-    `test_run_algorithm.py`'s `_FakeSource`, plus `vout` and
+    `test_run_loop.py`'s `_FakeSource`, plus `vout` and
     `consecutive_bad_frames` since `_run_live`/`run_control_loop` read
     both (`SpiMcuSource` has both; a plain SignalSource fake would not,
     and must still work - see `test_a_fake_source...` in
-    test_run_algorithm.py)."""
+    test_run_loop.py)."""
 
     def __init__(self):
         self._duty = 0.0

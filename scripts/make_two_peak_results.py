@@ -82,9 +82,19 @@ def run_one(make_ctl, panel, load: float, duty: float, n_steps: int) -> tuple[fl
     return final, (outside[-1] + 1 if outside else 0)
 
 
+# The committed results page documents these five. Keep the table fixed when
+# the harness roster grows.
+DOCUMENTED_LABELS = ("P&O", "InCond", "Fuzzy", "Scan&Track", "PSO")
+
+
+def _documented_specs():
+    by_label = {s.label: s for s in common.algorithm_specs()}
+    return [by_label[label] for label in DOCUMENTED_LABELS]
+
+
 def evaluate(curves, n_steps: int = N_STEPS, starts=START_DUTIES) -> list[dict]:
     rows = []
-    specs = common.algorithm_specs()
+    specs = _documented_specs()
     for name, path, load in curves:
         record = library.load(Path(path))
         panel = MeasuredPanel(record)
@@ -129,7 +139,7 @@ def to_markdown(rows: list[dict]) -> str:
 
 def make_plot(rows: list[dict], curves, path: Path, start: float = 0.5) -> None:
     fig, axes = plt.subplots(1, len(curves), figsize=(5.5 * len(curves), 4.5), squeeze=False)
-    colors = {s.label: s.color for s in common.algorithm_specs()}
+    colors = {s.label: s.color for s in _documented_specs()}
     for ax, (name, cpath, _) in zip(axes[0], curves, strict=True):
         panel = MeasuredPanel(library.load(Path(cpath)))
         v = np.linspace(0.0, panel.open_circuit_voltage, 400)
