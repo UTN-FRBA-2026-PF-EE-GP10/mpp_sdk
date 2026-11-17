@@ -4,6 +4,9 @@ import math
 
 from .base import MPPTAlgorithm
 
+_POWER_FLOOR = 1e-6  # [W]
+_DP_DEADBAND = 0.1 * _POWER_FLOOR  # [W]
+
 
 class AdaptivePerturbAndObserve(MPPTAlgorithm):
     """Perturb & Observe whose duty step follows the measured power slope.
@@ -66,9 +69,12 @@ class AdaptivePerturbAndObserve(MPPTAlgorithm):
         else:
             direction = +1
 
-        # Floor on P avoids a divide by zero in the dark
-        slope = abs(dp) / (self._last_step * max(power, 1e-6))
+        # Floor on P avoids a divide by zero in the dark. Below the dead-band
+        # a power change is noise, so the step stays at its minimum.
+        slope = abs(dp) / (self._last_step * max(power, _POWER_FLOOR))
         size = max(self._min_step, min(self._max_step, self._gain * slope))
+        if abs(dp) < _DP_DEADBAND:
+            size = self._min_step
 
         self._duty = self._clamp(self._duty + direction * size)
         self._last_v = voltage

@@ -136,6 +136,15 @@ def test_duty_stays_within_bounds():
         assert 0.2 <= d <= 0.8
 
 
+def test_near_dark_noise_keeps_minimum_step():
+    ctl = AdaptivePerturbAndObserve(initial_duty=0.5, min_step=0.001, max_step=0.05)
+    ctl.step(1e-3, 1e-4)  # P = 1e-7 W
+    before = ctl.duty
+    ctl.step(1.01e-3, 1e-4)  # dP = 1e-9 W, far below the dead-band
+    assert abs(ctl.duty - before) == pytest.approx(0.001)
+    assert ctl.last_step == pytest.approx(0.001)
+
+
 def test_interface():
     ctl = AdaptivePerturbAndObserve()
     assert isinstance(ctl, mpp_sdk.MPPTAlgorithm)

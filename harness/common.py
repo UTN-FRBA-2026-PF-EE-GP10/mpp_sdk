@@ -29,7 +29,7 @@ def algorithm_specs(
     rescan_period: int | None = None,
     pso_particles: int = 5,
 ) -> list[AlgorithmSpec]:
-    """The five registered MPPT algorithms, configured for one call site.
+    """The registered MPPT algorithms, configured for one call site.
 
     ``rescan_period`` and ``pso_particles`` map onto today's call sites:
 
