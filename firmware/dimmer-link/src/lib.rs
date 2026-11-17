@@ -7,6 +7,7 @@
 //! (180.00 degrees) is off.
 #![cfg_attr(not(test), no_std)]
 
+pub mod master;
 pub mod slave;
 
 /// 7-bit I2C address of the dimmer.

@@ -44,6 +44,12 @@ DIMMER_AP_PASS=<your password> cargo run --release --features wifi
 - After the first valid *Set alpha*, the lamp goes off if no valid *Set alpha* arrives for 2 s. The main loop checks this, not the I2C task.
 - With the `wifi` feature, `POST /level` answers 409 `I2C control active` after the first I2C command.
 
+## Known limits
+
+- Wi-Fi control has no deadman until the first I2C command arrives. A level set over Wi-Fi stays on if the phone goes away.
+- If the master skips a status read, the unread status frame stays in the I2C TX buffer. Later status reads then lag by one frame (about 0.5 s with the Pico's 500 ms status period). Lamp safety is not affected, because the deadman runs on the dimmer.
+- A possible fix, untested: call `i2c_reset_tx_fifo` before loading a new status frame.
+
 ## Control over Wi-Fi (`wifi` feature)
 
 The SuperMini's blue LED shows the state without a cable: three quick flashes at boot, then one short flash per second once the Wi-Fi network is up. Repeated triple flashes mean the board keeps resetting, usually from a weak supply.
@@ -82,7 +88,7 @@ Feed J2 from an isolated low-voltage AC transformer instead of mains. R7 + R8 (9
 
 - Close the board in its enclosure, with the heatsink fitted, the fuse in F1 and a **small resistive lamp** (for example 40–100 W incandescent or halogen) on J3.
 - Power the ESP32 from a certified isolated 3.3 V supply on J1 with JP1 fitted, **not** from the laptop's USB.
-- Control it only from the phone. The page should show **Locked to mains** and about 50 Hz. Under *Zero-cross, last second* expect about 100 pulses, 0 invalid and a half-period near 10 000 µs.
+- Mains testing needs the Pico link or a `wifi` build. Control it only from the Pico (or, in the `wifi` build, from the phone). The page of the `wifi` build should show **Locked to mains** and about 50 Hz. Under *Zero-cross, last second* expect about 100 pulses, 0 invalid and a half-period near 10 000 µs.
 - **A load is required.** The TRIAC only stays on when the load draws its latching current (roughly 50–80 mA for the BTA16). With only a voltmeter, or an open lamp filament, Full still shows about 220 V (FIRE is held on) but partial levels show only leakage, around 13–60 V. A 47 kΩ resistor (4.7 mA) is far too little.
 - Step through 25 / 50 / 75 / Full. The lamp should brighten smoothly and *skipped* should stay near 0.
 - Above about 100 W the TRIAC needs its heatsink: a 1 kW load is about 4.4 A and 4 W in Q2, which a bare TO-220 cannot shed.
