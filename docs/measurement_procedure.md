@@ -106,36 +106,33 @@ scripts/install_workbench_service.sh
 
 ## The tilted-panel procedure
 
-**Why**: this bench's array is two panels and a lamp. The light travels
-from 180 degrees toward 0 degrees; 90 degrees is vertical and faces the
-light squarely, so 90 is the *untilted* reference, not zero. Panel A is
-always fixed at 90 degrees - it is the unshaded reference panel and is
-never adjusted. Panel B is the one that moves, on a mount with five fixed
-detents: 90, 70, 60, 45, 30 degrees. Lower numbers tilt panel B further
-right, away from the light, so it receives less illumination. A single
-tilted capture and a full sweep across panel B's angles are the same
-physical setup, just one point or several - hence one measurement kind,
-`tilted`, for both. It lets `mpp-sdk compare-measured` (see
-`docs/methodology.md`'s "Measured curves" section) grade an algorithm's
-partial-shading behavior against a real, physically varying array shape
-instead of an inferred one.
+Setup facts:
 
-**Procedure for a sweep**: repeat "Capture one curve" once per angle,
-with two changes each time: physically set panel B to the next detent
-before clicking **Start Measurement**, and select the **Tilted** tab
-(not **Baseline**) so the save request's measurement kind matches. The
-save form's panel B selector is restricted to the five valid detents, so
-picking the wrong angle by typo is not possible - just make sure the
-selected value matches where the panel physically is. Use the same label
-prefix for the whole series with the angle appended, e.g.
-`"2026-09-08 tilted 45deg"`, so the saved-curves table stays readable.
-Keep every other condition (lighting, panel A) constant across the whole
-series. Sweeps run back-to-back here - see the Safety section above about
-Q3's heatsink.
+- The array is two panels and a lamp. Light travels from 180 degrees
+  toward 0 degrees. 90 degrees is vertical and faces the light, so 90 is
+  the untilted reference, not zero.
+- Panel A is fixed at 90 degrees. It is the unshaded reference.
+- Panel B moves on a mount with five detents: 90, 70, 60, 45, 30 degrees.
+  A lower number tilts B further from the light, so it gets less light.
+- One tilted capture and a full sweep of angles are the same setup. Both
+  use one measurement kind, `tilted`. `mpp-sdk compare-measured` (see
+  `docs/methodology.md`, "Measured curves") then grades an algorithm on a
+  real partial-shading curve.
 
-**After the series**: run `mpp-sdk compare-measured` (see
-`docs/methodology.md`) - it groups saved curves by measurement kind, so a
-consistently labeled tilted series shows up together automatically.
+For a sweep of angles, repeat "Capture one curve" for each angle:
+
+1. Set panel B to the next detent by hand.
+2. Select the **Tilted** tab, not **Baseline**.
+3. Click **Start Measurement**.
+4. In the save form, pick the same angle for panel B. The selector allows
+   only the five detents.
+5. Use one label prefix for the series, with the angle added, for example
+   `"2026-09-08 tilted 45deg"`.
+6. Keep the lighting and panel A the same for the whole series.
+7. Sweeps run back-to-back. See the Safety section about the Q3 heatsink.
+
+After the series, run `mpp-sdk compare-measured`. It groups saved curves
+by measurement kind, so the series shows up together.
 
 ## Where the files land
 
@@ -228,60 +225,56 @@ does not capture.
 
 ### Repeats and statistics
 
-A curve or run step can ask for more than one repeat, e.g. "3 curves, one
-after the other"). The step shows how many are
-linked against how many are asked for, e.g. "2 / 3 repeats". Once two or
-more are linked, the workbench shows the median, mean, standard
-deviation, min, and max for each number that matters: Voc, Isc, and P at
-MPP for curves; held power, P over MPP_th, and time to converge for runs.
-With only one linked, it shows that value alone, with no spread.
+- A curve or run step can ask for more than one repeat, for example 3
+  curves one after the other. The step shows "2 / 3 repeats".
+- With two or more linked, the workbench shows median, mean, standard
+  deviation, min and max. For curves: Voc, Isc, P at MPP. For runs: held
+  power, P over MPP_th, time to converge.
+- With one linked, it shows that value alone.
 
 ### Printing and downloads
 
-**Expand all** opens every linked curve's and run's chart at once - do
-this before printing (Ctrl+P/Cmd+P), though the workbench also expands
-them on its own when the print dialog opens, so nothing is missing from
-the printout. **Collapse all** puts them back.
-
-**Download JSON** saves the session record as-is. **Download Markdown**
-saves a readable summary: every step, its value and notes, and the
-statistics above, as plain text - paste it into a lab notebook or a PR
-description. Both downloads hold the session alone, without the curves
-and runs it links.
+- **Expand all** opens every linked chart. Use it before you print
+  (Ctrl+P or Cmd+P). The workbench also expands them when the print
+  dialog opens. **Collapse all** closes them.
+- **Download JSON** saves the session record.
+- **Download Markdown** saves a readable summary: each step, its value and
+  notes, and the statistics.
+- Both downloads hold the session alone, without the linked curves and
+  runs.
 
 ## Sharing a session file
 
-A session file bundles curves and runs (and, from a session, the session
-itself) into one file, so someone else can open the workbench with no
-board and no saved library and still see the whole picture.
+A session file bundles curves and runs, and optionally the session, into
+one file. Someone else can open it with no board and no saved library.
 
-**Export from a session**: open the session, click **Export session
-file**. The file holds the session record plus every curve and run its
-steps link. A linked curve or run since deleted from the library is
-listed as missing in the file, rather than silently left out.
+Export from a session:
 
-**Export loose curves or runs**: in **Curves** or **Runs**, click
-**Select**, tick the items you want, then **Export N selected**. Type a
-title when asked - this becomes the file name. This file holds no
-session; it is exactly the curves or runs you picked.
+1. Open the session and click **Export session file**.
+2. The file holds the session record and every linked curve and run. A
+   linked item that was deleted is listed as missing.
 
-Either way, the browser downloads `<title>.mppsession.json`.
+Export loose curves or runs:
 
-**Open**: start the workbench on any machine with
-`mpp-sdk curve-tracer-web --demo` (no board needed), open it in a browser,
-then click **Open session** in the header, or drag the file onto the
-page. The workbench switches to a read-only view of that file: a
-**Viewing: `<title>`** banner appears at the top, with a **Close** button
-that returns to the normal view. While viewing an imported session:
+1. In **Curves** or **Runs**, click **Select** and tick the items.
+2. Click **Export N selected** and type a title. The title is the file
+   name. The file holds no session.
 
-- Capture, starting a run, deleting, and remeasuring are all off - nothing
-  in the file can be changed, and nothing is sent to a server.
-- The curve and run views work the same as usual, including opening a run
-  in the player - the player reads the run's samples straight from the
-  file.
-- If the file carries a session, **View session** opens it read-only, the
-  same document view as a live session, fed entirely from the file - no
-  board and no saved library needed.
+The browser downloads `<title>.mppsession.json`.
 
-A bad file (wrong format, too large, or corrupted) shows an error message
-and leaves the current view untouched.
+Open a file:
+
+1. Start `mpp-sdk curve-tracer-web --demo` on any machine.
+2. Click **Open session** in the header, or drag the file onto the page.
+3. A **Viewing: `<title>`** banner shows. Click **Close** to leave.
+
+While you view a file:
+
+- Capture, starting a run, deleting and remeasuring are off. Nothing is
+  sent to a server.
+- Curve and run views work as usual. The player reads the run samples from
+  the file.
+- **View session** opens the session read-only, if the file has one.
+
+A bad file (wrong format, too large, corrupted) shows an error. The current
+view stays as it was.
