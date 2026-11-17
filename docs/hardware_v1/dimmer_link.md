@@ -93,7 +93,8 @@ The reply to `0xD2` is in the MISO of the next exchange, like the sweep progress
   bit 1 mains, bit 2 locked, bit 3 timed out.
 - The CRC covers bytes 0 to 7, then `ACK` (byte 9), then byte 10 (`SETTLED`, always `0` here), in that order.
   Every MISO frame does the same.
-- `SET` is the last alpha the Pi sent. `APPLIED` is the angle the dimmer reported.
+- `SET` is the alpha the Pico holds now.
+  It is the last alpha the Pi sent, or `18000` after a timeout or a link loss. `APPLIED` is the angle the dimmer reported.
 - `AGE` is the time since the last good status read, in 100 ms units, saturating at 255.
 
 ## Lamp power

@@ -8,6 +8,7 @@ cycle.
 """
 
 from .base import SignalSource
+from .bench_like import BenchLikeSource
 from .dynamic import DynamicSimulatedSource
 from .noisy import NoisySource
 from .simulated import SimulatedSource
@@ -18,6 +19,7 @@ __all__ = [
     "SimulatedSource",
     "DynamicSimulatedSource",
     "NoisySource",
+    "BenchLikeSource",
     "SpiMcuSource",
     "SweepProgress",
     "SweepSource",

@@ -66,7 +66,7 @@ uv add mpp-sdk
 # With high-fidelity pvlib panel models (PvlibPanelModel adapter)
 uv add "mpp-sdk[pvlib]"
 
-# With SPI hardware dependencies (Phase 5 - SpiMcuSource)
+# With SPI hardware dependencies (SpiMcuSource)
 uv add "mpp-sdk[hardware]"
 
 # With the curve-tracer FastAPI web backend (mpp-sdk curve-tracer-web)
@@ -192,19 +192,13 @@ that discovers the MPP from a stream of (V, I) measurements.
 `mpp-sdk` fills that gap. It is **complementary** to pvlib, not a
 replacement:
 
-| Concern                                  | pvlib            | mpp-sdk            |
-| ---------------------------------------- | ---------------- | ------------------ |
-| Solar resource & irradiance models       | yes              | out of scope       |
-| Panel I-V physics (single / two-diode)   | yes (canonical)  | minimal in-tree    |
-| Partial shading via `bishop88`           | yes              | wraps pvlib        |
-| Closed-loop MPPT controllers (P&O, …)    | **no**           | **yes**            |
-| SEPIC / power-stage model                | no               | yes                |
-| Hardware abstraction (`SignalSource`)    | no               | yes (Pi + Pico)    |
-| Algorithm benchmark / comparison harness | no               | yes                |
+- pvlib owns solar resource, irradiance and panel I-V physics.
+- `mpp-sdk` owns closed-loop MPPT controllers, the SEPIC model, the
+  hardware seam (`SignalSource`) and the comparison harness.
+- `PvlibPanelModel` puts any pvlib model behind the same controller and
+  converter pipeline. We do not re-implement panel physics.
 
-The `PvlibPanelModel(PanelModel)` adapter (shipped) drops any pvlib-grade
-model behind our controller and converter pipeline, unchanged. We do not
-re-implement panel physics that pvlib already provides.
+See [`docs/general_information.md`](docs/general_information.md) for more.
 
 ## Status
 
