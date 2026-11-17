@@ -100,3 +100,16 @@ The reply to `0xD2` is in the MISO of the next exchange, like the sweep progress
 ## Lamp power
 
 For a resistive lamp the power fraction at angle `alpha` is `P = 1 - alpha/pi + sin(2 alpha)/(2 pi)`.
+
+## Python use
+
+- `SpiMcuSource` sends the commands.
+- A thread repeats the last alpha every second (the `dimmer_keepalive_s` argument, at most 2 s).
+- `close()` and `dimmer_off()` stop the thread and switch the lamp off.
+- `scripts/dimmer_set.py` does the same from the command line.
+
+```python
+with SpiMcuSource() as src:
+    src.set_dimmer_power(0.5)  # or set_dimmer_alpha(90.0)
+    print(src.dimmer_status())
+```
