@@ -22,6 +22,7 @@ from .io.noisy import NoisySource
 from .io.simulated import SimulatedSource
 from .models.base import PanelModel
 from .models.ideal import IdealSingleDiode
+from .models.losses import SingleDiodeWithLosses
 from .models.measured import MeasuredPanel
 from .models.pvlib_adapter import PvlibPanelModel
 from .models.string import PvString
@@ -47,6 +48,7 @@ __all__ = [
     "MeasuredPanel",
     "PvlibPanelModel",
     "PvString",
+    "SingleDiodeWithLosses",
     "TabulatedPanel",
     "LivePanelView",
     "plot_iv_with_operating_point",
