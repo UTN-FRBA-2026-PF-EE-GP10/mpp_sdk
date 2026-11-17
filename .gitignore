@@ -48,3 +48,6 @@ firmware/Cargo.lock
 target/
 **/target/
 *.cfg
+
+# KiCad backups
+hardware/**/*-backups/
