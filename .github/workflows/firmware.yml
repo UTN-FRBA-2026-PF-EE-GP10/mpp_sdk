@@ -99,3 +99,28 @@ jobs:
 
       - name: Build for the Pico (no_std)
         run: cargo build --release --locked --target thumbv6m-none-eabi
+
+  mppt-po:
+    name: mppt-po unit tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: firmware/mppt-po
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@1.97.0
+        with:
+          components: rustfmt
+
+      - name: Cache cargo registry and build artefacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: firmware/mppt-po
+
+      - name: Format check
+        run: cargo fmt --check
+
+      - name: Test
+        run: cargo test --locked
