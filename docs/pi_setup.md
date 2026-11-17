@@ -56,8 +56,8 @@ Flash the firmware from a PC with a debug probe, not from the Pi.
 2. The result must be `0x0`.
 3. Any other value means under-voltage or throttling. Under-voltage can
    stall SPI and abort runs. Fix the supply before you measure:
-   - Use the official power supply for the Pi.
-   - Do not power the lamp or other loads from the same supply.
+   - Use a supply rated for the Pi.
+   - Give the lamp and other loads their own supply.
 
 ## Start the workbench server
 
@@ -71,9 +71,13 @@ Flash the firmware from a PC with a debug probe, not from the Pi.
 2. Open `http://<pi-host>:8000/` from any device on the bench network.
 3. The server does not need the Pico at start. The connection pill shows
    an error until the board answers, then it shows **PICO connected**.
-4. The server picks SPI bus 0 on a Raspberry Pi. Use `--spi-bus` to
+4. The server returns 403 if the browser uses a host name it does not know.
+   IP addresses, `localhost`, the Pi's own name and `<name>.local` always
+   work. For any other name, start the server with
+   `--allowed-host <name>` (repeat the option for more names).
+5. The server picks SPI bus 0 on a Raspberry Pi. Use `--spi-bus` to
    change it.
-5. To try the workbench with no board, add `--demo`.
+6. To try the workbench with no board, add `--demo`.
 
 The server has no login. Keep it on the bench network. See the safety
 notes in the [measurement procedure](measurement_procedure.md).
