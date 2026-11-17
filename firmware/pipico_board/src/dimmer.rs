@@ -13,7 +13,7 @@ use dimmer_link::{
 };
 use embassy_rp::gpio::Flex;
 use embassy_time::{Duration, Instant, Timer};
-use portable_atomic::{AtomicBool, AtomicU8, AtomicU16, AtomicU32, Ordering};
+use portable_atomic::{AtomicBool, AtomicU8, AtomicU16, AtomicU32, AtomicU64, Ordering};
 
 /// Alpha set by the Pi. Starts off.
 static ALPHA_SET: AtomicU16 = AtomicU16::new(ALPHA_OFF);
@@ -26,11 +26,10 @@ static LINK_LOST: AtomicBool = AtomicBool::new(false);
 /// Last good status from the dimmer.
 static STATUS_FLAGS: AtomicU8 = AtomicU8::new(0);
 static STATUS_APPLIED: AtomicU16 = AtomicU16::new(APPLIED_NONE);
-static STATUS_MS: AtomicU32 = AtomicU32::new(0);
+static STATUS_MS: AtomicU64 = AtomicU64::new(0);
 static STATUS_SEEN: AtomicBool = AtomicBool::new(false);
 
 const STATUS_PERIOD: Duration = Duration::from_millis(500);
-const RETRY_PERIOD: Duration = Duration::from_millis(100);
 const LOOP_PERIOD: Duration = Duration::from_millis(10);
 /// The I2C link counts as ok when a status read worked within this time.
 const LINK_OK_MS: u32 = 1_000;
@@ -56,6 +55,12 @@ pub fn host_set_alpha(alpha: u16) {
 /// Called by the SPI task: the Pi link is lost, or a valid frame came back.
 pub fn set_link_lost(lost: bool) {
     LINK_LOST.store(lost, Ordering::Relaxed);
+    if lost {
+        // The flag is a level and the task polls it, so a short gap could be
+        // missed. Drop the request too: the Pi must send `0xD1` again.
+        HOST_SEEN.store(false, Ordering::Relaxed);
+        ALPHA_SET.store(ALPHA_OFF, Ordering::Relaxed);
+    }
 }
 
 /// Fields of the `0xD2` reply.
@@ -69,12 +74,14 @@ pub struct StatusReply {
 
 pub fn status_reply() -> StatusReply {
     let age_ms = if STATUS_SEEN.load(Ordering::Relaxed) {
-        now_ms().wrapping_sub(STATUS_MS.load(Ordering::Relaxed))
+        Instant::now()
+            .as_millis()
+            .saturating_sub(STATUS_MS.load(Ordering::Relaxed))
     } else {
-        u32::MAX
+        u64::MAX
     };
     let mut flags = (STATUS_FLAGS.load(Ordering::Relaxed) & 0b111) << 1;
-    if age_ms < LINK_OK_MS {
+    if age_ms < LINK_OK_MS as u64 {
         flags |= 1;
     }
     StatusReply {
@@ -261,33 +268,27 @@ impl<'d> Bus<'d> {
 
 async fn send(bus: &mut Bus<'_>, command: Command) -> bool {
     let frame: [u8; COMMAND_LEN] = encode_command(command);
-    match bus.transact_write(&frame).await {
-        Ok(()) => true,
-        Err(fault) => {
-            defmt::warn!("dimmer: write failed: {}", fault);
-            false
-        }
-    }
+    bus.transact_write(&frame).await.is_ok()
 }
 
-async fn read_status(bus: &mut Bus<'_>) {
+async fn read_status(bus: &mut Bus<'_>) -> bool {
     if !send(bus, Command::RequestStatus).await {
-        return;
+        return false;
     }
     Timer::after_millis(STATUS_DELAY_MS as u64).await;
     let mut frame = [0u8; STATUS_LEN];
-    if let Err(fault) = bus.transact_read(&mut frame).await {
-        defmt::warn!("dimmer: read failed: {}", fault);
-        return;
+    if bus.transact_read(&mut frame).await.is_err() {
+        return false;
     }
     match decode_status(&frame) {
         Ok(status) => {
             STATUS_FLAGS.store(status.flags, Ordering::Relaxed);
             STATUS_APPLIED.store(status.alpha_applied, Ordering::Relaxed);
-            STATUS_MS.store(now_ms(), Ordering::Relaxed);
+            STATUS_MS.store(Instant::now().as_millis(), Ordering::Relaxed);
             STATUS_SEEN.store(true, Ordering::Relaxed);
+            true
         }
-        Err(_) => defmt::warn!("dimmer: bad status frame"),
+        Err(_) => false,
     }
 }
 
@@ -297,7 +298,7 @@ pub async fn dimmer_task(sda: Flex<'static>, scl: Flex<'static>) {
     let mut last_sent: Option<u16> = None;
     let mut last_send_at = Instant::now();
     let mut last_status_at = Instant::now();
-    let mut failed_at: Option<Instant> = None;
+    let mut bus_ok = true;
 
     loop {
         let requested = ALPHA_SET.load(Ordering::Relaxed);
@@ -313,22 +314,24 @@ pub async fn dimmer_task(sda: Flex<'static>, scl: Flex<'static>) {
         }
 
         let due = last_send_at.elapsed() >= Duration::from_millis(KEEPALIVE_MS as u64);
-        // After a failure, retry soon but not every loop: a missing dimmer
-        // would otherwise flood the log.
-        let retry_ok = failed_at.is_none_or(|t| t.elapsed() >= RETRY_PERIOD);
-        if (last_sent != Some(alpha) && retry_ok) || due {
-            if send(&mut bus, Command::SetAlpha(alpha)).await {
-                last_sent = Some(alpha);
-                failed_at = None;
-            } else {
-                last_sent = None;
-                failed_at = Some(Instant::now());
-            }
+        // A failed send is retried at the keepalive rhythm, so a missing
+        // dimmer is not polled in a tight loop.
+        if last_sent != Some(alpha) || due {
+            let ok = send(&mut bus, Command::SetAlpha(alpha)).await;
+            last_sent = Some(alpha);
             last_send_at = Instant::now();
+            if ok != bus_ok {
+                bus_ok = ok;
+                if ok {
+                    defmt::info!("dimmer: I2C link recovered");
+                } else {
+                    defmt::warn!("dimmer: I2C write failed");
+                }
+            }
         }
 
         if last_status_at.elapsed() >= STATUS_PERIOD {
-            read_status(&mut bus).await;
+            let _ = read_status(&mut bus).await;
             last_status_at = Instant::now();
         }
 

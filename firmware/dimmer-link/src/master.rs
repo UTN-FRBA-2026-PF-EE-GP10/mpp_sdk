@@ -48,6 +48,12 @@ mod tests {
     }
 
     #[test]
+    fn a_link_gap_leaves_the_lamp_off_until_a_new_command() {
+        // The Pico clears its host timestamp on link loss: no command seen.
+        assert_eq!(alpha_to_send(ALPHA_OFF, None, false), ALPHA_OFF);
+    }
+
+    #[test]
     fn an_out_of_range_request_never_passes() {
         assert_eq!(alpha_to_send(u16::MAX, Some(0), false), ALPHA_OFF);
     }
