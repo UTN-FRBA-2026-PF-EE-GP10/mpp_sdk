@@ -49,5 +49,6 @@ target/
 **/target/
 *.cfg
 
-# KiCad backups
+# KiCad backups and editor history
 hardware/**/*-backups/
+.history/
