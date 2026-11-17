@@ -77,7 +77,10 @@ mod tests {
     #[test]
     fn no_lock_or_no_half_period_means_no_firing() {
         assert_eq!(applied(FRACTION_FULL, 10_000, false), APPLIED_NONE);
-        assert_eq!(applied(alpha_to_fraction(9_000), 10_000, false), APPLIED_NONE);
+        assert_eq!(
+            applied(alpha_to_fraction(9_000), 10_000, false),
+            APPLIED_NONE
+        );
         assert_eq!(applied(alpha_to_fraction(9_000), 0, true), APPLIED_NONE);
         assert_eq!(applied(alpha_to_fraction(9_000), 2_900, true), APPLIED_NONE);
     }
