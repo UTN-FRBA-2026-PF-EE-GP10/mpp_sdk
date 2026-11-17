@@ -1,7 +1,7 @@
 # Comparison methodology
 
 How the harness measures MPPT performance, what each number means, and how
-how the simulation results are checked against PLECS and the bench. For
+the simulation results will be reproduced on PLECS and on the bench. For
 the system overview see `general_information.md`; for design decisions,
 `rationale.md`.
 
