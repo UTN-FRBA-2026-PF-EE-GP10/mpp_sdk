@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import contextlib
+import logging
 import math
 import threading
 import time
@@ -23,6 +23,8 @@ from .dimmer import (
     parse_status_frame,
 )
 from .spi_crc import crc8
+
+_log = logging.getLogger(__name__)
 
 # spidev is Linux-only and lives in the optional [hardware] extra.
 try:
@@ -159,7 +161,7 @@ class SpiMcuSource(SignalSource):
     counts - the firmware does the calibration). Temp is a big-endian
     ``i16`` in centi-Celsius, or the sentinel -32768 if no probe is
     connected (see ``temperature_c``). ``CHECKSUM`` is a CRC-8 (polynomial
-    0x07, init 0xFF; see ``crc8()`` above) over the frame's data bytes in
+    0x07, init 0xFF; see ``crc8()`` in ``spi_crc.py``) over the frame's data bytes in
     each direction - ``DUTY_H``, ``DUTY_L``, ``CMD`` for MOSI, the eight
     telemetry bytes plus ``ACK`` and ``SETTLED`` for MISO. Both handshake bytes are
     covered because each is a command to the other side rather than a
@@ -504,13 +506,16 @@ class SpiMcuSource(SignalSource):
                 f"reset the bulk-read handshake, so the fetch could never complete"
             )
 
-        ack = self._send_cmd(cmd=_CMD_REQUEST_BULK_DUMP)
-
-        for _ in range(poll_attempts):
-            if ack & 0x80:
-                return self._bulk_read(ack & 0x7F)
-            time.sleep(poll_interval_s)
-            ack = self._send_cmd(cmd=_CMD_REQUEST_BULK_DUMP)
+        # The ack and the bulk read are one critical section: the firmware
+        # expects an 83-byte frame right after the ack, so a keepalive in
+        # between would be swallowed. The sleep stays outside the lock.
+        for attempt in range(poll_attempts + 1):
+            with self._lock:
+                ack = self._send_cmd(cmd=_CMD_REQUEST_BULK_DUMP)
+                if ack & 0x80:
+                    return self._bulk_read(ack & 0x7F)
+            if attempt < poll_attempts:
+                time.sleep(poll_interval_s)
         return None
 
     def poll_sweep_progress(self) -> SweepProgress | None:
@@ -1069,7 +1074,13 @@ class SpiMcuSource(SignalSource):
     def _dimmer_resend(self) -> None:
         with self._lock:
             if self._dimmer_wire != WIRE_ALPHA_OFF:
-                self._send_config_cmd(_CMD_DIMMER_SET_ALPHA, self._dimmer_wire)
+                self._exchange(self._dimmer_wire, _CMD_DIMMER_SET_ALPHA)
+
+    @property
+    def is_dimmer_active(self) -> bool:
+        """True while the lamp is on and the keepalive thread runs."""
+        thread = self._dimmer_thread
+        return self._dimmer_wire != WIRE_ALPHA_OFF and thread is not None and thread.is_alive()
 
     def __del__(self) -> None:
         stop = getattr(self, "_dimmer_stop", None)
@@ -1105,6 +1116,11 @@ def _dimmer_keepalive_loop(
         source = source_ref()
         if source is None:
             return
-        with contextlib.suppress(OSError):
+        try:
             source._dimmer_resend()
+        except Exception:
+            # The Pico turns the lamp off after its timeout; report that state.
+            source._dimmer_wire = WIRE_ALPHA_OFF
+            _log.exception("dimmer keepalive failed, lamp will time out")
+            return
         del source

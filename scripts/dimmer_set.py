@@ -11,6 +11,7 @@ Without --hold the Pico switches the lamp off 3 s after the last command.
 """
 
 import argparse
+import signal
 import sys
 import time
 
@@ -54,6 +55,12 @@ def main() -> None:
         from mpp_sdk.io.spi_mcu import SpiMcuSource
     except ModuleNotFoundError as exc:
         sys.exit(f"{exc}\nThis script needs the spidev module on the Pi: uv sync --extra hardware")
+
+    def _on_sigterm(*_: object) -> None:
+        raise KeyboardInterrupt
+
+    # Same cleanup as Ctrl-C, so a killed service still sends off.
+    signal.signal(signal.SIGTERM, _on_sigterm)
 
     source = SpiMcuSource(bus=args.bus, device=args.device)
     try:

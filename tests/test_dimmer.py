@@ -1,5 +1,6 @@
 """Tests for the dimmer helpers and the SpiMcuSource dimmer methods (fake spidev)."""
 
+import contextlib
 import math
 import time
 
@@ -108,3 +109,48 @@ def test_close_sends_off_and_stops_thread(spi_mcu_source):  # noqa: F811
 def test_keepalive_interval_limit(spi_mcu_source):  # noqa: F811
     with pytest.raises(ValueError):
         spi_mcu_source(dimmer_keepalive_s=2.5)
+
+
+def test_keepalive_cannot_split_ack_and_bulk_read(spi_mcu_source):  # noqa: F811
+    from mpp_sdk.io.spi_mcu import _BULK_FRAME_LEN
+
+    src = spi_mcu_source(dimmer_keepalive_s=0.001)
+    src.set_dimmer_alpha(90.0)
+    ack_rx = _miso_frame(0, 0, 0, 0, ack=0x80)
+    for _ in range(100):
+        with src._lock:
+            src._spi.responses = [ack_rx, [0xC5] + [0] * (_BULK_FRAME_LEN - 1)]
+        with contextlib.suppress(RuntimeError):
+            src.request_sweep(poll_attempts=1)
+    sent = src._spi.sent
+    for i, tx in enumerate(sent):
+        if len(tx) == _BULK_FRAME_LEN:
+            assert sent[i - 1][3] == 0xB1
+    src.dimmer_off()
+    src.close()
+
+
+def test_keepalive_does_not_touch_telemetry(spi_mcu_source):  # noqa: F811
+    src = spi_mcu_source(dimmer_keepalive_s=0.01)
+    src.write(0.2)
+    before = (src._v, src._i, src._vout)
+    src._spi.responses = [_miso_frame(1234, 567, 890, 0)] * 50
+    src._spi.next_rx = _miso_frame(1234, 567, 890, 0)
+    src.set_dimmer_alpha(90.0)
+    after_set = (src._v, src._i, src._vout)
+    time.sleep(0.1)
+    assert (src._v, src._i, src._vout) == after_set
+    assert before != after_set
+    src.dimmer_off()
+    src.close()
+
+
+def test_keepalive_failure_marks_inactive(spi_mcu_source):  # noqa: F811
+    src = spi_mcu_source(dimmer_keepalive_s=0.01)
+    src.set_dimmer_alpha(90.0)
+    assert src.is_dimmer_active
+    src._spi.raise_on_xfer = RuntimeError("boom")
+    time.sleep(0.1)
+    assert not src.is_dimmer_active
+    src._spi.raise_on_xfer = None
+    src.close()
