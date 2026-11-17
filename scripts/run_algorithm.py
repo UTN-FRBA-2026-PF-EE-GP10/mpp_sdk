@@ -82,6 +82,8 @@ _log = logging.getLogger(__name__)
 
 
 def _check_positive_finite(name: str, value: float) -> None:
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be a number, not a bool; got {value!r}")
     # NaN compares False against everything, so a NaN limit would switch
     # its abort off without a sign. Refuse it before any duty is written.
     if not (math.isfinite(value) and value > 0):
@@ -257,7 +259,6 @@ def run_control_loop(
                 source.write(duty)
                 if period_s > 0:
                     sleep(period_s)
-                wait_until(t)
                 continue
             next_duty = algorithm.step(voltage, current)
             if not math.isfinite(next_duty):
