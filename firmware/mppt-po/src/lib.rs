@@ -32,7 +32,8 @@ pub struct PerturbAndObserve {
 
 impl PerturbAndObserve {
     pub fn new(cfg: Config) -> Self {
-        let duty = cfg.initial_duty.clamp(cfg.min_duty, cfg.max_duty);
+        // Not `clamp`: it panics on an inverted pair, and a panic resets the Pico.
+        let duty = cfg.initial_duty.max(cfg.min_duty).min(cfg.max_duty);
         Self {
             cfg,
             duty,

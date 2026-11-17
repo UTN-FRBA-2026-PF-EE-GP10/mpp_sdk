@@ -46,3 +46,53 @@ fn clamps_at_limits() {
     }
     assert_eq!(po.duty(), 150);
 }
+
+fn small() -> PerturbAndObserve {
+    PerturbAndObserve::new(Config {
+        initial_duty: 1000,
+        step: 10,
+        min_duty: 980,
+        max_duty: 2000,
+    })
+}
+
+#[test]
+fn equal_power_holds_and_updates_last() {
+    let mut po = small();
+    assert_eq!(po.step(1000, 1000), 1010);
+    // Same power: hold.
+    assert_eq!(po.step(500, 2000), 1010);
+    // Last power is now 1_000_000 at 500 mV. Higher P with higher V: duty down.
+    assert_eq!(po.step(600, 2000), 1000);
+}
+
+#[test]
+fn zero_dv_with_power_change_goes_up() {
+    let mut po = small();
+    po.step(1000, 1000);
+    assert_eq!(po.step(1000, 900), 1020);
+    assert_eq!(po.step(1000, 1100), 1030);
+}
+
+#[test]
+fn min_duty_clamp_holds() {
+    let mut po = small();
+    po.step(1000, 1000);
+    // P and V rise together: duty falls each step until the minimum.
+    for k in 1..=10u16 {
+        let d = po.step(1000 + 10 * k, 1000);
+        assert!(d >= 980);
+    }
+    assert_eq!(po.duty(), 980);
+}
+
+#[test]
+fn inverted_limits_do_not_panic() {
+    let po = PerturbAndObserve::new(Config {
+        initial_duty: 100,
+        step: 10,
+        min_duty: 200,
+        max_duty: 50,
+    });
+    assert_eq!(po.duty(), 50);
+}

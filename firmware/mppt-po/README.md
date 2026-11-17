@@ -35,6 +35,7 @@ Measured with `arm-none-eabi-size` and `objdump`.
 | Static RAM | 24 bytes of state (struct size), 0 bytes of globals | 4 KB |
 | Time per step | about 36 instructions on the worst path, under 1 us at 125 MHz | 1 ms |
 
-- The probe lets the compiler fold the config into constants, so the flash number is a little low.
+- Config and inputs are runtime values in the probe, so the numbers are not folded.
+  `step` is 108 bytes, `new` is 46 bytes, 186 bytes in total.
 - The time is an **estimate**: a count of Cortex-M0+ instructions on the longest path in the disassembly.
   Measure the real time on the Pico.
