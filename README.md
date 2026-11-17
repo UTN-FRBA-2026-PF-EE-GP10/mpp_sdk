@@ -18,8 +18,8 @@ guidelines. Open work is tracked in the
 ## Why
 
 pvlib gives panel physics but no shared **control** library. Most MPPT
-comparison work uses MATLAB or Simulink code that is rarely released.
-`mpp-sdk` adds:
+comparison work uses MATLAB or Simulink code that is rarely released
+[Subudhi & Pradhan 2013]. `mpp-sdk` adds:
 
 1. **One interface.** `MPPTAlgorithm.step(V, I) -> D`. A new controller is
    a one-file PR.
@@ -160,7 +160,8 @@ but those inputs live on the *model* - the controller never sees them.
 `mpp-sdk` is complementary to [`pvlib-python`](https://pvlib-python.readthedocs.io/),
 not a replacement:
 
-- pvlib owns solar resource, irradiance and panel I-V physics. It returns
+- pvlib owns solar resource, irradiance and panel I-V physics, including
+  the `bishop88` partial-shading solver [Anderson et al. 2023]. It returns
   the MPP. It has no closed-loop controllers.
 - `mpp-sdk` owns the MPPT controllers, the SEPIC model, the `SignalSource`
   seam and the comparison harness.
