@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
     
     
       
@@ -31,10 +31,10 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
       
         
-        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.fb2fffe2.min.css">
       
       
 
@@ -1376,7 +1376,10 @@
 </ul>
 <h2 id="exposure-limit">Exposure limit<a class="headerlink" href="#exposure-limit" title="Permanent link">&para;</a></h2>
 <p>The lamp is open loop, so the dimmer limits how long it may be on.
-The limit lives on the dimmer, the last part before the mains, and works even when the Pico or the Pi misbehave.</p>
+The limit lives on the dimmer, the last part before the mains.
+It does not depend on the Pico or the Pi.
+It does not cover a stalled dimmer main loop: that stops the limiter and the deadman too.
+A task watchdog for this is a later item.</p>
 <ul>
 <li>The dimmer keeps a "heat" counter in milliseconds.
   It counts the time the lamp is <em>commanded</em> on, not the time it really fires.
@@ -1394,6 +1397,12 @@ The limit lives on the dimmer, the last part before the mains, and works even wh
   The deadman and the trip itself do not count as that OFF.
   So a host that keeps sending its old angle never restarts the lamp by itself.
   It must send OFF, then ask again.</li>
+<li>The Pico also sends its own OFF at boot and after its 3 s host timeout.
+  The dimmer counts that as the acknowledgment.
+  So a crashed or idle host acknowledges by itself,
+  and the next on-command works after the cool-down.</li>
+<li>The time between two loop ticks is counted when a command arrives,
+  so fast on and off toggling does not hide the on time.</li>
 <li>The long-run duty is at most 50 percent.
   Short windows (about 10 s) can repeat until the counter is full.</li>
 <li>The counter is in RAM only.
@@ -1401,6 +1410,13 @@ The limit lives on the dimmer, the last part before the mains, and works even wh
   The lamp is off after a reset, so this is safe.</li>
 <li>Status: flag bit 3 and <code>BUDGET_S</code>.
   The Pico copies them to the Pi (SPI reply flag bit 4 and byte 7).</li>
+<li>Only the tripped bit says the lamp is blocked.
+  <code>BUDGET_S</code> can be <code>0</code> while the lamp is still allowed
+  (heat between 119.5 s and 120 s).</li>
+<li>When <code>link_ok</code> is <code>0</code>, the tripped bit and <code>BUDGET_S</code> are unknown.
+  The Pico sends <code>0</code> and <code>0</code>.
+  The other dimmer flags keep their last values.</li>
+<li><code>BUDGET_S</code> stops at 255 s if <code>EXPOSURE_MAX_ON_MS</code> is ever raised above 255 s.</li>
 </ul>
 <p>To change the limits after a bench thermal test:</p>
 <ul>
@@ -1408,6 +1424,8 @@ The limit lives on the dimmer, the last part before the mains, and works even wh
 <li>Keep <code>EXPOSURE_RESUME_MS</code> below <code>EXPOSURE_MAX_ON_MS</code>.</li>
 <li>Run <code>cargo test</code> in <code>firmware/dimmer-link</code>.</li>
 <li>Build and flash the dimmer again.</li>
+<li>Flash the Pico and the dimmer together.
+  An old Pico with a new dimmer (or the reverse) fails the CRC, so the link reads as down.</li>
 <li>Check the Python side: its window limit mirrors <code>EXPOSURE_MAX_ON_MS</code>.</li>
 </ul>
 <h2 id="spi-commands-pi-to-pico">SPI commands (Pi to Pico)<a class="headerlink" href="#spi-commands-pi-to-pico" title="Permanent link">&para;</a></h2>
@@ -1533,10 +1551,10 @@ The limit lives on the dimmer, the last part before the mains, and works even wh
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "content.code.copy", "search.suggest"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "content.code.copy", "search.suggest"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../assets/javascripts/bundle.a5f9d56c.min.js"></script>
       
         <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
       
