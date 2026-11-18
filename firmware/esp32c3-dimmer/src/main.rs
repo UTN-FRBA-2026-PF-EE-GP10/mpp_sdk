@@ -12,23 +12,36 @@
 //! - A firing pulse is skipped rather than sent late, so a delayed pulse can
 //!   never spill into the next half-cycle.
 //!
-//! Control is over Wi-Fi from a phone, so no cable has to be connected to the
-//! board while it is on mains.
+//! Control is over I2C from the Pico (slave at `I2C_ADDRESS`). With the `wifi`
+//! feature a phone can also control it over Wi-Fi, until the first I2C command
+//! arrives. If valid I2C commands stop, the lamp goes off (deadman).
 
 use std::ffi::c_void;
 use std::ptr;
-use std::sync::atomic::{AtomicBool, AtomicPtr, AtomicU32, Ordering::Relaxed};
+use std::sync::atomic::{AtomicBool, AtomicPtr, AtomicU32, AtomicU8, Ordering::Relaxed};
 use std::thread;
 use std::time::Duration;
 
 use anyhow::{bail, Result};
-use log::info;
-use esp_idf_svc::eventloop::EspSystemEventLoop;
+use dimmer_link::slave::{applied_alpha, command_timed_out};
+use dimmer_link::{
+    alpha_to_fraction, decode_command, encode_status, flags, Command, Status, ALPHA_OFF, COMMAND_LEN,
+    COMMAND_TIMEOUT_MS, FRACTION_FULL, FRACTION_OFF, I2C_ADDRESS,
+};
+use esp_idf_svc::hal::delay::TickType;
+use esp_idf_svc::hal::i2c::{I2cSlaveConfig, I2cSlaveDriver};
 use esp_idf_svc::hal::peripherals::Peripherals;
-use esp_idf_svc::http::server::{Configuration as HttpConfig, EspHttpServer};
-use esp_idf_svc::http::Method;
-use esp_idf_svc::io::Write;
 use esp_idf_svc::sys::{self, esp};
+use log::info;
+#[cfg(feature = "wifi")]
+use esp_idf_svc::eventloop::EspSystemEventLoop;
+#[cfg(feature = "wifi")]
+use esp_idf_svc::http::server::{Configuration as HttpConfig, EspHttpServer};
+#[cfg(feature = "wifi")]
+use esp_idf_svc::http::Method;
+#[cfg(feature = "wifi")]
+use esp_idf_svc::io::Write;
+#[cfg(feature = "wifi")]
 use esp_idf_svc::wifi::{AccessPointConfiguration, AuthMethod, BlockingWifi, Configuration, EspWifi};
 
 const ZC_GPIO: i32 = 3;
@@ -62,19 +75,31 @@ const FIRE_PULSE_US: u32 = 150;
 /// Optocoupler LED test length (only allowed with no mains present).
 const OPTO_TEST: Duration = Duration::from_secs(30);
 
+/// A partial command frame older than this is dropped, so a glitch cannot shift later frames.
+const I2C_READ_TIMEOUT_MS: u64 = 20;
+
+#[cfg(feature = "wifi")]
 const AP_SSID: &str = "esp32-dimmer";
 // Set at build time so no password lives in the repository.
+#[cfg(feature = "wifi")]
 const AP_PASS: &str = env!("DIMMER_AP_PASS");
 // WPA2 needs 8 to 63 characters.
+#[cfg(feature = "wifi")]
 const _: () = assert!(AP_PASS.len() >= 8 && AP_PASS.len() <= 63, "DIMMER_AP_PASS must have 8 to 63 characters");
 
-/// Firing delay as a fraction of the half-period, 0..=65536.
-/// `FRACTION_OFF` never fires; `FRACTION_FULL` keeps FIRE high while locked.
-const FRACTION_OFF: u32 = u32::MAX;
-const FRACTION_FULL: u32 = 0;
-
+// Firing delay as a fraction of the half-period, 0..=65536 (constants from dimmer-link).
+// `FRACTION_OFF` never fires; `FRACTION_FULL` keeps FIRE high while locked.
 static FRACTION: AtomicU32 = AtomicU32::new(FRACTION_OFF);
 static LEVEL: AtomicU32 = AtomicU32::new(0);
+
+/// Set by the first valid I2C `SetAlpha`; from then on the deadman is armed.
+static ARMED: AtomicBool = AtomicBool::new(false);
+/// Lamp was switched off by the deadman, until the next valid `SetAlpha`.
+static TIMED_OUT: AtomicBool = AtomicBool::new(false);
+/// Milliseconds clock (wrapping) at the last valid `SetAlpha`.
+static LAST_COMMAND_MS: AtomicU32 = AtomicU32::new(0);
+/// Rejected I2C frames (wraps).
+static BAD_FRAMES: AtomicU8 = AtomicU8::new(0);
 static OPTO_TEST_ON: AtomicBool = AtomicBool::new(false);
 /// Bumped on every LED test start or stop, so an old timer cannot end a newer test.
 static OPTO_TEST_GEN: AtomicU32 = AtomicU32::new(0);
@@ -114,6 +139,10 @@ fn now_us() -> u32 {
     unsafe { sys::esp_timer_get_time() as u32 }
 }
 
+fn now_ms() -> u32 {
+    (unsafe { sys::esp_timer_get_time() } / 1_000) as u32
+}
+
 fn fire(on: bool) {
     unsafe { sys::gpio_set_level(FIRE_GPIO, on as u32) };
 }
@@ -124,6 +153,12 @@ fn led(on: bool) {
 
 fn locked() -> bool {
     GOOD.load(Relaxed) >= LOCK_HALF_CYCLES
+}
+
+/// Zero-cross pulses are arriving.
+fn mains_present() -> bool {
+    let since_pulse = now_us().wrapping_sub(LAST_PULSE_US.load(Relaxed));
+    PULSES.load(Relaxed) > 0 && since_pulse < ZC_TIMEOUT_US
 }
 
 /// Stops firing immediately and forgets the zero-cross lock.
@@ -241,6 +276,24 @@ fn power_at(alpha: f64) -> f64 {
     1.0 - alpha / PI + (2.0 * alpha).sin() / (2.0 * PI)
 }
 
+/// The one place that changes the firing fraction, for both control paths.
+fn set_fraction(percent: u32, fraction: u32) {
+    // A level change ends the LED test, so the page never shows a test that is not running.
+    stop_opto_test();
+    LEVEL.store(percent, Relaxed);
+    FRACTION.store(fraction, Relaxed);
+    if fraction == FRACTION_OFF {
+        fire(false);
+    }
+}
+
+/// Sets the firing angle in 0.01 degree (the I2C unit): 0 = full on, 18000 = off.
+fn set_alpha(alpha: u16) {
+    let alpha_rad = alpha as f64 / ALPHA_OFF as f64 * std::f64::consts::PI;
+    let percent = (power_at(alpha_rad) * 100.0).round().clamp(0.0, 100.0) as u32;
+    set_fraction(percent, alpha_to_fraction(alpha));
+}
+
 /// Sets the lamp power in percent: 0 = off, 100 = full, otherwise phase control.
 fn set_level(percent: u32) {
     let percent = percent.min(100);
@@ -262,13 +315,7 @@ fn set_level(percent: u32) {
             ((lo / std::f64::consts::PI) * 65536.0) as u32
         }
     };
-    // A level change ends the LED test, so the page never shows a test that is not running.
-    stop_opto_test();
-    LEVEL.store(percent, Relaxed);
-    FRACTION.store(fraction, Relaxed);
-    if fraction == FRACTION_OFF {
-        fire(false);
-    }
+    set_fraction(percent, fraction);
 }
 
 fn setup_gpio() -> Result<()> {
@@ -352,6 +399,7 @@ fn status_json() -> String {
 }
 
 /// Turns FIRE on for a few seconds to check the MOC3052 LED current, only with no mains.
+#[cfg_attr(not(feature = "wifi"), allow(dead_code))]
 fn start_opto_test() -> Result<()> {
     let since_pulse = now_us().wrapping_sub(LAST_PULSE_US.load(Relaxed));
     if PULSES.load(Relaxed) > 0 && since_pulse < 1_000_000 {
@@ -379,13 +427,84 @@ fn stop_opto_test() {
     }
 }
 
+#[cfg(feature = "wifi")]
 static INDEX_HTML: &str = include_str!("index.html");
 
 /// Commands must carry `X-Dimmer: 1`. Another web page open on the phone cannot add a
 /// custom header to a cross-origin request without a CORS preflight, which this server
 /// never answers, so it cannot switch the lamp.
+#[cfg(feature = "wifi")]
 fn from_page(req: &esp_idf_svc::http::server::Request<&mut esp_idf_svc::http::server::EspHttpConnection>) -> bool {
     req.header("X-Dimmer") == Some("1")
+}
+
+/// What the master reads after `RequestStatus`.
+fn i2c_status() -> Status {
+    let half = HALF_US.load(Relaxed);
+    let mains = mains_present();
+    let mut status_flags = 0;
+    if mains {
+        status_flags |= flags::MAINS;
+    }
+    if mains && locked() {
+        status_flags |= flags::LOCKED;
+    }
+    if TIMED_OUT.load(Relaxed) {
+        status_flags |= flags::TIMED_OUT;
+    }
+    Status {
+        flags: status_flags,
+        alpha_applied: applied_alpha(
+            FRACTION.load(Relaxed),
+            half,
+            mains && locked(),
+            MIN_DELAY_US,
+            MIN_TAIL_US,
+        ),
+        freq_centi_hz: if mains && half > 0 { (50_000_000 / half).min(u16::MAX as u32) as u16 } else { 0 },
+        bad_frames: BAD_FRAMES.load(Relaxed),
+    }
+}
+
+fn count_bad_frame() {
+    BAD_FRAMES.fetch_add(1, Relaxed);
+}
+
+/// Receives command frames. The lamp deadman is not here but in the main loop, so a stalled
+/// driver cannot keep the lamp on.
+fn i2c_task(mut driver: I2cSlaveDriver<'static>) {
+    let timeout = TickType::new_millis(I2C_READ_TIMEOUT_MS).ticks();
+    let mut frame = [0u8; COMMAND_LEN];
+    let mut len = 0;
+    loop {
+        match driver.read(&mut frame[len..], timeout) {
+            Ok(n) => len += n,
+            Err(_) => {
+                if len > 0 {
+                    count_bad_frame();
+                    len = 0;
+                }
+                continue;
+            }
+        }
+        if len < COMMAND_LEN {
+            continue;
+        }
+        len = 0;
+        match decode_command(&frame) {
+            Ok(Command::SetAlpha(alpha)) => {
+                set_alpha(alpha);
+                LAST_COMMAND_MS.store(now_ms(), Relaxed);
+                ARMED.store(true, Relaxed);
+                TIMED_OUT.store(false, Relaxed);
+            }
+            Ok(Command::RequestStatus) => {
+                // The master reads at least 3 ms later; the frame waits in the TX buffer.
+                let _ = driver.write(&encode_status(&i2c_status()), 0);
+            }
+            Err(_) => count_bad_frame(),
+        }
+    }
 }
 
 fn main() -> Result<()> {
@@ -405,6 +524,24 @@ fn main() -> Result<()> {
     set_level(0);
 
     let peripherals = Peripherals::take()?;
+
+    // SDA is IO6 and SCL is IO7. The pull-ups are on the Pico board, so the internal ones stay off.
+    let i2c = I2cSlaveDriver::new(
+        peripherals.i2c0,
+        peripherals.pins.gpio6,
+        peripherals.pins.gpio7,
+        I2C_ADDRESS,
+        &I2cSlaveConfig::new()
+            .sda_enable_pullup(false)
+            .scl_enable_pullup(false)
+            .rx_buffer_length(128)
+            .tx_buffer_length(128),
+    )?;
+    thread::Builder::new().stack_size(4096).spawn(move || i2c_task(i2c))?;
+    info!("I2C slave at 0x{I2C_ADDRESS:02X} on IO6 (SDA) and IO7 (SCL)");
+
+    #[cfg(feature = "wifi")]
+    let _wifi = {
     let sys_loop = EspSystemEventLoop::take()?;
     // No NVS: nothing is written to flash at run time, so the ZC interrupt is never
     // paused by a flash write.
@@ -442,6 +579,10 @@ fn main() -> Result<()> {
         if !from_page(&req) {
             return req.into_status_response(403)?.write_all(b"missing X-Dimmer header");
         }
+        // One controller at a time: after the first I2C command the Pico owns the lamp.
+        if ARMED.load(Relaxed) {
+            return req.into_status_response(409)?.write_all(b"I2C control active");
+        }
         let query = req.uri().split_once('?').map_or("", |(_, q)| q);
         let level = query.split('&').find_map(|kv| kv.strip_prefix("p=")).and_then(|v| v.parse::<u32>().ok());
         match level {
@@ -465,6 +606,8 @@ fn main() -> Result<()> {
         stop_opto_test();
         req.into_ok_response()?.write_all(b"ok")
     })?;
+    (wifi, server)
+    };
 
     // Watchdog: losing the zero-cross signal stops firing within ZC_TIMEOUT_US.
     let mut last_print = 0u32;
@@ -476,6 +619,14 @@ fn main() -> Result<()> {
         if locked() && now.wrapping_sub(LAST_PULSE_US.load(Relaxed)) > ZC_TIMEOUT_US {
             unlock();
             info!("zero-cross lost: firing stopped");
+        }
+        // Deadman: here and not in the I2C task, so a stalled I2C driver cannot keep the lamp on.
+        // Off sets FRACTION_OFF and drives FIRE low, which also releases full on.
+        if command_timed_out(ARMED.load(Relaxed), LAST_COMMAND_MS.load(Relaxed), now_ms(), COMMAND_TIMEOUT_MS)
+            && !TIMED_OUT.swap(true, Relaxed)
+        {
+            set_fraction(0, FRACTION_OFF);
+            info!("no I2C command for {COMMAND_TIMEOUT_MS} ms: lamp off");
         }
         if now.wrapping_sub(last_window) >= 1_000_000 {
             last_window = now;

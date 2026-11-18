@@ -6,32 +6,22 @@ this page explains why and how.
 
 ## What it does
 
-The ADC gives a raw code (0 to 4095) for the voltage on its pin. The
-firmware turns that code into volts with one straight line:
+- The ADC gives a raw code (0 to 4095). The firmware converts it with one
+  straight line, then multiplies by the divider ratio (8.5 on `Low`):
 
-```text
-pin voltage = 0.79322 mV x (code - 13.19)
-```
+  ```text
+  pin voltage = 0.79322 mV x (code - 13.19)
+  ```
 
-Then it multiplies by the divider ratio (8.5 on the `Low` range) to get the
-voltage at the terminals.
+- The gain (0.79322 mV per code) and the zero (13.19 codes) are in
+  `firmware/pipico_board/src/adc_cal.rs`. `ADC_PWR`, `ADC_VOUT` and
+  `ADC_Input_Curr` share one ADC, so they share the line.
+- The ADC reads about 13 codes at 0 V. On `Low` that is about 90 mV at the
+  terminals. Before the calibration, V out showed 85-95 mV with 0 V on the
+  output, and readings below 1.2 V were 6-16 % high. From 3 V to 18 V they
+  were within 0.5 %.
 
-The two numbers are the **gain** (0.79322 mV per code) and the **zero**
-(13.19 codes). They are in `firmware/pipico_board/src/adc_cal.rs`. The
-same line is used for `ADC_PWR`, `ADC_VOUT` and `ADC_Input_Curr`: they
-share one ADC.
-
-## Why it is needed
-
-The ADC reads about **13 codes at 0 V**. On the `Low` range that is about
-**90 mV at the terminals**. Before the calibration:
-
-- V out showed 85-95 mV with the converter off and 0 V on the output.
-- Below 1.2 V, readings were 6-16 % too high.
-- From 3 V to 18 V, readings were already within 0.5 %.
-
-So the calibration matters most near 0 V and at low voltage. Measured on
-2026-09-19, against a multimeter:
+Check against a multimeter (2026-09-19):
 
 | Test | Meter | ADC_VOUT |
 |------|-------|----------|
@@ -113,11 +103,10 @@ The board has three ranges: `Low`, `Mid`, `Full`. Each range trades full-scale
 voltage for ADC resolution. `Low` gives the most resolution but the lowest
 ceiling; `Full` gives the highest ceiling but the least resolution per volt.
 
-| Range | Full scale | When to use it |
-|-------|-----------|-----------------|
-| `Low` | about 27.3 V | one panel (the firmware setting today) |
-| `Mid` | about 51.5 V | two panels in series (about 35 V open-circuit) |
-| `Full` | about 75.6 V | highest input the board can see |
+The full-scale values (`Low` about 27.3 V, `Mid` about 51.5 V, `Full` about
+75.6 V) are in the range table in `firmware/pipico_board/README.md`. Use
+`Low` for one panel (the firmware default) and `Mid` for two panels in
+series (about 35 V open-circuit).
 
 This needs four steps: move the jumpers, set the constant, reflash, and
 check the result against a meter. It does **not** need a new gain/zero fit
@@ -176,3 +165,22 @@ range's ratio in `firmware/pipico_board/src/adc_cal.rs`
 (`RATIO_LOW_X100`/`RATIO_MID_X100`/`RATIO_FULL_X100`) to the measured
 value. Do not touch the gain or zero: those describe the RP2040's ADC, not
 the divider, and a range change does not affect them.
+
+## Input resistance against the ideal SEPIC formula
+
+Check with `uv run python scripts/check_rin_model.py`. It uses the committed 10 Ohm duty sweep (5 V in, D 0.05 to 0.45)
+and the two long holds. Measured R_in is V_in / I_in. `SEPICConverter` is lossless, so it gives the same numbers
+as the ideal formula `R_load * ((1 - D) / D)^2`.
+
+- Median relative error is 5.2 %. The maximum is 409 % (at D 0.05).
+- The ideal formula is within 10 % from D 0.25 to 0.45 (errors 5.2 % at 0.25, 1.2 % at 0.30, -0.9 % at 0.35,
+  -2.5 % to 7.8 % at 0.40, -3.3 % at 0.45).
+- Below D 0.25 the formula is too high: 13 % at D 0.20, 35 % at 0.15, 94 % at 0.10, 409 % at 0.05. The measured
+  R_in is lower because the converter draws more input current than the lossless ratio gives.
+- Fixed losses dominate at low duty. Efficiency (V_out^2 / R_load over V_in * I_in) is 28 % at D 0.05
+  (35 mW in, 9.9 mW out), 43 % at 0.10, 64 % at 0.20 and 82 % at 0.45. The loss is 25 to 35 mW at D 0.05 to
+  0.10. A lossless converter would give 2529 Ohm at D 0.05 against 709 Ohm measured.
+- DCM may add to this at low duty, but it is not proven: the data has no inductor current.
+- I_in is only about 7 mA at D 0.05 (1 mA resolution, about 14 % there). This does not explain the 409 %.
+- `load_ohms` comes from the typed `--load-ohms` argument of `scripts/duty_sweep.py`, not from a measurement.
+- Use the formula for D above about 0.25 on this bench. Below that, do not rely on it.
