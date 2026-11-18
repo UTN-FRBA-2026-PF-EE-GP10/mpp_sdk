@@ -78,7 +78,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#beaglebone-black-setup-guide-for-mpp-sdk" class="md-skip">
+        <a href="#beaglebone-black-setup" class="md-skip">
           Skip to content
         </a>
       
@@ -567,10 +567,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#step-0-what-you-need" class="md-nav__link">
+  <a href="#prepare-the-board" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Step 0 — What you need
+        Prepare the board
       
     </span>
   </a>
@@ -578,10 +578,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#step-1-download-the-debian-image" class="md-nav__link">
+  <a href="#enable-spi1" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Step 1 — Download the Debian image
+        Enable SPI1
       
     </span>
   </a>
@@ -589,10 +589,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#step-2-flash-the-microsd-card" class="md-nav__link">
+  <a href="#wire-the-pico" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Step 2 — Flash the microSD card
+        Wire the Pico
       
     </span>
   </a>
@@ -600,60 +600,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#step-3-first-boot-and-ssh" class="md-nav__link">
+  <a href="#test-and-run" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Step 3 — First boot and SSH
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Step 3 — First boot and SSH">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#connect-via-usb-easiest-for-first-setup" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Connect via USB (easiest for first setup)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#or-via-ethernet" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Or via Ethernet
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#first-things-to-do-after-logging-in" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        First things to do after logging in
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#step-4-optional-flash-to-emmc" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Step 4 — Optional: flash to eMMC
+        Test and run
       
     </span>
   </a>
@@ -661,188 +611,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#step-5-install-python-314-and-uv" class="md-nav__link">
+  <a href="#flash-the-pico-over-swd-from-the-bbb" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Step 5 — Install Python 3.14 and uv
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Step 5 — Install Python 3.14 and uv">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#check-whats-already-there" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Check what's already there
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#if-python-314-is-in-the-repos-likely" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        If Python 3.14 is in the repos (likely)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#if-not-install-via-uv" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        If not, install via uv
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#install-uv-if-you-didnt-already" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Install uv (if you didn't already)
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#step-6-enable-spi" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Step 6 — Enable SPI
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Step 6 — Enable SPI">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#6a-disable-hdmi-frees-spi1-pins" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        6a — Disable HDMI (frees SPI1 pins)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#6b-enable-the-spi1-overlay" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        6b — Enable the SPI1 overlay
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#6c-verify-spi-is-working" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        6c — Verify SPI is working
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#step-7-wire-the-bbb-to-the-rp2040-pico" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Step 7 — Wire the BBB to the RP2040 Pico
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Step 7 — Wire the BBB to the RP2040 Pico">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#7a-spi-telemetry-and-control-wiring" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        7a — SPI telemetry and control wiring
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#7b-swd-flashing-debug-wiring-optional-but-recommended" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        7b — SWD flashing &amp; debug wiring (optional but recommended)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#quick-reference-p9-header-physical-location" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Quick reference — P9 header physical location
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Quick reference — P9 header physical location">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#pico-debug-pads-location" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Pico Debug Pads Location
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#step-8-clone-and-install-the-sdk" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Step 8 — Clone and install the SDK
+        Flash the Pico over SWD from the BBB
       
     </span>
   </a>
@@ -850,60 +622,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#step-9-test-the-spi-link" class="md-nav__link">
+  <a href="#stream-firmware-logs-defmt-over-rtt" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Step 9 — Test the SPI link
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Step 9 — Test the SPI link">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#quick-test-with-spi_testpy" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Quick test with spi_test.py
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#using-spimcusource-directly" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Using SpiMcuSource directly
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#running-the-full-web-workbench" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Running the full web workbench
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#step-10-make-spi-config-persist-across-reboots" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Step 10 — Make SPI config persist across reboots
+        Stream firmware logs (defmt over RTT)
       
     </span>
   </a>
@@ -911,121 +633,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#step-11-remote-firmware-flashing-via-openocd-swd" class="md-nav__link">
+  <a href="#differences-from-the-raspberry-pi" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Step 11 — Remote firmware flashing via OpenOCD SWD
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Step 11 — Remote firmware flashing via OpenOCD SWD">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#11a-install-openocd-on-the-beaglebone-black" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        11a — Install OpenOCD on the BeagleBone Black
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#11b-create-the-flashing-configuration-on-the-bbb" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        11b — Create the flashing configuration on the BBB
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#11c-build-on-your-pc-and-flash-remotely" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        11c — Build on your PC and flash remotely
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#step-12-stream-live-debug-logs-defmt-over-rtt" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Step 12 — Stream live debug logs (defmt over RTT)
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Step 12 — Stream live debug logs (defmt over RTT)">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#12a-setup-host-pc-tools" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        12a — Setup host PC tools
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#12b-configure-rtt-on-the-beaglebone-black" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        12b — Configure RTT on the BeagleBone Black
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#12c-start-the-rtt-server-on-the-bbb" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        12c — Start the RTT server on the BBB
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#12d-view-the-log-stream-from-your-pc" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        12d — View the log stream from your PC
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#summary-of-differences-from-the-rpi-5" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Summary of differences from the RPi 5
+        Differences from the Raspberry Pi
       
     </span>
   </a>
@@ -1190,7 +801,7 @@
   <span class="md-ellipsis">
     
   
-    Algorithms
+    Results
   
 
     
@@ -1203,6 +814,93 @@
         
         <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Results
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../results/two_peak_compare/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Two-peak curve comparison
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algorithms
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1227,6 +925,37 @@
     
   
     Perturb & Observe
+  
+
+    
+      <br>
+      <small>MPPT algorithm reference</small>
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/adaptive_perturb_observe/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adaptive Perturb & Observe
   
 
     
@@ -1432,10 +1161,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#step-0-what-you-need" class="md-nav__link">
+  <a href="#prepare-the-board" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Step 0 — What you need
+        Prepare the board
       
     </span>
   </a>
@@ -1443,10 +1172,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#step-1-download-the-debian-image" class="md-nav__link">
+  <a href="#enable-spi1" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Step 1 — Download the Debian image
+        Enable SPI1
       
     </span>
   </a>
@@ -1454,10 +1183,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#step-2-flash-the-microsd-card" class="md-nav__link">
+  <a href="#wire-the-pico" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Step 2 — Flash the microSD card
+        Wire the Pico
       
     </span>
   </a>
@@ -1465,60 +1194,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#step-3-first-boot-and-ssh" class="md-nav__link">
+  <a href="#test-and-run" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Step 3 — First boot and SSH
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Step 3 — First boot and SSH">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#connect-via-usb-easiest-for-first-setup" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Connect via USB (easiest for first setup)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#or-via-ethernet" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Or via Ethernet
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#first-things-to-do-after-logging-in" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        First things to do after logging in
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#step-4-optional-flash-to-emmc" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Step 4 — Optional: flash to eMMC
+        Test and run
       
     </span>
   </a>
@@ -1526,188 +1205,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#step-5-install-python-314-and-uv" class="md-nav__link">
+  <a href="#flash-the-pico-over-swd-from-the-bbb" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Step 5 — Install Python 3.14 and uv
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Step 5 — Install Python 3.14 and uv">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#check-whats-already-there" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Check what's already there
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#if-python-314-is-in-the-repos-likely" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        If Python 3.14 is in the repos (likely)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#if-not-install-via-uv" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        If not, install via uv
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#install-uv-if-you-didnt-already" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Install uv (if you didn't already)
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#step-6-enable-spi" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Step 6 — Enable SPI
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Step 6 — Enable SPI">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#6a-disable-hdmi-frees-spi1-pins" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        6a — Disable HDMI (frees SPI1 pins)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#6b-enable-the-spi1-overlay" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        6b — Enable the SPI1 overlay
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#6c-verify-spi-is-working" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        6c — Verify SPI is working
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#step-7-wire-the-bbb-to-the-rp2040-pico" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Step 7 — Wire the BBB to the RP2040 Pico
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Step 7 — Wire the BBB to the RP2040 Pico">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#7a-spi-telemetry-and-control-wiring" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        7a — SPI telemetry and control wiring
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#7b-swd-flashing-debug-wiring-optional-but-recommended" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        7b — SWD flashing &amp; debug wiring (optional but recommended)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#quick-reference-p9-header-physical-location" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Quick reference — P9 header physical location
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Quick reference — P9 header physical location">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#pico-debug-pads-location" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Pico Debug Pads Location
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#step-8-clone-and-install-the-sdk" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Step 8 — Clone and install the SDK
+        Flash the Pico over SWD from the BBB
       
     </span>
   </a>
@@ -1715,60 +1216,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#step-9-test-the-spi-link" class="md-nav__link">
+  <a href="#stream-firmware-logs-defmt-over-rtt" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Step 9 — Test the SPI link
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Step 9 — Test the SPI link">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#quick-test-with-spi_testpy" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Quick test with spi_test.py
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#using-spimcusource-directly" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Using SpiMcuSource directly
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#running-the-full-web-workbench" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Running the full web workbench
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#step-10-make-spi-config-persist-across-reboots" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Step 10 — Make SPI config persist across reboots
+        Stream firmware logs (defmt over RTT)
       
     </span>
   </a>
@@ -1776,121 +1227,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#step-11-remote-firmware-flashing-via-openocd-swd" class="md-nav__link">
+  <a href="#differences-from-the-raspberry-pi" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Step 11 — Remote firmware flashing via OpenOCD SWD
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Step 11 — Remote firmware flashing via OpenOCD SWD">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#11a-install-openocd-on-the-beaglebone-black" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        11a — Install OpenOCD on the BeagleBone Black
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#11b-create-the-flashing-configuration-on-the-bbb" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        11b — Create the flashing configuration on the BBB
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#11c-build-on-your-pc-and-flash-remotely" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        11c — Build on your PC and flash remotely
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#step-12-stream-live-debug-logs-defmt-over-rtt" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Step 12 — Stream live debug logs (defmt over RTT)
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Step 12 — Stream live debug logs (defmt over RTT)">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#12a-setup-host-pc-tools" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        12a — Setup host PC tools
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#12b-configure-rtt-on-the-beaglebone-black" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        12b — Configure RTT on the BeagleBone Black
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#12c-start-the-rtt-server-on-the-bbb" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        12c — Start the RTT server on the BBB
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#12d-view-the-log-stream-from-your-pc" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        12d — View the log stream from your PC
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#summary-of-differences-from-the-rpi-5" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Summary of differences from the RPi 5
+        Differences from the Raspberry Pi
       
     </span>
   </a>
@@ -1917,460 +1257,240 @@
   
 
 
-<h1 id="beaglebone-black-setup-guide-for-mpp-sdk">BeagleBone Black Setup Guide for mpp-sdk<a class="headerlink" href="#beaglebone-black-setup-guide-for-mpp-sdk" title="Permanent link">&para;</a></h1>
-<p>Step-by-step guide to get the BBB talking to the RP2040 Pico over SPI and
-running the mpp-sdk.</p>
-<hr />
-<h2 id="step-0-what-you-need">Step 0 — What you need<a class="headerlink" href="#step-0-what-you-need" title="Permanent link">&para;</a></h2>
+<h1 id="beaglebone-black-setup">BeagleBone Black setup<a class="headerlink" href="#beaglebone-black-setup" title="Permanent link">&para;</a></h1>
+<p>How to use a BeagleBone Black (BBB, Rev C) as the bench host instead of a
+Raspberry Pi. Only the BBB-specific steps are here. The shared steps are in
+the <a href="../pi_setup/">Raspberry Pi setup</a>: install <code>uv</code>, clone the repository,
+<code>uv sync --extra hardware --extra web</code>, start the workbench, install the
+boot service.</p>
+<h2 id="prepare-the-board">Prepare the board<a class="headerlink" href="#prepare-the-board" title="Permanent link">&para;</a></h2>
+<ol>
+<li>Flash the Debian 13 (Trixie) IoT image for the AM335x to a microSD card.
+   Use the image and the steps on the official BeagleBoard site
+   (<a href="https://www.beagleboard.org/distros">https://www.beagleboard.org/distros</a>). The IoT image has no desktop.</li>
+<li>Hold the USER/BOOT button while you apply power. The board then boots
+   from the SD card instead of the eMMC.</li>
+<li>Log in over ssh as <code>&lt;user&gt;</code> at <code>&lt;bbb-host&gt;</code>. Over USB the board is
+   usually at <code>192.168.7.2</code>. Change the default password.</li>
+<li>Run <code>sudo apt update &amp;&amp; sudo apt upgrade -y</code>.</li>
+<li>Optional: copy the OS to the 4 GB eMMC with
+   <code>sudo /opt/scripts/tools/eMMC/init-eMMC-flasher-v3.sh</code>. It takes about
+   30 minutes. Remove the SD card after the board shuts down.</li>
+<li>Install <code>uv</code> as in the Pi setup. The BBB is 32-bit ARM (<code>armv7l</code>). Some
+   wheels, for example <code>numpy</code>, may build from source. Install the build
+   tools first:
+   <code>sudo apt install -y build-essential python3-dev libopenblas-dev gfortran</code>.</li>
+</ol>
+<h2 id="enable-spi1">Enable SPI1<a class="headerlink" href="#enable-spi1" title="Permanent link">&para;</a></h2>
+<p>On the BBB the SPI pins need an overlay. A <code>raspi-config</code> toggle does not
+exist.</p>
+<ol>
+<li>HDMI uses the SPI1 pins. Add these lines to <code>/boot/uEnv.txt</code>:</li>
+</ol>
+<div class="highlight"><pre><span></span><code>disable_uboot_overlay_video=1
+disable_uboot_overlay_audio=1
+</code></pre></div>
+<ol>
+<li>On Debian 13 with kernel 6.x the overlays are under
+   <code>/boot/dtbs/$(uname -r)/overlays/</code>. Merge the SPI1 overlay into the
+   active device tree:</li>
+</ol>
+<div class="highlight"><pre><span></span><code>sudo<span class="w"> </span>fdtoverlay<span class="w"> </span>-i<span class="w"> </span>/boot/dtbs/<span class="k">$(</span>uname<span class="w"> </span>-r<span class="k">)</span>/am335x-boneblack-uboot.dtb<span class="w"> </span><span class="se">\</span>
+<span class="w">                </span>-o<span class="w"> </span>/boot/dtbs/<span class="k">$(</span>uname<span class="w"> </span>-r<span class="k">)</span>/am335x-boneblack-uboot.dtb<span class="w"> </span><span class="se">\</span>
+<span class="w">                </span>/boot/dtbs/<span class="k">$(</span>uname<span class="w"> </span>-r<span class="k">)</span>/overlays/BB-SPIDEV1-00A0.dtbo
+</code></pre></div>
+<ol>
+<li>Load <code>spidev</code> at boot and give the user access without <code>sudo</code>:</li>
+</ol>
+<div class="highlight"><pre><span></span><code><span class="nb">echo</span><span class="w"> </span>spidev<span class="w"> </span><span class="p">|</span><span class="w"> </span>sudo<span class="w"> </span>tee<span class="w"> </span>/etc/modules-load.d/spidev.conf
+<span class="nb">echo</span><span class="w"> </span><span class="s1">&#39;KERNEL==&quot;spidev*&quot;, GROUP=&quot;dialout&quot;, MODE=&quot;0660&quot;&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sudo<span class="w"> </span>tee<span class="w"> </span>/etc/udev/rules.d/80-spidev.rules
+</code></pre></div>
+<ol>
+<li>Reboot. Check that <code>/dev/spidev1.0</code> and <code>/dev/spidev1.1</code> exist.</li>
+</ol>
+<p>The overlay change is permanent. If you set the pins with <code>config-pin</code>
+instead, the setting is lost at reboot. Then use a oneshot systemd unit
+that runs <code>config-pin P9.28 spi_cs</code>, <code>P9.29 spi</code>, <code>P9.30 spi</code> and
+<code>P9.31 spi_sclk</code> at boot.</p>
+<h2 id="wire-the-pico">Wire the Pico<a class="headerlink" href="#wire-the-pico" title="Permanent link">&para;</a></h2>
+<p>Both boards use 3.3 V logic. Wire them directly, with no level shifter.
+The Pico side is the same as for the Pi. Only the host side changes.</p>
 <table>
 <thead>
 <tr>
-<th>Item</th>
-<th>Notes</th>
+<th>BBB pin</th>
+<th>BBB signal</th>
+<th>Direction</th>
+<th>Pico GPIO</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>BeagleBone Black (Rev C)</td>
-<td>AM335x, 512 MB RAM</td>
+<td>P9.31</td>
+<td>SPI1_SCLK</td>
+<td>to Pico</td>
+<td>GPIO10 (SCK)</td>
 </tr>
 <tr>
-<td>MicroSD card</td>
-<td>≥ 8 GB, Class 10 recommended</td>
+<td>P9.29</td>
+<td>SPI1_D0 (MISO)</td>
+<td>from Pico</td>
+<td>GPIO11 (TX)</td>
 </tr>
 <tr>
-<td>5 V barrel-jack or USB power supply</td>
-<td>Barrel jack preferred for stability during flashing</td>
+<td>P9.30</td>
+<td>SPI1_D1 (MOSI)</td>
+<td>to Pico</td>
+<td>GPIO12 (RX)</td>
 </tr>
 <tr>
-<td>Ethernet cable or USB cable</td>
-<td>For headless SSH access</td>
+<td>P9.28</td>
+<td>SPI1_CS0</td>
+<td>to Pico</td>
+<td>GPIO13 (CSn)</td>
 </tr>
 <tr>
-<td>6 jumper wires + 1 GND wire</td>
-<td>4 for SPI + 2 for SWD debug/flashing</td>
-</tr>
-<tr>
-<td>A PC with an SD card reader</td>
-<td>To flash the image</td>
+<td>P9.1 or P9.2</td>
+<td>GND</td>
+<td>-</td>
+<td>GND</td>
 </tr>
 </tbody>
 </table>
-<hr />
-<h2 id="step-1-download-the-debian-image">Step 1 — Download the Debian image<a class="headerlink" href="#step-1-download-the-debian-image" title="Permanent link">&para;</a></h2>
-<blockquote>
-<p>[!IMPORTANT]
-<strong>You don't need to compile Linux.</strong> BeagleBoard.org ships pre-built
-Debian images — just download, flash, and boot.</p>
-</blockquote>
-<p>Go to <strong><a href="https://www.beagleboard.org/distros">https://www.beagleboard.org/distros</a></strong> and download:</p>
-<ul>
-<li><strong>Debian 13 (Trixie) IoT</strong> image for the AM335x (BeagleBone Black)</li>
-<li>Pick the <strong>IoT</strong> (non-GUI) variant — you don't need a desktop, and it
-  leaves more RAM and disk for the SDK</li>
-<li>The file will be something like <code>bone-debian-13.x-iot-armhf-YYYY-MM-DD-4gb.img.xz</code></li>
-</ul>
-<blockquote>
-<p>[!TIP]
-"IoT" = headless, no graphical desktop. Since you'll SSH into it from
-your laptop (same as you do with the RPi 5), this is what you want.</p>
-</blockquote>
-<hr />
-<h2 id="step-2-flash-the-microsd-card">Step 2 — Flash the microSD card<a class="headerlink" href="#step-2-flash-the-microsd-card" title="Permanent link">&para;</a></h2>
-<p>On your PC:</p>
-<div class="highlight"><pre><span></span><code><span class="c1"># Option A: balenaEtcher (GUI) — download from https://www.balena.io/etcher/</span>
-<span class="c1"># Just select the .img.xz file, select the SD card, click Flash.</span>
-
-<span class="c1"># Option B: command line (Linux/Mac)</span>
-xzcat<span class="w"> </span>bone-debian-13.x-iot-armhf-*.img.xz<span class="w"> </span><span class="p">|</span><span class="w"> </span>sudo<span class="w"> </span>dd<span class="w"> </span><span class="nv">of</span><span class="o">=</span>/dev/sdX<span class="w"> </span><span class="nv">bs</span><span class="o">=</span>4M<span class="w"> </span><span class="nv">status</span><span class="o">=</span>progress
-sync
-</code></pre></div>
-<p>Replace <code>/dev/sdX</code> with your actual SD card device (<code>lsblk</code> to find it).</p>
-<hr />
-<h2 id="step-3-first-boot-and-ssh">Step 3 — First boot and SSH<a class="headerlink" href="#step-3-first-boot-and-ssh" title="Permanent link">&para;</a></h2>
+<p>Optional SWD wires for flashing and logs from the BBB:</p>
+<table>
+<thead>
+<tr>
+<th>BBB pin</th>
+<th>Signal</th>
+<th>Pico pad</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>P9.12 (GPIO 540)</td>
+<td>SWDIO</td>
+<td>SWDIO (right pad)</td>
+</tr>
+<tr>
+<td>P9.14 (GPIO 530)</td>
+<td>SWCLK</td>
+<td>SWCLK (left pad)</td>
+</tr>
+<tr>
+<td>P9.1 or P9.2</td>
+<td>GND</td>
+<td>GND (middle pad)</td>
+</tr>
+</tbody>
+</table>
+<p>The three SWD pads are at the bottom edge of the Pico, opposite the USB
+connector: SWCLK, GND, SWDIO from left to right.</p>
+<h2 id="test-and-run">Test and run<a class="headerlink" href="#test-and-run" title="Permanent link">&para;</a></h2>
 <ol>
-<li>Insert the microSD into the BBB</li>
-<li><strong>Hold the USER/BOOT button</strong> (near the SD slot) while plugging in power</li>
-<li>Release once the LEDs start blinking (forces boot from SD instead of eMMC)</li>
+<li>Power the Pico board. Run <code>uv run python scripts/spi_test.py --once</code>.
+   The line must show <code>V_raw</code>, <code>I_raw</code>, <code>Vout_raw</code> and a valid CRC.</li>
+<li>The SDK picks SPI bus 1 when <code>/proc/device-tree/model</code> names a
+   BeagleBone. Use <code>--bus 1</code> (<code>spi_test.py</code>) or <code>--spi-bus 1</code> (server) to
+   force it. In code use <code>SpiMcuSource(bus=1, device=0)</code>.</li>
+<li>Start the workbench with <code>uv run mpp-sdk curve-tracer-web</code>. Open
+   <code>http://&lt;bbb-host&gt;:8000/</code>.</li>
 </ol>
-<h3 id="connect-via-usb-easiest-for-first-setup">Connect via USB (easiest for first setup)<a class="headerlink" href="#connect-via-usb-easiest-for-first-setup" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><span class="c1"># The BBB creates a USB network interface at 192.168.7.2</span>
-ssh<span class="w"> </span>debian@192.168.7.2
-<span class="c1"># Default login: see your image&#39;s release notes</span>
+<h2 id="flash-the-pico-over-swd-from-the-bbb">Flash the Pico over SWD from the BBB<a class="headerlink" href="#flash-the-pico-over-swd-from-the-bbb" title="Permanent link">&para;</a></h2>
+<p>You build on a PC and flash through the BBB. You do not unplug wires or
+press BOOTSEL.</p>
+<ol>
+<li>On the BBB run <code>sudo apt install -y openocd</code>.</li>
+<li>Write <code>/etc/openocd/rp2040_swd.cfg</code> on the BBB:</li>
+</ol>
+<div class="highlight"><pre><span></span><code>adapter driver sysfsgpio
+sysfsgpio swdio_num 540
+sysfsgpio swclk_num 530
+transport select swd
+source [find target/rp2040.cfg]
 </code></pre></div>
-<h3 id="or-via-ethernet">Or via Ethernet<a class="headerlink" href="#or-via-ethernet" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><span class="c1"># If connected to your LAN, find its IP with nmap or check your router</span>
-ssh<span class="w"> </span>debian@&lt;bbb-ip&gt;
+<ol>
+<li>On the PC, in <code>firmware/pipico_board</code>, run <code>cargo build --release</code>.</li>
+<li>Copy and flash:</li>
+</ol>
+<div class="highlight"><pre><span></span><code>scp<span class="w"> </span>target/thumbv6m-none-eabi/release/mpp-firmware<span class="w"> </span>&lt;user&gt;@&lt;bbb-host&gt;:/tmp/mpp-firmware.elf
+ssh<span class="w"> </span>&lt;user&gt;@&lt;bbb-host&gt;<span class="w"> </span><span class="s2">&quot;sudo openocd -f /etc/openocd/rp2040_swd.cfg -c &#39;program /tmp/mpp-firmware.elf verify reset exit&#39;&quot;</span>
 </code></pre></div>
-<h3 id="first-things-to-do-after-logging-in">First things to do after logging in<a class="headerlink" href="#first-things-to-do-after-logging-in" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><span class="c1"># Change the default password</span>
-passwd
-
-<span class="c1"># Update the system</span>
-sudo<span class="w"> </span>apt<span class="w"> </span>update<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>sudo<span class="w"> </span>apt<span class="w"> </span>upgrade<span class="w"> </span>-y
-
-<span class="c1"># Check what you&#39;re running</span>
-uname<span class="w"> </span>-a
-<span class="c1"># Should show something like: Linux beaglebone 6.12.x armv7l GNU/Linux</span>
-cat<span class="w"> </span>/etc/debian_version
-<span class="c1"># Should show: 13.x</span>
+<h2 id="stream-firmware-logs-defmt-over-rtt">Stream firmware logs (defmt over RTT)<a class="headerlink" href="#stream-firmware-logs-defmt-over-rtt" title="Permanent link">&para;</a></h2>
+<ol>
+<li>On the PC run <code>cargo install defmt-print</code>.</li>
+<li>Write <code>/etc/openocd/rp2040_rtt.cfg</code> on the BBB:</li>
+</ol>
+<div class="highlight"><pre><span></span><code>bindto 0.0.0.0
+adapter driver sysfsgpio
+sysfsgpio swdio_num 540
+sysfsgpio swclk_num 530
+transport select swd
+source [find target/rp2040.cfg]
+init
+poll off
+rtt setup 0x20000000 0x40000 &quot;SEGGER RTT&quot;
+rtt polling_interval 1000
+rtt start
+rtt server start 9999 0
 </code></pre></div>
-<hr />
-<h2 id="step-4-optional-flash-to-emmc">Step 4 — Optional: flash to eMMC<a class="headerlink" href="#step-4-optional-flash-to-emmc" title="Permanent link">&para;</a></h2>
-<p>If you want the OS on the internal 4 GB eMMC (so you don't need the SD card
-inserted every time):</p>
-<div class="highlight"><pre><span></span><code>sudo<span class="w"> </span>/opt/scripts/tools/eMMC/init-eMMC-flasher-v3.sh
-<span class="c1"># Takes ~30 min. Board shuts down when done.</span>
-<span class="c1"># Remove SD card, power back on — it boots from eMMC now.</span>
-</code></pre></div>
-<blockquote>
-<p>[!NOTE]
-Running from SD card is fine too — it's just slower. For bench use, either
-works.</p>
-</blockquote>
-<hr />
-<h2 id="step-5-install-python-314-and-uv">Step 5 — Install Python 3.14 and uv<a class="headerlink" href="#step-5-install-python-314-and-uv" title="Permanent link">&para;</a></h2>
-<h3 id="check-whats-already-there">Check what's already there<a class="headerlink" href="#check-whats-already-there" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code>python3<span class="w"> </span>--version
-<span class="c1"># Debian 13 (Trixie) should have Python 3.13 or 3.14 in the repos</span>
-</code></pre></div>
-<h3 id="if-python-314-is-in-the-repos-likely">If Python 3.14 is in the repos (likely)<a class="headerlink" href="#if-python-314-is-in-the-repos-likely" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code>sudo<span class="w"> </span>apt<span class="w"> </span>install<span class="w"> </span>-y<span class="w"> </span>python3.14<span class="w"> </span>python3.14-dev<span class="w"> </span>python3.14-venv
-</code></pre></div>
-<h3 id="if-not-install-via-uv">If not, install via uv<a class="headerlink" href="#if-not-install-via-uv" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><span class="c1"># Install uv (works on armv7/armhf)</span>
-curl<span class="w"> </span>-LsSf<span class="w"> </span>https://astral.sh/uv/install.sh<span class="w"> </span><span class="p">|</span><span class="w"> </span>sh
-<span class="nb">source</span><span class="w"> </span>~/.bashrc<span class="w">   </span><span class="c1"># or restart your shell</span>
-
-<span class="c1"># Let uv install Python 3.14</span>
-uv<span class="w"> </span>python<span class="w"> </span>install<span class="w"> </span><span class="m">3</span>.14
-</code></pre></div>
-<h3 id="install-uv-if-you-didnt-already">Install uv (if you didn't already)<a class="headerlink" href="#install-uv-if-you-didnt-already" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-LsSf<span class="w"> </span>https://astral.sh/uv/install.sh<span class="w"> </span><span class="p">|</span><span class="w"> </span>sh
-<span class="nb">source</span><span class="w"> </span>~/.bashrc
-uv<span class="w"> </span>--version
-</code></pre></div>
-<blockquote>
-<p>[!WARNING]
-<strong>ARM 32-bit heads up.</strong> The BBB is <code>armv7l</code> (32-bit ARM), not <code>aarch64</code>
-(64-bit). Most Python packages have wheels for armhf, but some may need
-to compile from source — <code>numpy</code> in particular might take a few minutes to
-build. Install build dependencies just in case:</p>
-<div class="highlight"><pre><span></span><code>sudo<span class="w"> </span>apt<span class="w"> </span>install<span class="w"> </span>-y<span class="w"> </span>build-essential<span class="w"> </span>python3-dev<span class="w"> </span>libopenblas-dev<span class="w"> </span>gfortran
-</code></pre></div>
-</blockquote>
-<hr />
-<h2 id="step-6-enable-spi">Step 6 — Enable SPI<a class="headerlink" href="#step-6-enable-spi" title="Permanent link">&para;</a></h2>
-<p>This is the main difference from the RPi 5, where SPI is enabled with a
-simple <code>raspi-config</code> toggle. The BBB needs pin-muxing.</p>
-<h3 id="6a-disable-hdmi-frees-spi1-pins">6a — Disable HDMI (frees SPI1 pins)<a class="headerlink" href="#6a-disable-hdmi-frees-spi1-pins" title="Permanent link">&para;</a></h3>
-<p>SPI1 shares pins with HDMI on the BBB. Since you're running headless, disable
-it:</p>
-<div class="highlight"><pre><span></span><code>sudo<span class="w"> </span>nano<span class="w"> </span>/boot/uEnv.txt
-</code></pre></div>
-<p>Add or uncomment these lines:</p>
-<div class="highlight"><pre><span></span><code>disable_uboot_overlay_video=1
-disable_uboot_overlay_audio=1
-</code></pre></div>
-<h3 id="6b-enable-the-spi1-overlay">6b — Enable the SPI1 overlay<a class="headerlink" href="#6b-enable-the-spi1-overlay" title="Permanent link">&para;</a></h3>
-<p>On <strong>Debian 13 (Trixie) with kernel 6.x</strong>, overlays are stored in <code>/boot/dtbs/$(uname -r)/overlays/</code> rather than <code>/lib/firmware/</code>.</p>
-<p>To permanently enable SPI1 directly in the active device tree:</p>
-<div class="highlight"><pre><span></span><code><span class="c1"># 1. Merge the SPI1 overlay into the base device tree blob</span>
-sudo<span class="w"> </span>fdtoverlay<span class="w"> </span>-i<span class="w"> </span>/boot/dtbs/<span class="k">$(</span>uname<span class="w"> </span>-r<span class="k">)</span>/am335x-boneblack-uboot.dtb<span class="w"> </span><span class="se">\</span>
-<span class="w">                </span>-o<span class="w"> </span>/boot/dtbs/<span class="k">$(</span>uname<span class="w"> </span>-r<span class="k">)</span>/am335x-boneblack-uboot.dtb<span class="w"> </span><span class="se">\</span>
-<span class="w">                </span>/boot/dtbs/<span class="k">$(</span>uname<span class="w"> </span>-r<span class="k">)</span>/overlays/BB-SPIDEV1-00A0.dtbo
-
-<span class="c1"># 2. Ensure the spidev driver loads at boot</span>
-<span class="nb">echo</span><span class="w"> </span>spidev<span class="w"> </span><span class="p">|</span><span class="w"> </span>sudo<span class="w"> </span>tee<span class="w"> </span>/etc/modules-load.d/spidev.conf
-
-<span class="c1"># 3. Give user debian read/write access to SPI without sudo</span>
-sudo<span class="w"> </span>tee<span class="w"> </span>/etc/udev/rules.d/80-spidev.rules<span class="w"> </span>&gt;<span class="w"> </span>/dev/null<span class="w"> </span><span class="s">&lt;&lt; &#39;EOF&#39;</span>
-<span class="s">KERNEL==&quot;spidev*&quot;, GROUP=&quot;dialout&quot;, MODE=&quot;0660&quot;</span>
-<span class="s">EOF</span>
-
-<span class="c1"># 4. Reboot</span>
-sudo<span class="w"> </span>reboot
-</code></pre></div>
-<h3 id="6c-verify-spi-is-working">6c — Verify SPI is working<a class="headerlink" href="#6c-verify-spi-is-working" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code>ls<span class="w"> </span>-l<span class="w"> </span>/dev/spidev*
-<span class="c1"># Should show:</span>
-<span class="c1"># crw-rw---- 1 root dialout 153, 1 /dev/spidev1.0</span>
-<span class="c1"># crw-rw---- 1 root dialout 153, 0 /dev/spidev1.1</span>
-</code></pre></div>
-<hr />
-<h2 id="step-7-wire-the-bbb-to-the-rp2040-pico">Step 7 — Wire the BBB to the RP2040 Pico<a class="headerlink" href="#step-7-wire-the-bbb-to-the-rp2040-pico" title="Permanent link">&para;</a></h2>
-<h3 id="7a-spi-telemetry-and-control-wiring">7a — SPI telemetry and control wiring<a class="headerlink" href="#7a-spi-telemetry-and-control-wiring" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code>BeagleBone Black (P9 header)          RP2040 Pico
-──────────────────────────────        ─────────────
-P9.31  (SPI1_SCLK) ─────────────────► GPIO 14 (SCK)
-P9.29  (SPI1_D0 = MISO) ◄───────────── GPIO 11 (TX/MISO)
-P9.30  (SPI1_D1 = MOSI) ─────────────► GPIO 12 (RX/MOSI)
-P9.28  (SPI1_CS0) ──────────────────► GPIO 13 (CSn)
-P9.1 or P9.2  (GND) ────────────────► GND
-</code></pre></div>
-<h3 id="7b-swd-flashing-debug-wiring-optional-but-recommended">7b — SWD flashing &amp; debug wiring (optional but recommended)<a class="headerlink" href="#7b-swd-flashing-debug-wiring-optional-but-recommended" title="Permanent link">&para;</a></h3>
-<p>Allows flashing firmware remotely and reading high-speed <code>defmt</code> debug logs without touching the
-Pico or plugging in USB cables:</p>
-<div class="highlight"><pre><span></span><code>BeagleBone Black (P9 header)          RP2040 Pico Debug Header / Pads
-──────────────────────────────        ───────────────────────────────
-P9.12  (GPIO 540 / SWDIO) ──────────► SWDIO (right pad)
-P9.14  (GPIO 530 / SWCLK) ──────────► SWCLK (left pad)
-P9.1 or P9.2  (GND) ────────────────► GND   (middle pad or shared pin)
-</code></pre></div>
-<blockquote>
-<p>[!IMPORTANT]
-<strong>Both boards are 3.3 V logic.</strong> No level shifter needed — wire directly.
-These are the same Pico SPI1 slave pins the firmware already uses; only
-the <em>host</em> side changed.</p>
-</blockquote>
-<h3 id="quick-reference-p9-header-physical-location">Quick reference — P9 header physical location<a class="headerlink" href="#quick-reference-p9-header-physical-location" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code>    P9 Header (BBB, top-left edge, USB port facing you)
-    ┌────────────────────────────┐
-    │ Pin 1 (GND)   Pin 2 (GND) │  ← use either for GND
-    │ ...                       │
-    │ Pin 11         Pin 12     │  ← P9.12 = SWDIO (GPIO 540)
-    │ Pin 13         Pin 14     │  ← P9.14 = SWCLK (GPIO 530)
-    │ ...                       │
-    │ Pin 27         Pin 28     │  ← P9.28 = SPI1_CS0
-    │ Pin 29         Pin 30     │  ← P9.29 = MISO, P9.30 = MOSI
-    │ Pin 31         Pin 32     │  ← P9.31 = SCLK
-    │ ...                       │
-    └────────────────────────────┘
-</code></pre></div>
-<h4 id="pico-debug-pads-location">Pico Debug Pads Location<a class="headerlink" href="#pico-debug-pads-location" title="Permanent link">&para;</a></h4>
-<p>On the Raspberry Pi Pico, the 3-pin debug header/pads are located at the bottom edge opposite the USB connector:</p>
-<div class="highlight"><pre><span></span><code>  ┌────────────────────────────────────────────────────────┐
-  │ [USB]                                     [SWCLK GND SWDIO] │
-  └────────────────────────────────────────────────────────┘
-                                               Pin 1: SWCLK (left)
-                                               Pin 2: GND   (middle)
-                                               Pin 3: SWDIO (right)
-</code></pre></div>
-<hr />
-<h2 id="step-8-clone-and-install-the-sdk">Step 8 — Clone and install the SDK<a class="headerlink" href="#step-8-clone-and-install-the-sdk" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><span class="c1"># On the BeagleBone Black, via SSH:</span>
-<span class="nb">cd</span><span class="w"> </span>~
-git<span class="w"> </span>clone<span class="w"> </span>https://github.com/&lt;your-org&gt;/mpp-sdk.git
-<span class="nb">cd</span><span class="w"> </span>mpp-sdk
-
-<span class="c1"># Install with hardware extras</span>
-uv<span class="w"> </span>sync<span class="w"> </span>--extra<span class="w"> </span>hardware
-
-<span class="c1"># If you also want the web workbench:</span>
-uv<span class="w"> </span>sync<span class="w"> </span>--extra<span class="w"> </span>hardware<span class="w"> </span>--extra<span class="w"> </span>web
-</code></pre></div>
-<hr />
-<h2 id="step-9-test-the-spi-link">Step 9 — Test the SPI link<a class="headerlink" href="#step-9-test-the-spi-link" title="Permanent link">&para;</a></h2>
-<h3 id="quick-test-with-spi_testpy">Quick test with spi_test.py<a class="headerlink" href="#quick-test-with-spi_testpy" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><span class="c1"># Power on the Pico board, then:</span>
-uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>scripts/spi_test.py<span class="w"> </span>--once
-</code></pre></div>
-<p>You should see a line with V_raw, I_raw, Vout_raw values and a <code>✓</code> in the
-<code>crc?</code> column — same output you get on the RPi 5.</p>
-<p><strong>The only difference</strong>: pass <code>bus=1</code> instead of the default <code>bus=0</code>:</p>
-<div class="highlight"><pre><span></span><code><span class="c1"># If spi_test.py uses the default bus=0 and your BBB has SPI1:</span>
-<span class="c1"># Edit BUS at the top of spi_test.py from 0 to 1, or:</span>
-</code></pre></div>
-<h3 id="using-spimcusource-directly">Using SpiMcuSource directly<a class="headerlink" href="#using-spimcusource-directly" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">mpp_sdk.io.spi_mcu</span><span class="w"> </span><span class="kn">import</span> <span class="n">SpiMcuSource</span>
-
-<span class="c1"># BBB uses SPI1 → bus=1</span>
-<span class="k">with</span> <span class="n">SpiMcuSource</span><span class="p">(</span><span class="n">bus</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span> <span class="k">as</span> <span class="n">src</span><span class="p">:</span>
-    <span class="n">src</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="mf">0.0</span><span class="p">)</span>         <span class="c1"># send duty=0</span>
-    <span class="n">v</span><span class="p">,</span> <span class="n">i</span> <span class="o">=</span> <span class="n">src</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>      <span class="c1"># read telemetry</span>
-    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;V=</span><span class="si">{</span><span class="n">v</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2"> V, I=</span><span class="si">{</span><span class="n">i</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2"> A&quot;</span><span class="p">)</span>
-</code></pre></div>
-<h3 id="running-the-full-web-workbench">Running the full web workbench<a class="headerlink" href="#running-the-full-web-workbench" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code>uv<span class="w"> </span>run<span class="w"> </span>mpp-sdk<span class="w"> </span>curve-tracer-web
-<span class="c1"># Open http://&lt;bbb-ip&gt;:8000/ from your laptop</span>
-</code></pre></div>
-<hr />
-<h2 id="step-10-make-spi-config-persist-across-reboots">Step 10 — Make SPI config persist across reboots<a class="headerlink" href="#step-10-make-spi-config-persist-across-reboots" title="Permanent link">&para;</a></h2>
-<p>If you used the Device Tree Overlay method (Step 6b), it already persists.</p>
-<p>If you used <code>config-pin</code> (Step 6c), create a systemd service:</p>
-<div class="highlight"><pre><span></span><code>sudo<span class="w"> </span>tee<span class="w"> </span>/etc/systemd/system/spi1-pins.service<span class="w"> </span>&gt;<span class="w"> </span>/dev/null<span class="w"> </span><span class="s">&lt;&lt; &#39;EOF&#39;</span>
-<span class="s">[Unit]</span>
-<span class="s">Description=Configure SPI1 pins for mpp-sdk</span>
-<span class="s">After=multi-user.target</span>
-
-<span class="s">[Service]</span>
-<span class="s">Type=oneshot</span>
-<span class="s">ExecStart=/usr/bin/config-pin P9.28 spi_cs</span>
-<span class="s">ExecStart=/usr/bin/config-pin P9.29 spi</span>
-<span class="s">ExecStart=/usr/bin/config-pin P9.30 spi</span>
-<span class="s">ExecStart=/usr/bin/config-pin P9.31 spi_sclk</span>
-<span class="s">RemainAfterExit=yes</span>
-
-<span class="s">[Install]</span>
-<span class="s">WantedBy=multi-user.target</span>
-<span class="s">EOF</span>
-
-sudo<span class="w"> </span>systemctl<span class="w"> </span><span class="nb">enable</span><span class="w"> </span>spi1-pins.service
-sudo<span class="w"> </span>systemctl<span class="w"> </span>start<span class="w"> </span>spi1-pins.service
-</code></pre></div>
-<hr />
-<h2 id="step-11-remote-firmware-flashing-via-openocd-swd">Step 11 — Remote firmware flashing via OpenOCD SWD<a class="headerlink" href="#step-11-remote-firmware-flashing-via-openocd-swd" title="Permanent link">&para;</a></h2>
-<p>With SWD connected (Step 7b), you can build the firmware on your PC (fast) and flash the Pico
-over the network via the BeagleBone Black — no need to unplug wires or hold the BOOTSEL button.</p>
-<h3 id="11a-install-openocd-on-the-beaglebone-black">11a — Install OpenOCD on the BeagleBone Black<a class="headerlink" href="#11a-install-openocd-on-the-beaglebone-black" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><span class="c1"># On the BBB:</span>
-sudo<span class="w"> </span>apt<span class="w"> </span>update<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>sudo<span class="w"> </span>apt<span class="w"> </span>install<span class="w"> </span>-y<span class="w"> </span>openocd
-</code></pre></div>
-<h3 id="11b-create-the-flashing-configuration-on-the-bbb">11b — Create the flashing configuration on the BBB<a class="headerlink" href="#11b-create-the-flashing-configuration-on-the-bbb" title="Permanent link">&para;</a></h3>
-<p>Create <code>/etc/openocd/rp2040_swd.cfg</code>:</p>
-<div class="highlight"><pre><span></span><code>sudo<span class="w"> </span>tee<span class="w"> </span>/etc/openocd/rp2040_swd.cfg<span class="w"> </span>&gt;<span class="w"> </span>/dev/null<span class="w"> </span><span class="s">&lt;&lt; &#39;EOF&#39;</span>
-<span class="s">adapter driver sysfsgpio</span>
-<span class="s">sysfsgpio swdio_num 540</span>
-<span class="s">sysfsgpio swclk_num 530</span>
-<span class="s">transport select swd</span>
-<span class="s">source [find target/rp2040.cfg]</span>
-<span class="s">EOF</span>
-</code></pre></div>
-<h3 id="11c-build-on-your-pc-and-flash-remotely">11c — Build on your PC and flash remotely<a class="headerlink" href="#11c-build-on-your-pc-and-flash-remotely" title="Permanent link">&para;</a></h3>
-<p>From your host PC inside the repository:</p>
-<div class="highlight"><pre><span></span><code><span class="c1"># 1. Compile the firmware in release mode</span>
-<span class="nb">cd</span><span class="w"> </span>firmware/pipico_board
-cargo<span class="w"> </span>build<span class="w"> </span>--release
-
-<span class="c1"># 2. Transfer the ELF binary to the BeagleBone</span>
-scp<span class="w"> </span>target/thumbv6m-none-eabi/release/mpp-firmware<span class="w"> </span>debian@&lt;bbb-ip&gt;:/tmp/mpp-firmware.elf
-
-<span class="c1"># 3. Flash, verify, and reboot the Pico</span>
-ssh<span class="w"> </span>debian@&lt;bbb-ip&gt;<span class="w"> </span><span class="s2">&quot;sudo openocd -f /etc/openocd/rp2040_swd.cfg -c &#39;program /tmp/mpp-firmware.elf verify reset exit&#39;&quot;</span>
-</code></pre></div>
-<blockquote>
-<p>[!TIP]
-<strong>One-step build &amp; flash:</strong> You can configure Cargo on your PC to flash automatically when you type <code>cargo run --release</code>.
-In <code>firmware/pipico_board/.cargo/config.toml</code>, set:</p>
-<div class="highlight"><pre><span></span><code><span class="k">[target.thumbv6m-none-eabi]</span>
-<span class="n">runner</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;bash -c &#39;scp $0 debian@&lt;bbb-ip&gt;:/tmp/mpp-firmware.elf &amp;&amp; ssh debian@&lt;bbb-ip&gt; </span><span class="se">\&quot;</span><span class="s2">sudo openocd -f /etc/openocd/rp2040_swd.cfg -c </span><span class="se">\\\&quot;</span><span class="s2">program /tmp/mpp-firmware.elf verify reset exit</span><span class="se">\\\&quot;\&quot;</span><span class="s2">&#39;&quot;</span>
-</code></pre></div>
-</blockquote>
-<hr />
-<h2 id="step-12-stream-live-debug-logs-defmt-over-rtt">Step 12 — Stream live debug logs (defmt over RTT)<a class="headerlink" href="#step-12-stream-live-debug-logs-defmt-over-rtt" title="Permanent link">&para;</a></h2>
-<p>The firmware logs telemetry (voltage, current, temperature, ADC calibration) via <code>defmt</code> over
-SEGGER RTT using the SWD pins. You can stream these logs live to your PC over Ethernet without
-needing a serial/UART cable.</p>
-<h3 id="12a-setup-host-pc-tools">12a — Setup host PC tools<a class="headerlink" href="#12a-setup-host-pc-tools" title="Permanent link">&para;</a></h3>
-<p>On your development PC, install <code>defmt-print</code>:</p>
-<div class="highlight"><pre><span></span><code>cargo<span class="w"> </span>install<span class="w"> </span>defmt-print
-</code></pre></div>
-<h3 id="12b-configure-rtt-on-the-beaglebone-black">12b — Configure RTT on the BeagleBone Black<a class="headerlink" href="#12b-configure-rtt-on-the-beaglebone-black" title="Permanent link">&para;</a></h3>
-<p>Create <code>/etc/openocd/rp2040_rtt.cfg</code> on the BBB:</p>
-<div class="highlight"><pre><span></span><code>sudo<span class="w"> </span>tee<span class="w"> </span>/etc/openocd/rp2040_rtt.cfg<span class="w"> </span>&gt;<span class="w"> </span>/dev/null<span class="w"> </span><span class="s">&lt;&lt; &#39;EOF&#39;</span>
-<span class="s">bindto 0.0.0.0</span>
-<span class="s">adapter driver sysfsgpio</span>
-<span class="s">sysfsgpio swdio_num 540</span>
-<span class="s">sysfsgpio swclk_num 530</span>
-<span class="s">transport select swd</span>
-<span class="s">source [find target/rp2040.cfg]</span>
-<span class="s">init</span>
-<span class="s">poll off</span>
-<span class="s">rtt setup 0x20000000 0x40000 &quot;SEGGER RTT&quot;</span>
-<span class="s">rtt polling_interval 1000</span>
-<span class="s">rtt start</span>
-<span class="s">rtt server start 9999 0</span>
-<span class="s">EOF</span>
-</code></pre></div>
-<blockquote>
-<p>[!IMPORTANT]
-<strong>Critical BBB CPU optimization:</strong></p>
 <ul>
-<li><code>poll off</code> disables OpenOCD's continuous GDB core polling. Without this, constant SWD
-  bitbang traffic wakes up BeagleBoard's <code>gpio-manager</code> system service, pegging the single CPU
-  core at 100%.</li>
-<li><code>rtt polling_interval 1000</code> polls the RTT buffer once per second instead of the default ~1
-  ms, which matches the ~1 Hz sensor logging rate and drops CPU usage down to ~10–15%.</li>
+<li><code>poll off</code> stops the continuous core polling. Without it, the SWD
+     traffic wakes the <code>gpio-manager</code> service and uses 100 % of the single
+     CPU core.</li>
+<li><code>rtt polling_interval 1000</code> polls the buffer once per second. This
+     matches the 1 Hz log rate and keeps the CPU at about 10-15 %.</li>
+<li>Start it with low priority:
+   <code>sudo nice -n 19 openocd -f /etc/openocd/rp2040_rtt.cfg</code>.</li>
+<li>On the PC, from the repository root:</li>
 </ul>
-</blockquote>
-<h3 id="12c-start-the-rtt-server-on-the-bbb">12c — Start the RTT server on the BBB<a class="headerlink" href="#12c-start-the-rtt-server-on-the-bbb" title="Permanent link">&para;</a></h3>
-<p>Run OpenOCD with reduced priority (<code>nice -n 19</code>) so it never starves real-time tasks:</p>
-<div class="highlight"><pre><span></span><code><span class="c1"># In foreground:</span>
-sudo<span class="w"> </span>nice<span class="w"> </span>-n<span class="w"> </span><span class="m">19</span><span class="w"> </span>openocd<span class="w"> </span>-f<span class="w"> </span>/etc/openocd/rp2040_rtt.cfg
-
-<span class="c1"># Or in background with nohup:</span>
-sudo<span class="w"> </span>nohup<span class="w"> </span>nice<span class="w"> </span>-n<span class="w"> </span><span class="m">19</span><span class="w"> </span>openocd<span class="w"> </span>-f<span class="w"> </span>/etc/openocd/rp2040_rtt.cfg<span class="w"> </span>&gt;<span class="w"> </span>/tmp/openocd.log<span class="w"> </span><span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span><span class="w"> </span><span class="p">&amp;</span>
+<div class="highlight"><pre><span></span><code>nc<span class="w"> </span>&lt;bbb-host&gt;<span class="w"> </span><span class="m">9999</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>defmt-print<span class="w"> </span>-e<span class="w"> </span>firmware/pipico_board/target/thumbv6m-none-eabi/release/mpp-firmware
 </code></pre></div>
-<h3 id="12d-view-the-log-stream-from-your-pc">12d — View the log stream from your PC<a class="headerlink" href="#12d-view-the-log-stream-from-your-pc" title="Permanent link">&para;</a></h3>
-<p>From the root of the <code>mpp-sdk</code> repository on your PC, pipe the RTT TCP stream directly into <code>defmt-print</code>:</p>
-<div class="highlight"><pre><span></span><code>nc<span class="w"> </span>&lt;bbb-ip&gt;<span class="w"> </span><span class="m">9999</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>defmt-print<span class="w"> </span>-e<span class="w"> </span>firmware/pipico_board/target/thumbv6m-none-eabi/release/mpp-firmware
-</code></pre></div>
-<p>You will see live decoded firmware logs in your terminal:</p>
-<div class="highlight"><pre><span></span><code>INFO  V=0 mV I=0 mA T=n/a
-INFO  ADC_PWR=0 mV ADC_VOUT=8 mV ADC_Input_Curr=3 mV (INA229 V=0 mV I=0 mA)
-INFO  ADC cal: PWR raw=0.0 pin=0 mV scaled=0 mV | VOUT raw=14.3 pin=0 mV scaled=0 mV | INA229 V=0 mV (n=10)
-</code></pre></div>
-<p>To stop viewing, simply press <code>Ctrl+C</code>.</p>
-<hr />
-<h2 id="summary-of-differences-from-the-rpi-5">Summary of differences from the RPi 5<a class="headerlink" href="#summary-of-differences-from-the-rpi-5" title="Permanent link">&para;</a></h2>
+<h2 id="differences-from-the-raspberry-pi">Differences from the Raspberry Pi<a class="headerlink" href="#differences-from-the-raspberry-pi" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
 <tr>
 <th>What</th>
-<th>RPi 5</th>
+<th>Raspberry Pi</th>
 <th>BBB</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>Image</td>
-<td>Raspberry Pi OS</td>
-<td>Debian IoT from beagleboard.org</td>
-</tr>
-<tr>
 <td>Enable SPI</td>
-<td><code>raspi-config</code> toggle</td>
-<td>Device tree overlay + HDMI disable</td>
+<td><code>raspi-config</code></td>
+<td>Overlay and HDMI disabled</td>
 </tr>
 <tr>
 <td>SPI device</td>
-<td><code>/dev/spidev0.0</code> (bus=0)</td>
-<td><code>/dev/spidev1.0</code> (bus=1)</td>
+<td><code>/dev/spidev0.0</code> (bus 0)</td>
+<td><code>/dev/spidev1.0</code> (bus 1)</td>
 </tr>
 <tr>
 <td>SPI pins</td>
-<td>GPIO header (BCM 8-11)</td>
-<td>P9 header (pins 28-31)</td>
+<td>Header pins 19, 21, 23, 24</td>
+<td>P9.28 to P9.31</td>
 </tr>
 <tr>
-<td>SWD debug pins</td>
-<td>GPIO header (BCM 24, 25)</td>
-<td>P9 header (P9.12=SWDIO, P9.14=SWCLK)</td>
+<td>SWD pins</td>
+<td>BCM 24, 25</td>
+<td>P9.12 (SWDIO), P9.14 (SWCLK)</td>
 </tr>
 <tr>
-<td>Firmware flashing</td>
-<td>SWD via RPi GPIO (<code>rp2040.cfg</code>)</td>
-<td>SWD via BBB GPIO (<code>sysfsgpio</code>)</td>
+<td><code>SpiMcuSource</code></td>
+<td><code>bus=0, device=0</code></td>
+<td><code>bus=1, device=0</code></td>
 </tr>
 <tr>
-<td>Live telemetry logs</td>
-<td>defmt over RTT (port 9999)</td>
-<td>defmt over RTT (port 9999, <code>poll off</code>)</td>
-</tr>
-<tr>
-<td><code>SpiMcuSource()</code> call</td>
-<td><code>SpiMcuSource(bus=0, device=0)</code></td>
-<td><code>SpiMcuSource(bus=1, device=0)</code></td>
-</tr>
-<tr>
-<td>Code changes needed</td>
-<td>—</td>
-<td><strong>None</strong> (just different constructor args)</td>
-</tr>
-<tr>
-<td>Firmware changes</td>
-<td>—</td>
-<td><strong>None</strong></td>
+<td>Algorithm and firmware changes</td>
+<td>none</td>
+<td>none</td>
 </tr>
 </tbody>
 </table>
-<blockquote>
-<p>[!CAUTION]
-<strong>Performance caveat.</strong> The BBB has a 1 GHz Cortex-A8 with 512 MB RAM — it
-will be noticeably slower than the RPi 5 for heavy tasks (matplotlib
-figures, the web workbench, numpy-heavy harness runs). The MPPT control
-loop itself is unaffected — it's just <code>step(V, I) → D</code> + one SPI exchange.</p>
-</blockquote>
+<p>The BBB has a 1 GHz Cortex-A8 and 512 MB RAM. It is slower than a Pi 5 for
+plots, the workbench and heavy harness runs. The control loop is not
+affected: it is one <code>step(V, I)</code> call and one SPI exchange.</p>
 
 
 
