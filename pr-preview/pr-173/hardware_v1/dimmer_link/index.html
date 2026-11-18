@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
     
     
       
@@ -31,10 +31,10 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
       
         
-        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.fb2fffe2.min.css">
       
       
 
@@ -1394,9 +1394,10 @@
 <li>A new <code>set_dimmer_*</code> call starts a new deadline. <code>dimmer_window_left_s()</code> gives the time left
   (<code>None</code> when the lamp is off).</li>
 <li><code>lamp_window(power=...)</code> or <code>lamp_window(alpha_deg=...)</code> is the safe way to use the lamp.
-  It sets the lamp, reads the status once, and always sends OFF when the block ends,
-  also on an exception or Ctrl-C.
-  It raises <code>DimmerRefused</code> (after OFF) if the dimmer reports <code>tripped</code>.</li>
+  It sets the lamp, then waits up to 1.5 s (poll every 0.25 s) for a valid status with <code>link_ok</code>.
+  It always sends OFF when the block ends (3 tries), also on an exception or Ctrl-C.
+  It raises <code>DimmerRefused</code> (after OFF) if the link is not confirmed or the dimmer reports <code>tripped</code>.
+  <code>timed_out</code> is not checked: the Pico reports it from a cache that can be 1 s old.</li>
 <li>If <code>dimmer_status()</code> shows <code>tripped</code> while the host thinks the lamp is on, it sends OFF.
   That OFF is the acknowledgment the dimmer needs before it accepts "on" again.</li>
 <li><code>close()</code> and <code>dimmer_off()</code> stop the thread and switch the lamp off.</li>
@@ -1480,10 +1481,10 @@
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "content.code.copy", "search.suggest"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "content.code.copy", "search.suggest"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../assets/javascripts/bundle.a5f9d56c.min.js"></script>
       
         <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
       
