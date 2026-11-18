@@ -1649,6 +1649,40 @@ mains: read <code>hardware/dimmer/README.md</code> before bench work.</p>
 <li>The lamp is switched off when the server stops. With <code>--demo</code> a simulated
   dimmer with the same rules is used.</li>
 </ul>
+<p>Lamp only around a measurement:</p>
+<ul>
+<li><code>POST /api/start-sweep</code> and <code>POST /api/runs/start</code> take an optional
+  <code>lamp</code> object: <code>{"power": 0.3, "warmup_s": 3}</code>. Use <code>alpha_deg</code> instead
+  of <code>power</code> (exactly one). <code>warmup_s</code> is 0 to 30 s, default 3. The same
+  power rules and <code>--lamp-max-power</code> cap as <code>POST /api/dimmer</code> apply.</li>
+<li>The server switches the lamp on, waits <code>warmup_s</code>, starts the
+  measurement, and switches the lamp off when it ends. It also switches
+  off on Stop, on an abort, on an error, on a sweep that never reports,
+  and when the server stops.</li>
+<li>The lamp is on for <code>warmup_s</code> + duration + 5 s margin. That total must
+  be at most 110 s, because the dimmer trips at 120 s. For a sweep the
+  duration is taken as 15 s, the time the server waits for a sweep to
+  report. A longer total gets 422 and the message gives the numbers.</li>
+<li>Refusals, all before anything is switched on or started: 409 when the
+  dimmer is tripped or its budget is smaller than the total (the message
+  gives the seconds to wait), 503 when the dimmer link is not confirmed.</li>
+<li><code>lamp_phase</code> in <code>GET /api/runs/live</code> and <code>GET /api/data</code> is <code>null</code> (no
+  lamp option), <code>warming</code>, <code>measuring</code> or <code>off</code>. <code>lamp_warmup_left_s</code>
+  counts down while warming.</li>
+<li>Stop during the warm-up cancels the run and switches the lamp off. The
+  measurement never starts.</li>
+<li>A manual <code>POST /api/dimmer/off</code> ends the lamp phase (<code>off</code>). During the
+  warm-up the measurement is cancelled. During the measurement it goes on,
+  but in the dark. A newer manual window is never switched off by the
+  step. A manual "on" that the dimmer refused or that failed never takes
+  over the lamp: the step still switches its own window off.</li>
+<li>The lamp option for a simulated run is refused (422) unless the server
+  runs with <code>--demo</code>.</li>
+<li>If the sweep start command fails, the step ends at once and the lamp
+  goes off.</li>
+<li>A run that used the lamp keeps <code>lamp</code> (power or <code>alpha_deg</code>, and
+  <code>warmup_s</code>) in its record settings.</li>
+</ul>
 <p>The server has no login. Keep it on the bench network. See the safety
 notes in the <a href="../measurement_procedure/">measurement procedure</a>.</p>
 <h2 id="start-the-server-at-boot">Start the server at boot<a class="headerlink" href="#start-the-server-at-boot" title="Permanent link">&para;</a></h2>
