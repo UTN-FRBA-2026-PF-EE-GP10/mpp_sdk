@@ -45,16 +45,22 @@ Command (master writes 4 bytes):
 | `0x01` | Set alpha | alpha in 0.01 degree. `0` is full on, `18000` is off. Above `18000` is rejected. |
 | `0x02` | Request status | `0` |
 
-Status (master reads 8 bytes, at least 3 ms after Request status):
+Status (master reads 9 bytes, at least 3 ms after Request status):
 
 ```text
-[ 0xD1 | FLAGS | ALPHA_H | ALPHA_L | FREQ_H | FREQ_L | BAD_FRAMES | CRC ]
+[ 0xD1 | FLAGS | ALPHA_H | ALPHA_L | FREQ_H | FREQ_L | BAD_FRAMES | BUDGET_S | CRC ]
 ```
 
 - `FLAGS` bit 0: mains present. Bit 1: locked to the mains. Bit 2: lamp switched off by the timeout.
+  Bit 3: exposure limit tripped (see [Exposure limit](#exposure-limit)).
 - `ALPHA` is the angle the dimmer really fires at, after its own limits. `0xFFFF` means it does not fire.
 - `FREQ` is the mains frequency in 0.01 Hz. It is `0` without mains.
 - `BAD_FRAMES` counts rejected commands (wraps). A rising value means a noisy cable.
+- `BUDGET_S` is the exposure budget in seconds, at most 255.
+  Not tripped: lamp-on time left before a trip.
+  Tripped: seconds until the dimmer has cooled.
+  `0` while tripped means cooled, waiting for an OFF.
+- The CRC covers bytes 0 to 7.
 
 ## Safety
 
@@ -73,6 +79,61 @@ Status (master reads 8 bytes, at least 3 ms after Request status):
   Read `ALPHA` in the status to see the real value.
 - A lamp that is on for no reason is a fire risk. Keep the lamp under watch while the link is new.
 
+## Exposure limit
+
+The lamp is open loop, so the dimmer limits how long it may be on.
+The limit lives on the dimmer, the last part before the mains.
+It does not depend on the Pico or the Pi.
+It does not cover a stalled dimmer main loop: that stops the limiter and the deadman too.
+A task watchdog for this is a later item.
+
+- The dimmer keeps a "heat" counter in milliseconds.
+  It counts the time the lamp is *commanded* on, not the time it really fires.
+  So it also runs with no mains, and you can test it on the bench with no mains.
+- The counter rises 1 ms per ms while the lamp is commanded on.
+  It falls 1 ms per ms while the lamp is off, and never goes below 0.
+- At `EXPOSURE_MAX_ON_MS` (120 s) the dimmer trips.
+  It forces the lamp off at once (in its 10 ms loop) and latches the trip.
+- While tripped, every on-command is refused and the lamp stays off.
+  This holds for I2C and for Wi-Fi.
+- The trip clears only when both are true:
+  the counter is at or below `EXPOSURE_RESUME_MS` (60 s),
+  and the host sent an explicit OFF after the trip (`SetAlpha(18000)`, or Wi-Fi level 0).
+  An OFF that arrives early is remembered.
+  The deadman and the trip itself do not count as that OFF.
+  So a host that keeps sending its old angle never restarts the lamp by itself.
+  It must send OFF, then ask again.
+- The Pico also sends its own OFF at boot and after its 3 s host timeout.
+  The dimmer counts that as the acknowledgment.
+  So a crashed or idle host acknowledges by itself,
+  and the next on-command works after the cool-down.
+- The time between two loop ticks is counted when a command arrives,
+  so fast on and off toggling does not hide the on time.
+- The long-run duty is at most 50 percent.
+  Short windows (about 10 s) can repeat until the counter is full.
+- The counter is in RAM only.
+  A dimmer reset clears it and the trip.
+  The lamp is off after a reset, so this is safe.
+- Status: flag bit 3 and `BUDGET_S`.
+  The Pico copies them to the Pi (SPI reply flag bit 4 and byte 7).
+- Only the tripped bit says the lamp is blocked.
+  `BUDGET_S` can be `0` while the lamp is still allowed
+  (heat between 119.5 s and 120 s).
+- When `link_ok` is `0`, the tripped bit and `BUDGET_S` are unknown.
+  The Pico sends `0` and `0`.
+  The other dimmer flags keep their last values.
+- `BUDGET_S` stops at 255 s if `EXPOSURE_MAX_ON_MS` is ever raised above 255 s.
+
+To change the limits after a bench thermal test:
+
+- Edit `EXPOSURE_MAX_ON_MS` and `EXPOSURE_RESUME_MS` in `firmware/dimmer-link/src/lib.rs`.
+- Keep `EXPOSURE_RESUME_MS` below `EXPOSURE_MAX_ON_MS`.
+- Run `cargo test` in `firmware/dimmer-link`.
+- Build and flash the dimmer again.
+- Flash the Pico and the dimmer together.
+  An old Pico with a new dimmer (or the reverse) fails the CRC, so the link reads as down.
+- Check the Python side: its window limit mirrors `EXPOSURE_MAX_ON_MS`.
+
 ## SPI commands (Pi to Pico)
 
 Both use the 12-byte frame of the [measurement protocol](mppt_measurement_protocol.md) with the usual CRC.
@@ -85,12 +146,15 @@ Both use the 12-byte frame of the [measurement protocol](mppt_measurement_protoc
 The reply to `0xD2` is in the MISO of the next exchange, like the sweep progress poll:
 
 ```text
-[ 0xD2 | FLAGS | SET_H | SET_L | APPLIED_H | APPLIED_L | AGE | 0x00 | CHECKSUM | ACK | 0x00 x 2 ]
+[ 0xD2 | FLAGS | SET_H | SET_L | APPLIED_H | APPLIED_L | AGE | BUDGET_S | CHECKSUM | ACK | 0x00 x 2 ]
 ```
 
 - `FLAGS` bit 0: the I2C link works (a status read succeeded in the last second).
   Bits 1 to 3 are the dimmer flags from above, shifted up by one:
-  bit 1 mains, bit 2 locked, bit 3 timed out.
+  bit 1 mains, bit 2 locked, bit 3 timed out, bit 4 tripped.
+- `BUDGET_S` (byte 7) is the budget from the I2C status.
+  Without a good status read in the last second, `BUDGET_S` is `0` and the tripped bit is clear.
+  Bit 0 then tells that the data is old.
 - The CRC covers bytes 0 to 7, then `ACK` (byte 9), then byte 10 (`SETTLED`, always `0` here), in that order.
   Every MISO frame does the same.
 - `SET` is the alpha the Pico holds now.
