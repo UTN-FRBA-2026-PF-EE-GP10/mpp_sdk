@@ -477,3 +477,53 @@ export async function resetPicoCutoff(): Promise<void> {
   await parseJsonOrThrow(r, 'POST /api/pico-config/reset-cutoff')
 }
 
+// Lamp dimmer. The server owns the exposure window: a lamp-on request
+// carries its own length and the server switches the lamp off at the end.
+export type LampState = 'off' | 'on' | 'tripped' | 'unavailable'
+
+export interface LampStatus {
+  available: boolean
+  state: LampState
+  power: number | null
+  alpha_deg: number | null
+  applied_alpha_deg: number | null
+  window_left_s: number | null
+  max_on_s: number
+  budget_s: number | null
+  tripped: boolean
+  mains: boolean
+  locked: boolean
+  timed_out: boolean
+  link_ok: boolean
+  max_power: number
+  error: string | null
+}
+
+const LAMP_TIMEOUT_MS = 3000
+
+export async function fetchLamp(): Promise<LampStatus> {
+  const r = await fetch('/api/dimmer', {
+    cache: 'no-store',
+    signal: AbortSignal.timeout(LAMP_TIMEOUT_MS),
+  })
+  return (await parseJsonOrThrow(r, 'GET /api/dimmer')) as LampStatus
+}
+
+export async function setLamp(input: { power: number; max_on_s: number }): Promise<LampStatus> {
+  const r = await fetch('/api/dimmer', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+    signal: AbortSignal.timeout(LAMP_TIMEOUT_MS),
+  })
+  return (await parseJsonOrThrow(r, 'POST /api/dimmer')) as LampStatus
+}
+
+export async function lampOff(): Promise<LampStatus> {
+  const r = await fetch('/api/dimmer/off', {
+    method: 'POST',
+    signal: AbortSignal.timeout(LAMP_TIMEOUT_MS),
+  })
+  return (await parseJsonOrThrow(r, 'POST /api/dimmer/off')) as LampStatus
+}
+
