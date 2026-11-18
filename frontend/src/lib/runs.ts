@@ -85,6 +85,10 @@ export interface LiveRunState {
    * chosen curve, a demo curve sent inline, or the built-in panel. Empty
    * for a hardware run with no reference curve. */
   reference_points?: CurvePoint[]
+  /** Only a lamp-assisted run carries these. Read them through
+   * parseLampPhase/parseWarmupLeft: an older server sends neither. */
+  lamp_phase?: unknown
+  lamp_warmup_left_s?: unknown
 }
 
 // GET /api/runs/{id}'s shape: everything in RunSummary plus the samples

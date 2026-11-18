@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { CurveDetailDialog } from '@/components/CurveDetailDialog'
+import { LampOptionFields, LampPhaseLine } from '@/components/LampOptionFields'
 import { LiveChart } from '@/components/LiveChart'
 import { ProvenanceBadge } from '@/components/ProvenanceBadge'
 import { Badge } from '@/components/ui/badge'
@@ -15,6 +16,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { useDemoCapture } from '@/hooks/useDemoCapture'
+import { useLampOption } from '@/hooks/useLampOption'
 import { useLiveSweep } from '@/hooks/useLiveSweep'
 import { saveCurve } from '@/lib/api'
 import { sessionGoneMessage, useActiveSession, useCaptureSession } from '@/lib/activeSession'
@@ -254,6 +256,9 @@ export function CurveWorkbench({
   // Allowing Save mid-sweep would silently save the previous sweep's
   // points under the label meant for the one still in progress.
   const hasCapture = !active && points.length > 0
+  const lampOption = useLampOption({ kind: 'sweep' })
+  const lampPhase = demo ? null : live.lampPhase
+  const lampBlocked = lampOption.checked && lampOption.blockReason !== null
   const [selected, setSelected] = useState<CurveRecord | null>(null)
   // Replay-curve buttons run regardless of `connected` (they're local),
   // but Start Measurement/Hand panel to converter never fire in demo mode
@@ -271,10 +276,14 @@ export function CurveWorkbench({
           <div className="flex flex-wrap items-center gap-2">
             <Button
               variant={emphasizeReplay ? 'outline' : 'default'}
-              onClick={start}
-              disabled={demo || !connected || active}
+              onClick={() => start(lampOption.request ?? undefined)}
+              disabled={demo || !connected || active || lampBlocked}
               focusableWhenDisabled
-              title={demo ? 'Start Measurement needs real hardware - unavailable in demo mode' : undefined}
+              title={
+                demo
+                  ? 'Start Measurement needs real hardware - unavailable in demo mode'
+                  : (lampOption.blockReason ?? undefined)
+              }
             >
               {active ? 'Measuring...' : 'Start Measurement'}
             </Button>
@@ -335,6 +344,8 @@ export function CurveWorkbench({
             and Save curve still work normally.
           </p>
         )}
+        {!demo &&<LampOptionFields option={lampOption} />}
+        <LampPhaseLine phase={lampPhase} warmupLeftS={live.lampWarmupLeftS} />
         {commandError && (
           <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
             {commandError}

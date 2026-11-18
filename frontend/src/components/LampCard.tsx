@@ -3,10 +3,9 @@ import { useEffect, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { UNKNOWN_AFTER_FAILURES, useLamp } from '@/hooks/useLamp'
-import { useCaptureMode } from '@/lib/captureMode'
+import { UNKNOWN_AFTER_FAILURES } from '@/hooks/useLamp'
+import { useLampShared } from '@/lib/lampContext'
 import {
-  LAMP_DEFAULT_POWER_PCT,
   LAMP_DEFAULT_WINDOW_S,
   LAMP_MAX_WINDOW_S,
   LAMP_MIN_WINDOW_S,
@@ -30,10 +29,19 @@ const BADGES = {
 
 /** Lamp control: a bounded exposure window, never a latching switch. */
 export function LampCard() {
-  const { mode } = useCaptureMode()
-  const demo = mode === 'simulated'
-  const { status, receivedAt, failures, stale, busy, message, turnOn, turnOff } = useLamp(!demo)
-  const [powerPct, setPowerPct] = useState(LAMP_DEFAULT_POWER_PCT)
+  const {
+    demo,
+    status,
+    receivedAt,
+    failures,
+    stale,
+    busy,
+    message,
+    turnOn,
+    turnOff,
+    powerPct,
+    setPowerPct,
+  } = useLampShared()
   const [windowText, setWindowText] = useState(String(LAMP_DEFAULT_WINDOW_S))
   const [now, setNow] = useState(() => Date.now())
 

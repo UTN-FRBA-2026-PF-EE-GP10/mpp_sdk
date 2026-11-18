@@ -1,5 +1,34 @@
 import { describe, expect, it } from 'vitest'
-import { alphaDegForPower, clampWindowS, powerForAlpha } from './lamp'
+import {
+  alphaDegForPower,
+  clampWarmupS,
+  clampWindowS,
+  lampPhaseText,
+  parseLampPhase,
+  parseWarmupLeft,
+  powerForAlpha,
+} from './lamp'
+
+describe('lamp measurement helpers', () => {
+  it('clamps the warm-up to 0..30 and falls back to 3', () => {
+    expect(clampWarmupS(-5)).toBe(0)
+    expect(clampWarmupS(99)).toBe(30)
+    expect(clampWarmupS(NaN)).toBe(3)
+  })
+
+  it('reads an unknown phase as none', () => {
+    expect(parseLampPhase('warming')).toBe('warming')
+    expect(parseLampPhase('weird')).toBeNull()
+    expect(parseLampPhase(undefined)).toBeNull()
+    expect(parseWarmupLeft('x')).toBeNull()
+  })
+
+  it('words the phases', () => {
+    expect(lampPhaseText('warming', 1.2)).toBe('Warming up the lamp, 2 s')
+    expect(lampPhaseText('measuring', null)).toBe('Lamp on for the measurement')
+    expect(lampPhaseText('off', null)).toBeNull()
+  })
+})
 
 describe('alphaDegForPower', () => {
   it('maps the ends', () => {
