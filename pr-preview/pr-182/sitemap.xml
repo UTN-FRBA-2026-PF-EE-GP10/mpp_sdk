@@ -61,6 +61,10 @@
          <lastmod>2026-11-18</lastmod>
     </url>
     <url>
+         <loc>https://utn-frba-2026-pf-ee-gp10.github.io/mpp_sdk/hardware_v1/bench_session_metrics/</loc>
+         <lastmod>2026-11-18</lastmod>
+    </url>
+    <url>
          <loc>https://utn-frba-2026-pf-ee-gp10.github.io/mpp_sdk/hardware_v1/calibration/</loc>
          <lastmod>2026-11-18</lastmod>
     </url>
@@ -74,6 +78,22 @@
     </url>
     <url>
          <loc>https://utn-frba-2026-pf-ee-gp10.github.io/mpp_sdk/hardware_v1/settling_time_optimization/</loc>
+         <lastmod>2026-11-18</lastmod>
+    </url>
+    <url>
+         <loc>https://utn-frba-2026-pf-ee-gp10.github.io/mpp_sdk/metrics/anova_analysis/</loc>
+         <lastmod>2026-11-18</lastmod>
+    </url>
+    <url>
+         <loc>https://utn-frba-2026-pf-ee-gp10.github.io/mpp_sdk/metrics/metrics_analysis/</loc>
+         <lastmod>2026-11-18</lastmod>
+    </url>
+    <url>
+         <loc>https://utn-frba-2026-pf-ee-gp10.github.io/mpp_sdk/metrics/metrics_summary/</loc>
+         <lastmod>2026-11-18</lastmod>
+    </url>
+    <url>
+         <loc>https://utn-frba-2026-pf-ee-gp10.github.io/mpp_sdk/metrics/mppt_standards/</loc>
          <lastmod>2026-11-18</lastmod>
     </url>
     <url>
