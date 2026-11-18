@@ -111,11 +111,11 @@ from statsmodels.formula.api import ols
 from statsmodels.stats.multicomp import pairwise_tukeyhsd
 
 # Two-way ANOVA with Type II Sum of Squares (appropriate for factorial designs)
-model = ols('eta ~ C(algorithm) * C(scenario)', data=df).fit()
+model = ols("eta ~ C(algorithm) * C(scenario)", data=df).fit()
 anova_table = sm.stats.anova_lm(model, typ=2)
 
 # Post-hoc pairwise comparison (Tukey HSD)
-tukey = pairwise_tukeyhsd(df['eta'], df['algorithm'], alpha=0.05)
+tukey = pairwise_tukeyhsd(df["eta"], df["algorithm"], alpha=0.05)
 ```
 
 ---
