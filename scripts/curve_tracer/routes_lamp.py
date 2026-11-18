@@ -7,8 +7,12 @@ from __future__ import annotations
 
 from fastapi import FastAPI, HTTPException
 
+from mpp_sdk.io.dimmer import lamp_power_fraction
 from scripts.curve_tracer.lamp import LampError, _LampController
 from scripts.curve_tracer.models import _LampRequest
+
+# The alpha that gives exactly the cap power is found by bisection, so it can be a hair over.
+_CAP_TOLERANCE = 1e-9
 
 
 def register_lamp_routes(app: FastAPI, lamp: _LampController) -> None:
@@ -18,8 +22,12 @@ def register_lamp_routes(app: FastAPI, lamp: _LampController) -> None:
 
     @app.post("/api/dimmer")
     def post_dimmer(req: _LampRequest) -> dict:
-        if req.power is not None and req.power > lamp.max_power:
-            raise HTTPException(422, f"power must be at most {lamp.max_power:g} (--lamp-max-power)")
+        # alpha is capped through the power it gives, so --lamp-max-power binds both.
+        power = req.power if req.power is not None else lamp_power_fraction(req.alpha_deg)
+        if power > lamp.max_power + _CAP_TOLERANCE:
+            raise HTTPException(
+                422, f"lamp power {power:.3f} is above the server cap {lamp.max_power:g}"
+            )
         if req.power == 0.0 or req.alpha_deg == 180.0:
             return lamp.off()
         try:

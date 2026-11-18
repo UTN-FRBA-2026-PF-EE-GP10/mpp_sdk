@@ -42,6 +42,9 @@ class FakeLampSource:
         self.status_error = None
         self.off_error = None
         self.status_none = False
+        self.frozen_window = None
+        self.status_hook = None
+        self.link_down_threads = set()
 
     def set_dimmer_power(self, power, *, max_on_s):
         self.calls.append(("power", power, max_on_s))
@@ -65,6 +68,8 @@ class FakeLampSource:
         self.alpha = self.window = None
 
     def dimmer_window_left_s(self):
+        if self.frozen_window is not None and threading.current_thread().name == "refresher":
+            return self.frozen_window
         return self.window
 
     def dimmer_status(self):
@@ -72,10 +77,11 @@ class FakeLampSource:
             raise self.status_error
         if self.status_none:
             return None
+        link_ok = self.link_ok and threading.current_thread().name not in self.link_down_threads
         if self.tripped and self.alpha is not None:
             self.dimmer_off()  # the acknowledgment of the Python layer
-        return DimmerStatus(
-            link_ok=self.link_ok,
+        status = DimmerStatus(
+            link_ok=link_ok,
             mains=True,
             locked=True,
             timed_out=False,
@@ -85,6 +91,9 @@ class FakeLampSource:
             tripped=self.tripped,
             budget_s=self.budget_s,
         )
+        if self.status_hook is not None:
+            self.status_hook()
+        return status
 
 
 class Clock:
@@ -490,3 +499,165 @@ def test_lamp_max_power_option_accepts_a_fraction():
     from scripts.curve_tracer_server import _lamp_max_power
 
     assert _lamp_max_power("0.5") == 0.5 and _lamp_max_power("1") == 1.0
+
+
+class _SlowHolder(_LampHolder):
+    """Delays `get()` for the thread named "late-on", so an ON can be late to the source."""
+
+    def __init__(self, delay_s):
+        super().__init__()
+        self.delay_s = delay_s
+
+    def get(self):
+        if threading.current_thread().name == "late-on":
+            time.sleep(self.delay_s)
+        return super().get()
+
+
+def _holder_with(source):
+    holder = _LampHolder()
+    holder.set(source)
+    return holder
+
+
+def test_a_late_on_cannot_follow_an_off(source):
+    holder = _SlowHolder(0.3)
+    holder.set(source)
+    lamp = _LampController(holder, refresh_s=3600.0)
+    result = {}
+
+    def late_on():
+        try:
+            result["on"] = lamp.on(power=0.5, alpha_deg=None, max_on_s=60.0)
+        except Exception as exc:
+            result["on"] = exc
+
+    thread = threading.Thread(target=late_on, name="late-on")
+    thread.start()
+    time.sleep(0.1)
+    assert lamp.off()["state"] == "off"
+    thread.join(5.0)
+    assert getattr(result["on"], "status_code", None) == 409
+    assert "Off" in result["on"].detail
+    # OFF is the last frame on the wire and the lamp stays off.
+    assert source.calls[-1] == ("off",) and ("power", 0.5, 60.0) not in source.calls
+    assert source.alpha is None and lamp.snapshot()["state"] == "off"
+    # An ON after the completed OFF still works.
+    assert lamp.on(power=0.5, alpha_deg=None, max_on_s=60.0)["state"] == "on"
+    assert source.alpha is not None and lamp.snapshot()["state"] == "on"
+
+
+def test_off_during_the_link_confirmation_wins(source):
+    # The OFF arrives after the set command, while the ON waits for the link.
+    started = threading.Event()
+    release = threading.Event()
+
+    def hook():
+        if threading.current_thread().name == "slow-on":
+            started.set()
+            release.wait(5.0)
+
+    source.status_hook = hook
+    lamp = _LampController(_holder_with(source), refresh_s=3600.0)
+    result = {}
+
+    def slow_on():
+        try:
+            result["on"] = lamp.on(power=0.5, alpha_deg=None, max_on_s=60.0)
+        except Exception as exc:
+            result["on"] = exc
+
+    thread = threading.Thread(target=slow_on, name="slow-on")
+    thread.start()
+    assert started.wait(5.0)
+    assert lamp.off()["state"] == "off"
+    release.set()
+    thread.join(5.0)
+    assert getattr(result["on"], "status_code", None) == 409
+    assert source.calls[-1] == ("off",) and source.alpha is None
+    assert lamp.snapshot()["state"] == "off"
+
+
+def test_a_failing_on_does_not_switch_off_a_newer_on(source, monkeypatch):
+    monkeypatch.setattr("scripts.curve_tracer.lamp._CONFIRM_S", 0.4)
+    source.link_down_threads = {"first-on"}
+    lamp = _LampController(_holder_with(source), refresh_s=3600.0)
+    result = {}
+
+    def first_on():
+        try:
+            lamp.on(power=0.3, alpha_deg=None, max_on_s=60.0)
+        except Exception as exc:
+            result["first"] = exc
+
+    thread = threading.Thread(target=first_on, name="first-on")
+    thread.start()
+    time.sleep(0.1)
+    assert lamp.on(power=0.6, alpha_deg=None, max_on_s=60.0)["state"] == "on"
+    thread.join(5.0)
+    assert getattr(result["first"], "status_code", None) == 503
+    assert source.calls[-1][0] == "power" and source.alpha is not None
+    assert lamp.snapshot()["state"] == "on"
+
+
+def test_an_older_status_read_does_not_overwrite_a_newer_one(source):
+    lamp = _LampController(_holder_with(source), refresh_s=3600.0)
+    lamp.on(power=0.5, alpha_deg=None, max_on_s=60.0)
+    started, release = threading.Event(), threading.Event()
+    source.frozen_window = 30.0  # the refresh sees "on" even after the OFF
+
+    def hook():
+        if threading.current_thread().name == "refresher":
+            started.set()
+            release.wait(5.0)
+
+    source.status_hook = hook
+    thread = threading.Thread(target=lamp.refresh_once, name="refresher")
+    thread.start()
+    assert started.wait(5.0)
+    assert lamp.off()["state"] == "off"
+    release.set()
+    thread.join(5.0)
+    assert lamp.snapshot()["state"] == "off"
+
+
+def test_a_value_error_from_the_source_is_503_and_switches_off(source):
+    source.set_error = ValueError("bad alpha")
+    client, _, _ = make_client(source)
+    with client:
+        resp = client.post("/api/dimmer", json={"power": 0.5})
+        assert source.calls.count(("off",)) == 1
+    assert resp.status_code == 503 and "bad alpha" in resp.json()["detail"]
+
+
+def test_a_huge_integer_is_422(source):
+    client, _, _ = make_client(source)
+    with client:
+        raw = '{"power": 1' + "0" * 400 + "}"
+        resp = client.post("/api/dimmer", content=raw, headers={"content-type": "application/json"})
+        assert resp.status_code == 422
+        assert source.calls == []
+
+
+def test_alpha_is_capped_like_power(source):
+    client, _, _ = make_client(source, max_power=0.5)
+    with client:
+        assert client.post("/api/dimmer", json={"alpha_deg": 0}).status_code == 422
+        assert client.post("/api/dimmer", json={"alpha_deg": 89}).status_code == 422
+        assert source.calls == []
+        # 90 degrees gives exactly half power: at the cap is allowed.
+        assert client.post("/api/dimmer", json={"alpha_deg": 90}).status_code == 200
+        assert client.post("/api/dimmer", json={"alpha_deg": 91}).status_code == 200
+        # 180 degrees is OFF, always allowed.
+        resp = client.post("/api/dimmer", json={"alpha_deg": 180})
+        assert resp.status_code == 200 and resp.json()["state"] == "off"
+
+
+def test_alpha_at_the_cap_for_a_general_power(source):
+    from mpp_sdk.io.dimmer import alpha_for_power
+
+    client, _, _ = make_client(source, max_power=0.37)
+    with client:
+        alpha = alpha_for_power(0.37)
+        assert client.post("/api/dimmer", json={"alpha_deg": alpha}).status_code == 200
+        assert client.post("/api/dimmer", json={"alpha_deg": alpha - 0.5}).status_code == 422

@@ -352,6 +352,18 @@ class SpiMcuSource(SignalSource):
         self._apply_telemetry(v_raw, i_raw, vout_raw, temp_raw)
         return ack
 
+    def _send_dimmer_cmd(self, cmd: int, payload_u16: int = 0) -> None:
+        """Send a dimmer command and discard the reply.
+
+        The lamp methods run on other threads than a run or sweep (the server calls
+        them from request threads and polls the status about once a second). The
+        reply of ``_send_config_cmd`` is applied as telemetry and sets the settled
+        flag, so it could overwrite the voltage and current of a run that waits for
+        a settled measurement, or count a bad frame. The keepalive already uses
+        the raw exchange for the same reason.
+        """
+        self._exchange(payload_u16, cmd)
+
     def _transact(self, duty: float, cmd: int = 0) -> tuple[int, int, int, int, int]:
         """Send *duty* (and, if given, a curve-tracer bulk-read *cmd* byte).
 
@@ -1037,7 +1049,7 @@ class SpiMcuSource(SignalSource):
             return
         with self._lock:
             try:
-                self._send_config_cmd(_CMD_DIMMER_SET_ALPHA, wire)
+                self._send_dimmer_cmd(_CMD_DIMMER_SET_ALPHA, wire)
             except BaseException:
                 # The lamp state is unknown: report off and let the keepalive end.
                 self._dimmer_wire = WIRE_ALPHA_OFF
@@ -1059,7 +1071,7 @@ class SpiMcuSource(SignalSource):
             with self._lock:
                 self._dimmer_wire = WIRE_ALPHA_OFF
                 self._dimmer_deadline = None
-                self._send_config_cmd(_CMD_DIMMER_SET_ALPHA, WIRE_ALPHA_OFF)
+                self._send_dimmer_cmd(_CMD_DIMMER_SET_ALPHA, WIRE_ALPHA_OFF)
         finally:
             self._stop_dimmer_keepalive()
 
@@ -1140,7 +1152,7 @@ class SpiMcuSource(SignalSource):
         """
         for _ in range(_DIMMER_STATUS_ATTEMPTS):
             with self._lock:
-                self._send_config_cmd(_CMD_DIMMER_STATUS)
+                self._send_dimmer_cmd(_CMD_DIMMER_STATUS)
                 rx = self._exchange(round(self._duty * 65535), 0)
             status = parse_status_frame(rx)
             if status is not None:
@@ -1191,7 +1203,7 @@ class SpiMcuSource(SignalSource):
                 self._dimmer_wire = WIRE_ALPHA_OFF
                 self._dimmer_deadline = None
                 self._dimmer_stop.set()
-                self._send_config_cmd(_CMD_DIMMER_SET_ALPHA, WIRE_ALPHA_OFF)
+                self._send_dimmer_cmd(_CMD_DIMMER_SET_ALPHA, WIRE_ALPHA_OFF)
                 return False
             self._exchange(self._dimmer_wire, _CMD_DIMMER_SET_ALPHA)
             return True
@@ -1254,7 +1266,7 @@ def _dimmer_keepalive_loop(
                 # Not dimmer_off: it would join this very thread.
                 for _ in range(_OFF_ATTEMPTS):
                     try:
-                        source._send_config_cmd(_CMD_DIMMER_SET_ALPHA, WIRE_ALPHA_OFF)
+                        source._send_dimmer_cmd(_CMD_DIMMER_SET_ALPHA, WIRE_ALPHA_OFF)
                         break
                     except Exception:
                         _log.exception("dimmer OFF failed, lamp will time out")

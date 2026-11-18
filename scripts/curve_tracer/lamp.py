@@ -87,6 +87,20 @@ class _LampController:
         self._lock = threading.Lock()
         self._snapshot: dict | None = None
         self._captured_at = 0.0
+        # Sequence numbers: a status read takes one before it reads, and a result
+        # older than the stored one is dropped (a refresh that started before an
+        # OFF must not overwrite the OFF's status).
+        self._seq = 0
+        self._stored_seq = 0
+        # Ordering of commands. `_gen_lock` guards the counters and is never held
+        # across I/O. `_cmd_lock` serialises sends to the source, separate from the
+        # source's own SPI lock. OFF bumps `_off_gen`, so an ON that arrived before
+        # it cannot light the lamp after it. Every ON bumps `_on_gen`, so a failing
+        # ON cannot switch off a newer ON.
+        self._gen_lock = threading.Lock()
+        self._cmd_lock = threading.Lock()
+        self._off_gen = 0
+        self._on_gen = 0
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
 
@@ -142,8 +156,18 @@ class _LampController:
             "error": None,
         }
 
-    def _store(self, snapshot: dict) -> None:
+    def _next_seq(self) -> int:
         with self._lock:
+            self._seq += 1
+            return self._seq
+
+    def _store(self, snapshot: dict, seq: int | None = None) -> None:
+        if seq is None:
+            seq = self._next_seq()
+        with self._lock:
+            if seq < self._stored_seq:
+                return
+            self._stored_seq = seq
             self._snapshot = snapshot
             self._captured_at = self._clock()
 
@@ -171,12 +195,13 @@ class _LampController:
         if source is None:
             self._store(self._unavailable("no board configured", available=False))
             return
+        seq = self._next_seq()
         try:
             snapshot = self._build(source, source.dimmer_status())
         except Exception as exc:
             _log.warning("dimmer status read failed: %s", exc)
             snapshot = self._unavailable(f"dimmer status read failed: {exc}", available=True)
-        self._store(snapshot)
+        self._store(snapshot, seq)
 
     def start(self) -> None:
         if self._thread is not None:
@@ -220,40 +245,71 @@ class _LampController:
             snap = self._unavailable("no board configured", available=False)
             self._store(snap)
             return snap
-        error = self._off_with_retry(source)
+        with self._gen_lock:
+            self._off_gen += 1
+        with self._cmd_lock:
+            error = self._off_with_retry(source)
+            seq = self._next_seq()
         if error is not None:
             snap = self._unavailable(f"OFF failed, lamp state unknown: {error}", available=True)
-            self._store(snap)
+            self._store(snap, seq)
             return snap
         try:
             snap = self._build(source, source.dimmer_status())
         except Exception as exc:
             snap = self._unavailable(f"dimmer status read failed: {exc}", available=True)
-        self._store(snap)
+        self._store(snap, seq)
         return snap
+
+    def _off_if_current(self, source: Any, off_gen: int, on_gen: int) -> None:
+        """Failure path of an ON: switch off, unless an OFF or a newer ON came since."""
+        with self._cmd_lock:
+            with self._gen_lock:
+                current = self._off_gen == off_gen and self._on_gen == on_gen
+            if current:
+                self._off_with_retry(source)
 
     def on(self, *, power: float | None, alpha_deg: float | None, max_on_s: float) -> dict:
         """Open a lamp window and return the confirmed status, or raise LampError."""
+        with self._gen_lock:
+            self._on_gen += 1
+            on_gen, off_gen = self._on_gen, self._off_gen
         source = self.holder.get()
         if source is None:
             raise LampError(503, "no board configured: the lamp is not available")
+        cancelled = LampError(409, "cancelled by Off")
         try:
-            if power is not None:
-                source.set_dimmer_power(power, max_on_s=max_on_s)
-            else:
-                source.set_dimmer_alpha(alpha_deg, max_on_s=max_on_s)
+            with self._cmd_lock:
+                # Re-checked under the command lock: an OFF that arrived while this
+                # request was on its way has already sent its OFF frame, and this
+                # ON must not follow it.
+                with self._gen_lock:
+                    if self._off_gen != off_gen:
+                        raise cancelled
+                if power is not None:
+                    source.set_dimmer_power(power, max_on_s=max_on_s)
+                else:
+                    source.set_dimmer_alpha(alpha_deg, max_on_s=max_on_s)
+        except LampError:
+            raise
         except DimmerRefused as exc:
             raise LampError(409, str(exc)) from exc
-        except (RuntimeError, OSError) as exc:
-            self._off_with_retry(source)
+        except Exception as exc:
+            _log.exception("lamp command failed")
+            self._off_if_current(source, off_gen, on_gen)
             raise LampError(503, f"lamp command failed: {exc}") from exc
         # Fail closed: the lamp stays on only if the dimmer link is confirmed.
+        # The poll runs outside the command lock, so an OFF is never held up by it.
+        seq = self._next_seq()
         status = self._confirm(source)
         if status is None:
-            self._off_with_retry(source)
+            self._off_if_current(source, off_gen, on_gen)
             raise LampError(503, "dimmer link not confirmed, lamp switched off")
+        with self._gen_lock:
+            if self._off_gen != off_gen:
+                raise cancelled
         snap = self._build(source, status)
-        self._store(snap)
+        self._store(snap, seq)
         if status.tripped:
             # The status read already sent the acknowledgment OFF.
             raise LampError(
@@ -281,6 +337,9 @@ class _LampController:
         self.stop()
         source = self.holder.get()
         if source is not None:
-            error = self._off_with_retry(source)
+            with self._gen_lock:
+                self._off_gen += 1
+            with self._cmd_lock:
+                error = self._off_with_retry(source)
             if error is not None:
                 _log.error("lamp OFF at shutdown failed: %s", error)

@@ -149,7 +149,8 @@ def test_keepalive_does_not_touch_telemetry(spi_mcu_source):  # noqa: F811
     after_set = (src._v, src._i, src._vout)
     time.sleep(0.1)
     assert (src._v, src._i, src._vout) == after_set
-    assert before != after_set
+    # No lamp frame is applied as telemetry, not even the first set command.
+    assert before == after_set
     src.dimmer_off()
     src.close()
 
@@ -577,3 +578,38 @@ def test_exposure_limits_match_firmware():
     max_ms = _rust_const("EXPOSURE_MAX_ON_MS")
     assert max_ms == MAX_LAMP_WINDOW_S * 1000
     assert _rust_const("EXPOSURE_RESUME_MS") < max_ms
+
+
+def test_lamp_commands_do_not_disturb_run_state(spi_mcu_source):  # noqa: F811
+    """Lamp calls from another thread must not touch what a run reads.
+
+    The first exchange of a status read returns a telemetry-shaped frame. With a
+    measurement in progress it is zeroed and unsettled; applying it would wipe
+    V and I and the settled flag a run waits for. Corrupt frames must not count
+    as bad frames either.
+    """
+    src = spi_mcu_source()
+    src._v, src._i, src._vout, src._temp_raw = 12.0, 0.5, 20.0, 77
+    src._settled = True
+    src._consecutive_bad_frames = 2
+    last_good = src._last_good_raw
+    unsettled_zero = _miso_frame(0, 0, 0, 0, settled=0)
+    corrupt = _miso_frame(100, 200, 300, 400, corrupt=True)
+
+    def state():
+        return (
+            src._v, src._i, src._vout, src._temp_raw, src._settled,
+            src._consecutive_bad_frames, src._last_good_raw, src._has_read,
+        )  # fmt: skip
+
+    before = state()
+    for first in (unsettled_zero, corrupt):
+        src._spi.responses = [first, _status_frame()]
+        assert src.dimmer_status() is not None
+        src._spi.responses = [first]
+        src.set_dimmer_alpha(90.0, max_on_s=10.0)
+        src._spi.responses = [first]
+        src.dimmer_off()
+        assert state() == before
+    assert src._last_good_raw == last_good
+    src.close()

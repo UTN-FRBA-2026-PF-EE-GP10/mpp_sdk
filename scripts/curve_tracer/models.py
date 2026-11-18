@@ -205,7 +205,11 @@ class _LampRequest(BaseModel):
             return value
         if isinstance(value, bool) or not isinstance(value, int | float):
             raise ValueError("must be a number")
-        if not math.isfinite(value):
+        try:
+            finite = math.isfinite(value)
+        except OverflowError:  # an integer too large for a float
+            finite = False
+        if not finite:
             raise ValueError("must be finite")
         return value
 
