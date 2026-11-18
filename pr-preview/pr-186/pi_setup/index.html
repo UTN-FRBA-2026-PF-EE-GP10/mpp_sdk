@@ -1674,7 +1674,12 @@ mains: read <code>hardware/dimmer/README.md</code> before bench work.</p>
 <li>A manual <code>POST /api/dimmer/off</code> ends the lamp phase (<code>off</code>). During the
   warm-up the measurement is cancelled. During the measurement it goes on,
   but in the dark. A newer manual window is never switched off by the
-  step.</li>
+  step. A manual "on" that the dimmer refused or that failed never takes
+  over the lamp: the step still switches its own window off.</li>
+<li>The lamp option for a simulated run is refused (422) unless the server
+  runs with <code>--demo</code>.</li>
+<li>If the sweep start command fails, the step ends at once and the lamp
+  goes off.</li>
 <li>A run that used the lamp keeps <code>lamp</code> (power or <code>alpha_deg</code>, and
   <code>warmup_s</code>) in its record settings.</li>
 </ul>
