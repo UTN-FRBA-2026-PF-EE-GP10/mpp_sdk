@@ -156,7 +156,9 @@ def _run_live(
     stop_event: threading.Event,
 ) -> None:
     """Execute one live closed-loop run to completion, on the poll thread -
-    the only thread that may ever touch `src` (see the module docstring).
+    the thread that does the run, sweeps and Pico configuration with `src`. Only
+    the lamp methods of `src` are also called from request threads (see
+    `curve_tracer/lamp.py`); they are lock-protected and do not touch run state.
     This blocks `_poll_loop`'s normal sweep polling for the run's whole
     duration: a live run and curve-tracer polling are mutually exclusive
     on one SPI link, so that displacement is deliberate, not an accidental

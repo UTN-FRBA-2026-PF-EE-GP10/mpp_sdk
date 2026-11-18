@@ -1,4 +1,10 @@
-"""The poll thread: the only thread that touches the board."""
+"""The poll thread: the thread that does the sweeps, runs and Pico configuration.
+
+The lamp methods of `SpiMcuSource` are the exception: the lamp routes call them
+from request threads, so OFF still works while a run holds this thread. They are
+lock-protected like every SPI exchange. This thread publishes the source to them
+through `_LampHolder` and withdraws it before the source closes.
+"""
 
 from __future__ import annotations
 
@@ -8,6 +14,7 @@ import time
 from typing import TYPE_CHECKING
 
 from scripts.curve_tracer.cache import _ConfigCache, _SweepCache
+from scripts.curve_tracer.lamp import _LampHolder
 from scripts.curve_tracer.live_run import _LiveRunCache, _RunRequest
 from scripts.curve_tracer.run_exec import _run_live
 
@@ -75,6 +82,7 @@ def _poll_loop(
     config_cache: _ConfigCache | None = None,
     stop_event: threading.Event | None = None,
     shutdown_event: threading.Event | None = None,
+    lamp_holder: _LampHolder | None = None,
 ) -> None:
     """Poll the board until `shutdown_event` is set. That event is
     deliberately separate from `stop_event`, which ends one live run: a
@@ -88,6 +96,12 @@ def _poll_loop(
 
         source_cm: SweepSource = DemoSweepSource()
         cache.set_simulated(True)
+        # No board in demo mode: the lamp routes get a simulated dimmer that
+        # follows the firmware's rules.
+        if lamp_holder is not None:
+            from mpp_sdk.io.dimmer_sim import SimulatedDimmer
+
+            lamp_holder.set(SimulatedDimmer())
 
         # Demo mode reports one link state regardless of whether a result
         # is ready this iteration - "ok" vs "waiting for sweep" is a real
@@ -192,13 +206,20 @@ def _poll_loop(
         time.sleep(period_s)
 
     with source_cm as src:
-        while shutdown_event is None or not shutdown_event.is_set():
-            try:
-                poll_once(src)
-            except Exception as exc:
-                # This thread is the only one that may touch the board. If
-                # it dies, every later sweep and run request is dropped
-                # with no visible error, so any fault (spidev raises
-                # OSError, not RuntimeError) is reported and polling goes on.
-                cache.set(None, f"error: {exc}")
-                time.sleep(period_s)
+        if lamp_holder is not None and not demo:
+            lamp_holder.set(src)
+        try:
+            while shutdown_event is None or not shutdown_event.is_set():
+                try:
+                    poll_once(src)
+                except Exception as exc:
+                    # Sweeps, runs and config run only on this thread. If it
+                    # dies, every later sweep and run request is dropped
+                    # with no visible error, so any fault (spidev raises
+                    # OSError, not RuntimeError) is reported and polling goes on.
+                    cache.set(None, f"error: {exc}")
+                    time.sleep(period_s)
+        finally:
+            # Before the source closes, so no request uses a closed source.
+            if lamp_holder is not None:
+                lamp_holder.clear()
