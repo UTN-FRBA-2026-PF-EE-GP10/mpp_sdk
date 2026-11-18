@@ -1,4 +1,4 @@
-"""Tests for `scripts.run_algorithm.run_control_loop` only - not `main()`,
+"""Tests for `mpp_sdk.runs.loop.run_control_loop` only - not `main()`,
 not the sweep/save half (both need real hardware). A minimal in-test fake
 source is enough since this function only calls `.read()`/`.write()` (and,
 for the link-down abort, reads `.consecutive_bad_frames` if present),
@@ -9,7 +9,7 @@ import math
 
 import pytest
 
-from scripts.run_algorithm import BOARD_I_MAX, run_control_loop
+from mpp_sdk.runs.loop import BOARD_I_MAX, run_control_loop
 
 
 class _FakeSource:
@@ -579,3 +579,228 @@ def test_the_default_current_limit_is_below_the_sensor_maximum():
     can never trip on a real reading."""
     sensor_max_a = 1000 * (2**19 - 1) / 2**19 / 1000
     assert sensor_max_a > BOARD_I_MAX
+
+
+# ------------------------------------------------------------------
+# control period, run_info, settings
+# ------------------------------------------------------------------
+
+
+def test_control_period_keeps_steps_at_least_that_far_apart():
+    clock = _FakeClock()
+    info: dict = {}
+    samples, _, _ = run_control_loop(
+        _FakeSource(),
+        _FixedDutyAlgorithm(0.25),
+        duration_s=0.1,
+        v_max=100.0,
+        i_max=100.0,
+        clock=clock,
+        sleep=clock.advance,
+        control_period_ms=20.0,
+        run_info=info,
+    )
+    assert len(samples) == 5
+    assert info["step_period_mean_ms"] == pytest.approx(20.0)
+    assert info["step_period_max_ms"] == pytest.approx(20.0)
+
+
+def test_no_control_period_does_not_sleep():
+    clock = _FakeClock()
+    slept: list[float] = []
+    steps = 0
+
+    def should_stop():
+        nonlocal steps
+        steps += 1
+        return steps > 3
+
+    run_control_loop(
+        _FakeSource(),
+        _FixedDutyAlgorithm(0.25),
+        duration_s=1.0,
+        v_max=100.0,
+        i_max=100.0,
+        clock=clock,
+        sleep=slept.append,
+        should_stop=should_stop,
+    )
+    assert slept == []
+
+
+@pytest.mark.parametrize("value", [0.0, -1.0, math.nan])
+def test_a_bad_control_period_raises_before_any_write(value):
+    source = _FakeSource()
+    with pytest.raises(ValueError, match="control_period_ms"):
+        run_control_loop(
+            source,
+            _FixedDutyAlgorithm(0.3),
+            duration_s=1.0,
+            v_max=100.0,
+            i_max=100.0,
+            control_period_ms=value,
+        )
+    assert source.writes == []
+
+
+def test_run_info_counts_bad_frames_of_this_run_only():
+    class _Counting(_FakeSource):
+        bad_frames = 7
+
+        def read(self):
+            self.bad_frames += 2
+            return super().read()
+
+    clock = _FakeClock()
+    info: dict = {}
+    run_control_loop(
+        _Counting(),
+        _FixedDutyAlgorithm(0.25),
+        duration_s=0.3,
+        v_max=100.0,
+        i_max=100.0,
+        clock=clock,
+        sleep=clock.advance,
+        period_s=0.1,
+        run_info=info,
+    )
+    assert info["bad_frames"] == 6
+
+
+def test_run_info_bad_frames_is_none_for_a_source_without_the_counter():
+    info: dict = {}
+    run_control_loop(
+        _FakeSource(),
+        _FixedDutyAlgorithm(0.25),
+        duration_s=0.0,
+        v_max=100.0,
+        i_max=100.0,
+        run_info=info,
+    )
+    assert info["bad_frames"] is None
+    assert info["step_period_mean_ms"] is None
+
+
+def test_build_run_settings_reads_what_is_known_and_nulls_the_rest():
+    from mpp_sdk.algorithms import PerturbAndObserve
+    from mpp_sdk.runs.loop import build_run_settings
+
+    class _Src:
+        vin_range = "low"
+        vout_range = "mid"
+
+    s = build_run_settings(
+        _Src(),
+        PerturbAndObserve(step_size=0.002),
+        control_period_ms=10.0,
+        session_fields={"load_resistor": "50 Ohm", "firmware_commit": "abc1234"},
+    )
+    assert s["algorithm_params"]["step_size"] == 0.002
+    assert s["adc_divider_range"] == {"vin": "low", "vout": "mid"}
+    assert s["load"] == "50 Ohm"
+    assert s["firmware_commit"] == "abc1234"
+    assert s["control_period_ms"] == 10.0
+    assert s["averaging"] is None
+
+    bare = build_run_settings(_FakeSource(), _FixedDutyAlgorithm(0.3), control_period_ms=None)
+    assert bare["adc_divider_range"] is None
+    assert bare["load"] is None
+    assert bare["firmware_commit"] is None
+
+
+@pytest.mark.parametrize("value", [1000.1, 1e9, 1e300])
+def test_a_control_period_above_the_limit_raises(value):
+    with pytest.raises(ValueError, match="at most"):
+        run_control_loop(
+            _FakeSource(),
+            _FixedDutyAlgorithm(0.3),
+            duration_s=1.0,
+            v_max=100.0,
+            i_max=100.0,
+            control_period_ms=value,
+        )
+
+
+def test_should_stop_during_the_wait_ends_the_run_within_one_slice():
+    clock = _FakeClock()
+
+    def should_stop():
+        return clock() >= 0.2
+
+    _, aborted, reason = run_control_loop(
+        _FakeSource(),
+        _FixedDutyAlgorithm(0.25),
+        duration_s=100.0,
+        v_max=100.0,
+        i_max=100.0,
+        clock=clock,
+        sleep=clock.advance,
+        control_period_ms=1000.0,
+        should_stop=should_stop,
+    )
+    assert (aborted, reason) == (True, "stopped")
+    assert clock() <= 0.2 + 0.05 + 1e-9
+
+
+def test_duration_end_cuts_the_wait_short():
+    clock = _FakeClock()
+    run_control_loop(
+        _FakeSource(),
+        _FixedDutyAlgorithm(0.25),
+        duration_s=0.1,
+        v_max=100.0,
+        i_max=100.0,
+        clock=clock,
+        sleep=clock.advance,
+        control_period_ms=1000.0,
+    )
+    assert clock() < 0.2
+
+
+def test_suspect_readings_are_counted():
+    info: dict = {}
+    run_control_loop(
+        _ScriptedSource({1}, (20.0, 6.0)),
+        _FixedDutyAlgorithm(0.3),
+        duration_s=0.05,
+        v_max=100.0,
+        i_max=1.0,
+        control_period_ms=10.0,
+        run_info=info,
+    )
+    assert info["suspect_readings"] == 1
+
+
+def test_a_long_control_period_does_not_slow_a_safety_abort():
+    t = [0.0]
+
+    def clock():
+        t[0] += 0.01
+        return t[0]
+
+    source = _ScriptedSource(range(1, 1000), (99.0, 0.1))
+    _, aborted, reason = run_control_loop(
+        source,
+        _FixedDutyAlgorithm(0.3),
+        duration_s=100.0,
+        v_max=40.0,
+        i_max=100.0,
+        clock=clock,
+        sleep=lambda dt: t.__setitem__(0, t[0] + dt),
+        control_period_ms=1000.0,
+    )
+    assert (aborted, reason) == (True, "overvoltage")
+    assert t[0] < 0.5
+    assert source.writes[-1] == 0.0
+
+
+def test_a_bool_control_period_raises():
+    with pytest.raises(ValueError, match="control_period_ms"):
+        run_control_loop(
+            _FakeSource(),
+            _FixedDutyAlgorithm(0.3),
+            duration_s=1.0,
+            v_max=100.0,
+            i_max=100.0,
+            control_period_ms=True,
+        )

@@ -2,6 +2,7 @@
 
 from .base import PanelModel
 from .ideal import IdealSingleDiode
+from .losses import SingleDiodeWithLosses
 from .measured import MeasuredPanel
 from .pvlib_adapter import PvlibPanelModel
 from .string import PvString
@@ -13,5 +14,6 @@ __all__ = [
     "MeasuredPanel",
     "PvlibPanelModel",
     "PvString",
+    "SingleDiodeWithLosses",
     "TabulatedPanel",
 ]

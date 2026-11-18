@@ -2,6 +2,7 @@
 #![no_main]
 
 mod adc_cal;
+mod dimmer;
 mod ina229;
 mod max31865;
 mod mode_curve_tracer;
@@ -12,7 +13,7 @@ use embassy_executor::Spawner;
 use embassy_rp::adc::{Adc, Channel as AdcChannel, Config as AdcConfig};
 use embassy_rp::bind_interrupts;
 use embassy_rp::dma;
-use embassy_rp::gpio::{Input, Level, Output, Pull};
+use embassy_rp::gpio::{Flex, Input, Level, Output, Pull};
 use embassy_rp::peripherals::{DMA_CH0, DMA_CH1, PIO1};
 use embassy_rp::pio::{InterruptHandler as PioInterruptHandler, Pio};
 use embassy_rp::pio_programs::ws2812::{Grb, PioWs2812, PioWs2812Program};
@@ -688,6 +689,9 @@ async fn main(spawner: Spawner) {
     );
     spawner.spawn(neopixel_task(ws2812).unwrap());
     spawner.spawn(mode_curve_tracer::curve_tracer_task(curve_tracer).unwrap());
+
+    // I2C_SDA (GPIO5) and I2C_SCL (GPIO6) to the lamp dimmer, bit-banged.
+    spawner.spawn(dimmer::dimmer_task(Flex::new(p.PIN_5), Flex::new(p.PIN_6)).unwrap());
 
     let mut tick: u32 = 0;
     let mut psu_closed_loop = mode_power_supply::ClosedLoopState::new();

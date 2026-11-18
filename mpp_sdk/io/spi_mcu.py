@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import logging
 import math
+import threading
 import time
-from collections.abc import Sequence
+import weakref
 from dataclasses import dataclass
 
 from .base import SignalSource
@@ -13,6 +15,16 @@ from .board import (
     CUTOFF_V_MAX_CEILING_MV,
     PSU_VOUT_TARGET_CEILING_MV,
 )
+from .dimmer import (
+    WIRE_ALPHA_OFF,
+    DimmerStatus,
+    alpha_for_power,
+    alpha_to_wire,
+    parse_status_frame,
+)
+from .spi_crc import crc8
+
+_log = logging.getLogger(__name__)
 
 # spidev is Linux-only and lives in the optional [hardware] extra.
 try:
@@ -70,6 +82,12 @@ _CMD_RELEASE_RELAY = 0xB3
 # CMD_STREAM_POLL and mode_curve_tracer.rs's SweepProgress/PROGRESS_FLAG_*
 # exactly.
 _CMD_STREAM_POLL = 0xB4
+_CMD_DIMMER_SET_ALPHA = 0xD1
+_CMD_DIMMER_STATUS = 0xD2
+# The Pico turns the lamp off after 3 s without a valid set-alpha frame.
+_DIMMER_HOST_TIMEOUT_S = 3.0
+_MAX_DIMMER_KEEPALIVE_S = 2.0
+_DIMMER_STATUS_ATTEMPTS = 2
 
 # Replay a curve stored in the firmware instead of sweeping a real panel -
 # one byte per stored curve. Must match spi_slave_pio.rs's
@@ -102,26 +120,6 @@ _SETTLE_TIMEOUT_S = 0.150
 _SETTLE_MAX_BAD_FRAMES = 20
 # A second try resends the duty first, for a duty frame lost on the wire.
 _SETTLE_ATTEMPTS = 2
-
-
-def crc8(data: Sequence[int]) -> int:
-    """CRC-8 (polynomial 0x07, init 0xFF) over *data* - the checksum on
-    both 12-byte SPI frame directions. Must match `spi_slave_pio.rs`'s
-    `crc8` exactly.
-
-    Not an XOR, because an XOR is position-blind and a MOSI frame at duty
-    0 is all zeros but the command byte: a byte-shifted copy of it XORs to
-    the same value and is accepted. Measured on the bench - a
-    2-byte-shifted start-sweep frame validated cleanly and applied 69%
-    duty to the SEPIC gate against a commanded 0. A CRC's feedback makes
-    it order-dependent, so a shifted frame fails.
-    """
-    crc = 0xFF
-    for byte in data:
-        crc ^= byte
-        for _ in range(8):
-            crc = ((crc << 1) ^ 0x07) & 0xFF if crc & 0x80 else (crc << 1) & 0xFF
-    return crc
 
 
 def _to_signed_i16(raw: int) -> int:
@@ -163,7 +161,7 @@ class SpiMcuSource(SignalSource):
     counts - the firmware does the calibration). Temp is a big-endian
     ``i16`` in centi-Celsius, or the sentinel -32768 if no probe is
     connected (see ``temperature_c``). ``CHECKSUM`` is a CRC-8 (polynomial
-    0x07, init 0xFF; see ``crc8()`` above) over the frame's data bytes in
+    0x07, init 0xFF; see ``crc8()`` in ``spi_crc.py``) over the frame's data bytes in
     each direction - ``DUTY_H``, ``DUTY_L``, ``CMD`` for MOSI, the eight
     telemetry bytes plus ``ACK`` and ``SETTLED`` for MISO. Both handshake bytes are
     covered because each is a command to the other side rather than a
@@ -205,6 +203,7 @@ class SpiMcuSource(SignalSource):
         initial_duty: float = 0.0,
         settling_time_s: float = 0.03,
         oversample_count: int = 0,
+        dimmer_keepalive_s: float = 1.0,
     ) -> None:
         """
         Parameters
@@ -235,7 +234,19 @@ class SpiMcuSource(SignalSource):
             telemetry of the last frame without waiting.
         oversample_count:
             Deprecated parameter retained for backwards compatibility.
+        dimmer_keepalive_s:
+            Interval of the dimmer keepalive thread. Must be in (0, 2.0]
+            so the Pico's 3 s timeout never fires while the host runs.
         """
+        if not 0.0 < dimmer_keepalive_s <= _MAX_DIMMER_KEEPALIVE_S:
+            raise ValueError(f"dimmer_keepalive_s must be in (0, {_MAX_DIMMER_KEEPALIVE_S}]")
+        # One SPI exchange or exchange pair at a time: the keepalive thread
+        # shares the bus with the caller.
+        self._lock = threading.RLock()
+        self._dimmer_wire = WIRE_ALPHA_OFF
+        self._dimmer_keepalive_s = float(dimmer_keepalive_s)
+        self._dimmer_stop = threading.Event()
+        self._dimmer_thread: threading.Thread | None = None
         self._spi = _spidev.SpiDev()
         self._spi.open(bus, device)
         self._spi.max_speed_hz = speed_hz
@@ -262,6 +273,8 @@ class SpiMcuSource(SignalSource):
         # last-good telemetry forever. Counting the failures is what lets
         # a caller tell "the board is talking" from "nothing is there".
         self._consecutive_bad_frames = 0
+        self._bad_frames = 0
+        self._settle_failures = 0
         self._settled = True
         self._duty_changed = False
         self._last_write_time: float = 0.0
@@ -280,17 +293,23 @@ class SpiMcuSource(SignalSource):
 
     # ── internal ──────────────────────────────────────────────────────────────
 
-    def _xfer_raw(self, payload_u16: int, cmd: int) -> tuple[list[int], int] | None:
-        """Low-level full-duplex exchange sending raw 16-bit payload and command byte."""
+    def _exchange(self, payload_u16: int, cmd: int) -> list[int]:
+        """One 12-byte exchange with *payload_u16* and *cmd*; returns the raw MISO frame."""
         val = max(0, min(65535, int(payload_u16)))
         byte_h, byte_l = val >> 8, val & 0xFF
         tx = [byte_h, byte_l, crc8([byte_h, byte_l, cmd]), cmd] + [0] * 8
-        rx = self._spi.xfer2(list(tx))
+        with self._lock:
+            return self._spi.xfer2(list(tx))
+
+    def _xfer_raw(self, payload_u16: int, cmd: int) -> tuple[list[int], int] | None:
+        """Low-level full-duplex exchange sending raw 16-bit payload and command byte."""
+        rx = self._exchange(payload_u16, cmd)
 
         # The settled byte (rx[10]) is covered too: a frame with it set is
         # taken as the one measurement for the new duty.
         if rx[8] != crc8(rx[0:8] + [rx[9], rx[10]]):
             self._consecutive_bad_frames += 1
+            self._bad_frames += 1
             return None
         self._consecutive_bad_frames = 0
         self._settled = bool(rx[10] & 0x01)
@@ -389,6 +408,7 @@ class SpiMcuSource(SignalSource):
                 # the next read() asks again.
                 self._v = math.nan
                 self._i = math.nan
+                self._settle_failures += 1
 
         return self._v, self._i
 
@@ -486,13 +506,16 @@ class SpiMcuSource(SignalSource):
                 f"reset the bulk-read handshake, so the fetch could never complete"
             )
 
-        ack = self._send_cmd(cmd=_CMD_REQUEST_BULK_DUMP)
-
-        for _ in range(poll_attempts):
-            if ack & 0x80:
-                return self._bulk_read(ack & 0x7F)
-            time.sleep(poll_interval_s)
-            ack = self._send_cmd(cmd=_CMD_REQUEST_BULK_DUMP)
+        # The ack and the bulk read are one critical section: the firmware
+        # expects an 83-byte frame right after the ack, so a keepalive in
+        # between would be swallowed. The sleep stays outside the lock.
+        for attempt in range(poll_attempts + 1):
+            with self._lock:
+                ack = self._send_cmd(cmd=_CMD_REQUEST_BULK_DUMP)
+                if ack & 0x80:
+                    return self._bulk_read(ack & 0x7F)
+            if attempt < poll_attempts:
+                time.sleep(poll_interval_s)
         return None
 
     def poll_sweep_progress(self) -> SweepProgress | None:
@@ -517,8 +540,9 @@ class SpiMcuSource(SignalSource):
         final state (``active=False``) until the next sweep starts, since
         the firmware peeks rather than consumes.
         """
-        self._send_cmd(cmd=_CMD_STREAM_POLL)
-        result = self._xfer_checked(self._duty, cmd=0)
+        with self._lock:
+            self._send_cmd(cmd=_CMD_STREAM_POLL)
+            result = self._xfer_checked(self._duty, cmd=0)
         if result is None:
             return None
 
@@ -846,7 +870,8 @@ class SpiMcuSource(SignalSource):
         # back as a corrupted leading byte. Found on-target: bad magic
         # bytes with the low bits shifted out.
         time.sleep(_BULK_READ_ARM_DELAY_S)
-        rx = self._spi.xfer2([0] * _BULK_FRAME_LEN)
+        with self._lock:
+            rx = self._spi.xfer2([0] * _BULK_FRAME_LEN)
 
         if rx[0] != _BULK_MAGIC:
             raise RuntimeError(
@@ -898,6 +923,19 @@ class SpiMcuSource(SignalSource):
         this is reset.
         """
         return self._consecutive_bad_frames
+
+    @property
+    def bad_frames(self) -> int:
+        """Total frames rejected for a bad checksum (CRC) since this source
+        was opened. A corrupted frame that passes its CRC is not counted.
+        A caller takes the difference between two reads to count one run."""
+        return self._bad_frames
+
+    @property
+    def settle_failures(self) -> int:
+        """Total ``read()`` calls that got no settled measurement (timeout or
+        exhausted polls) and returned NaN since this source was opened."""
+        return self._settle_failures
 
     @property
     def duty(self) -> float:
@@ -972,11 +1010,93 @@ class SpiMcuSource(SignalSource):
         """Fixed duty cycle (0.0..1.0) for power supply open-loop mode."""
         return self._psu_fixed_duty
 
+    # ── lamp dimmer ───────────────────────────────────────────────────────────
+
+    def set_dimmer_alpha(self, alpha_deg: float) -> None:
+        """Set the lamp firing angle (0 = full on, 180 = off) and keep it alive."""
+        wire = alpha_to_wire(alpha_deg)
+        with self._lock:
+            self._dimmer_wire = wire
+            self._send_config_cmd(_CMD_DIMMER_SET_ALPHA, wire)
+        if wire == WIRE_ALPHA_OFF:
+            self._stop_dimmer_keepalive()
+        else:
+            self._start_dimmer_keepalive()
+
+    def set_dimmer_power(self, fraction: float) -> None:
+        """Set the lamp power as a fraction of full power (resistive lamp)."""
+        self.set_dimmer_alpha(alpha_for_power(fraction))
+
+    def dimmer_off(self) -> None:
+        """Switch the lamp off and stop the keepalive."""
+        self._stop_dimmer_keepalive()
+        with self._lock:
+            self._dimmer_wire = WIRE_ALPHA_OFF
+            self._send_config_cmd(_CMD_DIMMER_SET_ALPHA, WIRE_ALPHA_OFF)
+
+    def dimmer_status(self) -> DimmerStatus | None:
+        """Read the dimmer status through the Pico, or None if no valid reply.
+
+        The reply is in the MISO of the exchange after the request, like the
+        sweep progress poll. Both exchanges run back to back, inside the
+        firmware's 100 ms frame timeout.
+        """
+        for _ in range(_DIMMER_STATUS_ATTEMPTS):
+            with self._lock:
+                self._send_config_cmd(_CMD_DIMMER_STATUS)
+                rx = self._exchange(round(self._duty * 65535), 0)
+            status = parse_status_frame(rx)
+            if status is not None:
+                return status
+        return None
+
+    def _start_dimmer_keepalive(self) -> None:
+        with self._lock:
+            if self._dimmer_thread is not None and self._dimmer_thread.is_alive():
+                return
+            self._dimmer_stop = threading.Event()
+            thread = threading.Thread(
+                target=_dimmer_keepalive_loop,
+                args=(weakref.ref(self), self._dimmer_stop, self._dimmer_keepalive_s),
+                name="dimmer-keepalive",
+                daemon=True,
+            )
+            self._dimmer_thread = thread
+            thread.start()
+
+    def _stop_dimmer_keepalive(self) -> None:
+        self._dimmer_stop.set()
+        thread = self._dimmer_thread
+        if thread is not None and thread is not threading.current_thread():
+            thread.join(timeout=_DIMMER_HOST_TIMEOUT_S)
+        self._dimmer_thread = None
+
+    def _dimmer_resend(self) -> None:
+        with self._lock:
+            if self._dimmer_wire != WIRE_ALPHA_OFF:
+                self._exchange(self._dimmer_wire, _CMD_DIMMER_SET_ALPHA)
+
+    @property
+    def is_dimmer_active(self) -> bool:
+        """True while the lamp is on and the keepalive thread runs."""
+        thread = self._dimmer_thread
+        return self._dimmer_wire != WIRE_ALPHA_OFF and thread is not None and thread.is_alive()
+
+    def __del__(self) -> None:
+        stop = getattr(self, "_dimmer_stop", None)
+        if stop is not None:
+            stop.set()
+
     # ── resource management ──────────────────────────────────────────────────
 
     def close(self) -> None:
-        """Release the SPI device."""
-        self._spi.close()
+        """Switch the lamp off, then release the SPI device."""
+        try:
+            self.dimmer_off()
+        except OSError:
+            pass
+        finally:
+            self._spi.close()
 
     def __enter__(self) -> SpiMcuSource:
         return self
@@ -986,3 +1106,21 @@ class SpiMcuSource(SignalSource):
             self.soft_stop()
         finally:
             self.close()
+
+
+def _dimmer_keepalive_loop(
+    source_ref: weakref.ref, stop: threading.Event, interval_s: float
+) -> None:
+    # Holds only a weak reference so a dropped source can be collected.
+    while not stop.wait(interval_s):
+        source = source_ref()
+        if source is None:
+            return
+        try:
+            source._dimmer_resend()
+        except Exception:
+            # The Pico turns the lamp off after its timeout; report that state.
+            source._dimmer_wire = WIRE_ALPHA_OFF
+            _log.exception("dimmer keepalive failed, lamp will time out")
+            return
+        del source
