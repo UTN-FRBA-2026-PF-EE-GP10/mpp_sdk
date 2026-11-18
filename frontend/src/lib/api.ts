@@ -509,12 +509,16 @@ export async function fetchLamp(): Promise<LampStatus> {
   return (await parseJsonOrThrow(r, 'GET /api/dimmer')) as LampStatus
 }
 
-export async function setLamp(input: { power: number; max_on_s: number }): Promise<LampStatus> {
+export async function setLamp(
+  input: { power: number; max_on_s: number },
+  signal?: AbortSignal,
+): Promise<LampStatus> {
+  const timeout = AbortSignal.timeout(LAMP_TIMEOUT_MS)
   const r = await fetch('/api/dimmer', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
-    signal: AbortSignal.timeout(LAMP_TIMEOUT_MS),
+    signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
   })
   return (await parseJsonOrThrow(r, 'POST /api/dimmer')) as LampStatus
 }

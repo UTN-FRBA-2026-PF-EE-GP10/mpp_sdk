@@ -14,7 +14,7 @@ import {
   clampWindowS,
 } from '@/lib/lamp'
 
-type BadgeKey = 'off' | 'on' | 'tripped' | 'nolink'
+type BadgeKey = 'off' | 'on' | 'tripped' | 'nolink' | 'unknown'
 
 const BADGES = {
   off: { label: 'OFF', Icon: LightbulbOff, cls: '' },
@@ -24,6 +24,7 @@ const BADGES = {
     cls: 'border-amber-500/50 text-amber-700 dark:text-amber-400',
   },
   tripped: { label: 'TRIPPED', Icon: ShieldAlert, cls: 'border-destructive/50 text-destructive' },
+  unknown: { label: 'STATUS UNKNOWN', Icon: WifiOff, cls: 'border-destructive/50 text-destructive' },
   nolink: { label: 'NO LINK', Icon: WifiOff, cls: 'border-destructive/50 text-destructive' },
 } as const
 
@@ -31,7 +32,7 @@ const BADGES = {
 export function LampCard() {
   const { mode } = useCaptureMode()
   const demo = mode === 'simulated'
-  const { status, receivedAt, failures, busy, message, turnOn, turnOff } = useLamp(!demo)
+  const { status, receivedAt, failures, stale, busy, message, turnOn, turnOff } = useLamp(!demo)
   const [powerPct, setPowerPct] = useState(LAMP_DEFAULT_POWER_PCT)
   const [windowText, setWindowText] = useState(String(LAMP_DEFAULT_WINDOW_S))
   const [now, setNow] = useState(() => Date.now())
@@ -41,9 +42,13 @@ export function LampCard() {
     return () => clearInterval(id)
   }, [])
 
-  const unknown = failures >= UNKNOWN_AFTER_FAILURES
-  const pollFailing = failures > 0
-  const maxPct = status ? Math.max(0, Math.floor(status.max_power * 100)) : 100
+  const hiddenStale = stale && !demo
+  const unknown = failures >= UNKNOWN_AFTER_FAILURES || hiddenStale
+  const pollFailing = failures > 0 || hiddenStale
+  const maxPct =
+    status && Number.isFinite(status.max_power)
+      ? Math.min(100, Math.max(0, Math.floor(status.max_power * 100)))
+      : 100
   const shownPct = Math.min(powerPct, maxPct)
   const alpha = alphaDegForPower(shownPct / 100)
   const windowS = clampWindowS(Number(windowText))
@@ -52,7 +57,9 @@ export function LampCard() {
     (Number(windowText) < LAMP_MIN_WINDOW_S || Number(windowText) > LAMP_MAX_WINDOW_S)
 
   let badge: BadgeKey = 'off'
-  if (pollFailing || (status && (!status.available || !status.link_ok))) badge = 'nolink'
+  if (!status && !demo) badge = 'unknown'
+  else if (hiddenStale) badge = 'unknown'
+  else if (pollFailing || (status && (!status.available || !status.link_ok))) badge = 'nolink'
   else if (status?.tripped || status?.state === 'tripped') badge = 'tripped'
   else if (status?.state === 'on') badge = 'on'
 

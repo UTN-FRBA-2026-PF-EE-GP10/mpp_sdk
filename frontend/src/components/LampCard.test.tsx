@@ -93,6 +93,7 @@ describe('LampCard', () => {
 
   it('sends power and window on Lamp on, nothing before', async () => {
     vi.mocked(api.setLamp).mockResolvedValue(status({ state: 'on', window_left_s: 45 }))
+    vi.mocked(api.fetchLamp).mockResolvedValue(status({ state: 'on', window_left_s: 45 }))
     renderCard()
     await flush()
     fireEvent.change(screen.getByLabelText(/Power/), { target: { value: '50' } })
@@ -101,7 +102,7 @@ describe('LampCard', () => {
     expect(screen.getByLabelText(/Power/).closest('label')?.textContent).toContain('90.0 deg')
     fireEvent.click(onBtn())
     await flush()
-    expect(api.setLamp).toHaveBeenCalledWith({ power: 0.5, max_on_s: 45 })
+    expect(api.setLamp).toHaveBeenCalledWith({ power: 0.5, max_on_s: 45 }, expect.anything())
     expect(stateText()).toBe('ON')
   })
 
@@ -114,12 +115,15 @@ describe('LampCard', () => {
     expect(screen.getByText(/using 120 s/)).toBeTruthy()
     fireEvent.click(onBtn())
     await flush()
-    expect(api.setLamp).toHaveBeenCalledWith({ power: 0.3, max_on_s: 120 })
+    expect(api.setLamp).toHaveBeenCalledWith({ power: 0.3, max_on_s: 120 }, expect.anything())
   })
 
   it('sends Off and shows the answer', async () => {
     vi.mocked(api.fetchLamp).mockResolvedValue(status({ state: 'on', window_left_s: 10 }))
-    vi.mocked(api.lampOff).mockResolvedValue(status())
+    vi.mocked(api.lampOff).mockImplementation(async () => {
+      vi.mocked(api.fetchLamp).mockResolvedValue(status())
+      return status()
+    })
     renderCard()
     await flush()
     fireEvent.click(offBtn())
@@ -258,6 +262,83 @@ describe('LampCard', () => {
       await vi.advanceTimersByTimeAsync(5000)
     })
     expect(api.setLamp).toHaveBeenCalledTimes(2)
+  })
+
+  it('drops a late on-response after Off', async () => {
+    renderCard()
+    await flush()
+    let resolveOn: (s: api.LampStatus) => void = () => {}
+    vi.mocked(api.setLamp).mockReturnValue(new Promise((r) => (resolveOn = r)))
+    vi.mocked(api.lampOff).mockResolvedValue(status())
+    fireEvent.click(onBtn())
+    await flush()
+    fireEvent.click(offBtn())
+    await flush()
+    expect(stateText()).toBe('OFF')
+    resolveOn(status({ state: 'on', window_left_s: 30 }))
+    await flush()
+    expect(stateText()).toBe('OFF')
+    expect(screen.queryByText(/Window left/)).toBeNull()
+  })
+
+  it('drops a poll that started before Off', async () => {
+    let resolvePoll: (s: api.LampStatus) => void = () => {}
+    vi.mocked(api.fetchLamp).mockReturnValueOnce(new Promise((r) => (resolvePoll = r)))
+    vi.mocked(api.lampOff).mockResolvedValue(status())
+    renderCard()
+    await flush()
+    fireEvent.click(offBtn())
+    await flush()
+    expect(stateText()).toBe('OFF')
+    resolvePoll(status({ state: 'on', window_left_s: 30 }))
+    await flush()
+    expect(stateText()).toBe('OFF')
+  })
+
+  it('aborts the in-flight on-request on Off', async () => {
+    renderCard()
+    await flush()
+    vi.mocked(api.setLamp).mockReturnValue(new Promise(() => {}))
+    vi.mocked(api.lampOff).mockResolvedValue(status())
+    fireEvent.click(onBtn())
+    await flush()
+    const signal = vi.mocked(api.setLamp).mock.calls[0][1] as AbortSignal
+    expect(signal.aborted).toBe(false)
+    fireEvent.click(offBtn())
+    await flush()
+    expect(signal.aborted).toBe(true)
+  })
+
+  it('re-polls after a POST and ignores a body without state', async () => {
+    renderCard()
+    await flush()
+    vi.mocked(api.setLamp).mockResolvedValue({} as api.LampStatus)
+    const n = vi.mocked(api.fetchLamp).mock.calls.length
+    fireEvent.click(onBtn())
+    await flush()
+    expect(vi.mocked(api.fetchLamp).mock.calls.length).toBe(n + 1)
+    expect(stateText()).toBe('OFF')
+    expect((screen.getByLabelText(/Power/) as HTMLInputElement).max).toBe('100')
+    expect(screen.queryByText(/NaN/)).toBeNull()
+  })
+
+  it('shows STATUS UNKNOWN before the first status and when the tab is hidden', async () => {
+    vi.mocked(api.fetchLamp).mockReturnValueOnce(new Promise(() => {}))
+    renderCard()
+    expect(stateText()).toBe('STATUS UNKNOWN')
+    cleanup()
+    vi.mocked(api.fetchLamp).mockResolvedValue(status({ state: 'on', window_left_s: 20 }))
+    renderCard()
+    await flush()
+    expect(stateText()).toBe('ON')
+    setVisibility('hidden')
+    await flush()
+    expect(stateText()).toBe('STATUS UNKNOWN')
+    expect(screen.queryByText(/Window left/)).toBeNull()
+    expect(offBtn().disabled).toBe(false)
+    setVisibility('visible')
+    await flush()
+    expect(stateText()).toBe('ON')
   })
 
   it('does not send Off on unmount', async () => {
