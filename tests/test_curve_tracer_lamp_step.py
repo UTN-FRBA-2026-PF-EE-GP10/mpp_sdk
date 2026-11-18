@@ -28,7 +28,7 @@ from tests.test_curve_tracer_lamp import FakeLampSource  # noqa: E402
 
 
 class Rig:
-    def __init__(self, source, tmp_path, monkeypatch, *, max_power=1.0, demo=False):
+    def __init__(self, source, tmp_path, monkeypatch, *, max_power=1.0, demo=True):
         monkeypatch.setenv("MPP_SDK_RUN_DIR", str(tmp_path / "runs"))
         monkeypatch.setenv("MPP_SDK_CURVE_DIR", str(tmp_path / "curves"))
         monkeypatch.setenv("MPP_SDK_PANEL_DIR", str(tmp_path / "panels"))
@@ -276,7 +276,7 @@ def test_stop_during_warmup_cancels_the_measurement_and_switches_off(make):
 
 
 def test_hardware_run_is_queued_only_after_the_warmup(make):
-    r = make()
+    r = make(demo=False)
     body = r.run_body(simulated=False, lamp={"power": 0.3, "warmup_s": 0.3})
     assert r.client.post("/api/runs/start", json=body).status_code == 200
     assert r.run_requests.empty()  # still warming
@@ -375,7 +375,7 @@ def test_sweep_that_never_reports_times_out_and_the_lamp_goes_off(make, monkeypa
 
 
 def test_a_plain_sweep_or_second_step_is_refused_while_a_step_is_active(make):
-    r = make()
+    r = make(demo=False)
     r.client.post("/api/start-sweep", json={"lamp": {"power": 0.3, "warmup_s": 5}})
     assert r.client.post("/api/start-sweep").status_code == 409
     assert r.client.post("/api/start-sweep", json={"lamp": {"power": 0.3}}).status_code == 409
@@ -432,7 +432,7 @@ def test_a_newer_manual_window_is_not_switched_off_by_the_step(make):
 
 
 def test_demo_mode_end_to_end(tmp_path, monkeypatch):
-    r = Rig(None, tmp_path, monkeypatch, demo=True)
+    r = Rig(None, tmp_path, monkeypatch)
     shutdown = threading.Event()
     thread = threading.Thread(
         target=_poll_loop,
@@ -464,3 +464,87 @@ def test_demo_mode_end_to_end(tmp_path, monkeypatch):
     finally:
         shutdown.set()
         thread.join(5.0)
+
+
+# -- review fixes ------------------------------------------------------------------------
+
+
+def test_a_simulated_run_with_the_lamp_is_refused_outside_demo_mode(make):
+    r = make(demo=False)
+    resp = r.client.post("/api/runs/start", json=r.run_body())
+    assert resp.status_code == 422 and "simulated" in resp.json()["detail"]
+    untouched(r)
+
+
+def _manual_on_fails(r, how):
+    if how == "refused":
+        r.source.refuse = True
+        code = 409
+    else:
+        r.source.set_error = RuntimeError("spi glitch")
+        code = 503
+    assert r.client.post("/api/dimmer", json={"power": 0.8, "max_on_s": 20}).status_code == code
+    r.source.refuse, r.source.set_error = False, None
+
+
+@pytest.mark.parametrize("how", ["refused", "failed"])
+@pytest.mark.parametrize("when", ["warmup", "measuring"])
+def test_a_refused_or_failed_manual_on_never_takes_over_the_lamp(make, how, when):
+    r = make()
+    warmup = 0.6 if when == "warmup" else 0
+    r.client.post("/api/start-sweep", json={"lamp": {"power": 0.3, "warmup_s": warmup}})
+    if when == "measuring":
+        assert wait_for(lambda: r.phase("sweep") == "measuring")
+    _manual_on_fails(r, how)
+    assert r.phase("sweep") in ("warming", "measuring")  # the step is still its own
+    assert wait_for(lambda: r.phase("sweep") == "measuring")
+    if how == "refused":
+        assert not lamp_off(r)  # a failed ON, unlike a refused one, fails closed (lamp off)
+    n_before = len(offs(r))
+    r.cache.set([(1.0, 0.1)], "ok")
+    assert wait_for(lambda: r.phase("sweep") == "off")
+    assert wait_for(lambda: lamp_off(r) and len(offs(r)) > n_before)  # its own final OFF
+
+
+def test_a_valid_manual_on_during_the_warmup_cancels_with_an_honest_message(make):
+    r = make()
+    r.client.post("/api/start-sweep", json={"lamp": {"power": 0.3, "warmup_s": 1}})
+    assert r.client.post("/api/dimmer", json={"power": 0.8, "max_on_s": 20}).status_code == 200
+    assert wait_for(lambda: r.phase("sweep") == "off")
+    assert "changed by the operator" in r.client.get("/api/data").json()["command_error"]
+    assert r.commands.empty() and not lamp_off(r)  # the operator's window stays
+
+
+@pytest.mark.parametrize("kind", ["sweep", "run"])
+def test_a_thread_that_cannot_start_switches_the_lamp_off_and_frees_everything(
+    make, monkeypatch, kind
+):
+    r = make()
+    original = threading.Thread.start
+
+    def start(self):
+        if self.name == "lamp-step":
+            raise RuntimeError("cannot start new thread")
+        return original(self)
+
+    monkeypatch.setattr(threading.Thread, "start", start)
+    with pytest.raises(RuntimeError, match="cannot start"):
+        if kind == "sweep":
+            r.client.post("/api/start-sweep", json={"lamp": {"power": 0.3}})
+        else:
+            r.client.post("/api/runs/start", json=r.run_body())
+    monkeypatch.setattr(threading.Thread, "start", original)
+    assert lamp_off(r) and len(offs(r)) >= 1
+    assert r.run_status() == "idle"
+    assert r.client.post("/api/start-sweep").status_code == 204  # the runner is not stuck
+    assert r.client.post("/api/runs/start", json=r.run_body(duration_s=0.2)).status_code == 200
+
+
+def test_a_failed_sweep_start_command_ends_the_step_at_once(make):
+    r = make()
+    r.client.post("/api/start-sweep", json={"lamp": {"power": 0.3, "warmup_s": 0}})
+    assert wait_for(lambda: r.phase("sweep") == "measuring")
+    r.cache.set_command_error("start_sweep failed: spi")  # what the poll thread does
+    assert wait_for(lambda: r.phase("sweep") == "off", 2.0)
+    assert lamp_off(r)
+    assert r.cache.sweep_pending()  # the 15 s timeout has not been needed

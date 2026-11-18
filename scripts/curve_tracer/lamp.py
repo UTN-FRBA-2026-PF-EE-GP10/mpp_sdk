@@ -116,6 +116,9 @@ class _LampController:
         self._cmd_lock = threading.Lock()
         self._off_gen = 0
         self._on_gen = 0
+        # Bumped only when the dimmer accepted an ON. A refused or failed ON never takes
+        # over the lamp, so a lamp-assisted step compares this one, not `_on_gen`.
+        self._took_gen = 0
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
 
@@ -254,10 +257,11 @@ class _LampController:
         return error
 
     def generations(self) -> tuple[int, int]:
-        """`(off_gen, on_gen)`. A lamp-assisted step compares it with the value it
-        saw after its own ON: any change means an operator command came since."""
+        """`(off_gen, took_gen)`. A lamp-assisted step compares it with the value it
+        saw after its own ON: any change means an operator OFF, or an operator ON the
+        dimmer accepted, came since. A refused or failed ON changes nothing."""
         with self._gen_lock:
-            return self._off_gen, self._on_gen
+            return self._off_gen, self._took_gen
 
     def off(self, *, only_if_on_gen: int | None = None) -> dict | None:
         """Switch the lamp off and return the status. Never raises: OFF is the safe command.
@@ -272,7 +276,7 @@ class _LampController:
             self._store(snap)
             return snap
         with self._gen_lock:
-            if only_if_on_gen is not None and self._on_gen != only_if_on_gen:
+            if only_if_on_gen is not None and self._took_gen != only_if_on_gen:
                 return None
             self._off_gen += 1
         with self._cmd_lock:
@@ -324,6 +328,9 @@ class _LampController:
                     source.set_dimmer_power(power, max_on_s=max_on_s)
                 else:
                     source.set_dimmer_alpha(alpha_deg, max_on_s=max_on_s)
+                with self._gen_lock:
+                    self._took_gen += 1
+                    took_gen = self._took_gen
         except LampError:
             raise
         except DimmerRefused as exc:
@@ -343,7 +350,7 @@ class _LampController:
             if self._off_gen != off_gen:
                 raise cancelled
         # This ON's own generations, not the current ones: a newer ON must show as a change.
-        generations = (off_gen, on_gen)
+        generations = (off_gen, took_gen)
         snap = self._build(source, status)
         self._store(snap, seq)
         if status.tripped:

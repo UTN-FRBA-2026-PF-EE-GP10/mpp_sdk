@@ -169,17 +169,31 @@ class _LampStepRunner:
                 self._kind = None
                 self._phase = None
             raise
-        thread = threading.Thread(
-            target=self._drive,
-            args=(plan, generations, cancel, start, is_done, on_abort, measure_deadline_s),
-            name="lamp-step",
-            daemon=True,
-        )
-        self._thread = thread
-        thread.start()
+        try:
+            thread = threading.Thread(
+                target=self._drive,
+                args=(plan, generations, cancel, start, is_done, on_abort, measure_deadline_s),
+                name="lamp-step",
+                daemon=True,
+            )
+            self._thread = thread
+            thread.start()
+        except BaseException:
+            # No thread will switch the lamp off or free the runner: do both here.
+            self.lamp.off()
+            with self._lock:
+                self._active = False
+                self._phase = "off"
+            raise
 
-    def _lamp_lost(self, generations: tuple[int, int]) -> bool:
-        return self.lamp.generations() != generations
+    def _lamp_lost(self, generations: tuple[int, int]) -> str | None:
+        """Why the lamp is no longer this step's, or None."""
+        now = self.lamp.generations()
+        if now[0] != generations[0]:
+            return "the lamp was switched off by the operator"
+        if now[1] != generations[1]:
+            return "the lamp was changed by the operator"
+        return None
 
     def _drive(
         self,
@@ -200,8 +214,8 @@ class _LampStepRunner:
                     reason = "stopped during the lamp warm-up"
                 elif self._shutdown.is_set():
                     reason = "server shutting down"
-                elif self._lamp_lost(generations):
-                    reason = "lamp switched off during the warm-up"
+                elif lost := self._lamp_lost(generations):
+                    reason = f"{lost} during the warm-up"
                 if reason:
                     break
                 cancel.wait(min(self._tick_s, left))
@@ -219,7 +233,7 @@ class _LampStepRunner:
                 if self._shutdown.is_set() or time.monotonic() > deadline:
                     cancel.set()
                     break
-                if not lamp_phase_ended and self._lamp_lost(generations):
+                if not lamp_phase_ended and self._lamp_lost(generations) is not None:
                     lamp_phase_ended = True
                     self._set_phase("off")
                 # Not cancel.wait: after a Stop it returns at once and this would spin.

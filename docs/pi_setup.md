@@ -129,7 +129,12 @@ Lamp only around a measurement:
 - A manual `POST /api/dimmer/off` ends the lamp phase (`off`). During the
   warm-up the measurement is cancelled. During the measurement it goes on,
   but in the dark. A newer manual window is never switched off by the
-  step.
+  step. A manual "on" that the dimmer refused or that failed never takes
+  over the lamp: the step still switches its own window off.
+- The lamp option for a simulated run is refused (422) unless the server
+  runs with `--demo`.
+- If the sweep start command fails, the step ends at once and the lamp
+  goes off.
 - A run that used the lamp keeps `lamp` (power or `alpha_deg`, and
   `warmup_s`) in its record settings.
 

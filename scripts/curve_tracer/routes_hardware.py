@@ -55,6 +55,8 @@ def register_hardware_routes(
             return Response(status_code=204)
 
         def start() -> None:
+            # A command error from an earlier command must not end this step at once.
+            cache.set_command_error(None)
             cache.mark_sweep_pending()
             commands.put_nowait("start_sweep")
 
@@ -67,7 +69,9 @@ def register_hardware_routes(
                 needed,
                 cancel=threading.Event(),
                 start=start,
-                is_done=lambda: not cache.sweep_pending(),
+                is_done=lambda: (
+                    not cache.sweep_pending() or cache.snapshot().command_error is not None
+                ),
                 on_abort=lambda reason: cache.set_command_error(f"lamp step: {reason}"),
                 measure_deadline_s=_SWEEP_PENDING_TIMEOUT_S + _LAMP_STEP_MARGIN_S,
             )

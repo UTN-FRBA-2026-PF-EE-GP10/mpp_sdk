@@ -265,6 +265,12 @@ def register_run_routes(
 
         lamp_plan = None
         lamp_needed_s = 0.0
+        if body.lamp is not None and body.simulated and not demo:
+            raise HTTPException(
+                status_code=422,
+                detail="the lamp option is not allowed for a simulated run: it cannot use "
+                "light (only --demo allows it, to try the page)",
+            )
         if body.lamp is not None:
             # All lamp checks before the slot is claimed and anything is switched on.
             try:
@@ -329,9 +335,11 @@ def register_run_routes(
                     ),
                     measure_deadline_s=duration_s + _LAMP_STEP_MARGIN_S,
                 )
-            except LampError as exc:
+            except BaseException as exc:
                 run_cache.release_unstarted()
-                raise HTTPException(exc.status_code, exc.detail) from exc
+                if isinstance(exc, LampError):
+                    raise HTTPException(exc.status_code, exc.detail) from exc
+                raise
         return {
             "status": "running",
             "algorithm": spec.label,
