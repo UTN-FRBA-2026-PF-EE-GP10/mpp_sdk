@@ -4,6 +4,12 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      # The Rust toolchain is pinned by hand, together with
+      # firmware/pipico_board/rust-toolchain.toml, for reproducible firmware
+      # builds. dtolnay publishes a tag for each future release too, so
+      # Dependabot proposes versions that do not exist yet.
+      - dependency-name: dtolnay/rust-toolchain
 
   - package-ecosystem: uv
     directory: /

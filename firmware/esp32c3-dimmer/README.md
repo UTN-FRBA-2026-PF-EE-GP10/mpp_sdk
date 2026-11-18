@@ -13,6 +13,7 @@ Rust (ESP-IDF `std`) phase-control firmware for the 220 Vac halogen dimmer. The 
 - **Lock:** firing starts only after 8 valid half-cycles in a row. Valid means 40–62.5 Hz and a pulse narrower than 5 ms. A single missed pulse (a gap of about two half-cycles) keeps the lock, because the crossing that ends it is real. Any other bad crossing stops firing at once; no edge for 30 ms counts as mains lost.
 - **Firing (FIRE, GPIO4):** a 150 µs pulse to the MOC3052 at the delay that gives the requested **power** (not phase angle), using P = 1 − α/π + sin(2α)/(2π). 50 % power fires 5.0 ms after the crossing, 10 % at 7.4 ms. The delay is limited to 1.4–8.5 ms, so 99 % becomes 98.3 % and 1 % becomes 2 %. 100 % holds FIRE high (full on); 0 % never fires.
 - **Never late:** a pulse that would land less than 1 ms before the next crossing is skipped and counted, so a delayed pulse can never turn on the following half-cycle.
+- **Exposure limit:** the time the lamp is commanded on fills a counter (`firmware/dimmer-link/src/exposure.rs`). After 120 s the lamp is forced off and every on-command is refused, over I2C and over Wi-Fi. The trip clears after the counter falls to 60 s and the host sends an explicit OFF. Details and how to change the numbers are in the [dimmer link](../../docs/hardware_v1/dimmer_link.md) document. A reset clears it. The Pico also sends its own OFF at boot and after its 3 s host timeout, and the dimmer counts it as the acknowledgment, so a crashed or idle host clears the trip by itself after the cool-down; a host that keeps sending its old angle never restarts the lamp. When the I2C link is down the Pico reports tripped clear and budget 0 to the Pi (unknown). Flash the Pico and this firmware together: an old and a new version fail the CRC. The limiter does not cover a stalled main loop (it stops the deadman too); a task watchdog is a later item. The Wi-Fi `/level` answers 409 while tripped, and `/status` has `tripped` and `budget_s`.
 - **Off at boot:** the level is not stored. Wi-Fi runs without NVS, so nothing is written to flash while the lamp runs.
 - **Logging:** status goes to the USB serial port through `log::info!`. Never use `println!` in this firmware: it panics when no USB host is attached (see [debugging notes](DEBUGGING_NOTES.md)).
 - **Wi-Fi power** is capped at 8.5 dBm, which works around the SuperMini's poorly matched antenna and is enough for a phone in the same room.
@@ -44,6 +45,15 @@ DIMMER_AP_PASS=<your password> cargo run --release --features wifi
 - After the first valid *Set alpha*, the lamp goes off if no valid *Set alpha* arrives for 2 s. The main loop checks this, not the I2C task.
 - With the `wifi` feature, `POST /level` answers 409 `I2C control active` after the first I2C command.
 
+## Check the exposure limit without mains
+
+- Leave J2 unplugged. The counter runs on the commanded state, so it works with no mains.
+- Send *Set alpha* `9000` every 500 ms (or set a level on the Wi-Fi page) and read the status.
+  `BUDGET_S` must fall by about 1 per second, from 120.
+- At 0 the lamp is forced off, flag bit 3 (tripped) is set, and the log shows `exposure limit reached`.
+- Send *Set alpha* `9000` again: the status must still show `ALPHA` as `0xFFFF` and tripped.
+- Send *Set alpha* `18000`, wait 60 s, and check that tripped clears. Then an on-command works again.
+
 ## Known limits
 
 - Wi-Fi control has no deadman until the first I2C command arrives. A level set over Wi-Fi stays on if the phone goes away.
@@ -59,7 +69,7 @@ The board creates the Wi-Fi network `esp32-dimmer` (the password you set at buil
 - mains status (none, locking, locked), frequency, ZC pulse width, firing delay and angle;
 - a power slider with Off / 25 / 50 / 75 / Full buttons;
 - the expected lamp voltage for a true-RMS meter: V<sub>lamp</sub> = V<sub>in</sub> × √(power);
-- an optocoupler LED test (mains disconnected only).
+- an optocoupler LED test (mains disconnected only, for no-mains checks; it is refused while the limiter is tripped).
 
 `GET /status` returns the same data as JSON; `POST /level?p=0..100` sets the power. Commands need the header `X-Dimmer: 1`, so another web page open on the phone cannot switch the lamp.
 
