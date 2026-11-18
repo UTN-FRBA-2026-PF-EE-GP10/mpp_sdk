@@ -13,6 +13,7 @@ Rust (ESP-IDF `std`) phase-control firmware for the 220 Vac halogen dimmer. The 
 - **Lock:** firing starts only after 8 valid half-cycles in a row. Valid means 40–62.5 Hz and a pulse narrower than 5 ms. A single missed pulse (a gap of about two half-cycles) keeps the lock, because the crossing that ends it is real. Any other bad crossing stops firing at once; no edge for 30 ms counts as mains lost.
 - **Firing (FIRE, GPIO4):** a 150 µs pulse to the MOC3052 at the delay that gives the requested **power** (not phase angle), using P = 1 − α/π + sin(2α)/(2π). 50 % power fires 5.0 ms after the crossing, 10 % at 7.4 ms. The delay is limited to 1.4–8.5 ms, so 99 % becomes 98.3 % and 1 % becomes 2 %. 100 % holds FIRE high (full on); 0 % never fires.
 - **Never late:** a pulse that would land less than 1 ms before the next crossing is skipped and counted, so a delayed pulse can never turn on the following half-cycle.
+- **Exposure limit:** the time the lamp is commanded on fills a counter (`firmware/dimmer-link/src/exposure.rs`). After 120 s the lamp is forced off and every on-command is refused, over I2C and over Wi-Fi. The trip clears after the counter falls to 60 s and the host sends an explicit OFF. Details and how to change the numbers are in the [dimmer link](../../docs/hardware_v1/dimmer_link.md) document. A reset clears it. The Wi-Fi `/level` answers 409 while tripped, and `/status` has `tripped` and `budget_s`.
 - **Off at boot:** the level is not stored. Wi-Fi runs without NVS, so nothing is written to flash while the lamp runs.
 - **Logging:** status goes to the USB serial port through `log::info!`. Never use `println!` in this firmware: it panics when no USB host is attached (see [debugging notes](DEBUGGING_NOTES.md)).
 - **Wi-Fi power** is capped at 8.5 dBm, which works around the SuperMini's poorly matched antenna and is enough for a phone in the same room.
@@ -43,6 +44,15 @@ DIMMER_AP_PASS=<your password> cargo run --release --features wifi
 - The lamp is off at boot.
 - After the first valid *Set alpha*, the lamp goes off if no valid *Set alpha* arrives for 2 s. The main loop checks this, not the I2C task.
 - With the `wifi` feature, `POST /level` answers 409 `I2C control active` after the first I2C command.
+
+## Check the exposure limit without mains
+
+- Leave J2 unplugged. The counter runs on the commanded state, so it works with no mains.
+- Send *Set alpha* `9000` every 500 ms (or set a level on the Wi-Fi page) and read the status.
+  `BUDGET_S` must fall by about 1 per second, from 120.
+- At 0 the lamp is forced off, flag bit 3 (tripped) is set, and the log shows `exposure limit reached`.
+- Send *Set alpha* `9000` again: the status must still show `ALPHA` as `0xFFFF` and tripped.
+- Send *Set alpha* `18000`, wait 60 s, and check that tripped clears. Then an on-command works again.
 
 ## Known limits
 

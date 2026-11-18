@@ -371,7 +371,7 @@ fn build_progress_tx_frame(progress: &SweepProgress) -> [u32; FRAME_LEN] {
 }
 
 /// Build a dimmer status TX frame: `[ 0xD2 | FLAGS | SET_H | SET_L | APPLIED_H
-/// | APPLIED_L | AGE | 0 | CHECKSUM | ACK | 0 x 2 ]`. Same checksum and ack
+/// | APPLIED_L | AGE | BUDGET_S | CHECKSUM | ACK | 0 x 2 ]`. Same checksum and ack
 /// layout as `build_progress_tx_frame`.
 fn build_dimmer_tx_frame(reply: &StatusReply) -> [u32; FRAME_LEN] {
     let set = reply.set.to_be_bytes();
@@ -384,7 +384,7 @@ fn build_dimmer_tx_frame(reply: &StatusReply) -> [u32; FRAME_LEN] {
         applied[0],
         applied[1],
         reply.age,
-        0,
+        reply.budget_s,
     ];
     let ack = 0u8;
     let checksum = miso_checksum(&bytes, ack, 0);
