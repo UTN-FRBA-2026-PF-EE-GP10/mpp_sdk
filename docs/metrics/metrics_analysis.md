@@ -7,20 +7,12 @@ used to benchmark MPPT algorithms in the `mpp-sdk` framework.
 
 ## 1. Selected Core Metrics and Implementation
 
-### 1.1. Dynamic Energy Efficiency ($\eta_E$) - Implemented (`energy_efficiency`, Selected)
+### 1.1. Dynamic Energy Efficiency ($\eta_E$) - Implemented (`energy_efficiency`)
 
 $$\eta_E = \frac{\sum_{k=1}^N P_k \cdot \Delta t_k}{\sum_{k=1}^N P_{mpp}(t_k) \cdot \Delta t_k}$$
 
-- **Role:** Headline metric for **Scenario 3 (Dynamic Dimmer Profile)** on hardware and cyclic simulation
+- **Role:** Energy-weighted efficiency against a time-varying $P_{mpp}(t)$. Used in cyclic simulation
   (`harness/compare_cyclic.py`).
-- **Hardware Feasibility via Dimmer Stepped Plateaus:**
-  In continuous manual shading, instantaneous $P_{mpp}(t)$ is unknown. However, by using a **repeatable stepped dimming
-  profile** (e.g. $100\% \to 60\% \to 30\% \to 100\%$, holding each level for 5–10 s):
-  1. A calibration sweep is recorded at each discrete dimmer setting before the run: $P_{mpp,100\%}$, $P_{mpp,60\%}$,
-     $P_{mpp,30\%}$.
-  2. The ground-truth reference $P_{mpp}(t)$ is synthesized as a staircase aligned with the dimmer transition
-     timestamps.
-  3. All algorithms are tested against the exact same profile, allowing a fair, rigorous dynamic energy score.
 
 ---
 
@@ -34,22 +26,20 @@ $$\eta_{ss} = \frac{1}{M \cdot P_{mpp}} \sum_{k=N-M+1}^{N} P_k, \qquad D_{trap} 
 - **Discrimination:**
   - On single-peak curves ($90^\circ$), all functional algorithms reach $\eta_{ss} \approx 100\%$.
   - On multi-peak partial-shading curves ($45^\circ$, Scenario 2), $D_{trap}$ cleanly separates local trackers trapped
-    on the low-voltage peak ($D_{trap} \approx 87\%$) from global trackers reaching the global MPP
+    on the low-voltage peak ($D_{trap} \approx 87\text{–}89\%$) from global trackers reaching the global MPP
     ($D_{trap} \approx 100\%$).
 
 ---
 
-### 1.3. Convergence Time ($T_c$) & Dynamic Re-acquisition Time ($T_{reacq}$) - $T_c$ implemented, $T_{reacq}$ planned
+### 1.3. Convergence Time ($T_c$) - Implemented (Selected)
 
 $$T_c = \min \{ t \mid \forall \tau \ge t, \, P(\tau) \ge (1 - \text{band}) P_{mpp} \}$$
 
-- **Code:** `settling_time` in `mpp_sdk/metrics.py` ($T_c$ only).
-- **Role:** Measures tracking speed from cold start ($T_c$) and after an abrupt dimming change ($T_{reacq}$).
+- **Code:** `settling_time` in `mpp_sdk/metrics.py`.
+- **Role:** Measures tracking speed from cold start.
 - **Hardware Units:** Must be reported in **both seconds and control steps**. Because the physical HIL step takes
   $\sim 46\text{ ms}$ (due to ADC settling waits and filtering) while simulation runs at $1\text{ kHz}$ ($1\text{ ms}$),
   step counts provide the true invariant metric between simulation and real hardware.
-- **Dynamic Re-acquisition ($T_{reacq}$):** When the light level steps down or up in Scenario 3, $T_{reacq}$ measures
-  how quickly the algorithm regains 95 % of the new plateau's MPP.
 
 ---
 
@@ -60,8 +50,8 @@ $$E_{loss} = \sum_{k=1}^{T_c} (P_{mpp,k} - P_k) \cdot \Delta t_k$$
 - **Role:** Quantifies the exact energy penalty (in Joules) incurred during the search transient.
 - **Why It Matters:** Two algorithms can converge to the same $\eta_{ss} = 100\%$ and even have similar settling times,
   but one may stay closer to the peak during the climb while the other wanders or oscillates wildly. In the bench data,
-  Fuzzy and P&O both settled at $100\%$, but Fuzzy lost $12.65\text{ J}$ during convergence compared to P&O's
-  $4.63\text{ J}$.
+  Fuzzy and P&O both settled at $100\%$, but Fuzzy lost $12.54\text{ J}$ during convergence compared to P&O's
+  $4.54\text{ J}$.
 
 ---
 
@@ -71,20 +61,18 @@ $$RMSE = \sqrt{\frac{1}{M} \sum_{k=N-M+1}^{N} (P_k - P_{mpp})^2}, \qquad nRMSE =
 
 - **Role:** Replaces raw peak-to-peak ripple ($\Delta P_{pp}$).
 - **Statistical Superiority:** Peak-to-peak ripple is easily dominated by single-sample ADC spikes or noise floor
-  (~0.05–0.1 W). $nRMSE$ averages deviations over the entire tail, penalizes large excursions quadratically, and
+  (0.07–0.17 W peak-to-peak over the tail in the bench runs). $nRMSE$ averages deviations over the entire tail,
+  penalizes large excursions quadratically, and
   normalizes across different power levels.
 
 ---
 
-### 1.6. GMPP Hit Rate ($HR_{GMPP}$) & Restart Trigger Accuracy - Planned (Selected)
+### 1.6. GMPP Hit Rate ($HR_{GMPP}$) - Planned (Selected)
 
 $$HR_{GMPP} = \frac{N_{success}}{N_{total}} \times 100\%$$
 
-- **Role:** Critical for evaluating global MPPT methods (Scan&Track, PSO) under partial shading (Scenario 2) and dynamic
-  dimming (Scenario 3).
+- **Role:** Critical for evaluating global MPPT methods (Scan&Track, PSO) under partial shading (Scenario 2).
 - **Requirements:** Requires repeated runs ($N \ge 10$) with varying initial duties $D_0$ and RNG seeds for PSO.
-- **Restart Policy Validation:** In Scenario 3, tests whether the $\Delta P$ threshold detection in global trackers
-  triggers a scan when light drops without falsely triggering due to steady-state noise.
 
 ---
 
@@ -122,8 +110,8 @@ $$MAPE = \frac{100\%}{N} \sum_{k=1}^{N} \left| \frac{P_{sim,k} - P_{real,k}}{P_{
 
 - **Role:** Rigorous statistical hypothesis testing:
   - **Factor A:** Algorithm (P&O, InCond, Fuzzy, Scan&Track, PSO).
-  - **Factor B:** Scenario (B1: Single Peak, B2: Partial Shading, B3: Dynamic Dimmer Profile).
-  - **Dependent Variable:** $\eta_E$ (or $nRMSE$).
+  - **Factor B:** Scenario (B1: Single Peak, B2: Partial Shading).
+  - **Dependent Variable:** $\eta_{ss}$ (or $nRMSE$).
 - Proves whether performance differences are statistically significant or attributable to bench noise ($p < 0.05$). See
   [anova_analysis.md](anova_analysis.md).
 
@@ -135,23 +123,20 @@ $$MAPE = \frac{100\%}{N} \sum_{k=1}^{N} \left| \frac{P_{sim,k} - P_{real,k}}{P_{
 |---|:---:|---|
 | **Static $\eta$ (whole run)** | Secondary | Conflates transient search and steady-state holding; sensitive to arbitrary run length. |
 | **Power Ripple $\Delta P_{pp}$** | Secondary | Limited by ADC sensor noise floor; subsumed by $nRMSE$. |
-| **Overshoot $OS$** | Secondary | PV P-V curves are concave; power monotonically climbs unless flash irradiance occurs. Measured $OS < 1.5\%$ is purely noise. |
+| **Overshoot $OS$** | Secondary | PV P-V curves are concave; power monotonically climbs unless flash irradiance occurs. Recomputed on the bench runs, $OS$ is $0.7\text{–}1.9\%$. |
 | **MAE & RE** | Secondary | Highly collinear with $nRMSE$ and $1 - \eta_{ss}$. Redundant. |
-| **EN 50530 $\varepsilon_{TL}$** | Discarded | Requires continuous certified PV simulator ramps ($0.5\text{ to }100\text{ W/m}^2\text{s}$). Replaced by $\eta_E$ on our stepped dimmer profile. |
-| **Euro / CEC Efficiency** | Discarded | Requires calibrated solar simulators at 7 exact nominal power percentages. |
+| **Standard dynamic MPPT efficiency (EN 50530, IEC 62891)** | Discarded | Needs a PV simulator with defined irradiance profiles. Not available on our bench. |
 | **ASTM E2848 / LCOE** | Discarded | Utility-scale plant acceptance and financial models; outside the scope of embedded control. |
 | **Converter $\eta_{conv}$** | Discarded | Measures power stage semiconductor losses, not MPPT tracking intelligence. |
 
 ---
 
-## 3. Required Measurements Across the 3 Test Scenarios
+## 3. Required Measurements Across the Planned Test Scenarios
 
 | Data Required | Source / Tool | Metrics Fed | Needed in Scenarios |
 |---|---|---|---|
-| `t`, `voltage`, `current`, `duty` per step (`RunSample`) | `RunRecord.samples` | All metrics | Scenarios 1, 2, 3 |
-| Ground-truth $P_{mpp}$ curve(s) | Pre-run `CurveRecord` sweep(s) | $\eta_{ss}, D_{trap}, T_c, nRMSE, E_{loss}$ | Scenarios 1, 2, 3 |
-| Dimmer plateau sweep array | Sweeps at 100%, 60%, 30% | $\eta_E, T_{reacq}$, plateau traps | Scenario 3 |
-| Transition timestamps $t_{step}$ | Dimmer profile log | $T_{reacq}, E_{loss,dyn}$, restart checks | Scenario 3 |
-| Algorithm RNG seeds / $D_0$ | Run metadata | $HR_{GMPP}$, ANOVA | Scenarios 1, 2, 3 |
-| Replayed simulation trace | `DynamicSimulatedSource` | $MAPE$ (Sim-vs-Real) | Scenarios 1, 2, 3 |
+| `t`, `voltage`, `current`, `duty` per step (`RunSample`) | `RunRecord.samples` | All metrics | Scenarios 1, 2 |
+| Ground-truth $P_{mpp}$ curve(s) | Pre-run `CurveRecord` sweep(s) | $\eta_{ss}, D_{trap}, T_c, nRMSE, E_{loss}$ | Scenarios 1, 2 |
+| Algorithm RNG seeds / $D_0$ | Run metadata | $HR_{GMPP}$, ANOVA | Scenarios 1, 2 |
+| Replayed simulation trace | `DynamicSimulatedSource` | $MAPE$ (Sim-vs-Real) | Scenarios 1, 2 |
 | MCU execution cycles | RP2040 hardware timer | Computational complexity ($t_{step}$) | Firmware deployment |

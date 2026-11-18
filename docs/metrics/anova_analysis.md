@@ -21,7 +21,7 @@ The two-way ANOVA answers three critical scientific questions:
 1. **Main effect A (Algorithm):** Is there a statistically significant difference
    between at least one pair of algorithms, averaged across all test scenarios?
 2. **Main effect B (Condition / Scenario):** Does the environmental scenario
-   (single peak, partial shading, dynamic dimming) significantly affect tracking
+   (single peak, partial shading) significantly affect tracking
    performance?
 3. **Interaction A×B (Algorithm × Scenario):** Does an algorithm's relative
    advantage depend on the condition? (e.g. P&O is competitive under uniform full
@@ -36,22 +36,21 @@ The two-way ANOVA answers three critical scientific questions:
 | Factor | Type | Levels | Description |
 |---|---|---|---|
 | **Factor A - Algorithm** | Between-subjects | 5 levels | `P&O`, `InCond`, `Fuzzy`, `Scan&Track`, `PSO` |
-| **Factor B - Scenario** | Within-subjects / Environmental | 3 levels | Defined below (§2.2) |
+| **Factor B - Scenario** | Within-subjects / Environmental | 2 levels | Defined below (§2.2) |
 
 !!! note
     The design is a **full factorial**: every combination of (Algorithm × Scenario)
     is executed with $N \ge 5\text{ to }10$ repetitions.
 
-### 2.2. The Three Benchmark Scenarios (Factor B)
+### 2.2. The Two Planned Benchmark Scenarios (Factor B)
 
 To directly align with the experimental bench campaign, Factor B is defined by the
-three physical scenarios:
+two planned physical scenarios:
 
 | Level | Scenario Name | Physical Setup | What It Tests |
 |---|---|---|---|
 | **B₁** | **Uniform Steady (Single Peak)** | Both panels @ $90^\circ$, constant lamp power | Baseline steady-state efficiency ($\eta_{ss}$), lock-on speed ($T_c$), and voltage ripple ($\Delta V_{pp}$). |
 | **B₂** | **Static Partial Shading (Multi-Peak)** | Panel A @ $90^\circ$, Panel B @ $45^\circ$, constant lamp power | Susceptibility to local-maximum traps ($D_{trap}$), global search capability, and GMPP hit rate ($HR_{GMPP}$). |
-| **B₃** | **Dynamic Dimming Profile (Staircase)** | Repeatable stepped dimming: $100\% \to 60\% \to 30\% \to 100\%$ (5–10 s plateaus) | Dynamic energy efficiency ($\eta_E$), re-acquisition time ($T_{reacq}$), plateau traps, and restart policy trigger accuracy. |
 
 ### 2.3. Dependent Variables
 
@@ -59,10 +58,10 @@ A separate two-way ANOVA can be computed for each primary metric of interest:
 
 | Metric | Symbol | Type | Primary Role in ANOVA |
 |---|:---:|---|---|
-| **Dynamic Energy Efficiency** | $\eta_E$ (or $\eta_{ss}$ for B₁/B₂) | Continuous, $[0, 1]$ | **Primary Headline Metric** |
+| **Steady-State Efficiency** | $\eta_{ss}$ | Continuous, $[0, 1]$ | **Primary Headline Metric** |
 | **Normalized RMSE** | $nRMSE$ | Continuous, $\ge 0$ | Steady-state tracking precision |
 | **Transient Energy Loss** | $E_{loss}$ | Continuous, $\ge 0$ | Search transient penalty (Joules) |
-| **Convergence / Re-acquisition Time** | $T_c$ / $T_{reacq}$ | Continuous, $\ge 0$ | Transient responsiveness |
+| **Convergence Time** | $T_c$ | Continuous, $\ge 0$ | Transient responsiveness |
 
 !!! warning
     The GMPP hit rate ($HR_{GMPP}$) is a **proportion** / binary outcome (success/trap).
@@ -127,7 +126,7 @@ The planned analysis would produce:
 
 1. **Interaction Plot:** Mean $\eta$ versus Scenario for each of the 5 algorithms. Non-parallel lines visually
    demonstrate the Algorithm × Scenario interaction.
-2. **Boxplots per Cell:** Distribution of $\eta$ showing spread, median, and outliers across the $5 \times 3 = 15$
+2. **Boxplots per Cell:** Distribution of $\eta$ showing spread, median, and outliers across the $5 \times 2 = 10$
    cells.
 3. **Tukey HSD Significance Heatmap:** Pairwise matrix highlighting which algorithms differ significantly
    ($p < 0.05, p < 0.01, p < 0.001$).
