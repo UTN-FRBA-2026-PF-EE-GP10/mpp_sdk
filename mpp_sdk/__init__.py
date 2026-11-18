@@ -9,6 +9,7 @@ also expose them, so either of these is fine:
 """
 
 from . import metrics
+from .algorithms.adaptive_perturb_observe import AdaptivePerturbAndObserve
 from .algorithms.base import MPPTAlgorithm
 from .algorithms.fuzzy import FuzzyLogic
 from .algorithms.incremental_conductance import IncrementalConductance
@@ -17,11 +18,13 @@ from .algorithms.perturb_observe import PerturbAndObserve
 from .algorithms.scan_and_track import ScanAndTrack
 from .converters.sepic import SEPICConverter
 from .io.base import SignalSource
+from .io.bench_like import BenchLikeSource
 from .io.dynamic import DynamicSimulatedSource
 from .io.noisy import NoisySource
 from .io.simulated import SimulatedSource
 from .models.base import PanelModel
 from .models.ideal import IdealSingleDiode
+from .models.losses import SingleDiodeWithLosses
 from .models.measured import MeasuredPanel
 from .models.pvlib_adapter import PvlibPanelModel
 from .models.string import PvString
@@ -31,6 +34,7 @@ from .visualization import LivePanelView, plot_iv_with_operating_point
 __version__ = "0.1.0"
 
 __all__ = [
+    "AdaptivePerturbAndObserve",
     "MPPTAlgorithm",
     "FuzzyLogic",
     "IncrementalConductance",
@@ -42,11 +46,13 @@ __all__ = [
     "SimulatedSource",
     "DynamicSimulatedSource",
     "NoisySource",
+    "BenchLikeSource",
     "PanelModel",
     "IdealSingleDiode",
     "MeasuredPanel",
     "PvlibPanelModel",
     "PvString",
+    "SingleDiodeWithLosses",
     "TabulatedPanel",
     "LivePanelView",
     "plot_iv_with_operating_point",

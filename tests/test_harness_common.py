@@ -21,7 +21,14 @@ from harness.common import algorithm_specs, build_conditions, run_schedule  # no
 
 def test_roster_labels_and_order():
     specs = algorithm_specs()
-    assert [s.label for s in specs] == ["P&O", "InCond", "Fuzzy", "Scan&Track", "PSO"]
+    assert [s.label for s in specs] == [
+        "P&O",
+        "Adaptive P&O",
+        "InCond",
+        "Fuzzy",
+        "Scan&Track",
+        "PSO",
+    ]
     for spec in specs:
         algo = spec.make(0.5)
         assert isinstance(algo, mpp_sdk.MPPTAlgorithm)

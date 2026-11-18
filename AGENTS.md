@@ -70,8 +70,8 @@ In-tree, no optional deps:
 
 - `IdealSingleDiode` - shipped. Explicit closed-form `I(V)`, no losses or
   temperature effects.
-- `SingleDiodeWithLosses` - *planned*. Adds `R_s`/`R_sh`; solves the implicit
-  `I(V)` with a hand-rolled Newton/bisection method, to show the solver.
+- `SingleDiodeWithLosses` - shipped. Adds `R_s`/`R_sh`; solves the implicit
+  `I(V)` with a hand-rolled safeguarded Newton/bisection method, to show the solver.
 
 Via the pvlib adapter (optional `mpp-sdk[pvlib]`):
 
@@ -97,12 +97,13 @@ count and location of local maxima) at known conditions.
 
 All implement `MPPTAlgorithm.step(V, I) -> D` and own their state.
 
-- `PerturbAndObserve`, `IncrementalConductance`, `FuzzyLogic` - local
-  trackers.
+- `PerturbAndObserve`, `AdaptivePerturbAndObserve`, `IncrementalConductance`,
+  `FuzzyLogic` - local trackers.
 - `ScanAndTrack`, `ParticleSwarm` - global MPPT. They escape local maxima
   under partial shading.
-- *Planned*: adaptive-step P&O; a model-informed candidate scan; later, a
-  data-driven baseline.
+- *Planned*: a model-informed candidate scan; later, a data-driven baseline.
+- `firmware/mppt-po` is the `no_std` integer port of P&O for the Pico. A
+  fixture test cross-checks it against the Python reference.
 
 **Algorithms must stay portable to a Pico-class MCU.** Keep `step`
 dependency-free (no numpy/scipy/pandas inside it). Keep state small - a
@@ -149,6 +150,19 @@ Two phases:
    traces.
 
 MCU firmware lives in a sibling directory, not under `mpp_sdk/`.
+
+**Lamp dimmer.** A 220 Vac halogen lamp lights the panels. The Pi sets its
+firing angle through the Pico. The Pico is the I2C master of the dimmer board
+(an ESP32-C3 slave), so the chain is Pi, SPI, Pico, I2C, dimmer.
+
+- Board: `hardware/dimmer/`. Firmware: `firmware/esp32c3-dimmer/`.
+- The I2C wire format is the `firmware/dimmer-link` crate, shared by both
+  firmwares. The protocol, wiring and safety rules are in
+  `docs/hardware_v1/dimmer_link.md`.
+- The Python side is `SpiMcuSource.set_dimmer_alpha` and `scripts/dimmer_set.py`.
+- The lamp is off after boot and turns off when commands stop. The board
+  switches mains: read `hardware/dimmer/README.md` before any bench work.
+
 **Switching `SimulatedSource` to `SpiMcuSource`, or porting an algorithm to
 firmware, must need no algorithm code changes.** If it does, fix the base
 class first.

@@ -183,6 +183,7 @@ def test_data_defaults_before_anything_is_cached(client):
         "active": False,
         "link": "no data yet",
         "seq": 0,
+        "sweep_id": 0,
         "command_error": None,
         "demo_source": False,
     }
@@ -489,6 +490,24 @@ def test_delete_curves_batch_over_the_limit_is_rejected_with_400(client):
 def test_save_curve_without_a_captured_sweep_returns_409(client):
     r = client.post("/api/save-curve", json={"label": "x", "measurement": "baseline"})
     assert r.status_code == 409
+
+
+def test_save_curve_with_the_current_sweep_id_saves_and_returns_it(client):
+    client.cache.set([(21.3, 0.006), (18.0, 0.195)], "ok")
+    sweep_id = client.get("/api/data").json()["sweep_id"]
+    r = client.post("/api/save-curve", json={"label": "x", "sweep_id": sweep_id})
+    assert r.status_code == 200
+    assert r.json()["sweep_id"] == sweep_id
+
+
+def test_save_curve_with_a_stale_sweep_id_returns_409_and_saves_nothing(client):
+    client.cache.set([(21.3, 0.006), (18.0, 0.195)], "ok")
+    stale = client.get("/api/data").json()["sweep_id"]
+    client.cache.set([(21.0, 0.007), (17.0, 0.2)], "ok")
+    r = client.post("/api/save-curve", json={"label": "x", "sweep_id": stale})
+    assert r.status_code == 409
+    assert "nothing was saved" in r.json()["detail"]
+    assert client.get("/api/curves").json() == []
 
 
 def test_save_curve_round_trips(client):
@@ -1014,11 +1033,11 @@ def test_downsample_samples_below_the_cap_is_unchanged():
 
 class _FakeRunSource:
     """Minimal fake board for `_run_live`: `read()`/`write()` like
-    `test_run_algorithm.py`'s `_FakeSource`, plus `vout` and
+    `test_run_loop.py`'s `_FakeSource`, plus `vout` and
     `consecutive_bad_frames` since `_run_live`/`run_control_loop` read
     both (`SpiMcuSource` has both; a plain SignalSource fake would not,
     and must still work - see `test_a_fake_source...` in
-    test_run_algorithm.py)."""
+    test_run_loop.py)."""
 
     def __init__(self):
         self._duty = 0.0
@@ -3169,3 +3188,44 @@ def test_default_allowed_hosts_include_this_machine(monkeypatch):
     monkeypatch.setattr(server_module.socket, "gethostname", lambda: "Bench-Pi")
     hosts = server_module._default_allowed_hosts(["lab-host"])
     assert {"localhost", "bench-pi", "bench-pi.local", "lab-host"} <= hosts
+
+
+def test_simulated_run_saves_settings_control_period_and_timing(client):
+    r = client.post(
+        "/api/runs/start",
+        json={
+            "algorithm": "P&O",
+            "simulated": True,
+            "duration_s": 0.1,
+            "control_period_ms": 5,
+        },
+    )
+    assert r.status_code == 200
+    _wait_for_run_done(client)
+    live = client.get("/api/runs/live").json()
+    record = load_run(client.run_dir / f"{live['saved_run_id']}.json")
+    assert record.settings["control_period_ms"] == 5
+    assert "step_size" in record.settings["algorithm_params"]
+    assert record.settings["firmware_commit"] is None
+    assert record.step_period_mean_ms >= 5.0
+    assert record.step_period_max_ms >= record.step_period_mean_ms
+    assert record.bad_frames is None
+    saved = client.get(f"/api/runs/{live['saved_run_id']}").json()
+    assert saved["settings"]["control_period_ms"] == 5
+
+
+def test_start_run_rejects_a_non_positive_control_period(client):
+    r = client.post(
+        "/api/runs/start",
+        json={"algorithm": "P&O", "simulated": True, "control_period_ms": 0},
+    )
+    assert r.status_code == 400
+
+
+@pytest.mark.parametrize("value", [1000.5, 1e9, 1e300, 0, -3, True, "5"])
+def test_start_run_rejects_a_bad_control_period(client, value):
+    r = client.post(
+        "/api/runs/start",
+        json={"algorithm": "P&O", "simulated": True, "control_period_ms": value},
+    )
+    assert r.status_code in (400, 422)
