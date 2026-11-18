@@ -160,8 +160,17 @@ firing angle through the Pico. The Pico is the I2C master of the dimmer board
   firmwares. The protocol, wiring and safety rules are in
   `docs/hardware_v1/dimmer_link.md`.
 - The Python side is `SpiMcuSource.set_dimmer_alpha` and `scripts/dimmer_set.py`.
-- The lamp is off after boot and turns off when commands stop. The board
-  switches mains: read `hardware/dimmer/README.md` before any bench work.
+- The lamp is open loop, so idle is OFF (180 degrees; 0 degrees is full on) and
+  the lamp is on only inside a bounded window. Every lamp-on call has a
+  deadline (`max_on_s`, at most 120 s), and the dimmer firmware limits the
+  continuous on time itself (trips at 120 s, needs an explicit OFF to re-arm).
+  The lamp is off after boot and turns off when commands stop.
+- The server has `/api/dimmer` endpoints and a `lamp` option on sweep and run
+  requests, so the lamp is on only around a measurement. The web UI has a Lamp
+  card. The rules are in `docs/hardware_v1/dimmer_link.md` and `docs/pi_setup.md`.
+- Nothing about the lamp chain has run on hardware yet. The bench procedure is
+  `docs/hardware_v1/dimmer_bench.md`. The board switches mains: read
+  `hardware/dimmer/README.md` before any bench work.
 
 **Switching `SimulatedSource` to `SpiMcuSource`, or porting an algorithm to
 firmware, must need no algorithm code changes.** If it does, fix the base
