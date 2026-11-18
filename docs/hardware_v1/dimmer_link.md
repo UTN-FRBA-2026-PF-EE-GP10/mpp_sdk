@@ -82,7 +82,10 @@ Status (master reads 9 bytes, at least 3 ms after Request status):
 ## Exposure limit
 
 The lamp is open loop, so the dimmer limits how long it may be on.
-The limit lives on the dimmer, the last part before the mains, and works even when the Pico or the Pi misbehave.
+The limit lives on the dimmer, the last part before the mains.
+It does not depend on the Pico or the Pi.
+It does not cover a stalled dimmer main loop: that stops the limiter and the deadman too.
+A task watchdog for this is a later item.
 
 - The dimmer keeps a "heat" counter in milliseconds.
   It counts the time the lamp is *commanded* on, not the time it really fires.
@@ -100,6 +103,12 @@ The limit lives on the dimmer, the last part before the mains, and works even wh
   The deadman and the trip itself do not count as that OFF.
   So a host that keeps sending its old angle never restarts the lamp by itself.
   It must send OFF, then ask again.
+- The Pico also sends its own OFF at boot and after its 3 s host timeout.
+  The dimmer counts that as the acknowledgment.
+  So a crashed or idle host acknowledges by itself,
+  and the next on-command works after the cool-down.
+- The time between two loop ticks is counted when a command arrives,
+  so fast on and off toggling does not hide the on time.
 - The long-run duty is at most 50 percent.
   Short windows (about 10 s) can repeat until the counter is full.
 - The counter is in RAM only.
@@ -107,6 +116,13 @@ The limit lives on the dimmer, the last part before the mains, and works even wh
   The lamp is off after a reset, so this is safe.
 - Status: flag bit 3 and `BUDGET_S`.
   The Pico copies them to the Pi (SPI reply flag bit 4 and byte 7).
+- Only the tripped bit says the lamp is blocked.
+  `BUDGET_S` can be `0` while the lamp is still allowed
+  (heat between 119.5 s and 120 s).
+- When `link_ok` is `0`, the tripped bit and `BUDGET_S` are unknown.
+  The Pico sends `0` and `0`.
+  The other dimmer flags keep their last values.
+- `BUDGET_S` stops at 255 s if `EXPOSURE_MAX_ON_MS` is ever raised above 255 s.
 
 To change the limits after a bench thermal test:
 
@@ -114,6 +130,8 @@ To change the limits after a bench thermal test:
 - Keep `EXPOSURE_RESUME_MS` below `EXPOSURE_MAX_ON_MS`.
 - Run `cargo test` in `firmware/dimmer-link`.
 - Build and flash the dimmer again.
+- Flash the Pico and the dimmer together.
+  An old Pico with a new dimmer (or the reverse) fails the CRC, so the link reads as down.
 - Check the Python side: its window limit mirrors `EXPOSURE_MAX_ON_MS`.
 
 ## SPI commands (Pi to Pico)

@@ -31,6 +31,8 @@ pub const EXPOSURE_MAX_ON_MS: u32 = 120_000;
 /// After a trip the bucket must fall to this level before the lamp may turn on again.
 /// With the 1:1 cool rate the long-run duty is at most 50 percent.
 pub const EXPOSURE_RESUME_MS: u32 = 60_000;
+// Resume at or above the trip level would give a duty of 100 percent.
+const _: () = assert!(EXPOSURE_RESUME_MS < EXPOSURE_MAX_ON_MS);
 /// The master repeats the last `SetAlpha` this often, also when nothing changed.
 pub const KEEPALIVE_MS: u32 = 500;
 /// The master waits this long between `RequestStatus` and the read.
@@ -82,7 +84,8 @@ pub struct Status {
     /// Commands rejected so far (wraps). A rising value means a noisy cable.
     pub bad_frames: u8,
     /// Not tripped: seconds of lamp-on time left. Tripped: seconds until the
-    /// resume level (0 means cooled, waiting for an explicit OFF). Max 255.
+    /// resume level (0 means cooled, waiting for an explicit OFF). Max 255: with
+    /// `EXPOSURE_MAX_ON_MS` above 255 s it pins at 255.
     pub budget_s: u8,
 }
 

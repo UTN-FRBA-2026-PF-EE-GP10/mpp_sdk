@@ -22,8 +22,8 @@
 
 use std::ffi::c_void;
 use std::ptr;
-use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicPtr, AtomicU32, AtomicU8, Ordering::Relaxed};
+use std::sync::Mutex;
 use std::thread;
 use std::time::Duration;
 
@@ -298,17 +298,13 @@ fn exposure() -> std::sync::MutexGuard<'static, Exposure> {
 fn set_fraction(percent: u32, fraction: u32, explicit_off: bool) -> bool {
     // A level change ends the LED test, so the page never shows a test that is not running.
     stop_opto_test();
-    // The check and the stores share one lock, so a trip in the main loop cannot slip
-    // between them and leave the lamp on.
+    // The decision and the stores share one lock, so a trip in the main loop cannot slip
+    // between them and leave the lamp on. `apply` first counts the time of the previous
+    // state, so a short on-time between two loop ticks is not lost.
     let mut limiter = exposure();
-    let (percent, fraction, applied) = if fraction != FRACTION_OFF && !limiter.on_command() {
-        (0, FRACTION_OFF, false)
-    } else {
-        (percent, fraction, true)
-    };
-    if fraction == FRACTION_OFF && explicit_off {
-        limiter.off_command();
-    }
+    let prev_on = FRACTION.load(Relaxed) != FRACTION_OFF;
+    let applied = limiter.apply(now_ms(), prev_on, fraction != FRACTION_OFF, explicit_off);
+    let (percent, fraction) = if applied { (percent, fraction) } else { (0, FRACTION_OFF) };
     LEVEL.store(percent, Relaxed);
     FRACTION.store(fraction, Relaxed);
     if fraction == FRACTION_OFF {
@@ -440,6 +436,10 @@ fn start_opto_test() -> Result<()> {
     let since_pulse = now_us().wrapping_sub(LAST_PULSE_US.load(Relaxed));
     if PULSES.load(Relaxed) > 0 && since_pulse < 1_000_000 {
         bail!("mains detected: the LED test only runs with mains disconnected");
+    }
+    // The test drives FIRE directly, so it must not run while the limiter holds the lamp off.
+    if exposure().tripped() {
+        bail!("exposure limit tripped: the LED test is refused");
     }
     if OPTO_TEST_ON.load(Relaxed) {
         bail!("the LED test is already running");

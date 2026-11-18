@@ -13,8 +13,9 @@ use crate::{EXPOSURE_MAX_ON_MS, EXPOSURE_RESUME_MS};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Exposure {
     heat_ms: u32,
-    /// Clock value at the last tick, `None` before the first one.
-    last_ms: Option<u32>,
+    /// Clock value the bucket is advanced to. The clock starts at 0 at boot,
+    /// so time before the first call counts too.
+    last_ms: u32,
     tripped: bool,
     /// An explicit host OFF arrived since the trip.
     off_seen: bool,
@@ -30,7 +31,7 @@ impl Exposure {
     pub const fn new() -> Self {
         Self {
             heat_ms: 0,
-            last_ms: None,
+            last_ms: 0,
             tripped: false,
             off_seen: false,
         }
@@ -40,10 +41,8 @@ impl Exposure {
     /// lamp was commanded to since the last tick. A long gap between ticks is
     /// counted as one block of that state, which is the safe side for "on".
     pub fn tick(&mut self, now_ms: u32, on: bool) {
-        let Some(last) = self.last_ms.replace(now_ms) else {
-            return;
-        };
-        let dt = now_ms.wrapping_sub(last);
+        let dt = now_ms.wrapping_sub(self.last_ms);
+        self.last_ms = now_ms;
         if on {
             // Capped at the trip level, so a stall does not lengthen the cool-down.
             self.heat_ms = self.heat_ms.saturating_add(dt).min(EXPOSURE_MAX_ON_MS);
@@ -55,6 +54,24 @@ impl Exposure {
             self.heat_ms = self.heat_ms.saturating_sub(dt);
         }
         self.try_clear();
+    }
+
+    /// The one decision for a new lamp command: `prev_on` is the state until now,
+    /// `new_on` the state the command asks for. The bucket is first advanced to
+    /// `now_ms` with the PREVIOUS state, so a short on-time between two loop ticks
+    /// is still counted. Returns false when an on-command is refused.
+    ///
+    /// `explicit_off` is true only for an OFF the host asked for. The deadman and the
+    /// limiter's own forced off pass false: they must not acknowledge a trip.
+    pub fn apply(&mut self, now_ms: u32, prev_on: bool, new_on: bool, explicit_off: bool) -> bool {
+        self.tick(now_ms, prev_on);
+        if new_on {
+            return self.on_command();
+        }
+        if explicit_off {
+            self.off_command();
+        }
+        true
     }
 
     /// The host asked for a lamp on. Never changes state; returns whether the
@@ -119,9 +136,7 @@ mod tests {
     }
 
     fn started() -> (Exposure, u32) {
-        let mut e = Exposure::new();
-        e.tick(0, false);
-        (e, 0)
+        (Exposure::new(), 0)
     }
 
     #[test]
@@ -320,5 +335,221 @@ mod tests {
         run(&mut e, now, EXPOSURE_MAX_ON_MS, 1_000, true);
         assert!(e.tripped());
         assert_eq!(e.budget_s(), 60);
+    }
+
+    #[test]
+    fn time_before_the_first_tick_counts() {
+        let mut e = Exposure::new();
+        e.tick(EXPOSURE_MAX_ON_MS, true);
+        assert!(e.tripped());
+    }
+
+    #[test]
+    fn an_on_command_before_the_first_tick_counts_from_boot() {
+        let mut e = Exposure::new();
+        assert!(e.apply(3_000, false, true, false));
+        // The loop starts 200 s later and sees the lamp on the whole time.
+        e.tick(3_000 + EXPOSURE_MAX_ON_MS, true);
+        assert!(e.tripped());
+    }
+
+    #[test]
+    fn tripped_budget_rounds_up() {
+        let mut e = Exposure::new();
+        e.tripped = true;
+        e.heat_ms = EXPOSURE_RESUME_MS + 500;
+        assert_eq!(e.budget_s(), 1);
+        e.heat_ms = EXPOSURE_RESUME_MS;
+        assert_eq!(e.budget_s(), 0);
+    }
+
+    #[test]
+    fn a_budget_of_0_can_still_allow_on() {
+        let (mut e, _) = started();
+        e.tick(EXPOSURE_MAX_ON_MS - 500, true);
+        assert_eq!(e.budget_s(), 0);
+        assert!(!e.tripped());
+        assert!(e.allows_on());
+    }
+
+    #[test]
+    fn apply_counts_the_previous_state_up_to_the_command() {
+        let (mut e, _) = started();
+        assert!(e.apply(0, false, true, false));
+        assert!(e.apply(60_000, true, false, true));
+        assert_eq!(e.budget_s(), 60);
+    }
+
+    #[test]
+    fn toggling_between_loop_ticks_is_still_counted() {
+        // On for 9 ms, off for 1 ms, with the loop tick only every 10 ms and always
+        // seeing the lamp off. The commands themselves carry the on time.
+        let mut e = Exposure::new();
+        let mut now = 0u32;
+        let mut on = false;
+        for _ in 0..100_000 {
+            assert!(e.apply(now, on, true, false) || e.tripped());
+            on = !e.tripped();
+            now += 9;
+            e.apply(now, on, false, true);
+            on = false;
+            now += 1;
+            e.tick(now, on);
+            if e.tripped() {
+                break;
+            }
+        }
+        // 90 percent duty trips after 120 s / (0.9 - 0.1) = 150 s.
+        assert!(e.tripped());
+        assert!(now <= 150_010, "tripped late, at {now} ms");
+    }
+
+    #[test]
+    fn an_on_command_that_finds_the_bucket_full_is_refused() {
+        let (mut e, _) = started();
+        assert!(e.apply(0, false, true, false));
+        assert!(!e.apply(EXPOSURE_MAX_ON_MS, true, true, false));
+        assert!(e.tripped());
+    }
+
+    #[test]
+    fn only_an_explicit_off_acknowledges_a_trip() {
+        let (mut e, _) = started();
+        e.tick(EXPOSURE_MAX_ON_MS, true);
+        // The deadman and the forced off pass explicit_off = false.
+        e.apply(EXPOSURE_MAX_ON_MS + 1, false, false, false);
+        e.tick(EXPOSURE_MAX_ON_MS + 100_000, false);
+        assert!(e.tripped());
+        assert!(!e.apply(EXPOSURE_MAX_ON_MS + 100_001, false, true, false));
+        assert!(e.apply(EXPOSURE_MAX_ON_MS + 100_002, false, false, true));
+        assert!(!e.tripped());
+    }
+
+    struct Rng(u64);
+    impl Rng {
+        fn next(&mut self) -> u64 {
+            self.0 ^= self.0 << 13;
+            self.0 ^= self.0 >> 7;
+            self.0 ^= self.0 << 17;
+            self.0
+        }
+    }
+
+    /// Mimics main.rs: `lamp_on` is FRACTION != OFF.
+    struct Fw {
+        e: Exposure,
+        lamp_on: bool,
+    }
+    impl Fw {
+        fn cmd_on(&mut self, now: u32) -> bool {
+            let ok = self.e.apply(now, self.lamp_on, true, false);
+            self.lamp_on = ok;
+            ok
+        }
+        fn cmd_off(&mut self, now: u32) {
+            self.e.apply(now, self.lamp_on, false, true);
+            self.lamp_on = false;
+        }
+        fn loop_tick(&mut self, now: u32) {
+            self.e.tick(now, self.lamp_on);
+            if self.e.tripped() {
+                self.lamp_on = false;
+            }
+        }
+    }
+
+    /// Random commands against a plain reference model, also across the clock wrap.
+    #[test]
+    fn random_sequences_match_reference() {
+        for seed in 1..40u64 {
+            let mut r = Rng(seed.wrapping_mul(0x9E3779B97F4A7C15) | 1);
+            let start = if seed % 3 == 0 {
+                u32::MAX - (r.next() % 200_000) as u32
+            } else {
+                0
+            };
+            let mut fw = Fw {
+                e: Exposure::new(),
+                lamp_on: false,
+            };
+            let mut now = start;
+            fw.loop_tick(now);
+            let mut heat: i64 = 0;
+            let mut tripped = false;
+            let mut off_seen = false;
+            let mut cont_on: u32 = 0;
+            let mut worst_cont = 0u32;
+            let mut on_ms: u64 = 0;
+            let mut off_ms: u64 = 0;
+            let max = EXPOSURE_MAX_ON_MS as i64;
+            let res = EXPOSURE_RESUME_MS as i64;
+            for _step in 0..4_000 {
+                let a = r.next() % 100;
+                let dur = match r.next() % 4 {
+                    0 => 10,
+                    1 => 100,
+                    2 => 1000,
+                    _ => 10_000,
+                } as u32;
+                if a < 45 {
+                    let ok = fw.cmd_on(now);
+                    assert_eq!(ok, !tripped, "seed {seed}");
+                } else if a < 75 {
+                    fw.cmd_off(now);
+                    if tripped {
+                        off_seen = true;
+                        if heat <= res {
+                            tripped = false;
+                            off_seen = false;
+                        }
+                    }
+                }
+                let mut left = dur;
+                while left > 0 {
+                    let dt = left.min(10);
+                    left -= dt;
+                    now = now.wrapping_add(dt);
+                    let on = fw.lamp_on;
+                    fw.loop_tick(now);
+                    if on {
+                        heat = (heat + dt as i64).min(max);
+                        cont_on += dt;
+                        on_ms += dt as u64;
+                        if heat >= max && !tripped {
+                            tripped = true;
+                            off_seen = false;
+                        }
+                    } else {
+                        heat = (heat - dt as i64).max(0);
+                        cont_on = 0;
+                        off_ms += dt as u64;
+                    }
+                    if tripped && off_seen && heat <= res {
+                        tripped = false;
+                        off_seen = false;
+                    }
+                    worst_cont = worst_cont.max(cont_on);
+                    assert_eq!(fw.e.tripped(), tripped, "seed {seed} now {now}");
+                    assert_eq!(fw.e.allows_on(), !tripped);
+                    if tripped {
+                        assert!(!fw.lamp_on);
+                    }
+                    let b = fw.e.budget_s() as i64;
+                    if !tripped {
+                        assert!(b * 1000 <= max - heat, "seed {seed}");
+                    } else {
+                        assert!(b * 1000 >= heat - res);
+                    }
+                }
+            }
+            assert!(
+                worst_cont <= EXPOSURE_MAX_ON_MS + 10,
+                "seed {seed} cont {worst_cont}"
+            );
+            assert!(
+                on_ms <= off_ms + EXPOSURE_MAX_ON_MS as u64 + 10,
+                "seed {seed}"
+            );
+        }
     }
 }
