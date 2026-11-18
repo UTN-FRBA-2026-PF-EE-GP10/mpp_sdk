@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
     
     
       
@@ -31,10 +31,10 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
       
         
-        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.fb2fffe2.min.css">
       
       
 
@@ -1497,7 +1497,7 @@ omitted in favor of normalized, physically discriminative indicators.</p>
 <tr>
 <td><strong>Transient Energy Loss</strong></td>
 <td style="text-align: center;"><span class="arithmatex">\(E_{loss}\)</span></td>
-<td><span class="arithmatex">\(\sum_{k=1}^{T_c} (P_{mpp} - P_k) \cdot \Delta t_k\)</span> [Joules].</td>
+<td><span class="arithmatex">\(\int_0^{T_c} (P_{mpp} - P(t))\,dt\)</span> [Joules], trapezoid rule on the sample times.</td>
 <td>Exact energy cost burned during the convergence search. Differentiates algorithms that reach the same <span class="arithmatex">\(\eta_{ss}\)</span>.</td>
 </tr>
 <tr>
@@ -1538,7 +1538,7 @@ omitted in favor of normalized, physically discriminative indicators.</p>
 <td><strong>P&amp;O</strong></td>
 <td style="text-align: center;">100.4 %</td>
 <td style="text-align: center;">2.12 s (44 steps)</td>
-<td style="text-align: center;">4.63 J</td>
+<td style="text-align: center;">4.54 J</td>
 <td style="text-align: center;">0.6 %</td>
 <td style="text-align: center;">1.27 V</td>
 <td style="text-align: center;">0.352</td>
@@ -1548,7 +1548,7 @@ omitted in favor of normalized, physically discriminative indicators.</p>
 <td><strong>InCond</strong></td>
 <td style="text-align: center;">100.1 %</td>
 <td style="text-align: center;">2.05 s (43 steps)</td>
-<td style="text-align: center;">4.52 J</td>
+<td style="text-align: center;">4.41 J</td>
 <td style="text-align: center;">0.6 %</td>
 <td style="text-align: center;">1.24 V</td>
 <td style="text-align: center;">0.355</td>
@@ -1558,7 +1558,7 @@ omitted in favor of normalized, physically discriminative indicators.</p>
 <td><strong>Fuzzy</strong></td>
 <td style="text-align: center;">100.1 %</td>
 <td style="text-align: center;">5.67 s (119 steps)</td>
-<td style="text-align: center;"><strong>12.65 J</strong></td>
+<td style="text-align: center;"><strong>12.54 J</strong></td>
 <td style="text-align: center;">0.4 %</td>
 <td style="text-align: center;"><strong>0.78 V</strong></td>
 <td style="text-align: center;">0.349</td>
@@ -1568,7 +1568,7 @@ omitted in favor of normalized, physically discriminative indicators.</p>
 <td><strong>Scan&amp;Track</strong></td>
 <td style="text-align: center;">100.2 %</td>
 <td style="text-align: center;">1.10 s (22 steps)</td>
-<td style="text-align: center;">5.20 J</td>
+<td style="text-align: center;">5.10 J</td>
 <td style="text-align: center;">0.6 %</td>
 <td style="text-align: center;">0.85 V</td>
 <td style="text-align: center;">0.352</td>
@@ -1578,7 +1578,7 @@ omitted in favor of normalized, physically discriminative indicators.</p>
 <td><strong>PSO</strong></td>
 <td style="text-align: center;">100.6 %</td>
 <td style="text-align: center;">1.13 s (21 steps)</td>
-<td style="text-align: center;"><strong>3.36 J</strong></td>
+<td style="text-align: center;"><strong>3.30 J</strong></td>
 <td style="text-align: center;">0.8 %</td>
 <td style="text-align: center;">1.23 V</td>
 <td style="text-align: center;">0.356</td>
@@ -1586,17 +1586,14 @@ omitted in favor of normalized, physically discriminative indicators.</p>
 </tr>
 </tbody>
 </table>
-<div class="admonition note">
-<p class="admonition-title">Note</p>
-<p>The script that computed the <span class="arithmatex">\(E_{loss}\)</span> numbers is not in the repo. An independent recomputation gives values
-3 to 8 percent lower. The integration convention (for example sample sum or trapezoid) must be stated.</p>
-</div>
+<p><span class="arithmatex">\(E_{loss}\)</span> is the integral of <span class="arithmatex">\(P_{mpp} - P(t)\)</span> from the start to <span class="arithmatex">\(T_c\)</span> (the whole run if it never settles), using
+the trapezoid rule on the sample times. These values were recomputed from the run files.</p>
 <h3 id="observations-on-scenario-1">Observations on Scenario 1<a class="headerlink" href="#observations-on-scenario-1" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>Steady-State Holding:</strong> All five algorithms converge near 100% <span class="arithmatex">\(\eta_{ss}\)</span> (<span class="arithmatex">\(7.70\text{–}7.74\text{ W}\)</span>), confirming
   that single-peak steady state does not discriminate between algorithms.</li>
 <li><strong>Convergence Cost (<span class="arithmatex">\(E_{loss}\)</span>):</strong> Although Fuzzy reaches 100% <span class="arithmatex">\(\eta_{ss}\)</span>, its slow convergence (119 steps / 5.67 s)
-  burns <strong>12.65 J</strong> of energy-nearly triple that of P&amp;O (4.63 J) and quadruple that of PSO (3.36 J).</li>
+  burns <strong>12.54 J</strong> of energy-nearly triple that of P&amp;O (4.54 J) and quadruple that of PSO (3.30 J).</li>
 <li><strong>Electrical Stress (<span class="arithmatex">\(\Delta V_{pp}\)</span>):</strong> P&amp;O, InCond, and PSO exhibit <span class="arithmatex">\(\sim 1.2\text{–}1.3\text{ V}\)</span> bus voltage
   ripple from active dithering. Fuzzy operates with significantly lower voltage ripple (0.78 V).</li>
 </ul>
@@ -1629,7 +1626,7 @@ omitted in favor of normalized, physically discriminative indicators.</p>
 <td style="text-align: center;">0.20</td>
 <td style="text-align: center;">99.6 %</td>
 <td style="text-align: center;">1.15 s (24 steps)</td>
-<td style="text-align: center;">0.83 J</td>
+<td style="text-align: center;">0.81 J</td>
 <td style="text-align: center;">0.6 %</td>
 <td style="text-align: center;">1.02 V</td>
 <td style="text-align: center;">0.258</td>
@@ -1651,7 +1648,7 @@ omitted in favor of normalized, physically discriminative indicators.</p>
 <td style="text-align: center;">0.35</td>
 <td style="text-align: center;">100.0 %</td>
 <td style="text-align: center;">2.34 s (49 steps)</td>
-<td style="text-align: center;">2.52 J</td>
+<td style="text-align: center;">2.47 J</td>
 <td style="text-align: center;">0.6 %</td>
 <td style="text-align: center;">1.00 V</td>
 <td style="text-align: center;">0.259</td>
@@ -1662,7 +1659,7 @@ omitted in favor of normalized, physically discriminative indicators.</p>
 <td style="text-align: center;">0.45</td>
 <td style="text-align: center;"><strong>87.6 %</strong></td>
 <td style="text-align: center;">never</td>
-<td style="text-align: center;">5.34 J*</td>
+<td style="text-align: center;">5.31 J*</td>
 <td style="text-align: center;">12.4 %</td>
 <td style="text-align: center;">0.68 V</td>
 <td style="text-align: center;">0.460</td>
@@ -1673,7 +1670,7 @@ omitted in favor of normalized, physically discriminative indicators.</p>
 <td style="text-align: center;">0.50</td>
 <td style="text-align: center;"><strong>88.0 %</strong></td>
 <td style="text-align: center;">never</td>
-<td style="text-align: center;">15.19 J*</td>
+<td style="text-align: center;">15.14 J*</td>
 <td style="text-align: center;">12.0 %</td>
 <td style="text-align: center;">0.89 V</td>
 <td style="text-align: center;">0.459</td>
@@ -1684,7 +1681,7 @@ omitted in favor of normalized, physically discriminative indicators.</p>
 <td style="text-align: center;">0.50</td>
 <td style="text-align: center;"><strong>87.9 %</strong></td>
 <td style="text-align: center;">never</td>
-<td style="text-align: center;">5.55 J*</td>
+<td style="text-align: center;">5.50 J*</td>
 <td style="text-align: center;">12.1 %</td>
 <td style="text-align: center;">0.54 V</td>
 <td style="text-align: center;">0.458</td>
@@ -1695,7 +1692,7 @@ omitted in favor of normalized, physically discriminative indicators.</p>
 <td style="text-align: center;">0.50</td>
 <td style="text-align: center;"><strong>86.7 %</strong></td>
 <td style="text-align: center;">never</td>
-<td style="text-align: center;">6.56 J*</td>
+<td style="text-align: center;">6.50 J*</td>
 <td style="text-align: center;">13.3 %</td>
 <td style="text-align: center;">0.28 V</td>
 <td style="text-align: center;">0.446</td>
@@ -1706,7 +1703,7 @@ omitted in favor of normalized, physically discriminative indicators.</p>
 <td style="text-align: center;">Native scan</td>
 <td style="text-align: center;">100.0 %</td>
 <td style="text-align: center;">1.25 s (24 steps)</td>
-<td style="text-align: center;">2.42 J</td>
+<td style="text-align: center;">2.39 J</td>
 <td style="text-align: center;">0.6 %</td>
 <td style="text-align: center;">1.03 V</td>
 <td style="text-align: center;">0.259</td>
@@ -1717,7 +1714,7 @@ omitted in favor of normalized, physically discriminative indicators.</p>
 <td style="text-align: center;">Native seed</td>
 <td style="text-align: center;"><strong>88.4 %</strong></td>
 <td style="text-align: center;">never</td>
-<td style="text-align: center;">6.23 J*</td>
+<td style="text-align: center;">6.16 J*</td>
 <td style="text-align: center;">11.6 %</td>
 <td style="text-align: center;">0.81 V</td>
 <td style="text-align: center;">0.459</td>
@@ -1728,7 +1725,7 @@ omitted in favor of normalized, physically discriminative indicators.</p>
 <td style="text-align: center;">Native seed</td>
 <td style="text-align: center;"><strong>88.8 %</strong></td>
 <td style="text-align: center;">never</td>
-<td style="text-align: center;">10.67 J*</td>
+<td style="text-align: center;">10.62 J*</td>
 <td style="text-align: center;">11.2 %</td>
 <td style="text-align: center;">0.71 V</td>
 <td style="text-align: center;">0.462</td>
@@ -1790,12 +1787,12 @@ algorithm (P&amp;O: five start duties), so the rates are only indicative:</p>
 <li>On the local trap, <span class="arithmatex">\(nRMSE\)</span> jumps to <span class="arithmatex">\(11\text{–}13\%\)</span>, directly reflecting the <span class="arithmatex">\(12\%\)</span> power deficit.</li>
 <li><strong>Transient Cost (<span class="arithmatex">\(E_{loss}\)</span>) vs Settling Time (<span class="arithmatex">\(T_c\)</span>):</strong></li>
 <li><span class="arithmatex">\(E_{loss}\)</span> in Joules provides a direct physical penalty. Fuzzy settled at 100% <span class="arithmatex">\(\eta_{ss}\)</span> in Scenario 1, but its
-     sluggish response cost 12.65 J.</li>
+     sluggish response cost 12.54 J.</li>
 <li>Reporting <span class="arithmatex">\(T_c\)</span> in <strong>steps</strong> (e.g. 21 to 44 steps) normalizes hardware execution against the <span class="arithmatex">\(1\text{ ms}\)</span>
      simulation model.</li>
 <li><strong>Scan&amp;Track Dominance under Static Shading:</strong></li>
 <li>Scan&amp;Track is the only algorithm that reached the global peak autonomously without operator bias in initial duty.
-     Its scan cost <span class="arithmatex">\(2.42\text{ J}\)</span> and 24 steps, easily offset by avoiding the <span class="arithmatex">\(12\%\)</span> local trap.</li>
+     Its scan cost <span class="arithmatex">\(2.39\text{ J}\)</span> and 24 steps, easily offset by avoiding the <span class="arithmatex">\(12\%\)</span> local trap.</li>
 </ol>
 
 
@@ -1868,10 +1865,10 @@ algorithm (P&amp;O: five start duties), so the rates are only indicative:</p>
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "content.code.copy", "search.suggest"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "content.code.copy", "search.suggest"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../assets/javascripts/bundle.a5f9d56c.min.js"></script>
       
         <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
       
