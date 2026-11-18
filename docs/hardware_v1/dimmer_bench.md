@@ -85,7 +85,8 @@ Preconditions:
 - The Pico and the dimmer run firmware from the same commit. The Pi can reach the Pico over SPI.
 - Optional: a multimeter on FIRE (GPIO4, SELV side). It must stay at 0 V.
 
-Steps and expected readings. Run `uv run python3 scripts/dimmer_bench.py --out test0.json`, or one check at a time with `--only`.
+Steps and expected readings. Run `uv run python3 scripts/dimmer_bench.py --out test0.json`,
+or one check at a time with `--only`.
 
 | Check name | What it does | Expected reading | Pass when |
 | --- | --- | --- | --- |
