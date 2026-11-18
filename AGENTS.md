@@ -155,7 +155,7 @@ MCU firmware lives in a sibling directory, not under `mpp_sdk/`.
 firing angle through the Pico. The Pico is the I2C master of the dimmer board
 (an ESP32-C3 slave), so the chain is Pi, SPI, Pico, I2C, dimmer.
 
-- Board: `hardware/dimmer/`. Firmware: `firmware/esp32c3-dimmer/`.
+- Board: `hardware/dimmer/`. Firmware: `firmware/esp32-dimmer/`.
 - The I2C wire format is the `firmware/dimmer-link` crate, shared by both
   firmwares. The protocol, wiring and safety rules are in
   `docs/hardware_v1/dimmer_link.md`.

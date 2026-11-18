@@ -36,7 +36,7 @@ The ESP32-C3 gets its 3.3 V power and its I2C bus from J1 (SELV side).
 - `libraries/` - project-local symbols, footprints and 3D model
 - `../shared/` - ESP32-C3 SuperMini symbol, footprint and 3D model
 
-The firmware is in [firmware/esp32c3-dimmer/](../../firmware/esp32c3-dimmer/).
+The firmware is in [firmware/esp32-dimmer/](../../firmware/esp32-dimmer/).
 
 ## Origin
 

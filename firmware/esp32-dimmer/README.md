@@ -26,7 +26,7 @@ The default build has I2C control only. It has no Wi-Fi and needs no password:
 **Flash with mains disconnected.** Unplug J2, disconnect J1 and remove the JP1 shunt (as printed on the board), then connect USB:
 
 ```sh
-cd firmware/esp32c3-dimmer
+cd firmware/esp32-dimmer
 cargo run --release
 ```
 
