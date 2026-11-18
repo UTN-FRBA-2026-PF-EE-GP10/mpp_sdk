@@ -209,7 +209,9 @@ def test_status_parse_bad_crc_with_new_fields():
     assert parse_status_frame(_status_frame(flags=0x1F, budget=42, corrupt=True)) is None
 
 
-@pytest.mark.parametrize("bad", [0, -1, math.nan, math.inf, MAX_LAMP_WINDOW_S + 1])
+@pytest.mark.parametrize(
+    "bad", [0, -1, math.nan, math.inf, MAX_LAMP_WINDOW_S + 1, 120.0001, True, "5", None]
+)
 def test_max_on_s_validation(spi_mcu_source, bad):  # noqa: F811
     src = spi_mcu_source()
     with pytest.raises(ValueError):
@@ -299,8 +301,13 @@ def test_keepalive_failure_at_deadline_leaves_lamp_off_state(spi_mcu_source, clo
     src.close()
 
 
+def _link_ok(src):
+    src.dimmer_status = lambda: parse_status_frame(_status_frame(flags=0x0F))
+
+
 def test_lamp_window_off_after_normal_exit(spi_mcu_source):  # noqa: F811
     src = spi_mcu_source(dimmer_keepalive_s=0.01)
+    _link_ok(src)
     with src.lamp_window(power=0.5):
         assert src.is_dimmer_active
     assert not src.is_dimmer_active
@@ -311,6 +318,7 @@ def test_lamp_window_off_after_normal_exit(spi_mcu_source):  # noqa: F811
 @pytest.mark.parametrize("exc", [RuntimeError, KeyboardInterrupt])
 def test_lamp_window_off_after_exception(spi_mcu_source, exc):  # noqa: F811
     src = spi_mcu_source(dimmer_keepalive_s=0.01)
+    _link_ok(src)
     with pytest.raises(exc), src.lamp_window(alpha_deg=90.0):
         raise exc
     assert not src.is_dimmer_active
@@ -401,3 +409,163 @@ def test_timing_constants_match_firmware(spi_mcu_source):  # noqa: F811
     assert _rust_const("KEEPALIVE_MS") < _rust_const("COMMAND_TIMEOUT_MS")
     default = inspect.signature(spi_mcu.SpiMcuSource.__init__).parameters["dimmer_keepalive_s"]
     assert default.default * 1000 < _rust_const("COMMAND_TIMEOUT_MS")
+
+
+def test_validate_accepts_numbers():
+    from mpp_sdk.io.dimmer import validate_max_on_s
+
+    assert validate_max_on_s(5) == 5.0
+    assert validate_max_on_s(120.0) == 120.0
+
+
+def test_dimmer_off_sends_frame_even_if_join_is_interrupted(spi_mcu_source):  # noqa: F811
+    src = spi_mcu_source(dimmer_keepalive_s=0.01)
+    src.set_dimmer_alpha(90.0)
+    thread = src._dimmer_thread
+    real_join = thread.join
+
+    def bad_join(*a, **k):
+        raise KeyboardInterrupt
+
+    thread.join = bad_join
+    with pytest.raises(KeyboardInterrupt):
+        src.dimmer_off()
+    assert src._spi.sent[-1][:2] == _OFF_PREFIX
+    assert src._dimmer_wire == 18000
+    assert src.dimmer_window_left_s() is None
+    real_join()
+
+
+def test_lamp_window_retries_off_and_keeps_original_exception(spi_mcu_source):  # noqa: F811
+    src = spi_mcu_source(dimmer_keepalive_s=0.01)
+    _link_ok(src)
+    calls = []
+    real = src.dimmer_off
+
+    def flaky():
+        calls.append(1)
+        if len(calls) < 3:
+            raise OSError("spi")
+        real()
+
+    src.dimmer_off = flaky
+    with pytest.raises(ValueError, match="mine"), src.lamp_window(power=0.5):
+        raise ValueError("mine")
+    assert len(calls) == 3
+    assert src._spi.sent[-1][:2] == _OFF_PREFIX
+    src.close()
+
+
+def test_lamp_window_original_exception_wins_over_failing_off(spi_mcu_source):  # noqa: F811
+    src = spi_mcu_source(dimmer_keepalive_s=0.01)
+    _link_ok(src)
+
+    def always_fail():
+        raise OSError("spi")
+
+    src.dimmer_off = always_fail
+    with pytest.raises(ValueError, match="mine"), src.lamp_window(power=0.5):
+        raise ValueError("mine")
+    src._dimmer_wire = 18000
+    src.close()
+
+
+def test_lamp_window_raises_when_off_fails_after_normal_body(spi_mcu_source):  # noqa: F811
+    src = spi_mcu_source(dimmer_keepalive_s=0.01)
+    _link_ok(src)
+
+    def always_fail():
+        raise OSError("spi")
+
+    src.dimmer_off = always_fail
+    with pytest.raises(OSError), src.lamp_window(power=0.5):
+        pass
+    src._dimmer_wire = 18000
+    src.close()
+
+
+def test_keepalive_failure_sends_off_after_one_bad_resend(spi_mcu_source):  # noqa: F811
+    src = spi_mcu_source(dimmer_keepalive_s=0.01)
+    src.set_dimmer_alpha(90.0)
+    thread = src._dimmer_thread
+    real = src._exchange
+    state = {"failed": False}
+
+    def exchange(*a, **k):
+        if not state["failed"] and a[1:] == (0xD1,) and a[0] == 9000:
+            state["failed"] = True
+            raise RuntimeError("boom")
+        return real(*a, **k)
+
+    src._exchange = exchange
+    assert _wait(lambda: not thread.is_alive())
+    assert state["failed"]
+    assert src._spi.sent[-1][:2] == _OFF_PREFIX
+    src.close()
+
+
+def test_failed_set_leaves_lamp_off_state(spi_mcu_source):  # noqa: F811
+    src = spi_mcu_source(dimmer_keepalive_s=0.01)
+    src._spi.raise_on_xfer = OSError("spi")
+    with pytest.raises(OSError):
+        src.set_dimmer_alpha(90.0)
+    src._spi.raise_on_xfer = None
+    assert src.dimmer_window_left_s() is None
+    assert not src.is_dimmer_active
+    src.close()
+
+
+@pytest.fixture
+def fast_poll(monkeypatch):
+    from mpp_sdk.io import spi_mcu
+
+    monkeypatch.setattr(spi_mcu, "_LINK_POLL_S", 0.001)
+    monkeypatch.setattr(spi_mcu, "_LINK_CONFIRM_S", 0.05)
+
+
+def _refused(src, **kw):
+    with pytest.raises(DimmerRefused), src.lamp_window(power=0.5, **kw):
+        pytest.fail("window must not open")
+    assert not src.is_dimmer_active
+    assert src._spi.sent[-1][:2] == _OFF_PREFIX
+
+
+def test_lamp_window_refused_without_reply(spi_mcu_source, fast_poll):  # noqa: F811
+    src = spi_mcu_source(dimmer_keepalive_s=0.01)
+    _refused(src)
+    src.close()
+
+
+def test_lamp_window_refused_when_link_not_ok(spi_mcu_source, fast_poll):  # noqa: F811
+    src = spi_mcu_source(dimmer_keepalive_s=0.01)
+    src.dimmer_status = lambda: parse_status_frame(_status_frame(flags=0x0E))
+    _refused(src)
+    src.close()
+
+
+def test_lamp_window_refused_when_tripped_final_status(spi_mcu_source, fast_poll):  # noqa: F811
+    src = spi_mcu_source(dimmer_keepalive_s=0.01)
+    src.dimmer_status = lambda: parse_status_frame(_status_frame(flags=0x1F))
+    _refused(src)
+    src.close()
+
+
+def test_lamp_window_polls_past_bad_crc(spi_mcu_source, fast_poll):  # noqa: F811
+    src = spi_mcu_source(dimmer_keepalive_s=0.01)
+    zero = _miso_frame(0, 0, 0, 0)
+    bad = _status_frame(corrupt=True)
+    # set, then (request, reply) pairs: two bad polls of two attempts, then good
+    src._spi.responses = [zero] + [zero, bad] * 4 + [zero, _status_frame()]
+    with src.lamp_window(power=0.5):
+        assert src.is_dimmer_active
+    assert not src.is_dimmer_active
+    src.close()
+
+
+def test_lamp_window_good_status_on_second_poll(spi_mcu_source, fast_poll):  # noqa: F811
+    src = spi_mcu_source(dimmer_keepalive_s=0.01)
+    answers = iter([None, parse_status_frame(_status_frame())])
+    src.dimmer_status = lambda: next(answers)
+    with src.lamp_window(power=0.5):
+        pass
+    src.close()

@@ -111,9 +111,10 @@ For a resistive lamp the power fraction at angle `alpha` is `P = 1 - alpha/pi + 
 - A new `set_dimmer_*` call starts a new deadline. `dimmer_window_left_s()` gives the time left
   (`None` when the lamp is off).
 - `lamp_window(power=...)` or `lamp_window(alpha_deg=...)` is the safe way to use the lamp.
-  It sets the lamp, reads the status once, and always sends OFF when the block ends,
-  also on an exception or Ctrl-C.
-  It raises `DimmerRefused` (after OFF) if the dimmer reports `tripped`.
+  It sets the lamp, then waits up to 1.5 s (poll every 0.25 s) for a valid status with `link_ok`.
+  It always sends OFF when the block ends (3 tries), also on an exception or Ctrl-C.
+  It raises `DimmerRefused` (after OFF) if the link is not confirmed or the dimmer reports `tripped`.
+  `timed_out` is not checked: the Pico reports it from a cache that can be 1 s old.
 - If `dimmer_status()` shows `tripped` while the host thinks the lamp is on, it sends OFF.
   That OFF is the acknowledgment the dimmer needs before it accepts "on" again.
 - `close()` and `dimmer_off()` stop the thread and switch the lamp off.

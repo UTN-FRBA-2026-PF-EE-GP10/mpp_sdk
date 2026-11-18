@@ -7,7 +7,7 @@ Usage:
     uv run python3 scripts/dimmer_set.py --status
     uv run python3 scripts/dimmer_set.py --alpha 90 --hold   # keep it on, then off
 
-Without --hold the Pico switches the lamp off 3 s after the last command.
+Without --hold the lamp is switched off when the script exits.
 With --hold the lamp stays on for at most --max-on-s seconds (default 60, at
 most 120) or until Ctrl-C, then it is switched off.
 """

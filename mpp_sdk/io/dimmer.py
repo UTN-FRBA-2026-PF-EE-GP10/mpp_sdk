@@ -30,6 +30,8 @@ class DimmerRefused(RuntimeError):
 
 def validate_max_on_s(max_on_s: float) -> float:
     """Return *max_on_s* as a float, or raise ValueError if it is not in (0, MAX_LAMP_WINDOW_S]."""
+    if isinstance(max_on_s, bool) or not isinstance(max_on_s, int | float):
+        raise ValueError(f"max_on_s must be a number, got {max_on_s!r}")
     value = float(max_on_s)
     if not math.isfinite(value) or value <= 0.0 or value > MAX_LAMP_WINDOW_S:
         raise ValueError(f"max_on_s must be in (0, {MAX_LAMP_WINDOW_S:g}] s, got {max_on_s!r}")
