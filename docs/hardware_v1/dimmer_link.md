@@ -64,6 +64,8 @@ Status (master reads 9 bytes, at least 3 ms after Request status):
 
 ## Safety
 
+The bench tests are in [dimmer_bench.md](dimmer_bench.md).
+
 - The dimmer is off after boot.
 - The Pico repeats the last Set alpha every 500 ms.
   The dimmer turns the lamp off after 2 s without a valid Set alpha.

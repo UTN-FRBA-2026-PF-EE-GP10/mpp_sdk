@@ -62,9 +62,24 @@ def _record(**overrides) -> SessionRecord:
 # ------------------------------------------------------------------
 
 
-def test_list_templates_returns_both_shipped_templates():
+def test_list_templates_returns_the_shipped_templates():
     ids = {t.template_id for t in list_templates()}
-    assert ids == {"single-panel-characterization", "full-setup-characterization"}
+    assert ids == {
+        "single-panel-characterization",
+        "full-setup-characterization",
+        "dimmer-bench",
+    }
+
+
+def test_dimmer_bench_template_has_one_section_per_test():
+    template = get_template("dimmer-bench")
+    sections = [s.section for s in template.steps]
+    for prefix in ("Test 0", "Test 1", "Test 2", "Test 3"):
+        assert any(sec.startswith(prefix) for sec in sections), prefix
+    # The safety order: the sections appear in test order.
+    order = [sec[:6] for sec in dict.fromkeys(sections) if sec.startswith("Test")]
+    assert order == sorted(order)
+    assert {q.id for q in template.open_questions} >= {"unexpected-behaviour"}
 
 
 def test_shipped_templates_validate_unique_step_ids_and_known_kinds():
@@ -208,6 +223,8 @@ def test_session_template_repeats_defaults_to_one():
 
 def test_shipped_templates_ask_for_repeated_curves_and_runs():
     for template in list_templates():
+        if template.template_id == "dimmer-bench":
+            continue  # no curves or runs: a bench checklist
         baseline = next(s for s in template.steps if s.id == "baseline-curve")
         assert baseline.repeats == 3
         runs = [s for s in template.steps if s.kind == "run" and s.repeats > 1]

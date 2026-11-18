@@ -44,6 +44,8 @@ The design comes from [pcbs_llm_driven_design](https://github.com/fborello-lambd
 
 ## Safety
 
+Bench tests for this board and the lamp: [dimmer_bench.md](../../docs/hardware_v1/dimmer_bench.md).
+
 The dimmer firmware also limits the lamp-on time (exposure limit, off after 120 s of on time). See the [dimmer link](../../docs/hardware_v1/dimmer_link.md).
 
 This board switches lethal mains voltage and is not certified. It must not be treated as safe solely because ERC and DRC pass. Preserve the isolation slot and explicit MAINS/SELV constraints, and independently review creepage, clearance, fuse coordination, thermal performance, component ratings, enclosure, and fabrication capability before energizing it.
