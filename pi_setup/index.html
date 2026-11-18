@@ -555,6 +555,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#lamp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lamp
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#start-the-server-at-boot" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1432,6 +1443,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#lamp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lamp
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#start-the-server-at-boot" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1603,6 +1625,30 @@ Flash the firmware from a PC with a debug probe, not from the Pi.</p>
 5. The server picks SPI bus 0 on a Raspberry Pi. Use <code>--spi-bus</code> to
    change it.
 6. To try the workbench with no board, add <code>--demo</code>.</p>
+<h2 id="lamp">Lamp<a class="headerlink" href="#lamp" title="Permanent link">&para;</a></h2>
+<p>The server switches the lamp dimmer through the Pico. The board switches
+mains: read <code>hardware/dimmer/README.md</code> before bench work.</p>
+<ul>
+<li><code>GET /api/dimmer</code> returns the status: state (<code>off</code>, <code>on</code>, <code>tripped</code>,
+  <code>unavailable</code>), power, window left, budget, and the dimmer flags.</li>
+<li><code>POST /api/dimmer</code> takes <code>power</code> (fraction 0 to 1) or <code>alpha_deg</code> (0 to
+  180), plus <code>max_on_s</code> (default 30, at most 120). It returns the status.</li>
+<li><code>POST /api/dimmer/off</code> switches the lamp off. It works in every state.</li>
+<li><code>--lamp-max-power X</code> caps the power the API accepts (0 &lt; X &lt;= 1, default
+  1.0). A higher request gets 422. An angle is capped by the power it gives.</li>
+</ul>
+<p>Safety model:</p>
+<ul>
+<li>The lamp is off at idle and after boot.</li>
+<li>Every "on" is a window: the host switches the lamp off when it ends.</li>
+<li>A window is at most 120 s. The dimmer also counts on time: at 120 s it
+  trips and forces the lamp off. It cools 1 s per 1 s.</li>
+<li>While tripped, every "on" gets 409. It clears when the dimmer has cooled
+  to 60 s and the host has sent an OFF after the trip.</li>
+<li>Lamp commands do not wait for runs or sweeps, so Off works during a run.</li>
+<li>The lamp is switched off when the server stops. With <code>--demo</code> a simulated
+  dimmer with the same rules is used.</li>
+</ul>
 <p>The server has no login. Keep it on the bench network. See the safety
 notes in the <a href="../measurement_procedure/">measurement procedure</a>.</p>
 <h2 id="start-the-server-at-boot">Start the server at boot<a class="headerlink" href="#start-the-server-at-boot" title="Permanent link">&para;</a></h2>
