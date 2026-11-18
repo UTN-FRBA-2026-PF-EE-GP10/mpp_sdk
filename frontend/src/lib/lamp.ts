@@ -7,6 +7,55 @@ export const LAMP_DEFAULT_WINDOW_S = 30
 export const LAMP_MIN_WINDOW_S = 1
 export const LAMP_MAX_WINDOW_S = 120
 
+// Lamp use around one measurement (sweep or run). The server lights the
+// lamp, waits for the warm-up, measures and switches the lamp off again.
+
+/** The server refuses a step when warm-up + duration + margin is over the max. */
+export const LAMP_STEP_MAX_ON_S = 110
+export const LAMP_STEP_MARGIN_S = 5
+export const LAMP_DEFAULT_WARMUP_S = 3
+export const LAMP_MAX_WARMUP_S = 30
+
+/** The `lamp` object of a sweep or run start request. */
+export interface LampRequest {
+  power: number
+  warmup_s: number
+}
+
+export type LampPhase = 'warming' | 'measuring' | 'off'
+
+/** Anything the server sends that is not a known phase counts as no phase. */
+export function parseLampPhase(value: unknown): LampPhase | null {
+  return value === 'warming' || value === 'measuring' || value === 'off' ? value : null
+}
+
+export function parseWarmupLeft(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, value) : null
+}
+
+/** Warm-up seconds forced into 0..30; NaN falls back to the default. */
+export function clampWarmupS(value: number): number {
+  if (!Number.isFinite(value)) return LAMP_DEFAULT_WARMUP_S
+  return Math.min(LAMP_MAX_WARMUP_S, Math.max(0, Math.round(value)))
+}
+
+/** The status line for a lamp-assisted step, or null when there is nothing to say. */
+export function lampPhaseText(
+  phase: LampPhase | null,
+  warmupLeftS: number | null,
+  running = true,
+): string | null {
+  if (phase === 'warming') {
+    return warmupLeftS == null
+      ? 'Warming up the lamp'
+      : `Warming up the lamp, ${Math.ceil(warmupLeftS)} s`
+  }
+  if (phase === 'measuring') return 'Lamp on for the measurement'
+  if (phase === 'off' && running)
+    return 'The lamp is off, this measurement is running without light'
+  return null
+}
+
 /** Fraction of full power at firing angle `alphaRad`: 1 - a/pi + sin(2a)/(2pi). */
 export function powerForAlpha(alphaRad: number): number {
   return 1 - alphaRad / Math.PI + Math.sin(2 * alphaRad) / (2 * Math.PI)

@@ -146,6 +146,15 @@ loop, so it is only ever on for a bounded window:
   operator presses Off. The card polls `GET /api/dimmer` once per second while
   the tab is visible. It shows "Lamp not available" if the server has no dimmer.
 
+The sweep and the run have "Use the lamp for this measurement" (off by default).
+
+- The server lights the lamp, waits for the warm-up (0 to 30 s), measures and
+  switches the lamp off. The request gets a `lamp` object with `power` and `warmup_s`.
+- The option is disabled when the lamp is not available or tripped. Start is
+  disabled when warm-up plus run time is over 110 s. The card and the option share one poll.
+- The page shows "Warming up the lamp, N s" and "Lamp on for the measurement".
+  Stop run also cancels the warm-up. A sweep has no stop button.
+
 ## Build
 
 ```bash

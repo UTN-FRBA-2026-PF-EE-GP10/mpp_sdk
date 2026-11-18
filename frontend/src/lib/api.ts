@@ -12,6 +12,7 @@ import type {
   SessionTemplate,
   SessionTemplateSummary,
 } from '@/lib/sessions'
+import { parseLampPhase, parseWarmupLeft, type LampPhase, type LampRequest } from '@/lib/lamp'
 import type { LiveRunState, RunDetail, RunSummary } from '@/lib/runs'
 import type { CreatePanelModelInput, PanelModelRecord, PatchPanelModelInput } from '@/lib/panels'
 import type { CurvePoint, CurveRecord, PanelSetup } from '@/types'
@@ -29,6 +30,9 @@ interface DataResponse {
   seq: number
   command_error: string | null
   demo_source: boolean
+  // Only a lamp-assisted sweep carries these; an older server sends neither.
+  lamp_phase?: unknown
+  lamp_warmup_left_s?: unknown
 }
 
 export interface LiveSweepState {
@@ -43,6 +47,8 @@ export interface LiveSweepState {
   // True when the curve on screen was replayed from the firmware's
   // stored curves rather than measured off a panel.
   demoSource: boolean
+  lampPhase?: LampPhase | null
+  lampWarmupLeftS?: number | null
 }
 
 function fromWirePoints(points: WireDataPoint[] | undefined): CurvePoint[] {
@@ -87,6 +93,8 @@ export async function fetchLiveSweep(): Promise<LiveSweepState> {
     seq: Number.isFinite(payload.seq) ? payload.seq : 0,
     commandError: payload.command_error ?? null,
     demoSource: Boolean(payload.demo_source),
+    lampPhase: parseLampPhase(payload.lamp_phase),
+    lampWarmupLeftS: parseWarmupLeft(payload.lamp_warmup_left_s),
   }
 }
 
@@ -150,8 +158,19 @@ export async function saveCurve(input: SaveCurveInput): Promise<{ path: string; 
   return (await parseJsonOrThrow(r, 'POST /api/save-curve')) as { path: string; id: string }
 }
 
-export async function startSweep(): Promise<void> {
-  const r = await fetch('/api/start-sweep', { method: 'POST' })
+/** `lamp` asks the server to light the lamp for this sweep only. Without
+ * it the request has no body, exactly as before. */
+export async function startSweep(lamp?: LampRequest): Promise<void> {
+  const r = await fetch(
+    '/api/start-sweep',
+    lamp
+      ? {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ lamp }),
+        }
+      : { method: 'POST' },
+  )
   await parseJsonOrThrow(r, 'POST /api/start-sweep')
 }
 
@@ -284,6 +303,8 @@ export interface StartRunInput {
   /** The workbench's "active session" (lib/activeSession.ts), if any -
    * validated by the server and stamped onto the saved RunRecord. */
   session_id?: string | null
+  /** Light the lamp for this run only. Left out when the option is off. */
+  lamp?: LampRequest
 }
 
 export interface StartRunResult {

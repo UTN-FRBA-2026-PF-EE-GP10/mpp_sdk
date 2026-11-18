@@ -1,18 +1,21 @@
 import { useEffect, useRef, useState } from 'react'
 import { ActiveSessionNotice } from '@/components/ActiveSessionNotice'
 import { ProvenanceBadge } from '@/components/ProvenanceBadge'
+import { LampOptionFields, LampPhaseLine } from '@/components/LampOptionFields'
 import { Field } from '@/components/RunReadouts'
 import { RunChart } from '@/components/RunChart'
 import { RunPlayerDialog } from '@/components/RunPlayerDialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { stepBusyReason, useLampOption, useOtherStepPhase } from '@/hooks/useLampOption'
 import { useLiveRun } from '@/hooks/useLiveRun'
 import { sessionGoneMessage, useActiveSession, useCaptureSession } from '@/lib/activeSession'
-import { isSessionNotFound } from '@/lib/apiError'
+import { ApiError, isSessionNotFound } from '@/lib/apiError'
 import { fetchRunConfig, fetchRuns, type RunConfig } from '@/lib/api'
 import type { StartRunInput } from '@/lib/api'
 import { formatCapturedAt } from '@/lib/format'
+import { parseLampPhase, parseWarmupLeft } from '@/lib/lamp'
 import { abortReasonMessage } from '@/lib/liveRun'
 import { findCurveForRun, referenceCurveMessage } from '@/lib/runPlayback'
 import { useSandbox } from '@/lib/sandbox'
@@ -50,6 +53,10 @@ export function RunPane({
     // The session this run was to be filed into is gone (deleted in another
     // tab): turn filing off, or every later start is refused the same way.
     onStartError: (e) => {
+      // The lamp refusals (too long, tripped or budget, no link) carry their
+      // own explanation: show it as the server wrote it.
+      if (e instanceof ApiError && [409, 422, 503].includes(e.status) && !isSessionNotFound(e))
+        return e.detail
       if (!isSessionNotFound(e)) return undefined
       clearActiveSession()
       return sessionGoneMessage('run')
@@ -233,6 +240,20 @@ function RunSetupForm({
 
   const algorithms = config?.algorithms ?? []
 
+  // The duration the server will run: blank means its default, a longer
+  // request is clamped to its backstop.
+  const typedDuration = durationInput.trim() === '' ? NaN : Number(durationInput)
+  const runDurationS =
+    config === null
+      ? null
+      : Number.isFinite(typedDuration)
+        ? Math.min(typedDuration, config.maxDurationS)
+        : config.defaultDurationS
+  const lampOption = useLampOption({ kind: 'run', durationS: runDurationS })
+  const otherPhase = useOtherStepPhase('run', !simulated)
+  const busyReason = simulated ? null : stepBusyReason(null, otherPhase)
+  const lampBlocked = (lampOption.checked && lampOption.blockReason !== null) || busyReason !== null
+
   // Toggling demo mode swaps `curves` for a different list; a pick from
   // the old one must not linger as a value no option matches.
   useEffect(() => {
@@ -257,7 +278,7 @@ function RunSetupForm({
   }, [config])
 
   function handleStart() {
-    if (!canStart || starting || !algorithm) return
+    if (!canStart || starting || !algorithm || lampBlocked) return
     const trimmed = durationInput.trim()
     const duration = trimmed === '' ? undefined : Number(trimmed)
     if (!simulated) {
@@ -293,6 +314,7 @@ function RunSetupForm({
       reference_label: simulated && chosen ? chosen.id : null,
       simulated,
       session_id: captureSession?.id ?? null,
+      ...(lampOption.request ? { lamp: lampOption.request } : {}),
     })
   }
 
@@ -415,21 +437,24 @@ function RunSetupForm({
         </p>
       )}
 
+      {!simulated && <LampOptionFields option={lampOption} />}
+
       <ActiveSessionNotice what="run" />
 
       <Button
         onClick={handleStart}
-        disabled={!canStart || starting || !algorithm}
+        disabled={!canStart || starting || !algorithm || lampBlocked}
         // See CurveWorkbench's Start Measurement for the same fix:
         // focusableWhenDisabled keeps the disabled reason reachable by
         // hover/focus instead of native `disabled` swallowing pointer
         // events outright.
         focusableWhenDisabled
-        title={disabledReason ?? undefined}
+        title={disabledReason ?? busyReason ?? lampOption.blockReason ?? undefined}
         className="self-start"
       >
         {starting ? 'Starting...' : simulated ? 'Start simulated run' : 'Start run'}
       </Button>
+      {busyReason && <p className="text-xs text-muted-foreground">{busyReason}</p>}
       {!canStart && disabledReason && (
         <p className="text-xs text-muted-foreground">{disabledReason}</p>
       )}
@@ -553,6 +578,14 @@ function RunMonitor({
         trail={live.samples}
         current={current}
       />
+
+      {phase === 'live' && (
+        <LampPhaseLine
+          phase={parseLampPhase(live.lamp_phase)}
+          warmupLeftS={parseWarmupLeft(live.lamp_warmup_left_s)}
+          running
+        />
+      )}
 
       <LiveReadouts
         voltage={live.voltage}

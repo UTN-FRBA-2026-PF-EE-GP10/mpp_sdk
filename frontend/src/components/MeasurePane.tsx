@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { ActiveSessionNotice } from '@/components/ActiveSessionNotice'
 import { CurveWorkbench } from '@/components/CurveWorkbench'
 import { LampCard } from '@/components/LampCard'
+import { LampProvider } from '@/components/LampProvider'
 import { PicoConfigPane } from '@/components/PicoConfigPane'
 import { RunPane } from '@/components/RunPane'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -103,7 +104,10 @@ export function MeasurePane({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [single])
 
+  // One lamp poll for the card and for the "use the lamp" option of a sweep
+  // or a run below it.
   return (
+    <LampProvider active={section !== 'config'}>
     <div className="flex flex-col gap-4">
       <Tabs value={section} onValueChange={(value) => setSection(value as Section)}>
         <TabsList>
@@ -161,5 +165,6 @@ export function MeasurePane({
         <PicoConfigPane connected={connected} />
       )}
     </div>
+    </LampProvider>
   )
 }

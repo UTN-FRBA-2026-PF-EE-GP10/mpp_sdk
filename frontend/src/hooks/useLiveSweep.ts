@@ -6,6 +6,7 @@ import {
   startSweep as startSweepRequest,
 } from '@/lib/api'
 import type { LiveSweepState } from '@/lib/api'
+import type { LampPhase, LampRequest } from '@/lib/lamp'
 import type { CurvePoint } from '@/types'
 import { usePolling } from './usePolling'
 
@@ -55,6 +56,8 @@ export function useLiveSweep(enabled = true) {
   // command queue, so the polled `commandError` cannot report it.
   const [actionError, setActionError] = useState<string | null>(null)
   const [demoSource, setDemoSource] = useState(false)
+  const [lampPhase, setLampPhase] = useState<LampPhase | null>(null)
+  const [lampWarmupLeftS, setLampWarmupLeftS] = useState<number | null>(null)
   const lastSeq = useRef(-1)
   // Counts inactive polls that carried no new sweep - reset the moment a
   // sweep is active again or a new seq lands. Counting them (rather than
@@ -67,6 +70,8 @@ export function useLiveSweep(enabled = true) {
     setActive(data.active)
     setCommandError(data.commandError)
     setDemoSource(data.demoSource)
+    setLampPhase(data.lampPhase ?? null)
+    setLampWarmupLeftS(data.lampWarmupLeftS ?? null)
     if (data.seq !== lastSeq.current) {
       // A completed sweep landed: it replaces the live trace outright.
       setPoints(data.points)
@@ -95,7 +100,10 @@ export function useLiveSweep(enabled = true) {
     )
   }, [])
 
-  const start = useCallback(() => send('start-sweep', startSweepRequest), [send])
+  const start = useCallback(
+    (lamp?: LampRequest) => send('start-sweep', () => startSweepRequest(lamp)),
+    [send],
+  )
 
   const releaseRelay = useCallback(() => send('release-relay', releaseRelayRequest), [send])
 
@@ -110,6 +118,8 @@ export function useLiveSweep(enabled = true) {
     active,
     commandError: actionError ?? commandError,
     demoSource,
+    lampPhase,
+    lampWarmupLeftS,
     start,
     startDemo,
     releaseRelay,

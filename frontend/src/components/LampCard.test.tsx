@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { LampCard } from './LampCard'
+import { LampProvider } from './LampProvider'
 import { CaptureModeContext, type CaptureMode } from '@/lib/captureMode'
 import { ApiError } from '@/lib/apiError'
 import * as api from '@/lib/api'
@@ -35,7 +36,9 @@ function status(over: Partial<api.LampStatus> = {}): api.LampStatus {
 function renderCard(mode: CaptureMode = 'hardware') {
   return render(
     <CaptureModeContext.Provider value={{ mode, setMode: vi.fn() }}>
-      <LampCard />
+      <LampProvider>
+        <LampCard />
+      </LampProvider>
     </CaptureModeContext.Provider>,
   )
 }
