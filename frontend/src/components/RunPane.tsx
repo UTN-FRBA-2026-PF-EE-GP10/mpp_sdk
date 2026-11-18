@@ -8,7 +8,7 @@ import { RunPlayerDialog } from '@/components/RunPlayerDialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { useLampOption } from '@/hooks/useLampOption'
+import { stepBusyReason, useLampOption, useOtherStepPhase } from '@/hooks/useLampOption'
 import { useLiveRun } from '@/hooks/useLiveRun'
 import { sessionGoneMessage, useActiveSession, useCaptureSession } from '@/lib/activeSession'
 import { ApiError, isSessionNotFound } from '@/lib/apiError'
@@ -250,7 +250,9 @@ function RunSetupForm({
         ? Math.min(typedDuration, config.maxDurationS)
         : config.defaultDurationS
   const lampOption = useLampOption({ kind: 'run', durationS: runDurationS })
-  const lampBlocked = lampOption.checked && lampOption.blockReason !== null
+  const otherPhase = useOtherStepPhase('run', !simulated)
+  const busyReason = simulated ? null : stepBusyReason(null, otherPhase)
+  const lampBlocked = (lampOption.checked && lampOption.blockReason !== null) || busyReason !== null
 
   // Toggling demo mode swaps `curves` for a different list; a pick from
   // the old one must not linger as a value no option matches.
@@ -447,11 +449,12 @@ function RunSetupForm({
         // hover/focus instead of native `disabled` swallowing pointer
         // events outright.
         focusableWhenDisabled
-        title={disabledReason ?? lampOption.blockReason ?? undefined}
+        title={disabledReason ?? busyReason ?? lampOption.blockReason ?? undefined}
         className="self-start"
       >
         {starting ? 'Starting...' : simulated ? 'Start simulated run' : 'Start run'}
       </Button>
+      {busyReason && <p className="text-xs text-muted-foreground">{busyReason}</p>}
       {!canStart && disabledReason && (
         <p className="text-xs text-muted-foreground">{disabledReason}</p>
       )}
@@ -580,6 +583,7 @@ function RunMonitor({
         <LampPhaseLine
           phase={parseLampPhase(live.lamp_phase)}
           warmupLeftS={parseWarmupLeft(live.lamp_warmup_left_s)}
+          running
         />
       )}
 

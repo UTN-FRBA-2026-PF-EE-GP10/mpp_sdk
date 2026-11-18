@@ -16,7 +16,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { useDemoCapture } from '@/hooks/useDemoCapture'
-import { useLampOption } from '@/hooks/useLampOption'
+import { stepBusyReason, useLampOption, useOtherStepPhase } from '@/hooks/useLampOption'
 import { useLiveSweep } from '@/hooks/useLiveSweep'
 import { saveCurve } from '@/lib/api'
 import { sessionGoneMessage, useActiveSession, useCaptureSession } from '@/lib/activeSession'
@@ -258,7 +258,9 @@ export function CurveWorkbench({
   const hasCapture = !active && points.length > 0
   const lampOption = useLampOption({ kind: 'sweep' })
   const lampPhase = demo ? null : live.lampPhase
-  const lampBlocked = lampOption.checked && lampOption.blockReason !== null
+  const otherPhase = useOtherStepPhase('sweep', !demo)
+  const busyReason = demo ? null : stepBusyReason(lampPhase, otherPhase)
+  const lampBlocked = (lampOption.checked && lampOption.blockReason !== null) || busyReason !== null
   const [selected, setSelected] = useState<CurveRecord | null>(null)
   // Replay-curve buttons run regardless of `connected` (they're local),
   // but Start Measurement/Hand panel to converter never fire in demo mode
@@ -282,7 +284,7 @@ export function CurveWorkbench({
               title={
                 demo
                   ? 'Start Measurement needs real hardware - unavailable in demo mode'
-                  : (lampOption.blockReason ?? undefined)
+                  : (busyReason ?? lampOption.blockReason ?? undefined)
               }
             >
               {active ? 'Measuring...' : 'Start Measurement'}
@@ -345,7 +347,8 @@ export function CurveWorkbench({
           </p>
         )}
         {!demo &&<LampOptionFields option={lampOption} />}
-        <LampPhaseLine phase={lampPhase} warmupLeftS={live.lampWarmupLeftS} />
+        {busyReason && <p className="text-xs text-muted-foreground">{busyReason}</p>}
+        <LampPhaseLine phase={lampPhase} warmupLeftS={live.lampWarmupLeftS} running={active} />
         {commandError && (
           <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
             {commandError}

@@ -10,8 +10,9 @@ export const LAMP_MAX_WINDOW_S = 120
 // Lamp use around one measurement (sweep or run). The server lights the
 // lamp, waits for the warm-up, measures and switches the lamp off again.
 
-/** The server refuses a lamp-assisted step whose lamp-on time is longer. */
-export const LAMP_MAX_ON_S = 110
+/** The server refuses a step when warm-up + duration + margin is over the max. */
+export const LAMP_STEP_MAX_ON_S = 110
+export const LAMP_STEP_MARGIN_S = 5
 export const LAMP_DEFAULT_WARMUP_S = 3
 export const LAMP_MAX_WARMUP_S = 30
 
@@ -39,13 +40,19 @@ export function clampWarmupS(value: number): number {
 }
 
 /** The status line for a lamp-assisted step, or null when there is nothing to say. */
-export function lampPhaseText(phase: LampPhase | null, warmupLeftS: number | null): string | null {
+export function lampPhaseText(
+  phase: LampPhase | null,
+  warmupLeftS: number | null,
+  running = true,
+): string | null {
   if (phase === 'warming') {
     return warmupLeftS == null
       ? 'Warming up the lamp'
       : `Warming up the lamp, ${Math.ceil(warmupLeftS)} s`
   }
   if (phase === 'measuring') return 'Lamp on for the measurement'
+  if (phase === 'off' && running)
+    return 'The lamp is off, this measurement is running without light'
   return null
 }
 

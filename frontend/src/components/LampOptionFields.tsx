@@ -1,5 +1,5 @@
 import type { LampOption } from '@/hooks/useLampOption'
-import { LAMP_MAX_WARMUP_S, lampPhaseText, type LampPhase } from '@/lib/lamp'
+import { LAMP_MAX_WARMUP_S, LAMP_STEP_MARGIN_S, lampPhaseText, type LampPhase } from '@/lib/lamp'
 
 /** "Use the lamp for this measurement": the lamp is on only around the
  * sweep or run, lit and switched off by the server. */
@@ -48,7 +48,7 @@ export function LampOptionFields({ option }: { option: LampOption }) {
           <p className="text-xs text-muted-foreground">
             {option.onTimeS == null
               ? `Lamp on: ${option.warmupS} s warm-up, then until the sweep ends.`
-              : `Lamp on for about ${Math.round(option.onTimeS)} s (${option.warmupS} s warm-up plus the run).`}
+              : `Lamp on for about ${Math.round(option.onTimeS)} s (${option.warmupS} s warm-up, the run and ${LAMP_STEP_MARGIN_S} s margin).`}
           </p>
           {option.blockReason && !disabled && (
             <p className="text-sm font-medium text-destructive" role="alert">
@@ -65,11 +65,14 @@ export function LampOptionFields({ option }: { option: LampOption }) {
 export function LampPhaseLine({
   phase,
   warmupLeftS,
+  running,
 }: {
   phase: LampPhase | null
   warmupLeftS: number | null
+  /** The measurement is still running: only then does "off" need a line. */
+  running: boolean
 }) {
-  const text = lampPhaseText(phase, warmupLeftS)
+  const text = lampPhaseText(phase, warmupLeftS, running)
   if (!text) return null
   return (
     <p className="text-sm font-medium text-amber-700 dark:text-amber-400" aria-live="polite">

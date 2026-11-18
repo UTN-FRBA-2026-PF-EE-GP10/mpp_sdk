@@ -242,6 +242,38 @@ describe('lamp option on a sweep', () => {
     })
   })
 
+  it('disables Start Measurement while a run is warming up the lamp', async () => {
+    handlers['GET /api/runs/live'] = () => ({ json: liveRun({ lamp_phase: 'warming' }) })
+    renderSweep()
+    await waitFor(() =>
+      expect(startButton('Start Measurement').getAttribute('aria-disabled')).toBe('true'),
+    )
+  })
+
+  it('disables Start Measurement while the sweep step is in progress', async () => {
+    handlers['GET /api/data'] = () => ({ json: sweepData({ active: true, lamp_phase: 'measuring' }) })
+    renderSweep()
+    await waitFor(() => expect(screen.getByText('Lamp on for the measurement')).toBeTruthy())
+    expect(startButton('Measuring...').getAttribute('aria-disabled')).toBe('true')
+  })
+
+  it('disables Start with the reason for a power of 0', async () => {
+    renderSweep()
+    await lampReady()
+    fireEvent.click(checkbox())
+    fireEvent.change(screen.getAllByRole('slider')[1], { target: { value: '0' } })
+    expect(startButton('Start Measurement').getAttribute('aria-disabled')).toBe('true')
+    expect(screen.getByText(/power is 0 %/)).toBeTruthy()
+  })
+
+  it('says the lamp is off while a sweep is still running', async () => {
+    handlers['GET /api/data'] = () => ({ json: sweepData({ active: true, lamp_phase: 'off' }) })
+    renderSweep()
+    await waitFor(() =>
+      expect(screen.getByText('The lamp is off, this measurement is running without light')).toBeTruthy(),
+    )
+  })
+
   it('treats an unknown phase as none', async () => {
     handlers['GET /api/data'] = () => ({ json: sweepData({ lamp_phase: 'bogus' }) })
     renderSweep()
@@ -275,7 +307,7 @@ describe('lamp option on a run', () => {
   it('sends the lamp object with the option on', async () => {
     await ready()
     fireEvent.click(checkbox())
-    expect(screen.getByText(/13 s \(3 s warm-up plus the run\)/)).toBeTruthy()
+    expect(screen.getByText(/18 s \(3 s warm-up, the run and 5 s margin\)/)).toBeTruthy()
     fireEvent.click(startButton('Start run'))
     await waitFor(() => expect(count('POST /api/runs/start')).toBe(1))
     expect(bodyOf('POST /api/runs/start')).toMatchObject({ lamp: { power: 0.3, warmup_s: 3 } })
@@ -284,13 +316,13 @@ describe('lamp option on a run', () => {
   it('disables Start with the reason when warm-up plus duration is over 110 s', async () => {
     await ready()
     fireEvent.click(checkbox())
-    fireEvent.change(screen.getByLabelText('Duration (s)'), { target: { value: '108' } })
+    fireEvent.change(screen.getByLabelText('Duration (s)'), { target: { value: '103' } })
     const start = startButton('Start run')
     expect(start.getAttribute('aria-disabled')).toBe('true')
     expect(screen.getByText(/on for 111 s .* limit is 110 s/)).toBeTruthy()
     fireEvent.click(start)
     expect(count('POST /api/runs/start')).toBe(0)
-    fireEvent.change(screen.getByLabelText('Duration (s)'), { target: { value: '107' } })
+    fireEvent.change(screen.getByLabelText('Duration (s)'), { target: { value: '102' } })
     expect(startButton('Start run').getAttribute('aria-disabled')).not.toBe('true')
   })
 
@@ -331,6 +363,31 @@ describe('lamp option on a run', () => {
     await waitFor(() => expect(count('POST /api/runs/stop')).toBe(1))
     // The lamp card keeps its own Off, always enabled.
     expect(startButton('Off').disabled).toBe(false)
+  })
+
+  it('disables Start while a power of 0 is chosen', async () => {
+    await ready()
+    fireEvent.click(checkbox())
+    fireEvent.change(screen.getAllByRole('slider')[1], { target: { value: '0' } })
+    expect(startButton('Start run').getAttribute('aria-disabled')).toBe('true')
+    expect(screen.getByText(/power is 0 %/)).toBeTruthy()
+  })
+
+  it('disables Start while a sweep is warming up', async () => {
+    handlers['GET /api/data'] = () => ({ json: sweepData({ lamp_phase: 'warming', lamp_warmup_left_s: 2 }) })
+    await ready()
+    await waitFor(() =>
+      expect(startButton('Start run').getAttribute('aria-disabled')).toBe('true'),
+    )
+    expect(screen.getAllByText(/lamp-assisted measurement is in progress/).length).toBeGreaterThan(0)
+  })
+
+  it('says the lamp is off while a run still runs', async () => {
+    handlers['GET /api/runs/live'] = () => ({ json: liveRun({ lamp_phase: 'off' }) })
+    renderRun()
+    await waitFor(() =>
+      expect(screen.getByText('The lamp is off, this measurement is running without light')).toBeTruthy(),
+    )
   })
 
   it('shows the measuring text', async () => {

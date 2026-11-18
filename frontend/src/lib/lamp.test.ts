@@ -26,7 +26,10 @@ describe('lamp measurement helpers', () => {
   it('words the phases', () => {
     expect(lampPhaseText('warming', 1.2)).toBe('Warming up the lamp, 2 s')
     expect(lampPhaseText('measuring', null)).toBe('Lamp on for the measurement')
-    expect(lampPhaseText('off', null)).toBeNull()
+    expect(lampPhaseText('off', null, false)).toBeNull()
+    expect(lampPhaseText('off', null, true)).toBe(
+      'The lamp is off, this measurement is running without light',
+    )
   })
 })
 
