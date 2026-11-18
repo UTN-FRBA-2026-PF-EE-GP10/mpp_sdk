@@ -18,6 +18,23 @@ WIRE_ALPHA_UNKNOWN = 0xFFFF
 STATUS_MAGIC = 0xD2
 _AGE_UNIT_S = 0.1
 
+# Equal to the dimmer firmware trip level (EXPOSURE_MAX_ON_MS), so a host window
+# can never be longer than what the dimmer would allow anyway.
+DEFAULT_LAMP_WINDOW_S = 60.0
+MAX_LAMP_WINDOW_S = 120.0
+
+
+class DimmerRefused(RuntimeError):
+    """The dimmer refuses to turn the lamp on (its exposure limiter has tripped)."""
+
+
+def validate_max_on_s(max_on_s: float) -> float:
+    """Return *max_on_s* as a float, or raise ValueError if it is not in (0, MAX_LAMP_WINDOW_S]."""
+    value = float(max_on_s)
+    if not math.isfinite(value) or value <= 0.0 or value > MAX_LAMP_WINDOW_S:
+        raise ValueError(f"max_on_s must be in (0, {MAX_LAMP_WINDOW_S:g}] s, got {max_on_s!r}")
+    return value
+
 
 def alpha_to_wire(alpha_deg: float) -> int:
     """Convert a firing angle in degrees to centi-degrees (rounded to 0.01 degree)."""
@@ -64,6 +81,9 @@ class DimmerStatus:
     set_alpha_deg: float
     applied_alpha_deg: float | None
     age_s: float
+    tripped: bool = False
+    # On time left when not tripped, seconds to wait when tripped.
+    budget_s: int = 0
 
 
 def parse_status_frame(rx: Sequence[int]) -> DimmerStatus | None:
@@ -84,4 +104,6 @@ def parse_status_frame(rx: Sequence[int]) -> DimmerStatus | None:
         set_alpha_deg=((rx[2] << 8) | rx[3]) / 100.0,
         applied_alpha_deg=None if applied == WIRE_ALPHA_UNKNOWN else applied / 100.0,
         age_s=rx[6] * _AGE_UNIT_S,
+        tripped=bool(flags & 0x10),
+        budget_s=rx[7],
     )

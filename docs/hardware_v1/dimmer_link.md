@@ -104,12 +104,26 @@ For a resistive lamp the power fraction at angle `alpha` is `P = 1 - alpha/pi + 
 ## Python use
 
 - `SpiMcuSource` sends the commands.
+- Every "lamp on" has a deadline: `max_on_s` (default 60 s, at most 120 s, else `ValueError`).
+  The lamp is open loop, so a lamp that stays on by mistake is a fire risk.
 - A thread repeats the last alpha every second (the `dimmer_keepalive_s` argument, at most 2 s).
+  At the deadline the same thread sends OFF and stops, also if the caller hangs.
+- A new `set_dimmer_*` call starts a new deadline. `dimmer_window_left_s()` gives the time left
+  (`None` when the lamp is off).
+- `lamp_window(power=...)` or `lamp_window(alpha_deg=...)` is the safe way to use the lamp.
+  It sets the lamp, reads the status once, and always sends OFF when the block ends,
+  also on an exception or Ctrl-C.
+  It raises `DimmerRefused` (after OFF) if the dimmer reports `tripped`.
+- If `dimmer_status()` shows `tripped` while the host thinks the lamp is on, it sends OFF.
+  That OFF is the acknowledgment the dimmer needs before it accepts "on" again.
 - `close()` and `dimmer_off()` stop the thread and switch the lamp off.
 - `scripts/dimmer_set.py` does the same from the command line.
+  With `--hold`, `--max-on-s` sets the longest time the lamp stays on.
+  The status line shows `tripped` and `budget_s`.
 
 ```python
 with SpiMcuSource() as src:
-    src.set_dimmer_power(0.5)  # or set_dimmer_alpha(90.0)
+    with src.lamp_window(power=0.5, max_on_s=10.0):
+        measure()  # the lamp is on here and off afterwards
     print(src.dimmer_status())
 ```
