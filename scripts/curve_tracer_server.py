@@ -20,6 +20,12 @@ the source to the routes once it exists and withdraws it before it closes.
 A lamp command waits at most for one SPI exchange (milliseconds); an ON also
 confirms the link and can take about 1.5 s. See `curve_tracer/lamp.py`.
 
+A sweep or run request may carry `"lamp": {"power": 0.3, "warmup_s": 3}` (or
+`alpha_deg`): the lamp is then on only for the measurement - on, warm-up,
+measure, always off at the end, on Stop, on failure and at shutdown. The total
+lamp time is at most 110 s (422 above, 409 when the dimmer is tripped or its
+budget is too small, 503 without a dimmer link). See `curve_tracer/lamp_step.py`.
+
 A live closed-loop MPPT run (`POST /api/runs/start`) executes on that same
 thread, via `_run_live`/`run_control_loop` (`mpp_sdk/runs/loop.py`) -
 for the run's whole duration, normal curve-tracer polling is displaced,
@@ -91,6 +97,7 @@ except ModuleNotFoundError as exc:  # pragma: no cover
 # Re-exported: tests and other scripts import these names from here.
 from scripts.curve_tracer.cache import _ConfigCache, _Snapshot, _SweepCache
 from scripts.curve_tracer.lamp import _LampController, _LampHolder
+from scripts.curve_tracer.lamp_step import _LampStepRunner
 from scripts.curve_tracer.library_paths import (
     _curve_path,
     _delete_batch,
@@ -244,6 +251,7 @@ def create_app(
     stop_event = stop_event if stop_event is not None else threading.Event()
     config_cache = config_cache if config_cache is not None else _ConfigCache()
     lamp = lamp if lamp is not None else _LampController()
+    lamp_steps = _LampStepRunner(lamp)
     specs = {s.label.lower(): s for s in algorithm_specs()}
 
     # Seeded once, here, rather than per-request: this is "first use" of
@@ -267,6 +275,8 @@ def create_app(
         finally:
             # SIGTERM and Ctrl-C end uvicorn through here. The poll thread's
             # source closing also sends OFF, but it may be busy in a run.
+            # A lamp-assisted step ends first: its thread switches the lamp off.
+            lamp_steps.shutdown()
             lamp.shutdown_off()
 
     app = FastAPI(title="curve-tracer", lifespan=lifespan)
@@ -297,14 +307,16 @@ def create_app(
             return JSONResponse(status_code=403, content={"detail": "cross-site request refused"})
         return await call_next(request)
 
-    register_status_routes(app, cache)
+    register_status_routes(app, cache, lamp_steps)
     register_curve_routes(app, cache)
     register_panel_routes(app, patch_lock)
     # Looked up per call, not bound here: tests replace this module's name
     # after the app exists.
     register_session_routes(app, patch_lock, lambda template_id: get_session_template(template_id))
-    register_run_routes(app, cache, commands, run_cache, run_requests, stop_event, specs, demo)
-    register_hardware_routes(app, cache, commands, run_cache, config_cache)
+    register_run_routes(
+        app, cache, commands, run_cache, run_requests, stop_event, specs, demo, lamp_steps
+    )
+    register_hardware_routes(app, cache, commands, run_cache, config_cache, lamp_steps)
     register_lamp_routes(app, lamp)
 
     if _WEB_ROOT.exists():

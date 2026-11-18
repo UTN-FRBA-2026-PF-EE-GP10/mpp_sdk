@@ -39,6 +39,15 @@ _DEFAULT_V_OUT_MAX = BOARD_V_OUT_MAX
 # aborts before its first point (a dark panel) only clears this way.
 _SWEEP_PENDING_TIMEOUT_S = 15.0
 
+# Lamp-assisted sweep or run (`lamp` option). The dimmer trips at 120 s of
+# continuous on time and a trip cuts the lamp in the middle of the
+# measurement, so a step that needs the lamp on for more than this is refused.
+_LAMP_STEP_MAX_ON_S = 110.0
+# Extra lamp time after the measurement (the poll and save lag), in seconds.
+_LAMP_STEP_MARGIN_S = 5.0
+_LAMP_WARMUP_DEFAULT_S = 3.0
+_LAMP_WARMUP_MAX_S = 30.0
+
 # Live /api/runs/live polling only ever needs enough points to draw a
 # chart, not the full record (that's what the saved RunRecord is for) -
 # smaller than _DEFAULT_MAX_SAMPLES because this endpoint is polled

@@ -38,6 +38,9 @@ class _RunRequest:
     # saved RunRecord in save_and_finish below.
     session_id: str | None = None
     control_period_ms: float | None = None
+    # The lamp settings used (power or alpha_deg, warmup_s), recorded in the
+    # saved run's settings. None when the run had no lamp option.
+    lamp: dict | None = None
 
 
 class _LiveRunCache:
@@ -65,6 +68,23 @@ class _LiveRunCache:
         self._saved_run_id: str | None = None
         self._simulated = False
         self._reference_points: tuple[tuple[float, float], ...] = ()
+        # Which run holds the slot: a lamp step must not mistake a newer run for its own.
+        self._run_no = 0
+
+    def run_no(self) -> int:
+        with self._lock:
+            return self._run_no
+
+    def is_running(self, run_no: int) -> bool:
+        """Cheap check (no sample copy) that run `run_no` still holds the slot."""
+        with self._lock:
+            return self._status == "running" and self._run_no == run_no
+
+    def release_unstarted(self) -> None:
+        """Give the slot back for a run that never started (its lamp refused)."""
+        with self._lock:
+            if self._status == "running":
+                self._status = "idle"
 
     def stop_if_running(self, stop_event: threading.Event) -> bool:
         """Atomically check-and-set: `stop_event.set()` happens under the
@@ -102,6 +122,7 @@ class _LiveRunCache:
             if self._status == "running":
                 return False
             self._status = "running"
+            self._run_no += 1
             self._algorithm = algorithm
             self._label = label
             self._curve_ref = curve_ref

@@ -47,6 +47,21 @@ class LampError(Exception):
         self.detail = detail
 
 
+_CAP_TOLERANCE = 1e-9
+
+
+def checked_power(power: float | None, alpha_deg: float | None, max_power: float) -> float:
+    """The power a request asks for, or LampError 422 above the server cap.
+
+    An angle is capped through the power it gives, so --lamp-max-power binds both.
+    """
+    value = power if power is not None else lamp_power_fraction(alpha_deg)
+    # The alpha that gives exactly the cap power is found by bisection, so it can be a hair over.
+    if value > max_power + _CAP_TOLERANCE:
+        raise LampError(422, f"lamp power {value:.3f} is above the server cap {max_power:g}")
+    return value
+
+
 class _LampHolder:
     """Thread-safe slot for the source the lamp methods are called on.
 
@@ -238,14 +253,27 @@ class _LampController:
                 _log.exception("dimmer OFF failed")
         return error
 
-    def off(self) -> dict:
-        """Switch the lamp off and return the status. Never raises: OFF is the safe command."""
+    def generations(self) -> tuple[int, int]:
+        """`(off_gen, on_gen)`. A lamp-assisted step compares it with the value it
+        saw after its own ON: any change means an operator command came since."""
+        with self._gen_lock:
+            return self._off_gen, self._on_gen
+
+    def off(self, *, only_if_on_gen: int | None = None) -> dict | None:
+        """Switch the lamp off and return the status. Never raises: OFF is the safe command.
+
+        With `only_if_on_gen`, the OFF is skipped (and None returned) when an ON newer
+        than that one came in, so a lamp-assisted step never ends an operator's newer
+        window. The check and the generation bump share one lock section.
+        """
         source = self.holder.get()
         if source is None:
             snap = self._unavailable("no board configured", available=False)
             self._store(snap)
             return snap
         with self._gen_lock:
+            if only_if_on_gen is not None and self._on_gen != only_if_on_gen:
+                return None
             self._off_gen += 1
         with self._cmd_lock:
             error = self._off_with_retry(source)
@@ -271,6 +299,12 @@ class _LampController:
 
     def on(self, *, power: float | None, alpha_deg: float | None, max_on_s: float) -> dict:
         """Open a lamp window and return the confirmed status, or raise LampError."""
+        return self.on_tracked(power=power, alpha_deg=alpha_deg, max_on_s=max_on_s)[0]
+
+    def on_tracked(
+        self, *, power: float | None, alpha_deg: float | None, max_on_s: float
+    ) -> tuple[dict, tuple[int, int]]:
+        """Like `on`, also returning the `generations()` pair right after this ON."""
         with self._gen_lock:
             self._on_gen += 1
             on_gen, off_gen = self._on_gen, self._off_gen
@@ -308,6 +342,8 @@ class _LampController:
         with self._gen_lock:
             if self._off_gen != off_gen:
                 raise cancelled
+        # This ON's own generations, not the current ones: a newer ON must show as a change.
+        generations = (off_gen, on_gen)
         snap = self._build(source, status)
         self._store(snap, seq)
         if status.tripped:
@@ -317,7 +353,7 @@ class _LampController:
                 f"dimmer exposure limiter tripped: wait {status.budget_s} s, "
                 "then press Off to re-arm",
             )
-        return snap
+        return snap, generations
 
     def _confirm(self, source: Any) -> DimmerStatus | None:
         end = time.monotonic() + _CONFIRM_S

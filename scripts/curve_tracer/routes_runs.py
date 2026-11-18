@@ -16,6 +16,8 @@ from mpp_sdk.curves.record import now_utc
 from mpp_sdk.runs import library as run_library
 from mpp_sdk.runs.loop import MAX_CONTROL_PERIOD_MS
 from scripts.curve_tracer.cache import _SweepCache
+from scripts.curve_tracer.lamp import LampError
+from scripts.curve_tracer.lamp_step import _LampStepRunner
 from scripts.curve_tracer.library_paths import (
     _curve_path,
     _delete_batch,
@@ -30,6 +32,7 @@ from scripts.curve_tracer.limits import (
     _DEFAULT_V_MAX,
     _DEFAULT_V_OUT_MAX,
     _DEMO_LABEL_RE,
+    _LAMP_STEP_MARGIN_S,
     _MAX_BATCH_DELETE_IDS,
     _MAX_INLINE_CURVE_POINTS,
     _MAX_RUN_DURATION_S,
@@ -54,6 +57,7 @@ def register_run_routes(
     stop_event: threading.Event,
     specs: dict[str, AlgorithmSpec],
     demo: bool,
+    lamp_steps: _LampStepRunner,
 ) -> None:
     @app.get("/api/runs")
     def get_runs() -> list[dict]:
@@ -118,7 +122,10 @@ def register_run_routes(
         # frame confirms it - a run accepted in that gap would still
         # collide with it.
         if not body.simulated and (
-            not commands.empty() or cache.snapshot().active or cache.sweep_pending()
+            not commands.empty()
+            or cache.snapshot().active
+            or cache.sweep_pending()
+            or lamp_steps.active()
         ):
             raise HTTPException(
                 status_code=409,
@@ -256,6 +263,18 @@ def register_run_routes(
                 status_code=400, detail=f"label must be at most {_RUN_LABEL_MAX_LEN} characters"
             )
 
+        lamp_plan = None
+        lamp_needed_s = 0.0
+        if body.lamp is not None:
+            # All lamp checks before the slot is claimed and anything is switched on.
+            try:
+                lamp_plan = lamp_steps.plan(
+                    body.lamp.power, body.lamp.alpha_deg, body.lamp.warmup_s
+                )
+                lamp_needed_s = lamp_steps.preflight(lamp_plan, duration_s, "run duration")
+            except LampError as exc:
+                raise HTTPException(exc.status_code, exc.detail) from exc
+
         if not run_cache.try_start(
             algorithm=spec.label,
             label=label,
@@ -277,17 +296,42 @@ def register_run_routes(
             curve_points=curve_points,
             session_id=body.session_id,
             control_period_ms=body.control_period_ms,
+            lamp=lamp_plan.settings() if lamp_plan is not None else None,
         )
-        if body.simulated:
-            # Never touches spidev, so it does not need to wait for the
-            # poll thread that owns the real board - see the module
-            # docstring. try_start above already claimed the one run slot,
-            # so this can never end up running alongside a hardware run.
-            threading.Thread(
-                target=_run_simulated, args=(run_cache, request, stop_event), daemon=True
-            ).start()
+
+        def start_measurement() -> None:
+            if body.simulated:
+                # Never touches spidev, so it does not need to wait for the
+                # poll thread that owns the real board - see the module
+                # docstring. try_start above already claimed the one run slot,
+                # so this can never end up running alongside a hardware run.
+                threading.Thread(
+                    target=_run_simulated, args=(run_cache, request, stop_event), daemon=True
+                ).start()
+            else:
+                run_requests.put_nowait(request)
+
+        if lamp_plan is None:
+            lamp_steps.forget()
+            start_measurement()
         else:
-            run_requests.put_nowait(request)
+            run_no = run_cache.run_no()
+            try:
+                lamp_steps.begin(
+                    "run",
+                    lamp_plan,
+                    lamp_needed_s,
+                    cancel=stop_event,
+                    start=start_measurement,
+                    is_done=lambda: not run_cache.is_running(run_no),
+                    on_abort=lambda reason: run_cache.finish(
+                        aborted=True, reason=reason, saved_run_id=None
+                    ),
+                    measure_deadline_s=duration_s + _LAMP_STEP_MARGIN_S,
+                )
+            except LampError as exc:
+                run_cache.release_unstarted()
+                raise HTTPException(exc.status_code, exc.detail) from exc
         return {
             "status": "running",
             "algorithm": spec.label,
@@ -320,7 +364,7 @@ def register_run_routes(
         in registration order, and "live" would otherwise be swallowed as
         a (nonexistent) run id by that path-parameter route.
         """
-        return run_cache.snapshot(max_samples)
+        return {**run_cache.snapshot(max_samples), **lamp_steps.snapshot("run")}
 
     @app.get("/api/runs/{run_id}")
     def get_run(run_id: str, max_samples: int = _DEFAULT_MAX_SAMPLES) -> dict:

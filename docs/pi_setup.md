@@ -104,6 +104,35 @@ Safety model:
 - The lamp is switched off when the server stops. With `--demo` a simulated
   dimmer with the same rules is used.
 
+Lamp only around a measurement:
+
+- `POST /api/start-sweep` and `POST /api/runs/start` take an optional
+  `lamp` object: `{"power": 0.3, "warmup_s": 3}`. Use `alpha_deg` instead
+  of `power` (exactly one). `warmup_s` is 0 to 30 s, default 3. The same
+  power rules and `--lamp-max-power` cap as `POST /api/dimmer` apply.
+- The server switches the lamp on, waits `warmup_s`, starts the
+  measurement, and switches the lamp off when it ends. It also switches
+  off on Stop, on an abort, on an error, on a sweep that never reports,
+  and when the server stops.
+- The lamp is on for `warmup_s` + duration + 5 s margin. That total must
+  be at most 110 s, because the dimmer trips at 120 s. For a sweep the
+  duration is taken as 15 s, the time the server waits for a sweep to
+  report. A longer total gets 422 and the message gives the numbers.
+- Refusals, all before anything is switched on or started: 409 when the
+  dimmer is tripped or its budget is smaller than the total (the message
+  gives the seconds to wait), 503 when the dimmer link is not confirmed.
+- `lamp_phase` in `GET /api/runs/live` and `GET /api/data` is `null` (no
+  lamp option), `warming`, `measuring` or `off`. `lamp_warmup_left_s`
+  counts down while warming.
+- Stop during the warm-up cancels the run and switches the lamp off. The
+  measurement never starts.
+- A manual `POST /api/dimmer/off` ends the lamp phase (`off`). During the
+  warm-up the measurement is cancelled. During the measurement it goes on,
+  but in the dark. A newer manual window is never switched off by the
+  step.
+- A run that used the lamp keeps `lamp` (power or `alpha_deg`, and
+  `warmup_s`) in its record settings.
+
 The server has no login. Keep it on the bench network. See the safety
 notes in the [measurement procedure](measurement_procedure.md).
 

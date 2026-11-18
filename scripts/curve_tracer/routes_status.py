@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from harness.common import algorithm_specs
 from mpp_sdk.curves import MEASUREMENT_KINDS
 from scripts.curve_tracer.cache import _SweepCache
+from scripts.curve_tracer.lamp_step import _LampStepRunner
 from scripts.curve_tracer.limits import (
     _DEFAULT_I_MAX,
     _DEFAULT_INITIAL_DUTY,
@@ -16,8 +17,12 @@ from scripts.curve_tracer.limits import (
     _MAX_RUN_DURATION_S,
 )
 
+_NO_LAMP = {"lamp_phase": None, "lamp_warmup_left_s": None}
 
-def register_status_routes(app: FastAPI, cache: _SweepCache) -> None:
+
+def register_status_routes(
+    app: FastAPI, cache: _SweepCache, lamp_steps: _LampStepRunner | None = None
+) -> None:
     @app.get("/api/data")
     def get_data() -> dict:
         snap = cache.snapshot()
@@ -30,6 +35,8 @@ def register_status_routes(app: FastAPI, cache: _SweepCache) -> None:
             "sweep_id": snap.seq,
             "command_error": snap.command_error,
             "demo_source": snap.demo_source,
+            # null when the last sweep had no lamp option: see lamp_step.py
+            **(lamp_steps.snapshot("sweep") if lamp_steps else _NO_LAMP),
         }
 
     @app.get("/api/measurement-kinds")
