@@ -569,3 +569,11 @@ def test_lamp_window_good_status_on_second_poll(spi_mcu_source, fast_poll):  # n
     with src.lamp_window(power=0.5):
         pass
     src.close()
+
+
+def test_exposure_limits_match_firmware():
+    from mpp_sdk.io.dimmer import MAX_LAMP_WINDOW_S
+
+    max_ms = _rust_const("EXPOSURE_MAX_ON_MS")
+    assert max_ms == MAX_LAMP_WINDOW_S * 1000
+    assert _rust_const("EXPOSURE_RESUME_MS") < max_ms

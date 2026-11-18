@@ -74,7 +74,13 @@ def alpha_for_power(fraction: float) -> float:
 
 @dataclass(frozen=True)
 class DimmerStatus:
-    """Dimmer state as reported by the Pico."""
+    """Dimmer state as reported by the Pico.
+
+    ``tripped`` and ``budget_s`` are unknown when ``link_ok`` is false (the Pico
+    then sends 0 and 0). ``budget_s == 0`` does not mean blocked: only ``tripped``
+    does. The Pico's own OFF (at boot and after its 3 s host timeout) also counts
+    as the dimmer's OFF acknowledgment.
+    """
 
     link_ok: bool
     mains: bool

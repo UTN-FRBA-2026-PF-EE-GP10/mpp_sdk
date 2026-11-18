@@ -181,6 +181,9 @@ For a resistive lamp the power fraction at angle `alpha` is `P = 1 - alpha/pi + 
   `timed_out` is not checked: the Pico reports it from a cache that can be 1 s old.
 - If `dimmer_status()` shows `tripped` while the host thinks the lamp is on, it sends OFF.
   That OFF is the acknowledgment the dimmer needs before it accepts "on" again.
+- `tripped` and `budget_s` are unknown when `link_ok` is false (the Pico sends 0 and 0).
+  `budget_s == 0` does not mean blocked: only `tripped` does.
+  The Pico's own OFF (at boot and after its 3 s host timeout) also counts as the OFF acknowledgment.
 - `close()` and `dimmer_off()` stop the thread and switch the lamp off.
 - `scripts/dimmer_set.py` does the same from the command line.
   With `--hold`, `--max-on-s` sets the longest time the lamp stays on.
