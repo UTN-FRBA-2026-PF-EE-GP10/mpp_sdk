@@ -1,0 +1,158 @@
+# Two-Way ANOVA for Comparing MPPT Algorithms
+
+Design document for a planned two-factor analysis of variance for the
+comparison harness and experimental benchmark. It is not implemented: the repo has no
+`harness/compare_anova.py` and no `statsmodels` dependency yet. The goal is to determine whether
+the performance differences observed between the five MPPT algorithms are
+**statistically significant**, and whether they depend on the operational scenario
+(algorithm × condition interaction).
+
+---
+
+## 1. Why an ANOVA is Needed
+
+A single run per algorithm provides only a point estimate, not a distribution.
+Without formal statistical testing, we cannot rigorously claim in a paper or thesis
+that "Algorithm X performs significantly better than Algorithm Y" - only that
+"under this specific seed and run, X captured more energy than Y".
+
+The two-way ANOVA answers three critical scientific questions:
+
+1. **Main effect A (Algorithm):** Is there a statistically significant difference
+   between at least one pair of algorithms, averaged across all test scenarios?
+2. **Main effect B (Condition / Scenario):** Does the environmental scenario
+   (single peak, partial shading) significantly affect tracking
+   performance?
+3. **Interaction A×B (Algorithm × Scenario):** Does an algorithm's relative
+   advantage depend on the condition? (e.g. P&O is competitive under uniform full
+   sun but degrades under partial shading - this is a direct interaction effect).
+
+---
+
+## 2. Experimental Design
+
+### 2.1. Factors and Levels
+
+| Factor | Type | Levels | Description |
+|---|---|---|---|
+| **Factor A - Algorithm** | Between-subjects | 5 levels | `P&O`, `InCond`, `Fuzzy`, `Scan&Track`, `PSO` |
+| **Factor B - Scenario** | Within-subjects / Environmental | 2 levels | Defined below (§2.2) |
+
+!!! note
+    The design is a **full factorial**: every combination of (Algorithm × Scenario)
+    is executed with $N \ge 5\text{ to }10$ repetitions.
+
+### 2.2. The Two Planned Benchmark Scenarios (Factor B)
+
+To directly align with the experimental bench campaign, Factor B is defined by the
+two planned physical scenarios:
+
+| Level | Scenario Name | Physical Setup | What It Tests |
+|---|---|---|---|
+| **B₁** | **Uniform Steady (Single Peak)** | Both panels @ $90^\circ$, constant lamp power | Baseline steady-state efficiency ($\eta_{ss}$), lock-on speed ($T_c$), and voltage ripple ($\Delta V_{pp}$). |
+| **B₂** | **Static Partial Shading (Multi-Peak)** | Panel A @ $90^\circ$, Panel B @ $45^\circ$, constant lamp power | Susceptibility to local-maximum traps ($D_{trap}$), global search capability, and GMPP hit rate ($HR_{GMPP}$). |
+
+### 2.3. Dependent Variables
+
+A separate two-way ANOVA can be computed for each primary metric of interest:
+
+| Metric | Symbol | Type | Primary Role in ANOVA |
+|---|:---:|---|---|
+| **Steady-State Efficiency** | $\eta_{ss}$ | Continuous, $[0, 1]$ | **Primary Headline Metric** |
+| **Normalized RMSE** | $nRMSE$ | Continuous, $\ge 0$ | Steady-state tracking precision |
+| **Transient Energy Loss** | $E_{loss}$ | Continuous, $\ge 0$ | Search transient penalty (Joules) |
+| **Convergence Time** | $T_c$ | Continuous, $\ge 0$ | Transient responsiveness |
+
+!!! warning
+    The GMPP hit rate ($HR_{GMPP}$) is a **proportion** / binary outcome (success/trap).
+    An ANOVA on raw proportions violates normality assumptions. For $HR_{GMPP}$, use
+    a logistic regression model (generalized linear model with logit link) or Fisher's
+    exact test across algorithms.
+
+### 2.4. Sources of Repetitions ($N \ge 5\text{ to }10$)
+
+To satisfy ANOVA variance requirements, each cell must have genuine variability:
+
+| Algorithm Class | Mechanism for Generating Repetitions |
+|---|---|
+| **Stochastic (PSO)** | Vary RNG seed: $\text{seed} \in \{0, 1, \dots, N-1\}$. |
+| **Local Trackers (P&O, InCond, Fuzzy)** | Vary starting duty: $D_0 \in \{0.20, 0.25, 0.35, 0.45, 0.50\}$ + natural bench electrical sensor noise. |
+| **Deterministic Global (Scan&Track)** | Repeated runs across the physical profile with bench electrical sensor noise and slight lamp thermal drift. |
+
+---
+
+## 3. Data Pipeline & Verification of Assumptions
+
+### 3.1. Assumptions Check
+
+Before running the parametric ANOVA, the planned pipeline would verify:
+
+1. **Normality of Residuals:** Shapiro-Wilk test (`scipy.stats.shapiro`) on model residuals.
+2. **Homoscedasticity (Equal Variances):** Levene's test (`scipy.stats.levene`) across groups.
+
+Decision flow:
+
+- If the Shapiro-Wilk test passes ($p > 0.05$) and Levene's test passes: two-way parametric ANOVA, Type II sum of
+  squares.
+- If Shapiro-Wilk passes but Levene's test fails: with a balanced design ($N \ge 5$ per cell) use a robust two-way
+  ANOVA (the central limit theorem applies). With fewer repetitions, use the non-parametric path.
+- If Shapiro-Wilk fails: non-parametric analysis (Kruskal-Wallis or Aligned Rank Transform).
+- Parametric path with $p < 0.05$: Tukey HSD pairwise comparisons. Non-parametric path with $p < 0.05$: Dunn post-hoc
+  test with Bonferroni correction.
+- Otherwise: no statistically significant difference.
+
+### 3.2. Sketch with `statsmodels`
+
+`statsmodels` is not a project dependency yet. The code below is a sketch of the planned analysis.
+
+```python
+import statsmodels.api as sm
+from statsmodels.formula.api import ols
+from statsmodels.stats.multicomp import pairwise_tukeyhsd
+
+# Two-way ANOVA with Type II Sum of Squares (appropriate for factorial designs)
+model = ols("eta ~ C(algorithm) * C(scenario)", data=df).fit()
+anova_table = sm.stats.anova_lm(model, typ=2)
+
+# Post-hoc pairwise comparison (Tukey HSD)
+tukey = pairwise_tukeyhsd(df["eta"], df["algorithm"], alpha=0.05)
+```
+
+---
+
+## 4. Visualisation for Papers & Thesis
+
+The planned analysis would produce:
+
+1. **Interaction Plot:** Mean $\eta$ versus Scenario for each of the 5 algorithms. Non-parallel lines visually
+   demonstrate the Algorithm × Scenario interaction.
+2. **Boxplots per Cell:** Distribution of $\eta$ showing spread, median, and outliers across the $5 \times 2 = 10$
+   cells.
+3. **Tukey HSD Significance Heatmap:** Pairwise matrix highlighting which algorithms differ significantly
+   ($p < 0.05, p < 0.01, p < 0.001$).
+
+---
+
+## 5. Planned Location and Outputs
+
+Nothing in this section exists in the repo yet. Planned layout:
+
+```text
+harness/
+├── compare_anova.py          # Main script: processes data & computes ANOVA
+├── output/
+│   ├── anova_data.csv        # Cleaned dataset (algorithm, scenario, rep, eta, nrmse)
+│   ├── anova_table.csv       # Standard ANOVA table (SS, df, MS, F, p-value)
+│   ├── anova_interaction.png # Interaction & box plots
+│   └── anova_tukey.csv       # Pairwise post-hoc comparisons
+```
+
+---
+
+## 6. References
+
+- Montgomery, D.C. (2017). *Design and Analysis of Experiments*, 9th ed. Wiley.
+- Yang, B. et al. (2023). *State-of-the-art review of MPPT techniques for hybrid PV-TEG systems.* Global Energy
+  Interconnection, 6(5), 567–591. (Table 4 uses ANOVA for algorithm benchmarking).
+- [metrics_analysis.md](metrics_analysis.md) - Detailed formulation of metrics.
+- [metrics_summary.md](metrics_summary.md) - Complete metrics catalogue and selection.

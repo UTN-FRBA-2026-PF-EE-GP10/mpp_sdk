@@ -7,6 +7,8 @@ import math
 import threading
 import time
 import weakref
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 
 from .base import SignalSource
@@ -16,11 +18,14 @@ from .board import (
     PSU_VOUT_TARGET_CEILING_MV,
 )
 from .dimmer import (
+    DEFAULT_LAMP_WINDOW_S,
     WIRE_ALPHA_OFF,
+    DimmerRefused,
     DimmerStatus,
     alpha_for_power,
     alpha_to_wire,
     parse_status_frame,
+    validate_max_on_s,
 )
 from .spi_crc import crc8
 
@@ -88,6 +93,10 @@ _CMD_DIMMER_STATUS = 0xD2
 _DIMMER_HOST_TIMEOUT_S = 3.0
 _MAX_DIMMER_KEEPALIVE_S = 2.0
 _DIMMER_STATUS_ATTEMPTS = 2
+_OFF_ATTEMPTS = 3
+# The Pico refreshes the dimmer status about once a second.
+_LINK_CONFIRM_S = 1.5
+_LINK_POLL_S = 0.25
 
 # Replay a curve stored in the firmware instead of sweeping a real panel -
 # one byte per stored curve. Must match spi_slave_pio.rs's
@@ -244,6 +253,7 @@ class SpiMcuSource(SignalSource):
         # shares the bus with the caller.
         self._lock = threading.RLock()
         self._dimmer_wire = WIRE_ALPHA_OFF
+        self._dimmer_deadline: float | None = None
         self._dimmer_keepalive_s = float(dimmer_keepalive_s)
         self._dimmer_stop = threading.Event()
         self._dimmer_thread: threading.Thread | None = None
@@ -1012,27 +1022,114 @@ class SpiMcuSource(SignalSource):
 
     # ── lamp dimmer ───────────────────────────────────────────────────────────
 
-    def set_dimmer_alpha(self, alpha_deg: float) -> None:
-        """Set the lamp firing angle (0 = full on, 180 = off) and keep it alive."""
-        wire = alpha_to_wire(alpha_deg)
-        with self._lock:
-            self._dimmer_wire = wire
-            self._send_config_cmd(_CMD_DIMMER_SET_ALPHA, wire)
-        if wire == WIRE_ALPHA_OFF:
-            self._stop_dimmer_keepalive()
-        else:
-            self._start_dimmer_keepalive()
+    def set_dimmer_alpha(
+        self, alpha_deg: float, *, max_on_s: float = DEFAULT_LAMP_WINDOW_S
+    ) -> None:
+        """Set the lamp firing angle (0 = full on, 180 = off) and keep it alive.
 
-    def set_dimmer_power(self, fraction: float) -> None:
+        The lamp is on for at most *max_on_s* seconds: the keepalive thread sends
+        OFF at the deadline and stops. A new call starts a new deadline.
+        """
+        window = validate_max_on_s(max_on_s)
+        wire = alpha_to_wire(alpha_deg)
+        if wire == WIRE_ALPHA_OFF:
+            self.dimmer_off()
+            return
+        with self._lock:
+            try:
+                self._send_config_cmd(_CMD_DIMMER_SET_ALPHA, wire)
+            except BaseException:
+                # The lamp state is unknown: report off and let the keepalive end.
+                self._dimmer_wire = WIRE_ALPHA_OFF
+                self._dimmer_deadline = None
+                raise
+            self._dimmer_wire = wire
+            self._dimmer_deadline = time.monotonic() + window
+        self._start_dimmer_keepalive()
+
+    def set_dimmer_power(self, fraction: float, *, max_on_s: float = DEFAULT_LAMP_WINDOW_S) -> None:
         """Set the lamp power as a fraction of full power (resistive lamp)."""
-        self.set_dimmer_alpha(alpha_for_power(fraction))
+        self.set_dimmer_alpha(alpha_for_power(fraction), max_on_s=max_on_s)
 
     def dimmer_off(self) -> None:
-        """Switch the lamp off and stop the keepalive."""
-        self._stop_dimmer_keepalive()
+        """Switch the lamp off and stop the keepalive. Never call it from the keepalive thread."""
+        try:
+            # State and OFF frame first: a stale resend then sees OFF, and a
+            # signal during the join below cannot skip the OFF frame.
+            with self._lock:
+                self._dimmer_wire = WIRE_ALPHA_OFF
+                self._dimmer_deadline = None
+                self._send_config_cmd(_CMD_DIMMER_SET_ALPHA, WIRE_ALPHA_OFF)
+        finally:
+            self._stop_dimmer_keepalive()
+
+    def _dimmer_off_retry(self) -> Exception | None:
+        """Try dimmer_off up to _OFF_ATTEMPTS times. Returns the last error, or None on success."""
+        error: Exception | None = None
+        for _ in range(_OFF_ATTEMPTS):
+            try:
+                self.dimmer_off()
+                return None
+            except Exception as exc:
+                error = exc
+                _log.exception("dimmer OFF failed")
+        return error
+
+    def dimmer_window_left_s(self) -> float | None:
+        """Seconds until the host switches the lamp off, or None when the lamp is off."""
         with self._lock:
-            self._dimmer_wire = WIRE_ALPHA_OFF
-            self._send_config_cmd(_CMD_DIMMER_SET_ALPHA, WIRE_ALPHA_OFF)
+            deadline = self._dimmer_deadline
+            if self._dimmer_wire == WIRE_ALPHA_OFF or deadline is None:
+                return None
+            return max(0.0, deadline - time.monotonic())
+
+    @contextmanager
+    def lamp_window(
+        self,
+        *,
+        power: float | None = None,
+        alpha_deg: float | None = None,
+        max_on_s: float = DEFAULT_LAMP_WINDOW_S,
+    ) -> Iterator[None]:
+        """Lamp on inside the block, always off after it (also on an exception or Ctrl-C).
+
+        Raises DimmerRefused, after sending OFF, if the dimmer reports a trip.
+        """
+        if (power is None) == (alpha_deg is None):
+            raise ValueError("give exactly one of power and alpha_deg")
+        validate_max_on_s(max_on_s)
+        body_failed = False
+        try:
+            if power is not None:
+                self.set_dimmer_power(power, max_on_s=max_on_s)
+            else:
+                self.set_dimmer_alpha(alpha_deg, max_on_s=max_on_s)
+            status = self._confirm_dimmer_link()
+            if status.tripped:
+                raise DimmerRefused(
+                    f"dimmer exposure limiter tripped, wait {status.budget_s} s and retry"
+                )
+            yield
+        except BaseException:
+            body_failed = True
+            raise
+        finally:
+            error = self._dimmer_off_retry()
+            # Never replace the original exception. After a normal body the
+            # caller must hear that the lamp state is unknown.
+            if error is not None and not body_failed:
+                raise error
+
+    def _confirm_dimmer_link(self) -> DimmerStatus:
+        """Poll for a valid status with link_ok, or raise DimmerRefused (fail closed)."""
+        end = time.monotonic() + _LINK_CONFIRM_S
+        while True:
+            status = self.dimmer_status()
+            if status is not None and status.link_ok:
+                return status
+            if time.monotonic() >= end:
+                raise DimmerRefused("dimmer link not confirmed")
+            time.sleep(_LINK_POLL_S)
 
     def dimmer_status(self) -> DimmerStatus | None:
         """Read the dimmer status through the Pico, or None if no valid reply.
@@ -1047,12 +1144,24 @@ class SpiMcuSource(SignalSource):
                 rx = self._exchange(round(self._duty * 65535), 0)
             status = parse_status_frame(rx)
             if status is not None:
+                if status.tripped:
+                    with self._lock:
+                        lamp_on = self._dimmer_wire != WIRE_ALPHA_OFF
+                    # The lock is released here: dimmer_off joins the keepalive
+                    # thread, which needs the lock. This OFF is the acknowledgment
+                    # the dimmer waits for before it accepts "on" again.
+                    if lamp_on:
+                        self.dimmer_off()
                 return status
         return None
 
     def _start_dimmer_keepalive(self) -> None:
         with self._lock:
-            if self._dimmer_thread is not None and self._dimmer_thread.is_alive():
+            if (
+                self._dimmer_thread is not None
+                and self._dimmer_thread.is_alive()
+                and not self._dimmer_stop.is_set()
+            ):
                 return
             self._dimmer_stop = threading.Event()
             thread = threading.Thread(
@@ -1071,10 +1180,21 @@ class SpiMcuSource(SignalSource):
             thread.join(timeout=_DIMMER_HOST_TIMEOUT_S)
         self._dimmer_thread = None
 
-    def _dimmer_resend(self) -> None:
+    def _dimmer_resend(self) -> bool:
+        """Resend the alpha, or send OFF at the deadline. False means the thread must end."""
         with self._lock:
-            if self._dimmer_wire != WIRE_ALPHA_OFF:
-                self._exchange(self._dimmer_wire, _CMD_DIMMER_SET_ALPHA)
+            if self._dimmer_wire == WIRE_ALPHA_OFF:
+                return False
+            deadline = self._dimmer_deadline
+            if deadline is not None and time.monotonic() >= deadline:
+                # Set the state first so it is right even if the send fails.
+                self._dimmer_wire = WIRE_ALPHA_OFF
+                self._dimmer_deadline = None
+                self._dimmer_stop.set()
+                self._send_config_cmd(_CMD_DIMMER_SET_ALPHA, WIRE_ALPHA_OFF)
+                return False
+            self._exchange(self._dimmer_wire, _CMD_DIMMER_SET_ALPHA)
+            return True
 
     @property
     def is_dimmer_active(self) -> bool:
@@ -1112,15 +1232,31 @@ def _dimmer_keepalive_loop(
     source_ref: weakref.ref, stop: threading.Event, interval_s: float
 ) -> None:
     # Holds only a weak reference so a dropped source can be collected.
-    while not stop.wait(interval_s):
+    wait_s = interval_s
+    while not stop.wait(wait_s):
         source = source_ref()
         if source is None:
             return
         try:
-            source._dimmer_resend()
+            if not source._dimmer_resend():
+                return
+            deadline = source._dimmer_deadline
+            # Wake up at the deadline, not up to one interval after it.
+            wait_s = interval_s
+            if deadline is not None:
+                wait_s = min(interval_s, max(0.001, deadline - time.monotonic()))
         except Exception:
             # The Pico turns the lamp off after its timeout; report that state.
-            source._dimmer_wire = WIRE_ALPHA_OFF
-            _log.exception("dimmer keepalive failed, lamp will time out")
+            _log.exception("dimmer keepalive failed, sending OFF")
+            with source._lock:
+                source._dimmer_wire = WIRE_ALPHA_OFF
+                source._dimmer_deadline = None
+                # Not dimmer_off: it would join this very thread.
+                for _ in range(_OFF_ATTEMPTS):
+                    try:
+                        source._send_config_cmd(_CMD_DIMMER_SET_ALPHA, WIRE_ALPHA_OFF)
+                        break
+                    except Exception:
+                        _log.exception("dimmer OFF failed, lamp will time out")
             return
         del source

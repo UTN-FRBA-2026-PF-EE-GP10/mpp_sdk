@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ActiveSessionNotice } from '@/components/ActiveSessionNotice'
 import { CurveWorkbench } from '@/components/CurveWorkbench'
+import { LampCard } from '@/components/LampCard'
 import { PicoConfigPane } from '@/components/PicoConfigPane'
 import { RunPane } from '@/components/RunPane'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -111,6 +112,10 @@ export function MeasurePane({
           <TabsTrigger value="config">Pico Configuration</TabsTrigger>
         </TabsList>
       </Tabs>
+
+      {/* Both a curve and a run need the panels lit, so the lamp sits above
+          both workflows; the Pico config tab has nothing to do with it. */}
+      {section !== 'config' && <LampCard />}
 
       {section === 'curve' && (
         <>
