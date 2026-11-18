@@ -78,7 +78,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#mppt-measurement-protocol-closed-loop-telemetry-flow" class="md-skip">
+        <a href="#mppt-measurement-protocol" class="md-skip">
           Skip to content
         </a>
       
@@ -651,22 +651,33 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#1-problem-statement-higher-voltage-drift-v-v_textmpp" class="md-nav__link">
+  <a href="#why-stale-telemetry-makes-the-voltage-drift-up" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. Problem Statement: Higher Voltage Drift (\(V &gt; V_{\text{mpp}}\))
+        Why: stale telemetry makes the voltage drift up
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="1. Problem Statement: Higher Voltage Drift (\(V &gt; V_{\text{mpp}}\))">
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sequence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sequence
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Sequence">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#root-cause-analysis" class="md-nav__link">
+  <a href="#steps" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Root Cause Analysis
+        Steps
       
     </span>
   </a>
@@ -679,49 +690,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#2-expected-system-behavior-single-measurement-on-demand" class="md-nav__link">
+  <a href="#filter-specification-25-sample-trimmed-mean" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2. Expected System Behavior (Single-Measurement on Demand)
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="2. Expected System Behavior (Single-Measurement on Demand)">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#detailed-sequence-steps" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Detailed Sequence Steps
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#3-implementation-comparison" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        3. Implementation Comparison
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#4-filter-specification-25-sample-trimmed-mean" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        4. Filter Specification (25-Sample Trimmed Mean)
+        Filter Specification (25-Sample Trimmed Mean)
       
     </span>
   </a>
@@ -802,7 +774,7 @@
   <span class="md-ellipsis">
     
   
-    Algorithms
+    Results
   
 
     
@@ -815,6 +787,93 @@
         
         <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Results
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../results/two_peak_compare/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Two-peak curve comparison
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algorithms
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -839,6 +898,37 @@
     
   
     Perturb & Observe
+  
+
+    
+      <br>
+      <small>MPPT algorithm reference</small>
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/adaptive_perturb_observe/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adaptive Perturb & Observe
   
 
     
@@ -1044,22 +1134,33 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#1-problem-statement-higher-voltage-drift-v-v_textmpp" class="md-nav__link">
+  <a href="#why-stale-telemetry-makes-the-voltage-drift-up" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. Problem Statement: Higher Voltage Drift (\(V &gt; V_{\text{mpp}}\))
+        Why: stale telemetry makes the voltage drift up
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="1. Problem Statement: Higher Voltage Drift (\(V &gt; V_{\text{mpp}}\))">
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sequence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sequence
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Sequence">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#root-cause-analysis" class="md-nav__link">
+  <a href="#steps" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Root Cause Analysis
+        Steps
       
     </span>
   </a>
@@ -1072,49 +1173,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#2-expected-system-behavior-single-measurement-on-demand" class="md-nav__link">
+  <a href="#filter-specification-25-sample-trimmed-mean" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2. Expected System Behavior (Single-Measurement on Demand)
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="2. Expected System Behavior (Single-Measurement on Demand)">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#detailed-sequence-steps" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Detailed Sequence Steps
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#3-implementation-comparison" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        3. Implementation Comparison
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#4-filter-specification-25-sample-trimmed-mean" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        4. Filter Specification (25-Sample Trimmed Mean)
+        Filter Specification (25-Sample Trimmed Mean)
       
     </span>
   </a>
@@ -1141,52 +1203,26 @@
   
 
 
-<h1 id="mppt-measurement-protocol-closed-loop-telemetry-flow">MPPT Measurement Protocol &amp; Closed-Loop Telemetry Flow<a class="headerlink" href="#mppt-measurement-protocol-closed-loop-telemetry-flow" title="Permanent link">&para;</a></h1>
-<h2 id="1-problem-statement-higher-voltage-drift-v-v_textmpp">1. Problem Statement: Higher Voltage Drift (<span class="arithmatex">\(V &gt; V_{\text{mpp}}\)</span>)<a class="headerlink" href="#1-problem-statement-higher-voltage-drift-v-v_textmpp" title="Permanent link">&para;</a></h2>
-<p>During bench tests with MPPT algorithms (such as Perturb &amp; Observe, Incremental Conductance, and
-Fuzzy Logic), algorithms were observed drifting towards higher terminal voltages than the Maximum
-Power Point (MPP), eventually climbing towards open-circuit voltage (<span class="arithmatex">\(V_{oc}\)</span>).</p>
-<h3 id="root-cause-analysis">Root Cause Analysis<a class="headerlink" href="#root-cause-analysis" title="Permanent link">&para;</a></h3>
+<h1 id="mppt-measurement-protocol">MPPT measurement protocol<a class="headerlink" href="#mppt-measurement-protocol" title="Permanent link">&para;</a></h1>
+<p>How one closed-loop measurement works, and why it works this way.</p>
+<h2 id="why-stale-telemetry-makes-the-voltage-drift-up">Why: stale telemetry makes the voltage drift up<a class="headerlink" href="#why-stale-telemetry-makes-the-voltage-drift-up" title="Permanent link">&para;</a></h2>
+<p>Early bench runs of P&amp;O, Incremental Conductance and Fuzzy Logic drifted to
+voltages above <span class="arithmatex">\(V_\text{mpp}\)</span>, up to <span class="arithmatex">\(V_\text{oc}\)</span>. The cause:</p>
 <ol>
-<li>
-<p><strong>Full-Duplex SPI Pipelining Delay</strong>:</p>
-</li>
-<li>
-<p>The SPI bus operates in full-duplex. When the Host/sbc clocks out a 12-byte MOSI packet
-     containing a new duty cycle <span class="arithmatex">\(D_{k}\)</span>, the Pico simultaneously clocks out a 12-byte MISO packet
-     that was loaded into the TX FIFO <strong>prior to the transaction</strong>.</p>
-</li>
-<li>
-<p>Consequently, the telemetry received during <code>source.write(D_k)</code> reflects the state under the
-     previous duty cycle <span class="arithmatex">\(D_{k-1}\)</span> (or earlier).</p>
-</li>
-<li>
-<p><strong>SEPIC Dynamics &amp; Sign Inversion</strong>:</p>
-</li>
-<li>
-<p>On a SEPIC converter, reflected input resistance is given by:
-     $<span class="arithmatex">\(R_{\text{in}} = R_{\text{load}} \left(\frac{1 - D}{D}\right)^2\)</span>$</p>
-</li>
-<li>Raising duty <span class="arithmatex">\(D\)</span> <strong>decreases</strong> panel voltage <span class="arithmatex">\(V_{\text{in}}\)</span> (pulling more current).</li>
-<li>
-<p>Lowering duty <span class="arithmatex">\(D\)</span> <strong>increases</strong> panel voltage <span class="arithmatex">\(V_{\text{in}}\)</span> towards <span class="arithmatex">\(V_{oc}\)</span>.</p>
-</li>
-<li>
-<p><strong>Inverted Perturbation Feedback</strong>:</p>
-</li>
-<li>If the algorithm increases <span class="arithmatex">\(D\)</span> to drop the voltage towards <span class="arithmatex">\(V_{\text{mpp}}\)</span>, but immediately
-     reads stale telemetry where the voltage hasn't dropped yet, it miscalculates power slope
-     <span class="arithmatex">\(\frac{\mathrm{d}P}{\mathrm{d}V}\)</span> or conductance increment
-     <span class="arithmatex">\(\frac{\mathrm{d}I}{\mathrm{d}V} + \frac{I}{V}\)</span>.</li>
-<li>The algorithm incorrectly deduces that increasing <span class="arithmatex">\(D\)</span> did not yield the expected power change,
-     flipping its perturbation direction to decrease <span class="arithmatex">\(D\)</span>.</li>
-<li>Decreasing <span class="arithmatex">\(D\)</span> drives the SEPIC switch towards 0% duty, which raises the panel voltage all the
-     way to <span class="arithmatex">\(V_{oc}\)</span>.</li>
+<li>The SPI bus is full-duplex. The Pico loads the 12-byte MISO frame into
+   its TX FIFO before the transaction. So the telemetry that comes back
+   with <code>write(D_k)</code> shows the state under <span class="arithmatex">\(D_{k-1}\)</span> or earlier.</li>
+<li>On a SEPIC, a higher duty <span class="arithmatex">\(D\)</span> lowers the panel voltage
+   (<span class="arithmatex">\(R_\text{in} = R_\text{load}((1-D)/D)^2\)</span>). A lower <span class="arithmatex">\(D\)</span> raises it toward
+   <span class="arithmatex">\(V_\text{oc}\)</span>.</li>
+<li>The algorithm raises <span class="arithmatex">\(D\)</span> and reads stale data where the voltage has not
+   dropped yet. It sees the wrong slope <span class="arithmatex">\(\mathrm{d}P/\mathrm{d}V\)</span> (or the
+   wrong conductance increment) and flips to lower <span class="arithmatex">\(D\)</span>. Repeated flips push
+   the voltage up to <span class="arithmatex">\(V_\text{oc}\)</span>.</li>
 </ol>
-<hr />
-<h2 id="2-expected-system-behavior-single-measurement-on-demand">2. Expected System Behavior (Single-Measurement on Demand)<a class="headerlink" href="#2-expected-system-behavior-single-measurement-on-demand" title="Permanent link">&para;</a></h2>
-<p>To prevent cross-talk between duties and eliminate noise from continuous streaming, the measurement
-flow follows a strict request-response sequence:</p>
+<p>The fix is a strict request-response sequence with one settled measurement
+per duty.</p>
+<h2 id="sequence">Sequence<a class="headerlink" href="#sequence" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code>sequenceDiagram
     autonumber
     participant Host as Host/sbc (MPPT Controller)
@@ -1209,118 +1245,41 @@ flow follows a strict request-response sequence:</p>
     Note over Pico: Clear settled flag (stops streaming)
     Note over Host: 11. Execute MPPT step on clean values (no host filtering)
 </code></pre></div>
-<h3 id="detailed-sequence-steps">Detailed Sequence Steps<a class="headerlink" href="#detailed-sequence-steps" title="Permanent link">&para;</a></h3>
+<h3 id="steps">Steps<a class="headerlink" href="#steps" title="Permanent link">&para;</a></h3>
 <ol>
-<li>
-<p><strong>Host/sbc sends a duty to Pico</strong>: The Host/sbc calculates the next duty cycle <span class="arithmatex">\(D\)</span> and sends it
-   to the Pico via SPI (<code>write(D)</code>).</p>
-</li>
-<li>
-<p><strong>Pico sets that duty and erases all buffers</strong>: The Pico receives the duty, immediately zeroes
-   all measurement registers (<code>MEAS_V_MV</code>, <code>MEAS_I_MA</code>, <code>MEAS_ADC_VOUT_MV</code>, etc.), clears
-   <code>DUTY_SETTLED</code>, and updates the hardware PWM compare register.</p>
-</li>
-<li>
-<p><strong>Host/sbc has a small delay and erases buffers</strong>: The Host/sbc waits a settling window
-   (<span class="arithmatex">\(\ge 5-10\,\text{ms}\)</span>) and explicitly flushes its local telemetry cache and SPI input buffers so
-   no cross-talk or stale measurements can leak across duties.</p>
-</li>
-<li>
-<p><strong>Pico waits the hardware reaction delay</strong>: The Pico waits <span class="arithmatex">\(2\,\text{ms}\)</span> to allow the SEPIC
-   inductors and coupling capacitors to begin transitioning.</p>
-</li>
-<li>
-<p><strong>Pico checks if Vin is settled</strong>: The Pico monitors <span class="arithmatex">\(V_{\text{in}}\)</span> across an 8-sample rolling
-   window until drift is <span class="arithmatex">\(&lt; 40\,\text{mV}\)</span> (up to <span class="arithmatex">\(80\,\text{ms}\)</span> ceiling).</p>
-</li>
-<li>
-<p><strong>Pico performs 25-sample filtered measurement</strong>: Once steady state is reached, the Pico takes
-   <strong>25 consecutive readings</strong> of <span class="arithmatex">\(V_{\text{in}}\)</span>, <span class="arithmatex">\(V_{\text{out}}\)</span>, and <span class="arithmatex">\(I\)</span>:</p>
-</li>
-<li>
-<p>For each channel, the 25 readings are sorted.</p>
-</li>
-<li>The <strong>4 lowest</strong> and <strong>4 highest</strong> outliers are discarded (<span class="arithmatex">\(25 - 8 = 17\)</span> samples remaining).</li>
-<li>
-<p>The remaining <strong>17 samples</strong> are averaged (trimmed mean filter).</p>
-</li>
-<li>
-<p><strong>Pico holds the single measurement (NO streaming)</strong>: The Pico stores the filtered mean into
-   <code>MEAS_*</code>, asserts <code>DUTY_SETTLED = true</code>, and <strong>parks</strong>. The firmware does <strong>not</strong> run background
-   sampling loops and does <strong>not</strong> overwrite the filtered result with 1 ms raw readings.</p>
-</li>
-<li>
-<p><strong>Host/sbc asks for a measurement</strong>: Host/sbc sends <code>_CMD_READ_MEASUREMENT</code> (<code>0x02</code>) over SPI.</p>
-</li>
-<li>
-<p><strong>Pico sends the ONE measurement to the Host/sbc</strong>: The Pico returns the single settled
-   measurement frame with <code>is_settled = 1</code>. Upon delivery, Pico clears <code>DUTY_SETTLED = false</code> so it
-   does not stream further data.</p>
-</li>
-<li>
-<p><strong>Host/sbc analyzes measurements without filtering</strong>: The Host/sbc / MPPT algorithm consumes the
-    validated measurement directly, evaluating <span class="arithmatex">\(\Delta P\)</span> and <span class="arithmatex">\(\Delta V\)</span> with zero host-side
-    filtering or averaging loops.</p>
-</li>
+<li>The Host/sbc sends the duty <span class="arithmatex">\(D\)</span> over SPI (<code>write(D)</code>).</li>
+<li>The Pico zeroes all measurement registers (<code>MEAS_V_MV</code>, <code>MEAS_I_MA</code>,
+   <code>MEAS_ADC_VOUT_MV</code>, ...), clears <code>DUTY_SETTLED</code> and updates the PWM
+   compare register.</li>
+<li>The Host/sbc waits at least <span class="arithmatex">\(5 - 10\,\text{ms}\)</span> and flushes its local
+   telemetry cache and SPI input buffers.</li>
+<li>The Pico waits <span class="arithmatex">\(2\,\text{ms}\)</span> for the SEPIC inductors and coupling
+   capacitors to start the transition.</li>
+<li>The Pico watches <span class="arithmatex">\(V_\text{in}\)</span> in an 8-sample rolling window until the
+   drift is below <span class="arithmatex">\(40\,\text{mV}\)</span> (ceiling <span class="arithmatex">\(80\,\text{ms}\)</span>).</li>
+<li>The Pico takes 25 consecutive readings of <span class="arithmatex">\(V_\text{in}\)</span>, <span class="arithmatex">\(V_\text{out}\)</span>
+   and <span class="arithmatex">\(I\)</span>. For each channel it sorts them, drops the 4 lowest and the 4
+   highest, and averages the middle 17.</li>
+<li>The Pico stores the result in <code>MEAS_*</code>, sets <code>DUTY_SETTLED = true</code> and
+   parks. It runs no background sampling and does not overwrite the result
+   with raw 1 ms readings.</li>
+<li>The Host/sbc sends <code>_CMD_READ_MEASUREMENT</code> (<code>0x02</code>).</li>
+<li>The Pico returns the one settled frame with <code>is_settled = 1</code> and clears
+   <code>DUTY_SETTLED</code>.</li>
+<li>The algorithm uses the values as they are. The host does no filtering
+    or averaging.</li>
 </ol>
+<p>Implementation notes:</p>
+<ul>
+<li>The 2 ms delay is <code>Timer::after_millis(2).await</code> in <code>onchip_adc_task</code>,
+  started by <code>MEAS_TRIGGER_COUNT</code>.</li>
+<li>The settle check ends by asserting <code>SETTLED_TRIGGER</code>.</li>
+<li>The filter averages <code>samples[4..21]</code> on the INA229 and ADC channels.</li>
+<li><code>sensors_task</code> and <code>onchip_adc_task</code> run only on a trigger in MPPT mode.
+  The raw 1 kHz loop is off.</li>
+</ul>
 <hr />
-<h2 id="3-implementation-comparison">3. Implementation Comparison<a class="headerlink" href="#3-implementation-comparison" title="Permanent link">&para;</a></h2>
-<table>
-<thead>
-<tr>
-<th>Step</th>
-<th>Expected Implementation</th>
-<th>Current Implementation</th>
-<th>Old Implementation</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><strong>Duty Application</strong></td>
-<td>Duty is sent; old buffers erased on Pico and Host/sbc.</td>
-<td><code>write(D)</code> transmits duty; Pico zeroes <code>MEAS_*</code> and sets <code>DUTY_SETTLED = false</code>; Host/sbc zeroes local cache.</td>
-<td>Sent via SPI; MISO telemetry returned in the <em>same</em> frame was consumed immediately (reading stale data from prior duty).</td>
-</tr>
-<tr>
-<td><strong>Pico Hardware Delay</strong></td>
-<td>Pico applies initial reaction delay (2 ms) after duty cycle change.</td>
-<td><code>Timer::after_millis(2).await</code> in Pico firmware <code>onchip_adc_task</code> triggered by <code>MEAS_TRIGGER_COUNT</code>.</td>
-<td>Handled by arbitrary Linux-side <code>time.sleep(0.002)</code> in Python driver.</td>
-</tr>
-<tr>
-<td><strong>Settling Verification</strong></td>
-<td>Dynamic <span class="arithmatex">\(V_{\text{in}}\)</span> stability check (drift <span class="arithmatex">\(&lt; 40\,\text{mV}\)</span>) before sampling.</td>
-<td>8-sample rolling window in Pico evaluating <span class="arithmatex">\(\Delta V &lt; 40\,\text{mV}\)</span> (up to <span class="arithmatex">\(80\,\text{ms}\)</span>) before asserting <code>SETTLED_TRIGGER</code>.</td>
-<td>Python-side rolling buffer polling over SPI subject to Linux scheduling jitter.</td>
-</tr>
-<tr>
-<td><strong>Sample Filtering</strong></td>
-<td><strong>25 samples taken; 4 lowest and 4 highest removed (averaging 17).</strong></td>
-<td><strong>25 samples taken on INA229 &amp; ADC; sorted; <code>samples[4..21]</code> averaged (<span class="arithmatex">\(\mathbf{N=17}\)</span>).</strong></td>
-<td>10 samples taken in firmware (averaging 6), or host-side list sorting in Python.</td>
-</tr>
-<tr>
-<td><strong>Continuous Streaming</strong></td>
-<td><strong>Disabled:</strong> Pico holds the single filtered reading; does NOT overwrite with raw samples.</td>
-<td><code>sensors_task</code> and <code>onchip_adc_task</code> are strictly trigger-based in MPPT mode; raw 1 kHz loop disabled.</td>
-<td>Tasks ran free-running 1 ms loops overwriting filtered values with raw 1-sample noisy readings immediately.</td>
-</tr>
-<tr>
-<td><strong>Telemetry Delivery</strong></td>
-<td>On-demand: Host/sbc asks via <code>CMD_READ_MEASUREMENT</code>; Pico returns the one measurement and clears settled flag.</td>
-<td>Host/sbc <code>read()</code> waits delay, zeroes cache, queries <code>_CMD_READ_MEASUREMENT</code>; Pico delivers frame and clears <code>DUTY_SETTLED</code>.</td>
-<td>Desynchronized; host took whatever value was already sitting in MISO FIFO at exchange start.</td>
-</tr>
-<tr>
-<td><strong>Host/sbc Processing</strong></td>
-<td>Clean host: Zero filtering or artificial delays on Host/sbc; consumes values directly.</td>
-<td>Clean host: Zero filtering in Python; algorithms consume clean <span class="arithmatex">\((V, I)\)</span> directly.</td>
-<td>Host ran its own sleep delays, dynamic drift checks, and list-filtering loops in Python.</td>
-</tr>
-</tbody>
-</table>
-<hr />
-<h2 id="4-filter-specification-25-sample-trimmed-mean">4. Filter Specification (25-Sample Trimmed Mean)<a class="headerlink" href="#4-filter-specification-25-sample-trimmed-mean" title="Permanent link">&para;</a></h2>
+<h2 id="filter-specification-25-sample-trimmed-mean">Filter Specification (25-Sample Trimmed Mean)<a class="headerlink" href="#filter-specification-25-sample-trimmed-mean" title="Permanent link">&para;</a></h2>
 <p>Let <span class="arithmatex">\(S = [s_0, s_1, \dots, s_{24}]\)</span> be an array of 25 consecutive ADC readings for a given channel
 (<span class="arithmatex">\(V_{\text{in}}\)</span>, <span class="arithmatex">\(V_{\text{out}}\)</span>, or <span class="arithmatex">\(I\)</span>):</p>
 <ol>

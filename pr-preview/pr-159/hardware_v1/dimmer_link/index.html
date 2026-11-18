@@ -16,7 +16,7 @@
         <link rel="prev" href="../mppt_measurement_protocol/">
       
       
-        <link rel="next" href="../../algorithms/perturb_observe/">
+        <link rel="next" href="../../results/two_peak_compare/">
       
       
         
@@ -733,6 +733,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#python-use" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Python use
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -779,7 +790,7 @@
   <span class="md-ellipsis">
     
   
-    Algorithms
+    Results
   
 
     
@@ -792,6 +803,93 @@
         
         <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Results
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../results/two_peak_compare/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Two-peak curve comparison
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algorithms
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -816,6 +914,37 @@
     
   
     Perturb & Observe
+  
+
+    
+      <br>
+      <small>MPPT algorithm reference</small>
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../algorithms/adaptive_perturb_observe/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adaptive Perturb & Observe
   
 
     
@@ -1075,6 +1204,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#python-use" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Python use
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1238,11 +1378,23 @@
   bit 1 mains, bit 2 locked, bit 3 timed out.</li>
 <li>The CRC covers bytes 0 to 7, then <code>ACK</code> (byte 9), then byte 10 (<code>SETTLED</code>, always <code>0</code> here), in that order.
   Every MISO frame does the same.</li>
-<li><code>SET</code> is the last alpha the Pi sent. <code>APPLIED</code> is the angle the dimmer reported.</li>
+<li><code>SET</code> is the alpha the Pico holds now.
+  It is the last alpha the Pi sent, or <code>18000</code> after a timeout or a link loss. <code>APPLIED</code> is the angle the dimmer reported.</li>
 <li><code>AGE</code> is the time since the last good status read, in 100 ms units, saturating at 255.</li>
 </ul>
 <h2 id="lamp-power">Lamp power<a class="headerlink" href="#lamp-power" title="Permanent link">&para;</a></h2>
 <p>For a resistive lamp the power fraction at angle <code>alpha</code> is <code>P = 1 - alpha/pi + sin(2 alpha)/(2 pi)</code>.</p>
+<h2 id="python-use">Python use<a class="headerlink" href="#python-use" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>SpiMcuSource</code> sends the commands.</li>
+<li>A thread repeats the last alpha every second (the <code>dimmer_keepalive_s</code> argument, at most 2 s).</li>
+<li><code>close()</code> and <code>dimmer_off()</code> stop the thread and switch the lamp off.</li>
+<li><code>scripts/dimmer_set.py</code> does the same from the command line.</li>
+</ul>
+<div class="highlight"><pre><span></span><code><span class="k">with</span> <span class="n">SpiMcuSource</span><span class="p">()</span> <span class="k">as</span> <span class="n">src</span><span class="p">:</span>
+    <span class="n">src</span><span class="o">.</span><span class="n">set_dimmer_power</span><span class="p">(</span><span class="mf">0.5</span><span class="p">)</span>  <span class="c1"># or set_dimmer_alpha(90.0)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="n">src</span><span class="o">.</span><span class="n">dimmer_status</span><span class="p">())</span>
+</code></pre></div>
 
 
 
