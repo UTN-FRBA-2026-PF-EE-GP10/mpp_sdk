@@ -712,6 +712,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#exposure-limit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exposure limit
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#spi-commands-pi-to-pico" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1183,6 +1194,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#exposure-limit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exposure limit
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#spi-commands-pi-to-pico" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1320,14 +1342,20 @@
 </tr>
 </tbody>
 </table>
-<p>Status (master reads 8 bytes, at least 3 ms after Request status):</p>
-<div class="highlight"><pre><span></span><code>[ 0xD1 | FLAGS | ALPHA_H | ALPHA_L | FREQ_H | FREQ_L | BAD_FRAMES | CRC ]
+<p>Status (master reads 9 bytes, at least 3 ms after Request status):</p>
+<div class="highlight"><pre><span></span><code>[ 0xD1 | FLAGS | ALPHA_H | ALPHA_L | FREQ_H | FREQ_L | BAD_FRAMES | BUDGET_S | CRC ]
 </code></pre></div>
 <ul>
-<li><code>FLAGS</code> bit 0: mains present. Bit 1: locked to the mains. Bit 2: lamp switched off by the timeout.</li>
+<li><code>FLAGS</code> bit 0: mains present. Bit 1: locked to the mains. Bit 2: lamp switched off by the timeout.
+  Bit 3: exposure limit tripped (see <a href="#exposure-limit">Exposure limit</a>).</li>
 <li><code>ALPHA</code> is the angle the dimmer really fires at, after its own limits. <code>0xFFFF</code> means it does not fire.</li>
 <li><code>FREQ</code> is the mains frequency in 0.01 Hz. It is <code>0</code> without mains.</li>
 <li><code>BAD_FRAMES</code> counts rejected commands (wraps). A rising value means a noisy cable.</li>
+<li><code>BUDGET_S</code> is the exposure budget in seconds, at most 255.
+  Not tripped: lamp-on time left before a trip.
+  Tripped: seconds until the dimmer has cooled.
+  <code>0</code> while tripped means cooled, waiting for an OFF.</li>
+<li>The CRC covers bytes 0 to 7.</li>
 </ul>
 <h2 id="safety">Safety<a class="headerlink" href="#safety" title="Permanent link">&para;</a></h2>
 <ul>
@@ -1345,6 +1373,60 @@
   The angles <code>0</code> (full on) and <code>18000</code> (off) are the exceptions.
   Read <code>ALPHA</code> in the status to see the real value.</li>
 <li>A lamp that is on for no reason is a fire risk. Keep the lamp under watch while the link is new.</li>
+</ul>
+<h2 id="exposure-limit">Exposure limit<a class="headerlink" href="#exposure-limit" title="Permanent link">&para;</a></h2>
+<p>The lamp is open loop, so the dimmer limits how long it may be on.
+The limit lives on the dimmer, the last part before the mains.
+It does not depend on the Pico or the Pi.
+It does not cover a stalled dimmer main loop: that stops the limiter and the deadman too.
+A task watchdog for this is a later item.</p>
+<ul>
+<li>The dimmer keeps a "heat" counter in milliseconds.
+  It counts the time the lamp is <em>commanded</em> on, not the time it really fires.
+  So it also runs with no mains, and you can test it on the bench with no mains.</li>
+<li>The counter rises 1 ms per ms while the lamp is commanded on.
+  It falls 1 ms per ms while the lamp is off, and never goes below 0.</li>
+<li>At <code>EXPOSURE_MAX_ON_MS</code> (120 s) the dimmer trips.
+  It forces the lamp off at once (in its 10 ms loop) and latches the trip.</li>
+<li>While tripped, every on-command is refused and the lamp stays off.
+  This holds for I2C and for Wi-Fi.</li>
+<li>The trip clears only when both are true:
+  the counter is at or below <code>EXPOSURE_RESUME_MS</code> (60 s),
+  and the host sent an explicit OFF after the trip (<code>SetAlpha(18000)</code>, or Wi-Fi level 0).
+  An OFF that arrives early is remembered.
+  The deadman and the trip itself do not count as that OFF.
+  So a host that keeps sending its old angle never restarts the lamp by itself.
+  It must send OFF, then ask again.</li>
+<li>The Pico also sends its own OFF at boot and after its 3 s host timeout.
+  The dimmer counts that as the acknowledgment.
+  So a crashed or idle host acknowledges by itself,
+  and the next on-command works after the cool-down.</li>
+<li>The time between two loop ticks is counted when a command arrives,
+  so fast on and off toggling does not hide the on time.</li>
+<li>The long-run duty is at most 50 percent.
+  Short windows (about 10 s) can repeat until the counter is full.</li>
+<li>The counter is in RAM only.
+  A dimmer reset clears it and the trip.
+  The lamp is off after a reset, so this is safe.</li>
+<li>Status: flag bit 3 and <code>BUDGET_S</code>.
+  The Pico copies them to the Pi (SPI reply flag bit 4 and byte 7).</li>
+<li>Only the tripped bit says the lamp is blocked.
+  <code>BUDGET_S</code> can be <code>0</code> while the lamp is still allowed
+  (heat between 119.5 s and 120 s).</li>
+<li>When <code>link_ok</code> is <code>0</code>, the tripped bit and <code>BUDGET_S</code> are unknown.
+  The Pico sends <code>0</code> and <code>0</code>.
+  The other dimmer flags keep their last values.</li>
+<li><code>BUDGET_S</code> stops at 255 s if <code>EXPOSURE_MAX_ON_MS</code> is ever raised above 255 s.</li>
+</ul>
+<p>To change the limits after a bench thermal test:</p>
+<ul>
+<li>Edit <code>EXPOSURE_MAX_ON_MS</code> and <code>EXPOSURE_RESUME_MS</code> in <code>firmware/dimmer-link/src/lib.rs</code>.</li>
+<li>Keep <code>EXPOSURE_RESUME_MS</code> below <code>EXPOSURE_MAX_ON_MS</code>.</li>
+<li>Run <code>cargo test</code> in <code>firmware/dimmer-link</code>.</li>
+<li>Build and flash the dimmer again.</li>
+<li>Flash the Pico and the dimmer together.
+  An old Pico with a new dimmer (or the reverse) fails the CRC, so the link reads as down.</li>
+<li>Check the Python side: its window limit mirrors <code>EXPOSURE_MAX_ON_MS</code>.</li>
 </ul>
 <h2 id="spi-commands-pi-to-pico">SPI commands (Pi to Pico)<a class="headerlink" href="#spi-commands-pi-to-pico" title="Permanent link">&para;</a></h2>
 <p>Both use the 12-byte frame of the <a href="../mppt_measurement_protocol/">measurement protocol</a> with the usual CRC.</p>
@@ -1370,12 +1452,15 @@
 </tbody>
 </table>
 <p>The reply to <code>0xD2</code> is in the MISO of the next exchange, like the sweep progress poll:</p>
-<div class="highlight"><pre><span></span><code>[ 0xD2 | FLAGS | SET_H | SET_L | APPLIED_H | APPLIED_L | AGE | 0x00 | CHECKSUM | ACK | 0x00 x 2 ]
+<div class="highlight"><pre><span></span><code>[ 0xD2 | FLAGS | SET_H | SET_L | APPLIED_H | APPLIED_L | AGE | BUDGET_S | CHECKSUM | ACK | 0x00 x 2 ]
 </code></pre></div>
 <ul>
 <li><code>FLAGS</code> bit 0: the I2C link works (a status read succeeded in the last second).
   Bits 1 to 3 are the dimmer flags from above, shifted up by one:
-  bit 1 mains, bit 2 locked, bit 3 timed out.</li>
+  bit 1 mains, bit 2 locked, bit 3 timed out, bit 4 tripped.</li>
+<li><code>BUDGET_S</code> (byte 7) is the budget from the I2C status.
+  Without a good status read in the last second, <code>BUDGET_S</code> is <code>0</code> and the tripped bit is clear.
+  Bit 0 then tells that the data is old.</li>
 <li>The CRC covers bytes 0 to 7, then <code>ACK</code> (byte 9), then byte 10 (<code>SETTLED</code>, always <code>0</code> here), in that order.
   Every MISO frame does the same.</li>
 <li><code>SET</code> is the alpha the Pico holds now.
