@@ -2265,11 +2265,15 @@ def test_panels_routes_are_unaffected_by_demo_mode(demo_client):
 # ------------------------------------------------------------------
 
 
-def test_get_session_templates_lists_both_shipped_templates(client):
+def test_get_session_templates_lists_the_shipped_templates(client):
     r = client.get("/api/session-templates")
     assert r.status_code == 200
     ids = {t["template_id"] for t in r.json()}
-    assert ids == {"single-panel-characterization", "full-setup-characterization"}
+    assert ids == {
+        "single-panel-characterization",
+        "full-setup-characterization",
+        "dimmer-bench",
+    }
     for entry in r.json():
         assert entry.keys() == {"template_id", "version", "title", "setup", "n_steps"}
         assert entry["n_steps"] > 0

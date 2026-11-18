@@ -1,0 +1,206 @@
+{
+  "schema": 1,
+  "template_id": "dimmer-bench",
+  "version": 1,
+  "title": "Lamp dimmer bench tests",
+  "setup": "single",
+  "field_defs": [
+    {
+      "key": "lamp_used",
+      "label": "Lamp used",
+      "hint": "Lamp type and power for each test (Test 2: small lamp, 25 to 40 W).",
+      "default": ""
+    },
+    {
+      "key": "mains_protection",
+      "label": "Mains protection",
+      "hint": "Isolation transformer or GFCI, and the fuse value, for Tests 2 and 3.",
+      "default": ""
+    },
+    {
+      "key": "power_meter",
+      "label": "Power meter",
+      "hint": "Meter used for lamp power, or none (then the panel Isc is the light sensor).",
+      "default": ""
+    },
+    {
+      "key": "temp_probe",
+      "label": "Panel temperature probe",
+      "hint": "Probe and where it sits on the panel, or none.",
+      "default": ""
+    },
+    {
+      "key": "scope",
+      "label": "Scope or logic analyser",
+      "hint": "Instrument used for Test 1, and the probe ground point (SELV side only).",
+      "default": ""
+    },
+    {
+      "key": "pico_commit",
+      "label": "Pico firmware commit",
+      "hint": "Git commit of the Pico firmware. It must match the dimmer firmware (status frame of 9 bytes).",
+      "default": ""
+    },
+    {
+      "key": "dimmer_commit",
+      "label": "Dimmer firmware commit",
+      "hint": "Git commit of the dimmer firmware.",
+      "default": ""
+    },
+    {
+      "key": "operator",
+      "label": "Operator",
+      "hint": "Name of the person running the session, and of the second person present for mains tests.",
+      "default": ""
+    }
+  ],
+  "steps": [
+    {
+      "id": "safety-read",
+      "section": "Before anything",
+      "title": "Safety rules read",
+      "instructions": "Read hardware/dimmer/README.md and the safety part of docs/hardware_v1/dimmer_bench.md. A second person is present for Tests 2 and 3. There is a way to cut the mains. No lamp is ever on unattended. Pass: all true.",
+      "kind": "check"
+    },
+    {
+      "id": "t0-link-and-alpha",
+      "section": "Test 0: SELV only, no mains, no lamp",
+      "title": "Link, status and alpha read-back",
+      "instructions": "Run: uv run python3 scripts/dimmer_bench.py --only link --only alpha. Pass: link_ok true, mains and locked false, set angle read back, applied angle None.",
+      "kind": "check"
+    },
+    {
+      "id": "t0-stable",
+      "section": "Test 0: SELV only, no mains, no lamp",
+      "title": "Link stable for a minute",
+      "instructions": "Run the stable check. Pass: link_ok stays true and no read fails. The bad frame counter is not sent to the Pi: it is checked in Test 1.",
+      "kind": "check"
+    },
+    {
+      "id": "t0-timeouts",
+      "section": "Test 0: SELV only, no mains, no lamp",
+      "title": "Host, I2C and SPI timeouts and the dimmer deadman",
+      "instructions": "Run the host-timeout, i2c-unplug, spi-unplug and deadman checks. Pass: the Pico returns to 180 deg within about 3 s of a killed host, link_ok goes false within about 2 s of an unplugged I2C cable, the Pico stays at 180 deg after an SPI unplug. timed_out may be inconclusive (see the procedure). Write down the measured times.",
+      "kind": "check"
+    },
+    {
+      "id": "t0-limiter-budget",
+      "section": "Test 0: SELV only, no mains, no lamp",
+      "title": "Limiter budget falls and rises",
+      "instructions": "Run the budget-fall and budget-rise checks. Pass: the budget falls about 1 s per second while the lamp is commanded on and rises about 1 s per second while off.",
+      "kind": "check"
+    },
+    {
+      "id": "t0-limiter-trip",
+      "section": "Test 0: SELV only, no mains, no lamp",
+      "title": "Limiter trip, refusal and re-arm",
+      "instructions": "Run the trip and no-restart checks. Pass: tripped is set at the end of the budget (120 s from full), on-commands are refused, an early OFF is remembered, a stream of on-commands never restarts the dimmer, and it re-arms after the cool-down plus an OFF.",
+      "kind": "check"
+    },
+    {
+      "id": "t0-limiter-reset",
+      "section": "Test 0: SELV only, no mains, no lamp",
+      "title": "Dimmer reset clears the limiter",
+      "instructions": "Run the reset-clears check. Pass: after a reset the budget is back to about 120 s and tripped is clear.",
+      "kind": "check"
+    },
+    {
+      "id": "t1-scl-frequency",
+      "section": "Test 1: software I2C timing on the Pico board",
+      "title": "SCL frequency",
+      "instructions": "Measure the SCL frequency on GPIO6 with a scope or logic analyser (SELV side). Write down the value. Pass: about 100 kHz or lower, never above 100 kHz.",
+      "kind": "number",
+      "unit": "kHz"
+    },
+    {
+      "id": "t1-start-stop-rise",
+      "section": "Test 1: software I2C timing on the Pico board",
+      "title": "Start, stop and rise time",
+      "instructions": "Check the start and stop timing against the I2C standard mode limits and measure the rise time with the 4.7 kohm pull-ups. Pass: rise time below 1000 ns, start and stop timing inside the limits. Write down the values.",
+      "kind": "text"
+    },
+    {
+      "id": "t1-poll-10-min",
+      "section": "Test 1: software I2C timing on the Pico board",
+      "title": "10 minutes of status polling",
+      "instructions": "Poll the status for 10 minutes and read the bad frame counter on the dimmer USB log or on the logic analyser. Pass: the counter does not rise. Write down the count.",
+      "kind": "number",
+      "unit": "frames"
+    },
+    {
+      "id": "t1-stale-frame",
+      "section": "Test 1: software I2C timing on the Pico board",
+      "title": "Old status frame after a skipped read",
+      "instructions": "Provoke a skipped status read and look at the next reads (see the procedure). Pass or fail: write down whether the status lags by one frame.",
+      "kind": "text"
+    },
+    {
+      "id": "t2-bring-up",
+      "section": "Test 2: mains with a small lamp",
+      "title": "Bring-up order and protection",
+      "instructions": "Small lamp (25 to 40 W), isolation transformer or GFCI, fuse in line, second person ready to cut the plug. Follow the bring-up order in firmware/esp32c3-dimmer/README.md. Pass: all true.",
+      "kind": "check"
+    },
+    {
+      "id": "t2-lock",
+      "section": "Test 2: mains with a small lamp",
+      "title": "Mains and lock",
+      "instructions": "Run: uv run python3 scripts/dimmer_bench.py --mains --only mains-lock. Pass: mains true and locked true. Also write down the mains frequency from the dimmer log (about 50 Hz).",
+      "kind": "number",
+      "unit": "Hz"
+    },
+    {
+      "id": "t2-alpha-range",
+      "section": "Test 2: mains with a small lamp",
+      "title": "Real alpha range",
+      "instructions": "Run the mains-range check. Pass: the applied angle is inside about 25 to 153 deg and equals the requested angle inside that range. Write down the applied angles.",
+      "kind": "text"
+    },
+    {
+      "id": "t2-power-vs-alpha",
+      "section": "Test 2: mains with a small lamp",
+      "title": "Lamp power against alpha",
+      "instructions": "At 30, 60, 90, 120 and 150 deg, short windows, write down the lamp power from a power meter, or the panel Isc from a curve capture. Compare with lamp_power_fraction. Write down the values and the result.",
+      "kind": "text"
+    },
+    {
+      "id": "t2-dark",
+      "section": "Test 2: mains with a small lamp",
+      "title": "Lamp dark at 180 and when the keepalive stops",
+      "instructions": "Run the mains-dark check and answer the question about the lamp. Pass: the lamp is dark at 180 deg and dark within about 4 s after the process is killed.",
+      "kind": "check"
+    },
+    {
+      "id": "t3-short-windows",
+      "section": "Test 3: full halogen lamp with the panels",
+      "title": "Short windows with the full lamp",
+      "instructions": "Only after Test 2 passed. Use short windows (10 s or less) and a person watching. Pass: the lamp follows the angle, and the lamp is off after each window. Write down the window length and angle of each.",
+      "kind": "text"
+    },
+    {
+      "id": "t3-panel-temp-before",
+      "section": "Test 3: full halogen lamp with the panels",
+      "title": "Panel temperature before a window",
+      "instructions": "Record the panel temperature before each window, if a probe exists.",
+      "kind": "number",
+      "unit": "C"
+    },
+    {
+      "id": "t3-panel-temp-after",
+      "section": "Test 3: full halogen lamp with the panels",
+      "title": "Panel temperature after a window",
+      "instructions": "Record the panel temperature at the end of each window and again at 30 s, 60 s and 120 s after the lamp is off. This shows how fast the panels cool, and the limiter constants are tuned from it.",
+      "kind": "text"
+    }
+  ],
+  "open_questions": [
+    {
+      "id": "unexpected-behaviour",
+      "text": "Was there any unexpected behaviour during the session?"
+    },
+    {
+      "id": "limiter-constants",
+      "text": "Do the numbers 120 s (trip) and 60 s (resume) fit the panel temperatures seen in Test 3? Write down the suggested values."
+    }
+  ]
+}

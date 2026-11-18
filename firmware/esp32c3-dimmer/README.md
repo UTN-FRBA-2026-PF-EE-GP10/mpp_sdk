@@ -75,6 +75,8 @@ The board creates the Wi-Fi network `esp32-dimmer` (the password you set at buil
 
 ## Bring-up and testing
 
+The bench procedure with a check script is in [dimmer bench tests](../../docs/hardware_v1/dimmer_bench.md).
+
 Do the steps in order. Each step only adds one hazard.
 
 - Order: SELV only first (steps 1 and 2), then the Pico link without mains, then mains (steps 3 and 4).
