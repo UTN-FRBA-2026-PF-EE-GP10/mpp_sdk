@@ -1768,11 +1768,11 @@ exact test across algorithms.</p>
 <span class="kn">from</span><span class="w"> </span><span class="nn">statsmodels.stats.multicomp</span><span class="w"> </span><span class="kn">import</span> <span class="n">pairwise_tukeyhsd</span>
 
 <span class="c1"># Two-way ANOVA with Type II Sum of Squares (appropriate for factorial designs)</span>
-<span class="n">model</span> <span class="o">=</span> <span class="n">ols</span><span class="p">(</span><span class="s1">&#39;eta ~ C(algorithm) * C(scenario)&#39;</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="n">df</span><span class="p">)</span><span class="o">.</span><span class="n">fit</span><span class="p">()</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">ols</span><span class="p">(</span><span class="s2">&quot;eta ~ C(algorithm) * C(scenario)&quot;</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="n">df</span><span class="p">)</span><span class="o">.</span><span class="n">fit</span><span class="p">()</span>
 <span class="n">anova_table</span> <span class="o">=</span> <span class="n">sm</span><span class="o">.</span><span class="n">stats</span><span class="o">.</span><span class="n">anova_lm</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">typ</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
 
 <span class="c1"># Post-hoc pairwise comparison (Tukey HSD)</span>
-<span class="n">tukey</span> <span class="o">=</span> <span class="n">pairwise_tukeyhsd</span><span class="p">(</span><span class="n">df</span><span class="p">[</span><span class="s1">&#39;eta&#39;</span><span class="p">],</span> <span class="n">df</span><span class="p">[</span><span class="s1">&#39;algorithm&#39;</span><span class="p">],</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.05</span><span class="p">)</span>
+<span class="n">tukey</span> <span class="o">=</span> <span class="n">pairwise_tukeyhsd</span><span class="p">(</span><span class="n">df</span><span class="p">[</span><span class="s2">&quot;eta&quot;</span><span class="p">],</span> <span class="n">df</span><span class="p">[</span><span class="s2">&quot;algorithm&quot;</span><span class="p">],</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.05</span><span class="p">)</span>
 </code></pre></div>
 <hr />
 <h2 id="4-visualisation-for-papers-thesis">4. Visualisation for Papers &amp; Thesis<a class="headerlink" href="#4-visualisation-for-papers-thesis" title="Permanent link">&para;</a></h2>

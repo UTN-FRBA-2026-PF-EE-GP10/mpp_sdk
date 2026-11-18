@@ -1671,12 +1671,30 @@ A task watchdog for this is a later item.</p>
 <h2 id="python-use">Python use<a class="headerlink" href="#python-use" title="Permanent link">&para;</a></h2>
 <ul>
 <li><code>SpiMcuSource</code> sends the commands.</li>
-<li>A thread repeats the last alpha every second (the <code>dimmer_keepalive_s</code> argument, at most 2 s).</li>
+<li>Every "lamp on" has a deadline: <code>max_on_s</code> (default 60 s, at most 120 s, else <code>ValueError</code>).
+  The lamp is open loop, so a lamp that stays on by mistake is a fire risk.</li>
+<li>A thread repeats the last alpha every second (the <code>dimmer_keepalive_s</code> argument, at most 2 s).
+  At the deadline the same thread sends OFF and stops, also if the caller hangs.</li>
+<li>A new <code>set_dimmer_*</code> call starts a new deadline. <code>dimmer_window_left_s()</code> gives the time left
+  (<code>None</code> when the lamp is off).</li>
+<li><code>lamp_window(power=...)</code> or <code>lamp_window(alpha_deg=...)</code> is the safe way to use the lamp.
+  It sets the lamp, then waits up to 1.5 s (poll every 0.25 s) for a valid status with <code>link_ok</code>.
+  It always sends OFF when the block ends (3 tries), also on an exception or Ctrl-C.
+  It raises <code>DimmerRefused</code> (after OFF) if the link is not confirmed or the dimmer reports <code>tripped</code>.
+  <code>timed_out</code> is not checked: the Pico reports it from a cache that can be 1 s old.</li>
+<li>If <code>dimmer_status()</code> shows <code>tripped</code> while the host thinks the lamp is on, it sends OFF.
+  That OFF is the acknowledgment the dimmer needs before it accepts "on" again.</li>
+<li><code>tripped</code> and <code>budget_s</code> are unknown when <code>link_ok</code> is false (the Pico sends 0 and 0).
+  <code>budget_s == 0</code> does not mean blocked: only <code>tripped</code> does.
+  The Pico's own OFF (at boot and after its 3 s host timeout) also counts as the OFF acknowledgment.</li>
 <li><code>close()</code> and <code>dimmer_off()</code> stop the thread and switch the lamp off.</li>
-<li><code>scripts/dimmer_set.py</code> does the same from the command line.</li>
+<li><code>scripts/dimmer_set.py</code> does the same from the command line.
+  With <code>--hold</code>, <code>--max-on-s</code> sets the longest time the lamp stays on.
+  The status line shows <code>tripped</code> and <code>budget_s</code>.</li>
 </ul>
 <div class="highlight"><pre><span></span><code><span class="k">with</span> <span class="n">SpiMcuSource</span><span class="p">()</span> <span class="k">as</span> <span class="n">src</span><span class="p">:</span>
-    <span class="n">src</span><span class="o">.</span><span class="n">set_dimmer_power</span><span class="p">(</span><span class="mf">0.5</span><span class="p">)</span>  <span class="c1"># or set_dimmer_alpha(90.0)</span>
+    <span class="k">with</span> <span class="n">src</span><span class="o">.</span><span class="n">lamp_window</span><span class="p">(</span><span class="n">power</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">max_on_s</span><span class="o">=</span><span class="mf">10.0</span><span class="p">):</span>
+        <span class="n">measure</span><span class="p">()</span>  <span class="c1"># the lamp is on here and off afterwards</span>
     <span class="nb">print</span><span class="p">(</span><span class="n">src</span><span class="o">.</span><span class="n">dimmer_status</span><span class="p">())</span>
 </code></pre></div>
 
