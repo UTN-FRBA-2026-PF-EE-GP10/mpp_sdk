@@ -21,7 +21,7 @@ jobs:
         working-directory: firmware/pipico_board
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install Rust + thumbv6m target
         uses: dtolnay/rust-toolchain@1.97.0
@@ -51,7 +51,7 @@ jobs:
         working-directory: firmware/safety-checks
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: dtolnay/rust-toolchain@1.97.0
         with:
@@ -76,7 +76,7 @@ jobs:
         working-directory: firmware/dimmer-link
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: dtolnay/rust-toolchain@1.97.0
         with:
@@ -108,7 +108,7 @@ jobs:
         working-directory: firmware/mppt-po
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: dtolnay/rust-toolchain@1.97.0
         with:
