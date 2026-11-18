@@ -1,8 +1,11 @@
 # Bench Session Metrics: Two Panels, 50 Ohm
 
-This document evaluates the 15 closed-loop hardware runs from `data/bench/two_panels_50R_20261017/` (commit `15d427f`), retaining **only the core metrics selected for the project's comparison benchmark** (as formalized in [`metrics/metrics_summary.md`](../../metrics/metrics_summary.md) and [`metrics/metrics_analysis.md`](../../metrics/metrics_analysis.md)).
+This document evaluates the 15 closed-loop hardware runs from `data/bench/two_panels_50R_20261017/` (commit `15d427f`),
+retaining **only the core metrics selected for the project's comparison benchmark** (as formalized in
+[metrics_summary.md](../metrics/metrics_summary.md) and [metrics_analysis.md](../metrics/metrics_analysis.md)).
 
-Redundant metrics (static $\eta$, raw power ripple $\Delta P_{pp}$, non-physical overshoot $OS$, $MAE$, $RE$) have been omitted in favor of normalized, physically discriminative indicators.
+Redundant metrics (static $\eta$, raw power ripple $\Delta P_{pp}$, non-physical overshoot $OS$, $MAE$, $RE$) have been
+omitted in favor of normalized, physically discriminative indicators.
 
 ---
 
@@ -10,9 +13,9 @@ Redundant metrics (static $\eta$, raw power ripple $\Delta P_{pp}$, non-physical
 
 | Metric | Symbol | Definition / Setting | Role in Comparison |
 |---|:---:|---|---|
-| **Steady-State Efficiency** | $\eta_{ss}$ | Mean of $P$ over the final 30 % of the run divided by $P_{mpp}$. | Checks convergence quality after search transients extinguish. |
+| **Steady-State Efficiency** | $\eta_{ss}$ | Mean of $P$ over the tail of the run divided by $P_{mpp}$. The SDK function `final_efficiency` averages the last `last_n` samples (default 100); the table below used the final 30 % of the samples. | Checks convergence quality after search transients extinguish. |
 | **Local Trap Depth** | $D_{trap}$ | $\frac{P_{settled}}{P_{global\_mpp}}$ (equivalent to $\eta_{ss}$ on multi-peak curves). | **Decisive under partial shading**: quantifies power lost when stuck on a secondary peak. |
-| **Settling Time** | $T_c$ | First sample after which the entire trace remains inside $\pm 5\%$ of $P_{mpp}$. Reported in **seconds and steps**. | Measures initial acquisition speed. Step count provides the invariant bridge to simulation ($1\text{ ms}$ vs $\sim 46\text{ ms}$). |
+| **Settling Time** | $T_c$ | First sample after which the entire trace stays at or above 95 % of $P_{mpp}$ (one-sided band, as in `settling_time`). Reported in **seconds and steps**. | Measures initial acquisition speed. Step count provides the invariant bridge to simulation ($1\text{ ms}$ vs $\sim 46\text{ ms}$). |
 | **Transient Energy Loss** | $E_{loss}$ | $\sum_{k=1}^{T_c} (P_{mpp} - P_k) \cdot \Delta t_k$ [Joules]. | Exact energy cost burned during the convergence search. Differentiates algorithms that reach the same $\eta_{ss}$. |
 | **Normalized RMSE** | $nRMSE$ | $\frac{1}{P_{mpp}}\sqrt{\frac{1}{M}\sum_{tail}(P_k - P_{mpp})^2} \times 100\%$ | Penalizes tail oscillations quadratically; normalized across different light levels. |
 | **Panel Voltage Ripple** | $\Delta V_{pp}$ | $\max(V_{tail}) - \min(V_{tail})$ [Volts]. | Measures electrical stress and input bus voltage oscillation induced by duty dithering. |
@@ -32,17 +35,28 @@ Redundant metrics (static $\eta$, raw power ripple $\Delta P_{pp}$, non-physical
 | **Scan&Track** | 100.2 % | 1.10 s (22 steps) | 5.20 J | 0.6 % | 0.85 V | 0.352 | 29.6 V |
 | **PSO** | 100.6 % | 1.13 s (21 steps) | **3.36 J** | 0.8 % | 1.23 V | 0.356 | 29.2 V |
 
+!!! note
+    The script that computed the $E_{loss}$ numbers is not in the repo. An independent recomputation gives values
+    3 to 8 percent lower. The integration convention (for example sample sum or trapezoid) must be stated.
+
 ### Observations on Scenario 1
-- **Steady-State Holding:** All five algorithms converge near 100% $\eta_{ss}$ ($7.70\text{–}7.74\text{ W}$), confirming that single-peak steady state does not discriminate between algorithms.
-- **Convergence Cost ($E_{loss}$):** Although Fuzzy reaches 100% $\eta_{ss}$, its slow convergence (119 steps / 5.67 s) burns **12.65 J** of energy—nearly triple that of P&O (4.63 J) and quadruple that of PSO (3.36 J).
-- **Electrical Stress ($\Delta V_{pp}$):** P&O, InCond, and PSO exhibit $\sim 1.2\text{–}1.3\text{ V}$ bus voltage ripple from active dithering. Fuzzy operates with significantly lower voltage ripple (0.78 V).
+
+- **Steady-State Holding:** All five algorithms converge near 100% $\eta_{ss}$ ($7.70\text{–}7.74\text{ W}$), confirming
+  that single-peak steady state does not discriminate between algorithms.
+- **Convergence Cost ($E_{loss}$):** Although Fuzzy reaches 100% $\eta_{ss}$, its slow convergence (119 steps / 5.67 s)
+  burns **12.65 J** of energy-nearly triple that of P&O (4.63 J) and quadruple that of PSO (3.36 J).
+- **Electrical Stress ($\Delta V_{pp}$):** P&O, InCond, and PSO exhibit $\sim 1.2\text{–}1.3\text{ V}$ bus voltage
+  ripple from active dithering. Fuzzy operates with significantly lower voltage ripple (0.78 V).
 
 ---
 
 ## 3. Scenario 2: Partial Shading (B @ 45°, Two Peaks)
 
 - **Reference $P_{mpp}$:** **4.29 W** (refined from runs; the coarse 20-point sweep missed the narrow apex at 4.03 W).
-- **Topography:** Global peak is at high voltage ($\sim 4.29\text{ W}$, $31.5\text{ V}$, $D \approx 0.26$). Local sub-peak is at low voltage ($\sim 3.77\text{ W}$, $13.8\text{ V}$, $D \approx 0.46$).
+  This value is the author's estimate from the runs. Its ratios are not comparable with the percentages in
+  `data/bench/two_panels_50R_20261017/README.md`, which use the sweep best of 4.03 W.
+- **Topography:** Global peak is at high voltage ($\sim 4.29\text{ W}$, $31.5\text{ V}$, $D \approx 0.26$). Local
+  sub-peak is at low voltage ($\sim 3.77\text{ W}$, $13.8\text{ V}$, $D \approx 0.46$).
 
 | Run | Start Duty $D_0$ | $\eta_{ss}$ = $D_{trap}$ | Settling Time ($T_c$) | Transient Loss ($E_{loss}$) | $nRMSE$ | Voltage Ripple ($\Delta V_{pp}$) | Settled Duty | Peak Reached |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
@@ -57,11 +71,12 @@ Redundant metrics (static $\eta$, raw power ripple $\Delta P_{pp}$, non-physical
 | **PSO** | Native seed | **88.4 %** | never | 6.23 J* | 11.6 % | 0.81 V | 0.459 | **Local Trap** |
 | **PSO (20 s)** | Native seed | **88.8 %** | never | 10.67 J* | 11.2 % | 0.71 V | 0.462 | **Local Trap** |
 
-*\*Note: For runs that never enter the $\pm 5\%$ band of the global peak, $E_{loss}$ is integrated over the full run duration.*
+*\*Note: For runs that never reach 95 % of the global peak, $E_{loss}$ is integrated over the full run duration.*
 
 ### GMPP Hit Rate Summary ($HR_{GMPP}$)
 
-A run is scored as a hit if its settled power is within $\pm 5\%$ of the global MPP (4.29 W):
+A run is scored as a hit if its settled power is within $\pm 5\%$ of the global MPP (4.29 W). This is one run per
+algorithm (P&O: five start duties), so the rates are only indicative:
 
 | Algorithm | Hits / Attempts | $HR_{GMPP}$ | Primary Limitation Identified |
 |---|:---:|:---:|---|
@@ -79,19 +94,10 @@ A run is scored as a hit if its settled power is within $\pm 5\%$ of the global 
    - On the global peak, $nRMSE \approx 0.5\text{–}0.6\%$, reflecting clean tracking.
    - On the local trap, $nRMSE$ jumps to $11\text{–}13\%$, directly reflecting the $12\%$ power deficit.
 2. **Transient Cost ($E_{loss}$) vs Settling Time ($T_c$):**
-   - $E_{loss}$ in Joules provides a direct physical penalty. Fuzzy settled at 100% $\eta_{ss}$ in Scenario 1, but its sluggish response cost 12.65 J.
-   - Reporting $T_c$ in **steps** (e.g. 21 to 44 steps) normalizes hardware execution against the $1\text{ ms}$ simulation model.
+   - $E_{loss}$ in Joules provides a direct physical penalty. Fuzzy settled at 100% $\eta_{ss}$ in Scenario 1, but its
+     sluggish response cost 12.65 J.
+   - Reporting $T_c$ in **steps** (e.g. 21 to 44 steps) normalizes hardware execution against the $1\text{ ms}$
+     simulation model.
 3. **Scan&Track Dominance under Static Shading:**
-   - Scan&Track is the only algorithm that reached the global peak autonomously without operator bias in initial duty. Its scan cost $2.42\text{ J}$ and 24 steps, easily offset by avoiding the $12\%$ local trap.
-
----
-
-## 5. Protocol for the Next Measurement Campaign
-
-The next campaign will expand on this baseline by testing **all 5 algorithms across 3 standardized scenarios**:
-
-1. **Scenario 1 (Single Peak — 90°):** Run $N \ge 5$ repeats per algorithm with standardized $D_0 \in \{0.20, 0.35, 0.50\}$.
-2. **Scenario 2 (Multi-Peak — 45°):** Run $N \ge 10$ repeats with randomized seeds for PSO and varied $D_0$ for local trackers to establish formal **$HR_{GMPP}$** and feed the **Two-Way ANOVA**.
-3. **Scenario 3 (Dynamic Dimmer Profile):**
-   - Execute a repeatable dimmer staircase profile ($100\% \to 60\% \to 30\% \to 100\%$, holding 5–10 s per plateau).
-   - Compute **Dynamic Energy Efficiency ($\eta_E$)**, **Re-acquisition Time ($T_{reacq}$)**, and verify **Restart Policy** triggers on hardware.
+   - Scan&Track is the only algorithm that reached the global peak autonomously without operator bias in initial duty.
+     Its scan cost $2.42\text{ J}$ and 24 steps, easily offset by avoiding the $12\%$ local trap.

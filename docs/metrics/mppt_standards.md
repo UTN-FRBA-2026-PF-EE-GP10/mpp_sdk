@@ -3,7 +3,7 @@
 Summary of the three main normative frameworks for evaluating MPPT algorithms,
 based on the comparative analysis *"Comparación Crítica de Normas MPPT en
 Sistemas Fotovoltaicos"* (Critical Comparison of MPPT Standards in Photovoltaic
-Systems) (`papers/Comparacion_Critica_de_Normas_MPPT_en_Sistemas_Fot.pdf`).
+Systems) (author and year to be added).
 
 ---
 
@@ -40,19 +40,19 @@ $$\eta_{CEC} = \sum a_i \cdot \eta_i$$
 
 | Power level | CEC weight | EUR weight |
 |:-:|:-:|:-:|
-| 5 % | — | 0.03 |
+| 5 % | - | 0.03 |
 | 10 % | 0.04 | 0.06 |
 | 20 % | 0.05 | 0.13 |
 | 30 % | 0.12 | 0.10 |
 | 50 % | 0.21 | 0.48 |
 | 75 % | 0.53 | 0.20 |
-| 100 % | 0.05 | — |
+| 100 % | 0.05 | - |
 
 The CEC weights reflect the climate of California (lots of sun → high weight at
 75 %); the EUR weights reflect central Europe (more hours at medium power →
 high weight at 50 %).
 
-### Test requirements
+### EN 50530: test requirements
 
 | Parameter | Value |
 |-----------|-------|
@@ -62,7 +62,7 @@ high weight at 50 %).
 | Test temperature | T = 25 °C fixed (static) |
 | Dynamic profiles | Synthetic ramps (Annex B) |
 
-### Limitations
+### EN 50530: limitations
 
 - Focuses exclusively on the inverter → ignores losses from mismatch between
   modules, partial shading or multi-MPPT configurations.
@@ -87,7 +87,8 @@ the complement of the energy efficiency:
 
 $$\varepsilon_{TL} = (1 - \eta_{energy}) \times 100\%$$
 
-The standard classifies algorithms into categories according to εTL:
+The standard classifies algorithms into classes according to εTL (number of classes to be checked against the
+standard):
 
 | Class | εTL |
 |:-----:|:---:|
@@ -99,7 +100,7 @@ The standard classifies algorithms into categories according to εTL:
 
 **Main advantage:** εTL translates directly into energy not generated
 (kWh/year) and therefore into economic impact ($/year). If a 1 kW system with a
-20 % capacity factor has εTL = 2 %, it loses ~3.5 kWh/year — scaled to MW, the
+20 % capacity factor has εTL = 2 %, it loses ~3.5 kWh/year - scaled to MW, the
 differences are significant.
 
 ### Methodological approach
@@ -110,7 +111,7 @@ Unlike EN 50530, IEC 62816 allows:
 - Evaluating the complete system including modules, cabling and inverter.
 - Capturing the effect of partial shading (generic reference).
 
-### Test requirements
+### IEC 62816: test requirements
 
 | Parameter | Value |
 |-----------|-------|
@@ -120,7 +121,7 @@ Unlike EN 50530, IEC 62816 allows:
 | Test temperature | Real T, measured |
 | Minimum duration | Until covering 90 % of annual variability |
 
-### Limitations
+### IEC 62816: limitations
 
 - Lower time resolution (≥ 1 Hz vs. ≥ 10 Hz for EN 50530) → can mask
   ultra-fast transients.
@@ -136,15 +137,13 @@ It prioritises simplicity and low implementation cost.
 
 ### Metric: regression model
 
-$$P_{model} = a_1 + a_2 \cdot E + a_3 \cdot T_{ambient} + a_4 \cdot v_{wind}$$
+Regression of power on irradiance, temperature and wind speed (exact form: see the standard). The coefficients are
+determined statistically from historical field data.
 
-where E is the irradiance, T_ambient the ambient temperature and v_wind the wind
-speed. The coefficients are determined statistically from historical field data.
-
-It does not define a tracking efficiency metric per se — it infers the loss as
+It does not define a tracking efficiency metric per se - it infers the loss as
 the difference between the power predicted by the model and the measured power.
 
-### Test requirements
+### ASTM E2848: test requirements
 
 | Parameter | Value |
 |-----------|-------|
@@ -153,13 +152,13 @@ the difference between the power predicted by the model and the measured power.
 | Inter-lab reproducibility | Not set |
 | Minimum duration | 3 – 30 field days |
 
-### Limitations
+### ASTM E2848: limitations
 
 - 1-minute time resolution → completely smooths out the transients of the MPPT
   algorithm.
 - High dispersion of results (σ ≈ 1.1 %) → makes inter-laboratory comparison
   difficult.
-- **Unsuitable for comparing individual MPPT algorithms** — its purpose is
+- **Unsuitable for comparing individual MPPT algorithms** - its purpose is
   plant-level performance characterisation for annual projections.
 
 ---
@@ -205,18 +204,18 @@ algorithms.
 
 | Aspect | EN 50530 / IEC 62816 | Our Implementation & Bench Scenarios |
 |---------|----------|----------|
-| Sampling frequency | ≥ 10 Hz (EN 50530) / ≥ 1 Hz (IEC 62816) | 1 kHz (sim) / ~22 Hz (~46 ms, hardware HIL) ✅ |
-| Dynamic profiles | Synthetic ramps | Simulation: cyclic profile with ramps. Hardware: **Scenario 3 (repeatable stepped dimmer profile)** ✅ |
-| Partial shading | Not covered (EN 50530) / Generic (IEC) | **Scenario 2**: `PvString` with bypass diodes, 2 panels @ 45° tilt (multi-peak P-V curve) ✅ |
-| Dynamic efficiency | η_dyn | `energy_efficiency()` ≡ η_dyn (scored against pre-calibrated dimmer plateau sweeps) ✅ |
-| Tracking loss | εTL = 1 - η_dyn | Calculated as 1 - η_E on our dimmer profile ✅ |
-| Test T | 25 °C fixed | Simulation: configurable. Hardware: real T measured via thermocouple ✅ |
+| Sampling frequency | ≥ 10 Hz (EN 50530) / ≥ 1 Hz (IEC 62816) | 1 kHz (sim) / ~22 Hz (~46 ms, hardware HIL) |
+| Dynamic profiles | Synthetic ramps | Simulation: cyclic profile with ramps. Hardware: **Scenario 3 (repeatable stepped dimmer profile)** |
+| Partial shading | Not covered (EN 50530) / Generic (IEC) | **Scenario 2**: `PvString` with bypass diodes, 2 panels @ 45° tilt (multi-peak P-V curve) |
+| Dynamic efficiency | η_dyn | `energy_efficiency()` ≡ η_dyn (scored against pre-calibrated dimmer plateau sweeps) |
+| Tracking loss | εTL = 1 - η_dyn | Calculated as 1 - η_E on our dimmer profile |
+| Test T | 25 °C fixed | Simulation: configurable. Hardware: panel temperature not measured in the first bench session |
 
-> [!NOTE]
-> We are evaluating the **isolated MPPT algorithm** running on a SEPIC converter,
-> not a complete commercial grid-tied inverter. By implementing **Scenario 3 (repeatable stepped dimmer profile)**,
-> we apply the core principles of dynamic tracking characterization from EN 50530 and IEC 62816
-> directly to our physical bench without requiring an industrial solar simulator.
+!!! note
+    We are evaluating the **isolated MPPT algorithm** running on a SEPIC converter,
+    not a complete commercial grid-tied inverter. By implementing **Scenario 3 (repeatable stepped dimmer profile)**,
+    we apply the core principles of dynamic tracking characterization from EN 50530 and IEC 62816
+    directly to our physical bench without requiring an industrial solar simulator.
 
 ---
 
@@ -224,14 +223,12 @@ algorithms.
 
 - EN 50530:2018. *Overall efficiency of grid connected photovoltaic inverters.*
 
-- IEC 62816:2014. *Photovoltaic systems — Test procedure of MPPT performance.*
+- IEC 62816:2014. *Photovoltaic systems - Test procedure of MPPT performance.*
 
 - ASTM E2848. *Standard test method for reporting photovoltaic non-concentrator
   system performance.*
 
-- *Comparación Crítica de Normas MPPT en Sistemas Fotovoltaicos.*
-  → `papers/Comparacion_Critica_de_Normas_MPPT_en_Sistemas_Fot.pdf`
+- *Comparación Crítica de Normas MPPT en Sistemas Fotovoltaicos.* (author and year to be added)
 
 - Femia, N. et al. (2017). *Power Electronics and Control Techniques for
   Maximum Energy Harvesting in Photovoltaic Systems.* CRC Press.
-  → `papers/2017_Book_EnergyHarvestingAndEnergyEffic.pdf`

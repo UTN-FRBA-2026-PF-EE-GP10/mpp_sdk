@@ -1,7 +1,8 @@
 # Two-Way ANOVA for Comparing MPPT Algorithms
 
-Design document for implementing a two-factor analysis of variance in the
-comparison harness and experimental benchmark. The goal is to determine whether
+Design document for a planned two-factor analysis of variance for the
+comparison harness and experimental benchmark. It is not implemented: the repo has no
+`harness/compare_anova.py` and no `statsmodels` dependency yet. The goal is to determine whether
 the performance differences observed between the five MPPT algorithms are
 **statistically significant**, and whether they depend on the operational scenario
 (algorithm × condition interaction).
@@ -12,7 +13,7 @@ the performance differences observed between the five MPPT algorithms are
 
 A single run per algorithm provides only a point estimate, not a distribution.
 Without formal statistical testing, we cannot rigorously claim in a paper or thesis
-that "Algorithm X performs significantly better than Algorithm Y" — only that
+that "Algorithm X performs significantly better than Algorithm Y" - only that
 "under this specific seed and run, X captured more energy than Y".
 
 The two-way ANOVA answers three critical scientific questions:
@@ -24,7 +25,7 @@ The two-way ANOVA answers three critical scientific questions:
    performance?
 3. **Interaction A×B (Algorithm × Scenario):** Does an algorithm's relative
    advantage depend on the condition? (e.g. P&O is competitive under uniform full
-   sun but degrades under partial shading — this is a direct interaction effect).
+   sun but degrades under partial shading - this is a direct interaction effect).
 
 ---
 
@@ -34,12 +35,12 @@ The two-way ANOVA answers three critical scientific questions:
 
 | Factor | Type | Levels | Description |
 |---|---|---|---|
-| **Factor A — Algorithm** | Between-subjects | 5 levels | `P&O`, `InCond`, `Fuzzy`, `Scan&Track`, `PSO` |
-| **Factor B — Scenario** | Within-subjects / Environmental | 3 levels | Defined below (§2.2) |
+| **Factor A - Algorithm** | Between-subjects | 5 levels | `P&O`, `InCond`, `Fuzzy`, `Scan&Track`, `PSO` |
+| **Factor B - Scenario** | Within-subjects / Environmental | 3 levels | Defined below (§2.2) |
 
-> [!IMPORTANT]
-> The design is a **full factorial**: every combination of (Algorithm × Scenario)
-> is executed with $N \ge 5\text{ to }10$ repetitions.
+!!! note
+    The design is a **full factorial**: every combination of (Algorithm × Scenario)
+    is executed with $N \ge 5\text{ to }10$ repetitions.
 
 ### 2.2. The Three Benchmark Scenarios (Factor B)
 
@@ -63,11 +64,11 @@ A separate two-way ANOVA can be computed for each primary metric of interest:
 | **Transient Energy Loss** | $E_{loss}$ | Continuous, $\ge 0$ | Search transient penalty (Joules) |
 | **Convergence / Re-acquisition Time** | $T_c$ / $T_{reacq}$ | Continuous, $\ge 0$ | Transient responsiveness |
 
-> [!WARNING]
-> The GMPP hit rate ($HR_{GMPP}$) is a **proportion** / binary outcome (success/trap).
-> An ANOVA on raw proportions violates normality assumptions. For $HR_{GMPP}$, use
-> a logistic regression model (generalized linear model with logit link) or Fisher's
-> exact test across algorithms.
+!!! warning
+    The GMPP hit rate ($HR_{GMPP}$) is a **proportion** / binary outcome (success/trap).
+    An ANOVA on raw proportions violates normality assumptions. For $HR_{GMPP}$, use
+    a logistic regression model (generalized linear model with logit link) or Fisher's
+    exact test across algorithms.
 
 ### 2.4. Sources of Repetitions ($N \ge 5\text{ to }10$)
 
@@ -85,30 +86,25 @@ To satisfy ANOVA variance requirements, each cell must have genuine variability:
 
 ### 3.1. Assumptions Check
 
-Before running the parametric ANOVA, the pipeline verifies:
+Before running the parametric ANOVA, the planned pipeline would verify:
 
 1. **Normality of Residuals:** Shapiro-Wilk test (`scipy.stats.shapiro`) on model residuals.
 2. **Homoscedasticity (Equal Variances):** Levene's test (`scipy.stats.levene`) across groups.
 
-```mermaid
-graph TD
-    A[Bench Data: Algorithm x Scenario x Repetitions] --> B{Shapiro-Wilk<br>p > 0.05?}
-    B -->|Yes| C{Levene Test<br>p > 0.05?}
-    B -->|No| F[Non-Parametric Analysis<br>Kruskal-Wallis / Aligned Rank Transform]
-    C -->|Yes| D[Two-Way Parametric ANOVA<br>Type II Sum of Squares]
-    C -->|No| E{Balanced Design<br>N >= 5 per cell?}
-    E -->|Yes| D2[Robust Two-Way ANOVA<br>Central Limit Theorem applies]
-    E -->|No| F
-    D --> G{p < 0.05?}
-    D2 --> G
-    G -->|Yes| H[Post-Hoc Analysis:<br>Tukey HSD Pairwise Comparisons]
-    G -->|No| I[No Statistically Significant Difference]
-    F --> J{p < 0.05?}
-    J -->|Yes| K[Dunn Post-Hoc + Bonferroni Correction]
-    J -->|No| I
-```
+Decision flow:
 
-### 3.2. Execution with `statsmodels`
+- If the Shapiro-Wilk test passes ($p > 0.05$) and Levene's test passes: two-way parametric ANOVA, Type II sum of
+  squares.
+- If Shapiro-Wilk passes but Levene's test fails: with a balanced design ($N \ge 5$ per cell) use a robust two-way
+  ANOVA (the central limit theorem applies). With fewer repetitions, use the non-parametric path.
+- If Shapiro-Wilk fails: non-parametric analysis (Kruskal-Wallis or Aligned Rank Transform).
+- Parametric path with $p < 0.05$: Tukey HSD pairwise comparisons. Non-parametric path with $p < 0.05$: Dunn post-hoc
+  test with Bonferroni correction.
+- Otherwise: no statistically significant difference.
+
+### 3.2. Sketch with `statsmodels`
+
+`statsmodels` is not a project dependency yet. The code below is a sketch of the planned analysis.
 
 ```python
 import statsmodels.api as sm
@@ -127,16 +123,22 @@ tukey = pairwise_tukeyhsd(df['eta'], df['algorithm'], alpha=0.05)
 
 ## 4. Visualisation for Papers & Thesis
 
-The script generates:
-1. **Interaction Plot:** Mean $\eta$ versus Scenario for each of the 5 algorithms. Non-parallel lines visually demonstrate the Algorithm × Scenario interaction.
-2. **Boxplots per Cell:** Distribution of $\eta$ showing spread, median, and outliers across the $5 \times 3 = 15$ cells.
-3. **Tukey HSD Significance Heatmap:** Pairwise matrix highlighting which algorithms differ significantly ($p < 0.05, p < 0.01, p < 0.001$).
+The planned analysis would produce:
+
+1. **Interaction Plot:** Mean $\eta$ versus Scenario for each of the 5 algorithms. Non-parallel lines visually
+   demonstrate the Algorithm × Scenario interaction.
+2. **Boxplots per Cell:** Distribution of $\eta$ showing spread, median, and outliers across the $5 \times 3 = 15$
+   cells.
+3. **Tukey HSD Significance Heatmap:** Pairwise matrix highlighting which algorithms differ significantly
+   ($p < 0.05, p < 0.01, p < 0.001$).
 
 ---
 
-## 5. Location and Execution
+## 5. Planned Location and Outputs
 
-```
+Nothing in this section exists in the repo yet. Planned layout:
+
+```text
 harness/
 ├── compare_anova.py          # Main script: processes data & computes ANOVA
 ├── output/
@@ -146,16 +148,12 @@ harness/
 │   └── anova_tukey.csv       # Pairwise post-hoc comparisons
 ```
 
-Execute with:
-```bash
-uv run harness/compare_anova.py
-```
-
 ---
 
 ## 6. References
 
 - Montgomery, D.C. (2017). *Design and Analysis of Experiments*, 9th ed. Wiley.
-- Yang, B. et al. (2023). *State-of-the-art review of MPPT techniques for hybrid PV-TEG systems.* Global Energy Interconnection, 6(5), 567–591. (Table 4 uses ANOVA for algorithm benchmarking).
-- [metrics_analysis.md](metrics_analysis.md) — Detailed formulation of metrics.
-- [metrics_summary.md](metrics_summary.md) — Complete metrics catalogue and selection.
+- Yang, B. et al. (2023). *State-of-the-art review of MPPT techniques for hybrid PV-TEG systems.* Global Energy
+  Interconnection, 6(5), 567–591. (Table 4 uses ANOVA for algorithm benchmarking).
+- [metrics_analysis.md](metrics_analysis.md) - Detailed formulation of metrics.
+- [metrics_summary.md](metrics_summary.md) - Complete metrics catalogue and selection.
