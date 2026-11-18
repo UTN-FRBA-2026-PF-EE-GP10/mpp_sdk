@@ -6,7 +6,7 @@
 //! released to the 4.7 kohm pull-ups. Every wait is a timer await, so the
 //! other tasks keep running.
 
-use dimmer_link::master::alpha_to_send;
+use dimmer_link::master::{alpha_to_send, spi_status_fields};
 use dimmer_link::{
     ALPHA_OFF, APPLIED_NONE, COMMAND_LEN, Command, I2C_ADDRESS, KEEPALIVE_MS, STATUS_DELAY_MS,
     STATUS_LEN, decode_status, encode_command,
@@ -25,6 +25,7 @@ static LINK_LOST: AtomicBool = AtomicBool::new(false);
 
 /// Last good status from the dimmer.
 static STATUS_FLAGS: AtomicU8 = AtomicU8::new(0);
+static STATUS_BUDGET_S: AtomicU8 = AtomicU8::new(0);
 static STATUS_APPLIED: AtomicU16 = AtomicU16::new(APPLIED_NONE);
 static STATUS_MS: AtomicU64 = AtomicU64::new(0);
 static STATUS_SEEN: AtomicBool = AtomicBool::new(false);
@@ -70,6 +71,8 @@ pub struct StatusReply {
     pub set: u16,
     pub applied: u16,
     pub age: u8,
+    /// Seconds of lamp-on time left, or the cool-down wait when tripped. 0 when unknown.
+    pub budget_s: u8,
 }
 
 pub fn status_reply() -> StatusReply {
@@ -80,15 +83,17 @@ pub fn status_reply() -> StatusReply {
     } else {
         u64::MAX
     };
-    let mut flags = (STATUS_FLAGS.load(Ordering::Relaxed) & 0b111) << 1;
-    if age_ms < LINK_OK_MS as u64 {
-        flags |= 1;
-    }
+    let (flags, budget_s) = spi_status_fields(
+        STATUS_FLAGS.load(Ordering::Relaxed),
+        STATUS_BUDGET_S.load(Ordering::Relaxed),
+        age_ms < LINK_OK_MS as u64,
+    );
     StatusReply {
         flags,
         set: ALPHA_SET.load(Ordering::Relaxed),
         applied: STATUS_APPLIED.load(Ordering::Relaxed),
         age: (age_ms / 100).min(255) as u8,
+        budget_s,
     }
 }
 
@@ -283,6 +288,7 @@ async fn read_status(bus: &mut Bus<'_>) -> bool {
     match decode_status(&frame) {
         Ok(status) => {
             STATUS_FLAGS.store(status.flags, Ordering::Relaxed);
+            STATUS_BUDGET_S.store(status.budget_s, Ordering::Relaxed);
             STATUS_APPLIED.store(status.alpha_applied, Ordering::Relaxed);
             STATUS_MS.store(Instant::now().as_millis(), Ordering::Relaxed);
             STATUS_SEEN.store(true, Ordering::Relaxed);

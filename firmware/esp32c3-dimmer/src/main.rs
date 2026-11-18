@@ -11,6 +11,10 @@
 //!   invalid or missing crossing stops firing until the lock is regained.
 //! - A firing pulse is skipped rather than sent late, so a delayed pulse can
 //!   never spill into the next half-cycle.
+//! - Exposure limit: the time the lamp is commanded on fills a leaky bucket
+//!   (`dimmer_link::exposure`). When it is full the lamp is forced off and
+//!   on-commands are refused until it has cooled and the host sent an explicit
+//!   OFF. It is RAM only, so a reset clears it (the lamp is off at boot anyway).
 //!
 //! Control is over I2C from the Pico (slave at `I2C_ADDRESS`). With the `wifi`
 //! feature a phone can also control it over Wi-Fi, until the first I2C command
@@ -19,14 +23,15 @@
 use std::ffi::c_void;
 use std::ptr;
 use std::sync::atomic::{AtomicBool, AtomicPtr, AtomicU32, AtomicU8, Ordering::Relaxed};
+use std::sync::Mutex;
 use std::thread;
 use std::time::Duration;
 
 use anyhow::{bail, Result};
 use dimmer_link::slave::{applied_alpha, command_timed_out};
 use dimmer_link::{
-    alpha_to_fraction, decode_command, encode_status, flags, Command, Status, ALPHA_OFF, COMMAND_LEN,
-    COMMAND_TIMEOUT_MS, FRACTION_FULL, FRACTION_OFF, I2C_ADDRESS,
+    alpha_to_fraction, decode_command, encode_status, exposure::Exposure, flags, Command, Status, ALPHA_OFF,
+    COMMAND_LEN, COMMAND_TIMEOUT_MS, FRACTION_FULL, FRACTION_OFF, I2C_ADDRESS,
 };
 use esp_idf_svc::hal::delay::TickType;
 use esp_idf_svc::hal::i2c::{I2cSlaveConfig, I2cSlaveDriver};
@@ -91,6 +96,9 @@ const _: () = assert!(AP_PASS.len() >= 8 && AP_PASS.len() <= 63, "DIMMER_AP_PASS
 // `FRACTION_OFF` never fires; `FRACTION_FULL` keeps FIRE high while locked.
 static FRACTION: AtomicU32 = AtomicU32::new(FRACTION_OFF);
 static LEVEL: AtomicU32 = AtomicU32::new(0);
+/// Exposure limiter. The lock is only held for short non-blocking work, never across a
+/// blocking call.
+static EXPOSURE: Mutex<Exposure> = Mutex::new(Exposure::new());
 
 /// Set by the first valid I2C `SetAlpha`; from then on the deadman is armed.
 static ARMED: AtomicBool = AtomicBool::new(false);
@@ -276,26 +284,46 @@ fn power_at(alpha: f64) -> f64 {
     1.0 - alpha / PI + (2.0 * alpha).sin() / (2.0 * PI)
 }
 
-/// The one place that changes the firing fraction, for both control paths.
-fn set_fraction(percent: u32, fraction: u32) {
+fn exposure() -> std::sync::MutexGuard<'static, Exposure> {
+    // The state is plain data, so a poisoned lock is still usable.
+    EXPOSURE.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// The one place that changes the firing fraction, for both control paths and for the
+/// deadman and limiter. Returns false when an on-fraction was refused (the lamp is then off).
+///
+/// `explicit_off` is true only for an OFF the host asked for (I2C `SetAlpha(ALPHA_OFF)`,
+/// Wi-Fi level 0). The deadman and the limiter's own forced off pass false: they must not
+/// count as the acknowledgment that clears a trip.
+fn set_fraction(percent: u32, fraction: u32, explicit_off: bool) -> bool {
     // A level change ends the LED test, so the page never shows a test that is not running.
     stop_opto_test();
+    // The decision and the stores share one lock, so a trip in the main loop cannot slip
+    // between them and leave the lamp on. `apply` first counts the time of the previous
+    // state, so a short on-time between two loop ticks is not lost.
+    let mut limiter = exposure();
+    let prev_on = FRACTION.load(Relaxed) != FRACTION_OFF;
+    let applied = limiter.apply(now_ms(), prev_on, fraction != FRACTION_OFF, explicit_off);
+    let (percent, fraction) = if applied { (percent, fraction) } else { (0, FRACTION_OFF) };
     LEVEL.store(percent, Relaxed);
     FRACTION.store(fraction, Relaxed);
     if fraction == FRACTION_OFF {
         fire(false);
     }
+    applied
 }
 
 /// Sets the firing angle in 0.01 degree (the I2C unit): 0 = full on, 18000 = off.
 fn set_alpha(alpha: u16) {
     let alpha_rad = alpha as f64 / ALPHA_OFF as f64 * std::f64::consts::PI;
     let percent = (power_at(alpha_rad) * 100.0).round().clamp(0.0, 100.0) as u32;
-    set_fraction(percent, alpha_to_fraction(alpha));
+    // The reply to a refused command is the status frame, so the result is not needed here.
+    set_fraction(percent, alpha_to_fraction(alpha), alpha >= ALPHA_OFF);
 }
 
-/// Sets the lamp power in percent: 0 = off, 100 = full, otherwise phase control.
-fn set_level(percent: u32) {
+/// Sets the lamp power in percent: 0 = off (an explicit host OFF), 100 = full, otherwise
+/// phase control. Returns false when the limiter refused it.
+fn set_level(percent: u32) -> bool {
     let percent = percent.min(100);
     let fraction = match percent {
         0 => FRACTION_OFF,
@@ -315,7 +343,7 @@ fn set_level(percent: u32) {
             ((lo / std::f64::consts::PI) * 65536.0) as u32
         }
     };
-    set_fraction(percent, fraction);
+    set_fraction(percent, fraction, percent == 0)
 }
 
 fn setup_gpio() -> Result<()> {
@@ -380,8 +408,12 @@ fn status_json() -> String {
         _ => 0,
     };
     let freq = if mains && half > 0 { 500_000.0 / half as f32 } else { 0.0 };
+    let (tripped, budget_s) = {
+        let limiter = exposure();
+        (limiter.tripped(), limiter.budget_s())
+    };
     format!(
-        "{{\"level\":{},\"mains\":{},\"locked\":{},\"freq_hz\":{:.2},\"zc_width_us\":{},\"delay_us\":{},\"fired\":{},\"skipped\":{},\"opto_test\":{},{}}}",
+        "{{\"tripped\":{tripped},\"budget_s\":{budget_s},\"level\":{},\"mains\":{},\"locked\":{},\"freq_hz\":{:.2},\"zc_width_us\":{},\"delay_us\":{},\"fired\":{},\"skipped\":{},\"opto_test\":{},{}}}",
         LEVEL.load(Relaxed),
         mains,
         mains && locked(),
@@ -404,6 +436,10 @@ fn start_opto_test() -> Result<()> {
     let since_pulse = now_us().wrapping_sub(LAST_PULSE_US.load(Relaxed));
     if PULSES.load(Relaxed) > 0 && since_pulse < 1_000_000 {
         bail!("mains detected: the LED test only runs with mains disconnected");
+    }
+    // The test drives FIRE directly, so it must not run while the limiter holds the lamp off.
+    if exposure().tripped() {
+        bail!("exposure limit tripped: the LED test is refused");
     }
     if OPTO_TEST_ON.load(Relaxed) {
         bail!("the LED test is already running");
@@ -452,6 +488,13 @@ fn i2c_status() -> Status {
     if TIMED_OUT.load(Relaxed) {
         status_flags |= flags::TIMED_OUT;
     }
+    let (tripped, budget_s) = {
+        let limiter = exposure();
+        (limiter.tripped(), limiter.budget_s())
+    };
+    if tripped {
+        status_flags |= flags::TRIPPED;
+    }
     Status {
         flags: status_flags,
         alpha_applied: applied_alpha(
@@ -463,6 +506,7 @@ fn i2c_status() -> Status {
         ),
         freq_centi_hz: if mains && half > 0 { (50_000_000 / half).min(u16::MAX as u32) as u16 } else { 0 },
         bad_frames: BAD_FRAMES.load(Relaxed),
+        budget_s,
     }
 }
 
@@ -521,6 +565,7 @@ fn main() -> Result<()> {
         led(false);
         thread::sleep(Duration::from_millis(120));
     }
+    // Boot state: lamp off. Not a host OFF in any way that matters: nothing is tripped yet.
     set_level(0);
 
     let peripherals = Peripherals::take()?;
@@ -587,8 +632,11 @@ fn main() -> Result<()> {
         let level = query.split('&').find_map(|kv| kv.strip_prefix("p=")).and_then(|v| v.parse::<u32>().ok());
         match level {
             Some(p) if p <= 100 => {
-                set_level(p);
-                req.into_ok_response()?.write_all(b"ok")
+                if set_level(p) {
+                    req.into_ok_response()?.write_all(b"ok")
+                } else {
+                    req.into_status_response(409)?.write_all(b"exposure limit: lamp refused, send level 0 after the cool-down")
+                }
             }
             _ => req.into_status_response(400)?.write_all(b"expected p=0..100"),
         }
@@ -612,6 +660,7 @@ fn main() -> Result<()> {
     // Watchdog: losing the zero-cross signal stops firing within ZC_TIMEOUT_US.
     let mut last_print = 0u32;
     let mut last_window = 0u32;
+    let mut was_tripped = false;
     let mut counts = [0u32; 5];
     loop {
         let now = now_us();
@@ -625,8 +674,27 @@ fn main() -> Result<()> {
         if command_timed_out(ARMED.load(Relaxed), LAST_COMMAND_MS.load(Relaxed), now_ms(), COMMAND_TIMEOUT_MS)
             && !TIMED_OUT.swap(true, Relaxed)
         {
-            set_fraction(0, FRACTION_OFF);
+            set_fraction(0, FRACTION_OFF, false);
             info!("no I2C command for {COMMAND_TIMEOUT_MS} ms: lamp off");
+        }
+        // Exposure limiter: the bucket follows the commanded state. While tripped the lamp is
+        // forced off on every pass, not only at the trip, so a command that raced the trip
+        // cannot leave it on.
+        let tripped = {
+            let mut limiter = exposure();
+            limiter.tick(now_ms(), FRACTION.load(Relaxed) != FRACTION_OFF);
+            limiter.tripped()
+        };
+        if tripped && FRACTION.load(Relaxed) != FRACTION_OFF {
+            set_fraction(0, FRACTION_OFF, false);
+        }
+        if tripped != was_tripped {
+            was_tripped = tripped;
+            if tripped {
+                info!("exposure limit reached: lamp forced off");
+            } else {
+                info!("exposure limit cleared");
+            }
         }
         if now.wrapping_sub(last_window) >= 1_000_000 {
             last_window = now;

@@ -7,6 +7,7 @@
 //! (180.00 degrees) is off.
 #![cfg_attr(not(test), no_std)]
 
+pub mod exposure;
 pub mod master;
 pub mod slave;
 
@@ -24,13 +25,21 @@ pub const APPLIED_NONE: u16 = u16::MAX;
 pub const COMMAND_TIMEOUT_MS: u32 = 2_000;
 /// The Pico turns the lamp off when the Pi sends no valid alpha command for this long.
 pub const HOST_TIMEOUT_MS: u32 = 3_000;
+/// The dimmer trips when the lamp was commanded on this long (net of cooling).
+/// Change it only after a bench thermal test.
+pub const EXPOSURE_MAX_ON_MS: u32 = 120_000;
+/// After a trip the bucket must fall to this level before the lamp may turn on again.
+/// With the 1:1 cool rate the long-run duty is at most 50 percent.
+pub const EXPOSURE_RESUME_MS: u32 = 60_000;
+// Resume at or above the trip level would give a duty of 100 percent.
+const _: () = assert!(EXPOSURE_RESUME_MS < EXPOSURE_MAX_ON_MS);
 /// The master repeats the last `SetAlpha` this often, also when nothing changed.
 pub const KEEPALIVE_MS: u32 = 500;
 /// The master waits this long between `RequestStatus` and the read.
 pub const STATUS_DELAY_MS: u32 = 3;
 
 pub const COMMAND_LEN: usize = 4;
-pub const STATUS_LEN: usize = 8;
+pub const STATUS_LEN: usize = 9;
 
 const CMD_SET_ALPHA: u8 = 0x01;
 const CMD_REQUEST_STATUS: u8 = 0x02;
@@ -44,6 +53,8 @@ pub mod flags {
     pub const LOCKED: u8 = 1 << 1;
     /// The lamp was switched off because no valid command arrived in time.
     pub const TIMED_OUT: u8 = 1 << 2;
+    /// The exposure limiter tripped: on-commands are refused until it clears.
+    pub const TRIPPED: u8 = 1 << 3;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -72,6 +83,10 @@ pub struct Status {
     pub freq_centi_hz: u16,
     /// Commands rejected so far (wraps). A rising value means a noisy cable.
     pub bad_frames: u8,
+    /// Not tripped: seconds of lamp-on time left. Tripped: seconds until the
+    /// resume level (0 means cooled, waiting for an explicit OFF). Max 255: with
+    /// `EXPOSURE_MAX_ON_MS` above 255 s it pins at 255.
+    pub budget_s: u8,
 }
 
 /// CRC-8, polynomial 0x07, init 0xFF: the same as the SPI link to the Pi.
@@ -117,7 +132,7 @@ pub fn decode_command(frame: &[u8]) -> Result<Command, Error> {
     }
 }
 
-/// `[magic, flags, alpha_hi, alpha_lo, freq_hi, freq_lo, bad_frames, crc]`.
+/// `[magic, flags, alpha_hi, alpha_lo, freq_hi, freq_lo, bad_frames, budget_s, crc]`.
 pub fn encode_status(status: &Status) -> [u8; STATUS_LEN] {
     let alpha = status.alpha_applied.to_be_bytes();
     let freq = status.freq_centi_hz.to_be_bytes();
@@ -129,9 +144,10 @@ pub fn encode_status(status: &Status) -> [u8; STATUS_LEN] {
         freq[0],
         freq[1],
         status.bad_frames,
+        status.budget_s,
         0,
     ];
-    frame[7] = crc8(&frame[..7]);
+    frame[8] = crc8(&frame[..8]);
     frame
 }
 
@@ -139,7 +155,7 @@ pub fn decode_status(frame: &[u8]) -> Result<Status, Error> {
     if frame.len() != STATUS_LEN {
         return Err(Error::Length);
     }
-    if crc8(&frame[..7]) != frame[7] {
+    if crc8(&frame[..8]) != frame[8] {
         return Err(Error::Crc);
     }
     if frame[0] != STATUS_MAGIC {
@@ -150,6 +166,7 @@ pub fn decode_status(frame: &[u8]) -> Result<Status, Error> {
         alpha_applied: u16::from_be_bytes([frame[2], frame[3]]),
         freq_centi_hz: u16::from_be_bytes([frame[4], frame[5]]),
         bad_frames: frame[6],
+        budget_s: frame[7],
     })
 }
 
@@ -239,7 +256,7 @@ mod tests {
     fn wrong_length_is_rejected() {
         assert_eq!(decode_command(&[0x01, 0x00, 0x00]), Err(Error::Length));
         assert_eq!(decode_command(&[0; 5]), Err(Error::Length));
-        assert_eq!(decode_status(&[0; 7]), Err(Error::Length));
+        assert_eq!(decode_status(&[0; 8]), Err(Error::Length));
     }
 
     #[test]
@@ -263,9 +280,13 @@ mod tests {
             alpha_applied: 9_000,
             freq_centi_hz: 5_000,
             bad_frames: 5,
+            budget_s: 120,
         };
         let frame = encode_status(&status);
-        assert_eq!(frame, [0xD1, 0x03, 0x23, 0x28, 0x13, 0x88, 0x05, 0x5A]);
+        assert_eq!(
+            frame,
+            [0xD1, 0x03, 0x23, 0x28, 0x13, 0x88, 0x05, 0x78, 0xEE]
+        );
         assert_eq!(decode_status(&frame), Ok(status));
     }
 
@@ -276,9 +297,10 @@ mod tests {
             alpha_applied: APPLIED_NONE,
             freq_centi_hz: 0,
             bad_frames: 0,
+            budget_s: 0,
         });
         frame[0] = 0xD2;
-        frame[7] = crc8(&frame[..7]);
+        frame[8] = crc8(&frame[..8]);
         assert_eq!(decode_status(&frame), Err(Error::Unknown));
     }
 

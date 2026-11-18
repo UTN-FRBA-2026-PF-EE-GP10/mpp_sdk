@@ -1,4 +1,7 @@
 version: 2
+# One pull request per ecosystem and kind of change: all minor and patch
+# updates together, all major updates together. A broken major bump then
+# does not hold back the safe ones.
 updates:
   - package-ecosystem: github-actions
     directory: /
@@ -10,6 +13,11 @@ updates:
       # builds. dtolnay publishes a tag for each future release too, so
       # Dependabot proposes versions that do not exist yet.
       - dependency-name: dtolnay/rust-toolchain
+    groups:
+      actions-minor-patch:
+        update-types: [minor, patch]
+      actions-major:
+        update-types: [major]
 
   - package-ecosystem: uv
     directory: /
@@ -18,6 +26,8 @@ updates:
     groups:
       python-minor-patch:
         update-types: [minor, patch]
+      python-major:
+        update-types: [major]
 
   - package-ecosystem: cargo
     directories:
@@ -29,6 +39,8 @@ updates:
     groups:
       cargo-minor-patch:
         update-types: [minor, patch]
+      cargo-major:
+        update-types: [major]
 
   - package-ecosystem: npm
     directory: /frontend
@@ -37,3 +49,5 @@ updates:
     groups:
       npm-minor-patch:
         update-types: [minor, patch]
+      npm-major:
+        update-types: [major]

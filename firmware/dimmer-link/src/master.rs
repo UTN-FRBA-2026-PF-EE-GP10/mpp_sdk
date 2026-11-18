@@ -1,7 +1,7 @@
 //! Decision logic of the Pico (I2C master): which alpha goes to the dimmer now.
 //! Pure, so the safety rules run as host unit tests.
 
-use crate::{ALPHA_OFF, HOST_TIMEOUT_MS};
+use crate::{ALPHA_OFF, HOST_TIMEOUT_MS, flags};
 
 /// Alpha to send to the dimmer.
 ///
@@ -17,9 +17,41 @@ pub fn alpha_to_send(requested: u16, host_age_ms: Option<u32>, link_lost: bool) 
     }
 }
 
+/// Flags and budget for the SPI `0xD2` reply: `(flags, budget_s)`.
+///
+/// The dimmer flags move up one bit (bit 0 is `link_ok`), so `TRIPPED` is
+/// bit 4. Without a fresh I2C status the budget is 0 and `TRIPPED` is clear:
+/// the data is stale and `link_ok` already says so.
+pub fn spi_status_fields(dimmer_flags: u8, budget_s: u8, link_ok: bool) -> (u8, u8) {
+    let known = dimmer_flags & (flags::MAINS | flags::LOCKED | flags::TIMED_OUT | flags::TRIPPED);
+    if link_ok {
+        ((known << 1) | 1, budget_s)
+    } else {
+        ((known & !flags::TRIPPED) << 1, 0)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn spi_fields_shift_the_dimmer_flags_and_carry_the_budget() {
+        let all = flags::MAINS | flags::LOCKED | flags::TIMED_OUT | flags::TRIPPED;
+        assert_eq!(spi_status_fields(all, 77, true), (0b1_1111, 77));
+        assert_eq!(spi_status_fields(flags::TRIPPED, 0, true), (0b1_0001, 0));
+        assert_eq!(spi_status_fields(flags::MAINS, 120, true), (0b0_0011, 120));
+        // An unknown high bit never leaks into the reply.
+        assert_eq!(spi_status_fields(0xF0, 5, true), (0b1, 5));
+    }
+
+    #[test]
+    fn spi_fields_without_a_fresh_status_report_budget_0_and_not_tripped() {
+        let (f, b) = spi_status_fields(flags::TRIPPED | flags::MAINS, 200, false);
+        assert_eq!(b, 0);
+        // Link bit and tripped bit clear; the older flags keep their old behaviour.
+        assert_eq!(f, flags::MAINS << 1);
+    }
 
     #[test]
     fn boot_before_any_command_is_off() {
