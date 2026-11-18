@@ -132,6 +132,20 @@ recompiling firmware:
 - **Batch & Single Transmission**: Checkboxes let operators select any subset of
   parameters to send in batch, with individual per-field send buttons for instant tweaks.
 
+## Lamp
+
+The **Lamp** card (`src/components/LampCard.tsx`) sits above the Curve and Run
+tabs in Measure. It drives the dimmer for the 220 Vac lamp. The lamp is open
+loop, so it is only ever on for a bounded window:
+
+- Set the power (0 to 100 percent, the firing angle is shown) and a window
+  length (1 to 120 s). Nothing is sent until "Lamp on".
+- The server switches the lamp off at the end of the window. "Off" is always
+  enabled, also when the link is down or the status is unknown.
+- After a trip the lamp stays off until the heat budget recovers and the
+  operator presses Off. The card polls `GET /api/dimmer` once per second while
+  the tab is visible. It shows "Lamp not available" if the server has no dimmer.
+
 ## Build
 
 ```bash
