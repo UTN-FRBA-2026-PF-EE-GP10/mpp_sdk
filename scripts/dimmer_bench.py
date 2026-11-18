@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import signal
 import subprocess
 import sys
@@ -325,7 +326,7 @@ class Holder:
         self._proc.wait()
 
 
-def _spawn_holder(alpha_deg: float, bus: int, device: int) -> Holder:
+def _spawn_holder(alpha_deg: float, bus: int, device: int, mains: bool) -> Holder:
     cmd = [
         sys.executable,
         str(Path(__file__).resolve()),
@@ -335,6 +336,8 @@ def _spawn_holder(alpha_deg: float, bus: int, device: int) -> Holder:
         str(bus),
         "--device",
         str(device),
+        "--child-mains",
+        "1" if mains else "0",
     ]
     return Holder(subprocess.Popen(cmd))
 
@@ -694,10 +697,28 @@ def write_results(
     Path(path).write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
-def _child_hold(args) -> int:
-    from mpp_sdk.io.spi_mcu import SpiMcuSource  # noqa: PLC0415
+def _child_hold(args, source_factory=None) -> int:
+    """Hold an angle for the parent. It applies the same mains rule as the parent."""
+    angle = args.child_hold
+    if args.child_mains is None:
+        print("refused: --child-mains is required with --child-hold")
+        return 3
+    if not math.isfinite(angle) or not 0.0 <= angle < OFF_DEG:
+        print(f"refused: angle {angle!r} is not in [0, {OFF_DEG:g}) degrees")
+        return 3
+    if source_factory is None:
+        from mpp_sdk.io.spi_mcu import SpiMcuSource  # noqa: PLC0415
 
-    source = SpiMcuSource(bus=args.bus, device=args.device)
+        def source_factory():
+            return SpiMcuSource(bus=args.bus, device=args.device)
+
+    source = source_factory()
+    try:
+        Bench(source, mains=bool(args.child_mains)).guard()
+    except MainsPolicyError as exc:
+        source.close()
+        print(f"refused: {exc}")
+        return 3
     try:
         source.set_dimmer_alpha(args.child_hold, max_on_s=ON_WINDOW_S + 10.0)
         time.sleep(ON_WINDOW_S + 10.0)
@@ -721,6 +742,7 @@ def main(argv: Sequence[str] | None = None, *, source_factory=None, ask=input, o
     parser.add_argument("--bus", type=int, default=default_spi_bus())
     parser.add_argument("--device", type=int, default=0)
     parser.add_argument("--child-hold", type=float, help=argparse.SUPPRESS)
+    parser.add_argument("--child-mains", type=int, choices=(0, 1), help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
 
     if args.list:
@@ -728,7 +750,7 @@ def main(argv: Sequence[str] | None = None, *, source_factory=None, ask=input, o
             out(f"{name}{'  (needs a human)' if human else ''}")
         return 0
     if args.child_hold is not None:
-        return _child_hold(args)
+        return _child_hold(args, source_factory)
     try:
         checks = select_checks(args.only, mains=args.mains, auto_only=args.auto_only)
     except ValueError as exc:
@@ -746,7 +768,11 @@ def main(argv: Sequence[str] | None = None, *, source_factory=None, ask=input, o
     if args.mains:
         out("MAINS MODE: a lamp will light. Small lamp (25 to 40 W), isolation transformer or")
         out("GFCI, fuse in line, someone ready to cut the plug. Read hardware/dimmer/README.md.")
-        if ask(f"Type exactly '{CONFIRM_TEXT}' to continue: ").strip() != CONFIRM_TEXT:
+        try:
+            answer = ask(f"Type exactly '{CONFIRM_TEXT}' to continue: ")
+        except EOFError:
+            answer = ""
+        if answer.strip() != CONFIRM_TEXT:
             out("not confirmed, nothing was commanded")
             return 3
 
@@ -760,7 +786,7 @@ def main(argv: Sequence[str] | None = None, *, source_factory=None, ask=input, o
         mains=args.mains,
         ask=ask,
         out=out,
-        spawn_holder=lambda alpha: _spawn_holder(alpha, args.bus, args.device),
+        spawn_holder=lambda alpha: _spawn_holder(alpha, args.bus, args.device, args.mains),
         stable_s=args.stable_s,
         human=not args.auto_only,
     )

@@ -63,6 +63,13 @@ How the script reads results:
 - Without `--mains` the script refuses to command an angle when the status says `mains` is true.
   This protects you from a wrong belief that the lamp is disconnected.
 - The script starts a second Python process to hold an angle. It kills that process to test the timeouts.
+- The child process shares the SPI bus with the script. A status read of the script can be split by
+  a keepalive frame of the child. The script then retries the read.
+- The child applies the same mains rule as the script and refuses to start without the mains state of its parent.
+- If the script is killed with SIGKILL while the child holds an angle, the child keeps the angle until its
+  window ends: at most 40 s. Then it sends OFF. Cut the mains if the lamp is lit.
+- `no-restart` streams on-commands for up to the budget plus 75 s, with no status reads. Only the dimmer trip
+  bounds it (each on-command has a 30 s window, renewed every 10 s). Run it only with no mains (Test 0).
 - `--out` writes every status read to a JSON file. Keep it with the session.
 
 ## Test 0: Pico to dimmer link, no mains, no lamp

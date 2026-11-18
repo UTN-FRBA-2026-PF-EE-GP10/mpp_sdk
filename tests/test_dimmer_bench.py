@@ -451,3 +451,78 @@ def test_help_works_without_spidev(capsys):
         b.main(["--help"])
     assert exc.value.code == 0
     assert "--auto-only" in capsys.readouterr().out
+
+
+def test_main_mains_confirmation_with_closed_stdin_is_not_confirmed():
+    def eof(prompt):
+        raise EOFError
+
+    made = []
+    code = b.main(["--mains"], source_factory=lambda: made.append(1), ask=eof, out=lambda s: None)
+    assert code == 3 and made == []
+
+
+def test_limits_at_their_bounds():
+    link = [(0.0, st()), (3.0, st(link_ok=False))]
+    assert b.judge_link_loss(link, 0.0).status == b.PASS
+    link = [(0.0, st()), (5.0, st(link_ok=False))]
+    assert b.judge_link_loss(link, 0.0).status == b.FAIL
+    off = lambda t: [(t, st(set_alpha_deg=180.0)), (t + 1, st(set_alpha_deg=180.0))]  # noqa: E731
+    assert b.judge_pico_timeout(off(4.4), 0.0).status == b.PASS
+    assert b.judge_pico_timeout(off(4.6), 0.0).status == b.FAIL
+    cool = lambda t: [(t, st(tripped=False))]  # noqa: E731
+    assert b.judge_cooldown_rearm(cool(65.9), 0.0, 60.0).status == b.PASS
+    assert b.judge_cooldown_rearm(cool(66.1), 0.0, 60.0).status == b.FAIL
+    assert b.judge_cooldown_rearm(cool(53.9), 0.0, 60.0).status == b.FAIL
+    trip = lambda t: [(t, st(tripped=True))]  # noqa: E731
+    assert b.judge_trip(trip(125.9), 0.0, 120.0).status == b.PASS
+    assert b.judge_trip(trip(126.1), 0.0, 120.0).status == b.FAIL
+    assert b.judge_stable([(i, st(age_s=1.5)) for i in range(6)]).status == b.PASS
+    assert b.judge_stable([(i, st(age_s=1.6)) for i in range(6)]).status == b.FAIL
+    assert b.judge_cleared([(0.0, st(tripped=True)), (4.0, st())]).status == b.PASS
+    assert b.judge_cleared([(0.0, st(tripped=True)), (4.5, st())]).status == b.FAIL
+
+
+def test_deadman_has_no_time_limit_and_is_inconclusive_not_fail():
+    assert b.judge_timed_out_seen([(t, st()) for t in range(100)]).status == b.INCONCLUSIVE
+    assert b.judge_timed_out_seen([(99.0, st(timed_out=True))]).status == b.PASS
+
+
+def child_args(angle, mains):
+    ns = type("A", (), {})()
+    ns.child_hold, ns.child_mains, ns.bus, ns.device = angle, mains, 0, 0
+    return ns
+
+
+def test_child_refuses_without_mains_state_or_with_bad_angle(capsys):
+    made = []
+    factory = lambda: made.append(1)  # noqa: E731
+    assert b._child_hold(child_args(90.0, None), factory) == 3
+    for angle in (-1.0, 180.0, 200.0, float("nan"), float("inf")):
+        assert b._child_hold(child_args(angle, 0), factory) == 3
+    assert made == []
+
+
+def test_child_applies_the_mains_rule():
+    dimmer = FakeDimmer(Clock(), mains=True)
+    assert b._child_hold(child_args(90.0, 0), lambda: dimmer) == 3
+    assert dimmer.max_on == [] and dimmer.closed
+    dimmer = FakeDimmer(Clock(), mains=False)
+    assert b._child_hold(child_args(90.0, 1), lambda: dimmer) == 3
+    assert dimmer.max_on == []
+
+
+def test_child_holds_when_the_rule_is_met(monkeypatch):
+    clock = Clock()
+    dimmer = FakeDimmer(clock, mains=False)
+    monkeypatch.setattr(b.time, "sleep", clock.sleep)
+    assert b._child_hold(child_args(90.0, 0), lambda: dimmer) == 0
+    assert dimmer.max_on == [b.ON_WINDOW_S + 10.0] and dimmer.closed
+    assert dimmer.wire_on is False
+
+
+def test_spawn_passes_the_mains_state(monkeypatch):
+    seen = []
+    monkeypatch.setattr(b.subprocess, "Popen", lambda cmd: seen.append(cmd) or object())
+    b._spawn_holder(90.0, 0, 0, True)
+    assert seen[0][seen[0].index("--child-mains") + 1] == "1"
