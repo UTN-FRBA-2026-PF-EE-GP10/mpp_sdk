@@ -1607,7 +1607,7 @@ mains: read <code>hardware/dimmer/README.md</code> before bench work.</p>
   180), plus <code>max_on_s</code> (default 30, at most 120). It returns the status.</li>
 <li><code>POST /api/dimmer/off</code> switches the lamp off. It works in every state.</li>
 <li><code>--lamp-max-power X</code> caps the power the API accepts (0 &lt; X &lt;= 1, default
-  1.0). A higher request gets 422.</li>
+  1.0). A higher request gets 422. An angle is capped by the power it gives.</li>
 </ul>
 <p>Safety model:</p>
 <ul>
