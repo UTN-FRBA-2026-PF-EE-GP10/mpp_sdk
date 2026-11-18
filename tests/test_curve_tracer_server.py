@@ -186,6 +186,8 @@ def test_data_defaults_before_anything_is_cached(client):
         "sweep_id": 0,
         "command_error": None,
         "demo_source": False,
+        "lamp_phase": None,
+        "lamp_warmup_left_s": None,
     }
 
 

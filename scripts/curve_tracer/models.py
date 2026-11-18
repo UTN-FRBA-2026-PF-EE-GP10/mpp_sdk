@@ -18,6 +18,8 @@ from scripts.curve_tracer.limits import (
     _DEFAULT_INITIAL_DUTY,
     _DEFAULT_V_MAX,
     _DEFAULT_V_OUT_MAX,
+    _LAMP_WARMUP_DEFAULT_S,
+    _LAMP_WARMUP_MAX_S,
 )
 
 _DividerRange = Literal["low", "mid", "full", 0, 1, 2]
@@ -178,6 +180,8 @@ class _StartRunRequest(BaseModel):
     session_id: str | None = None
     # Minimum time between algorithm steps; None keeps one step per exchange.
     control_period_ms: StrictFloat | StrictInt | None = None
+    # Lamp on only around the run: see scripts/curve_tracer/lamp_step.py.
+    lamp: _LampOption | None = None
 
 
 class _BatchDeleteRequest(BaseModel):
@@ -187,34 +191,65 @@ class _BatchDeleteRequest(BaseModel):
     ids: list[str]
 
 
-class _LampRequest(BaseModel):
-    """Body of `POST /api/dimmer`: exactly one of `power` (fraction 0 to 1) and
-    `alpha_deg` (0 = full on, 180 = off). Power 0 and alpha 180 mean OFF. The
-    server's `--lamp-max-power` is checked in the route."""
+def _plain_finite_number(value: object) -> object:
+    # bool is an int in Python and NaN passes range checks as False, so both
+    # would get through the bounds of the fields.
+    if value is None:
+        return value
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        raise ValueError("must be a number")
+    try:
+        finite = math.isfinite(value)
+    except OverflowError:  # an integer too large for a float
+        finite = False
+    if not finite:
+        raise ValueError("must be finite")
+    return value
+
+
+class _LampLevel(BaseModel):
+    """Exactly one of `power` (fraction 0 to 1) and `alpha_deg` (0 = full on, 180 = off).
+    The server's `--lamp-max-power` is checked in the routes."""
 
     power: float | None = Field(default=None, ge=0.0, le=1.0)
     alpha_deg: float | None = Field(default=None, ge=0.0, le=180.0)
-    max_on_s: float = Field(default=30.0, gt=0.0, le=MAX_LAMP_WINDOW_S)
 
-    @field_validator("power", "alpha_deg", "max_on_s", mode="before")
+    @field_validator("power", "alpha_deg", mode="before")
     @classmethod
-    def _plain_finite_number(cls, value: object) -> object:
-        # bool is an int in Python and NaN passes range checks as False, so both
-        # would get through the bounds above.
-        if value is None:
-            return value
-        if isinstance(value, bool) or not isinstance(value, int | float):
-            raise ValueError("must be a number")
-        try:
-            finite = math.isfinite(value)
-        except OverflowError:  # an integer too large for a float
-            finite = False
-        if not finite:
-            raise ValueError("must be finite")
-        return value
+    def _plain_level(cls, value: object) -> object:
+        return _plain_finite_number(value)
 
     @model_validator(mode="after")
-    def _exactly_one(self) -> _LampRequest:
+    def _exactly_one(self) -> _LampLevel:
         if (self.power is None) == (self.alpha_deg is None):
             raise ValueError("give exactly one of power and alpha_deg")
         return self
+
+
+class _LampRequest(_LampLevel):
+    """Body of `POST /api/dimmer`. Power 0 and alpha 180 mean OFF."""
+
+    max_on_s: float = Field(default=30.0, gt=0.0, le=MAX_LAMP_WINDOW_S)
+
+    @field_validator("max_on_s", mode="before")
+    @classmethod
+    def _plain_window(cls, value: object) -> object:
+        return _plain_finite_number(value)
+
+
+class _LampOption(_LampLevel):
+    """The `lamp` option of a sweep or run request: the lamp is on only around
+    the measurement, after `warmup_s` seconds of warm-up."""
+
+    warmup_s: float = Field(default=_LAMP_WARMUP_DEFAULT_S, ge=0.0, le=_LAMP_WARMUP_MAX_S)
+
+    @field_validator("warmup_s", mode="before")
+    @classmethod
+    def _plain_warmup(cls, value: object) -> object:
+        return _plain_finite_number(value)
+
+
+class _StartSweepRequest(BaseModel):
+    """Optional body of `POST /api/start-sweep`."""
+
+    lamp: _LampOption | None = None

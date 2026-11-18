@@ -78,6 +78,14 @@ def _execute_run(
             session_fields = session_library.load(_session_path(request.session_id)).fields
 
     def save_and_finish(samples: tuple[RunSample, ...], aborted: bool, reason: str | None) -> None:
+        settings = build_run_settings(
+            src,
+            algorithm,
+            control_period_ms=request.control_period_ms,
+            session_fields=session_fields,
+        )
+        if request.lamp is not None:
+            settings["lamp"] = request.lamp
         record = RunRecord(
             captured_at=runs_now_utc(),
             label=request.label,
@@ -88,12 +96,7 @@ def _execute_run(
             notes=reason or "",
             source=source,
             session_id=request.session_id,
-            settings=build_run_settings(
-                src,
-                algorithm,
-                control_period_ms=request.control_period_ms,
-                session_fields=session_fields,
-            ),
+            settings=settings,
             step_period_mean_ms=run_info.get("step_period_mean_ms"),
             step_period_max_ms=run_info.get("step_period_max_ms"),
             bad_frames=run_info.get("bad_frames"),
