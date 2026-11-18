@@ -21,6 +21,7 @@ from scripts.curve_tracer_server import (  # noqa: E402
     _SweepCache,
     create_app,
 )
+from tests.test_spi_mcu import spi_mcu_source  # noqa: E402, F401
 
 KEYS = {
     "available", "state", "power", "alpha_deg", "applied_alpha_deg", "window_left_s",
@@ -401,7 +402,7 @@ class _FakeBoard(FakeLampSource):
         return None
 
 
-def test_off_acts_while_a_run_occupies_the_poll_thread(monkeypatch):
+def test_off_acts_while_a_run_occupies_the_poll_thread(monkeypatch, spi_mcu_source):  # noqa: F811
     board = _FakeBoard()
     monkeypatch.setattr("mpp_sdk.io.spi_mcu.SpiMcuSource", lambda **_kw: board)
     run_started, release = threading.Event(), threading.Event()
