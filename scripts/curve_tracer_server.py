@@ -7,10 +7,18 @@ Needs the `web` extra (`uv sync --extra web`) for `fastapi`/`uvicorn`, and
 lean (AGENTS.md). A background thread calls `request_sweep()` and
 `poll_sweep_progress()` in a loop and caches the latest result. Route
 handlers just read the cache, so a slow SPI round trip never blocks a
-page load. `spidev` is not documented thread-safe, so that same thread is
-the only thing that ever touches `SpiMcuSource` - the start-sweep/
+page load. That same thread does all the board work: the start-sweep/
 release-relay/runs-start routes hand their request off through a queue
 instead of calling into it directly from a request-handling thread.
+
+The one exception is the lamp dimmer (`/api/dimmer`). A run can occupy the
+poll thread for 10 minutes and OFF must act within about a second, so the
+lamp routes call the lamp methods of `SpiMcuSource` from the request thread.
+That is safe because every SPI exchange of the source runs under one RLock
+(the dimmer keepalive thread already relies on it). The poll thread publishes
+the source to the routes once it exists and withdraws it before it closes.
+A lamp command waits at most for one SPI exchange (milliseconds); an ON also
+confirms the link and can take about 1.5 s. See `curve_tracer/lamp.py`.
 
 A live closed-loop MPPT run (`POST /api/runs/start`) executes on that same
 thread, via `_run_live`/`run_control_loop` (`mpp_sdk/runs/loop.py`) -
@@ -44,12 +52,18 @@ Usage::
     # --demo: simulated sweeps (curve_tracer_demo_source.py), no board or
     # spidev needed - runs on any machine, only needs the `web` extra:
     mpp-sdk curve-tracer-web --demo
+
+    # Lamp: --lamp-max-power 0.5 caps the lamp power the API accepts (fraction
+    # 0 to 1, default 1.0). Idle is off, every on has a window of at most 120 s,
+    # and the lamp is switched off when the server stops.
 """
 
 from __future__ import annotations
 
 import argparse
+import contextlib
 import ipaddress
+import math
 import queue
 import socket
 import threading
@@ -64,6 +78,8 @@ from mpp_sdk.sessions.templates import get_template as get_session_template
 
 try:
     from fastapi import FastAPI, Request
+    from fastapi.encoders import jsonable_encoder
+    from fastapi.exceptions import RequestValidationError
     from fastapi.responses import JSONResponse
     from fastapi.staticfiles import StaticFiles
 except ModuleNotFoundError as exc:  # pragma: no cover
@@ -74,6 +90,7 @@ except ModuleNotFoundError as exc:  # pragma: no cover
 
 # Re-exported: tests and other scripts import these names from here.
 from scripts.curve_tracer.cache import _ConfigCache, _Snapshot, _SweepCache
+from scripts.curve_tracer.lamp import _LampController, _LampHolder
 from scripts.curve_tracer.library_paths import (
     _curve_path,
     _delete_batch,
@@ -106,6 +123,7 @@ from scripts.curve_tracer.models import _StartRunRequest
 from scripts.curve_tracer.poll import _apply_pico_config, _poll_loop
 from scripts.curve_tracer.routes_curves import register_curve_routes
 from scripts.curve_tracer.routes_hardware import register_hardware_routes
+from scripts.curve_tracer.routes_lamp import register_lamp_routes
 from scripts.curve_tracer.routes_panels import register_panel_routes
 from scripts.curve_tracer.routes_runs import register_run_routes
 from scripts.curve_tracer.routes_sessions import register_session_routes
@@ -194,6 +212,7 @@ def create_app(
     run_requests: queue.Queue[_RunRequest] | None = None,
     stop_event: threading.Event | None = None,
     allowed_hosts: frozenset[str] | None = None,
+    lamp: _LampController | None = None,
 ) -> FastAPI:
     """Build the FastAPI app against given cache/command objects - taken
     as parameters rather than module globals so tests can construct one
@@ -215,11 +234,16 @@ def create_app(
     `allowed_hosts` is given, a request whose `Host` is neither an IP
     address nor in `allowed_hosts` gets 403 (DNS rebinding). Tests leave
     `allowed_hosts` as None; `main()` always passes it.
+
+    `lamp` serves `/api/dimmer`. Without one, the lamp is unavailable (no
+    board). Its refresh thread starts and stops with the app, and the lamp is
+    switched off when the app shuts down.
     """
     run_cache = run_cache if run_cache is not None else _LiveRunCache()
     run_requests = run_requests if run_requests is not None else queue.Queue()
     stop_event = stop_event if stop_event is not None else threading.Event()
     config_cache = config_cache if config_cache is not None else _ConfigCache()
+    lamp = lamp if lamp is not None else _LampController()
     specs = {s.label.lower(): s for s in algorithm_specs()}
 
     # Seeded once, here, rather than per-request: this is "first use" of
@@ -235,7 +259,29 @@ def create_app(
     # lost. One lock for both is enough at bench request rates.
     patch_lock = threading.Lock()
 
-    app = FastAPI(title="curve-tracer")
+    @contextlib.asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        lamp.start()
+        try:
+            yield
+        finally:
+            # SIGTERM and Ctrl-C end uvicorn through here. The poll thread's
+            # source closing also sends OFF, but it may be busy in a run.
+            lamp.shutdown_off()
+
+    app = FastAPI(title="curve-tracer", lifespan=lifespan)
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_error(_request: Request, exc: RequestValidationError):
+        # A NaN or infinity in the body is echoed in the error's "input" and
+        # cannot be written as JSON, so the default 422 would become a 500.
+        errors = [
+            {**e, "input": repr(e["input"])}
+            if isinstance(e.get("input"), float) and not math.isfinite(e["input"])
+            else e
+            for e in exc.errors()
+        ]
+        return JSONResponse(status_code=422, content={"detail": jsonable_encoder(errors)})
 
     @app.middleware("http")
     async def refuse_cross_site(request: Request, call_next):
@@ -259,6 +305,7 @@ def create_app(
     register_session_routes(app, patch_lock, lambda template_id: get_session_template(template_id))
     register_run_routes(app, cache, commands, run_cache, run_requests, stop_event, specs, demo)
     register_hardware_routes(app, cache, commands, run_cache, config_cache)
+    register_lamp_routes(app, lamp)
 
     if _WEB_ROOT.exists():
         # Mounted last: FastAPI/Starlette match routes in registration
@@ -269,6 +316,13 @@ def create_app(
         app.mount("/", StaticFiles(directory=_WEB_ROOT, html=True), name="frontend")
 
     return app
+
+
+def _lamp_max_power(text: str) -> float:
+    value = float(text)
+    if not 0.0 < value <= 1.0:  # False for NaN too
+        raise argparse.ArgumentTypeError("must be greater than 0 and at most 1")
+    return value
 
 
 def main() -> None:
@@ -318,8 +372,16 @@ def main() -> None:
         help="use a simulated sweep source instead of SpiMcuSource - no board, no spidev, "
         "runs on any machine. For trying out the frontend away from the bench.",
     )
+    parser.add_argument(
+        "--lamp-max-power",
+        type=_lamp_max_power,
+        default=1.0,
+        help="highest lamp power the API accepts, as a fraction in (0, 1] (default 1.0)",
+    )
     args = parser.parse_args()
 
+    lamp_holder = _LampHolder()
+    lamp = _LampController(lamp_holder, max_power=args.lamp_max_power)
     cache = _SweepCache()
     commands: queue.Queue[object] = queue.Queue()
     config_cache = _ConfigCache()
@@ -344,6 +406,7 @@ def main() -> None:
             "config_cache": config_cache,
             "stop_event": stop_event,
             "shutdown_event": shutdown_event,
+            "lamp_holder": lamp_holder,
         },
         daemon=True,
     )
@@ -358,6 +421,7 @@ def main() -> None:
         run_requests=run_requests,
         stop_event=stop_event,
         allowed_hosts=_default_allowed_hosts(args.allowed_host),
+        lamp=lamp,
     )
     mode = " [DEMO MODE - simulated sweeps, no hardware]" if args.demo else ""
     print(f"Serving curve-tracer UI on http://{args.host}:{args.port}/{mode} (Ctrl+C to stop)")

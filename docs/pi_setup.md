@@ -79,6 +79,31 @@ Flash the firmware from a PC with a debug probe, not from the Pi.
    change it.
 6. To try the workbench with no board, add `--demo`.
 
+## Lamp
+
+The server switches the lamp dimmer through the Pico. The board switches
+mains: read `hardware/dimmer/README.md` before bench work.
+
+- `GET /api/dimmer` returns the status: state (`off`, `on`, `tripped`,
+  `unavailable`), power, window left, budget, and the dimmer flags.
+- `POST /api/dimmer` takes `power` (fraction 0 to 1) or `alpha_deg` (0 to
+  180), plus `max_on_s` (default 30, at most 120). It returns the status.
+- `POST /api/dimmer/off` switches the lamp off. It works in every state.
+- `--lamp-max-power X` caps the power the API accepts (0 < X <= 1, default
+  1.0). A higher request gets 422.
+
+Safety model:
+
+- The lamp is off at idle and after boot.
+- Every "on" is a window: the host switches the lamp off when it ends.
+- A window is at most 120 s. The dimmer also counts on time: at 120 s it
+  trips and forces the lamp off. It cools 1 s per 1 s.
+- While tripped, every "on" gets 409. It clears when the dimmer has cooled
+  to 60 s and the host has sent an OFF after the trip.
+- Lamp commands do not wait for runs or sweeps, so Off works during a run.
+- The lamp is switched off when the server stops. With `--demo` a simulated
+  dimmer with the same rules is used.
+
 The server has no login. Keep it on the bench network. See the safety
 notes in the [measurement procedure](measurement_procedure.md).
 

@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
+import math
 from typing import Literal
 
-from pydantic import BaseModel, Field, StrictFloat, StrictInt
+from pydantic import BaseModel, Field, StrictFloat, StrictInt, field_validator, model_validator
 
 from mpp_sdk.io.board import (
     CUTOFF_I_MAX_CEILING_MA,
     CUTOFF_V_MAX_CEILING_MV,
     PSU_VOUT_TARGET_CEILING_MV,
 )
+from mpp_sdk.io.dimmer import MAX_LAMP_WINDOW_S
 from scripts.curve_tracer.limits import (
     _DEFAULT_I_MAX,
     _DEFAULT_INITIAL_DUTY,
@@ -183,3 +185,32 @@ class _BatchDeleteRequest(BaseModel):
     `POST /api/runs/delete-batch`."""
 
     ids: list[str]
+
+
+class _LampRequest(BaseModel):
+    """Body of `POST /api/dimmer`: exactly one of `power` (fraction 0 to 1) and
+    `alpha_deg` (0 = full on, 180 = off). Power 0 and alpha 180 mean OFF. The
+    server's `--lamp-max-power` is checked in the route."""
+
+    power: float | None = Field(default=None, ge=0.0, le=1.0)
+    alpha_deg: float | None = Field(default=None, ge=0.0, le=180.0)
+    max_on_s: float = Field(default=30.0, gt=0.0, le=MAX_LAMP_WINDOW_S)
+
+    @field_validator("power", "alpha_deg", "max_on_s", mode="before")
+    @classmethod
+    def _plain_finite_number(cls, value: object) -> object:
+        # bool is an int in Python and NaN passes range checks as False, so both
+        # would get through the bounds above.
+        if value is None:
+            return value
+        if isinstance(value, bool) or not isinstance(value, int | float):
+            raise ValueError("must be a number")
+        if not math.isfinite(value):
+            raise ValueError("must be finite")
+        return value
+
+    @model_validator(mode="after")
+    def _exactly_one(self) -> _LampRequest:
+        if (self.power is None) == (self.alpha_deg is None):
+            raise ValueError("give exactly one of power and alpha_deg")
+        return self
