@@ -279,9 +279,9 @@ fn miso_checksum(bytes: &[u8; 8], ack: u8, settled: u8) -> u8 {
 /// comment.
 ///
 /// `ack` is covered by the checksum because it is a *command* to the Pi,
-/// not a reading: a bit flip setting its top bit makes the Pi issue an
-/// 83-byte bulk-read transaction against firmware that is still sending
-/// 12-byte telemetry, desyncing the wire. Found on-target - spurious
+/// not a reading: a bit flip setting its top bit makes the Pi issue a
+/// `BULK_FRAME_LEN`-byte bulk-read transaction against firmware that is
+/// still sending 12-byte telemetry, desyncing the wire. Found on-target - spurious
 /// bulk reads with garbage magic bytes, concentrated at sweep start when
 /// the linear current sink switches on and the link is noisiest. It sits
 /// after `CHECKSUM` in the frame but that is only byte order; both sides
@@ -410,11 +410,11 @@ const PSU_ARM_WINDOW: Duration = Duration::from_millis(1000);
 /// genuinely stalled/aborted transfer, not jitter.
 const FRAME_TIMEOUT: Duration = Duration::from_millis(100);
 
-/// Time budget for the one 83-byte bulk-read exchange specifically -
-/// `FRAME_TIMEOUT` alone was calibrated for `FRAME_LEN` (12) and reused
-/// unchanged here on the assumption raw SPI clock time is what matters
-/// (only ~3.3 ms more at 200 kHz), but the RX side isn't DMA-driven - it's
-/// `BULK_FRAME_LEN` (83) individual IRQ-driven `wait_pull()` word-waits
+/// Time budget for the one `BULK_FRAME_LEN`-byte bulk-read exchange
+/// specifically - `FRAME_TIMEOUT` alone was calibrated for `FRAME_LEN` (12)
+/// and reused unchanged here on the assumption raw SPI clock time is what
+/// matters (only a few ms more at 200 kHz), but the RX side isn't
+/// DMA-driven - it's `BULK_FRAME_LEN` individual IRQ-driven `wait_pull()` word-waits
 /// instead of `FRAME_LEN`'s 12, and each one carries real executor
 /// wake/reschedule overhead on top of the raw clock time. Found on-target:
 /// the bulk-read consistently timed out under `FRAME_TIMEOUT` while every

@@ -7,8 +7,10 @@ fake is injected into ``sys.modules`` before importing
 """
 
 import math
+import re
 import sys
 import types
+from pathlib import Path
 
 import pytest
 
@@ -138,6 +140,34 @@ def _bulk_frame(
     if corrupt:
         checksum ^= 0x01
     return [*data, checksum]
+
+
+_FIRMWARE_TRACER_SRC = (
+    Path(__file__).parent.parent / "firmware/pipico_board/src/mode_curve_tracer.rs"
+)
+
+
+def test_sweep_point_count_matches_the_firmware(spi_mcu_source):
+    """The SDK sizes the bulk read from its own copy of the firmware's
+    point count; nothing on the wire negotiates it, so a mismatch only
+    shows up on hardware as a checksum error on every fetch."""
+    # The fixture installs the fake spidev that importing spi_mcu needs.
+    from mpp_sdk.io.spi_mcu import _TRACER_SWEEP_POINTS
+
+    src = _FIRMWARE_TRACER_SRC.read_text(encoding="utf-8")
+    match = re.search(
+        r"^\s*(?:pub(?:\([^)]*\))?\s+)?const\s+TRACER_SWEEP_POINTS\s*:\s*usize\s*=\s*([\d_]+)\s*;",
+        src,
+        re.MULTILINE,
+    )
+    if match is None:
+        pytest.fail(
+            f"TRACER_SWEEP_POINTS declaration not found in {_FIRMWARE_TRACER_SRC} - "
+            "update this test if its shape changed"
+        )
+    firmware_points = int(match.group(1).replace("_", ""))
+    assert firmware_points == _TRACER_SWEEP_POINTS
+    assert firmware_points == _TEST_TRACER_SWEEP_POINTS
 
 
 # ------------------------------------------------------------------
@@ -306,7 +336,7 @@ def test_request_sweep_resends_cmd_on_every_poll(spi_mcu_source):
 
 def test_flipped_ack_bit_does_not_trigger_a_bulk_read(spi_mcu_source):
     """A corrupted ack byte must fail the frame checksum rather than send
-    us clocking an 83-byte bulk read at firmware that is still sending
+    us clocking a bulk-sized read at firmware that is still sending
     12-byte telemetry - the ack is a command to us, not a reading."""
     src = spi_mcu_source()
     frame = _miso_frame(v_raw=1000, i_raw=100, vout_raw=0, temp_raw=0, ack=0x00)
@@ -392,12 +422,16 @@ def test_request_sweep_raises_on_point_count_mismatch(spi_mcu_source):
 def test_request_sweep_raises_on_implausible_point_count(spi_mcu_source):
     src = spi_mcu_source()
     # ack and bulk-frame counts agree (so the mismatch check above doesn't
-    # catch it) but both say 30 - more than _TEST_TRACER_SWEEP_POINTS (20),
-    # which would index past the frame if not checked explicitly.
+    # catch it) but both say one more than _TEST_TRACER_SWEEP_POINTS, which
+    # would index past the frame if not checked explicitly.
+    implausible = _TEST_TRACER_SWEEP_POINTS + 1
+    # The ack carries the count in 7 bits (0x80 | count); past that this
+    # case cannot be expressed on the wire at all.
+    assert implausible <= 0x7F, "point count no longer fits the 7-bit ack"
     src._spi.responses = [
         _miso_frame(v_raw=0, i_raw=0, vout_raw=0, temp_raw=0, ack=0),
-        _miso_frame(v_raw=0, i_raw=0, vout_raw=0, temp_raw=0, ack=0x80 | 30),
-        _bulk_frame([(1, 1), (2, 2)], count_override=30),
+        _miso_frame(v_raw=0, i_raw=0, vout_raw=0, temp_raw=0, ack=0x80 | implausible),
+        _bulk_frame([(1, 1), (2, 2)], count_override=implausible),
     ]
     with pytest.raises(RuntimeError, match="implausible point count"):
         src.request_sweep(poll_attempts=5, poll_interval_s=0)
@@ -573,7 +607,9 @@ def test_poll_sweep_progress_out_of_range_index_returns_none(spi_mcu_source):
     src = spi_mcu_source()
     src._spi.responses = [
         _miso_frame(v_raw=0, i_raw=0, vout_raw=0, temp_raw=0),
-        _progress_frame(42, 12000, 150, active=True, final_point=False),
+        # The first index past the last valid point. It cannot collide with
+        # the 0xFF sentinel while the firmware keeps the count at 127 or below.
+        _progress_frame(_TEST_TRACER_SWEEP_POINTS, 12000, 150, active=True, final_point=False),
     ]
     assert src.poll_sweep_progress() is None
 
