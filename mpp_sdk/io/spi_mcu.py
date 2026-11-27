@@ -72,7 +72,8 @@ _DIVIDER_RANGE_MAP: dict[str | int, int] = {
 
 # Curve-tracer bulk-read protocol - must match
 # firmware/pipico_board/src/spi_slave_pio.rs's constants of the same name
-# and mode_curve_tracer::TRACER_SWEEP_POINTS exactly.
+# and mode_curve_tracer::TRACER_SWEEP_POINTS exactly. tests/test_spi_mcu.py
+# checks the point count against the firmware source.
 _CMD_REQUEST_BULK_DUMP = 0xB1
 _BULK_MAGIC = 0xC5
 _TRACER_SWEEP_POINTS = 20
@@ -529,7 +530,7 @@ class SpiMcuSource(SignalSource):
             )
 
         # The ack and the bulk read are one critical section: the firmware
-        # expects an 83-byte frame right after the ack, so a keepalive in
+        # expects a _BULK_FRAME_LEN-byte frame right after the ack, so a keepalive in
         # between would be swallowed. The sleep stays outside the lock.
         for attempt in range(poll_attempts + 1):
             with self._lock:

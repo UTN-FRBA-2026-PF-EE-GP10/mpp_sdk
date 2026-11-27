@@ -33,7 +33,9 @@ use crate::{MEAS_I_MA, MEAS_V_MV, RELAY_ENGAGED, TRACER_ACTIVE};
 /// budget is fixed and the points are placed where they are worth most -
 /// see `sweep_duty_for_step`. Unlike the reference (which has the
 /// operator dial in a target current range), the sweep's top is found
-/// automatically per sweep - see `auto_range`.
+/// automatically per sweep - see `auto_range`. The Pi-side copy is
+/// `mpp_sdk/io/spi_mcu.py`'s `_TRACER_SWEEP_POINTS`; `tests/test_spi_mcu.py`
+/// fails if they differ.
 pub const TRACER_SWEEP_POINTS: usize = 20;
 
 /// Points of the budget above spent on the fine leg across the knee. The
@@ -45,6 +47,44 @@ const TRACER_FINE_POINTS: usize = 12;
 /// between auto-range and the sweep, and no more: past the cliff every
 /// extra point reads the same short-circuit current.
 const TRACER_TAIL_POINTS: usize = 2;
+
+// Compile-time guards on the point budget above. They cost nothing at run
+// time; they turn a bad edit to these constants into a build error instead
+// of a bad sweep on the bench.
+
+// `sweep_duty_for_step` sizes the coarse leg as `TRACER_SWEEP_POINTS -
+// TRACER_FINE_POINTS - TRACER_TAIL_POINTS` in `usize`. It needs at least one
+// point: that subtraction must not underflow, and step 0 must stay duty 0
+// (the open-circuit point) as that function promises.
+const _: () = assert!(
+    TRACER_SWEEP_POINTS > TRACER_FINE_POINTS + TRACER_TAIL_POINTS,
+    "TRACER_SWEEP_POINTS must leave at least one coarse point"
+);
+
+// The bulk-dump ack is one byte, `0x80 | count` (`spi_slave_pio.rs`'s
+// `build_tx_buf_for_state`, read back as `ack & 0x7F` by
+// `mpp_sdk/io/spi_mcu.py`), so the count has 7 bits. This also keeps every
+// progress index below the 0xFF "no sweep yet" sentinel.
+const _: () = assert!(
+    TRACER_SWEEP_POINTS <= 127,
+    "TRACER_SWEEP_POINTS must fit the 7-bit bulk-dump ack"
+);
+
+// The fine leg spaces its points by `span / (TRACER_FINE_POINTS - 1)` in
+// `sweep_duty_for_step`: one point divides by zero, and two are the fewest
+// that reach both ends of the knee band.
+const _: () = assert!(
+    TRACER_FINE_POINTS >= 2,
+    "TRACER_FINE_POINTS must cover both ends of the knee band"
+);
+
+// The tail's last step is the one that lands exactly on the auto-ranged
+// `top` (`sweep_duty_for_step`). With no tail points the sweep stops at the
+// knee band's end and never reaches past Isc.
+const _: () = assert!(
+    TRACER_TAIL_POINTS >= 1,
+    "TRACER_TAIL_POINTS must reach the auto-ranged top"
+);
 
 /// Where the fine leg starts and ends, as a percent of the knee duty.
 /// Below the start a panel is a current source and the curve is nearly
@@ -145,10 +185,10 @@ const RELAY_RELEASE_MS: u64 = 20;
 // The load's full-scale current is far above what a small PV panel can
 // deliver (the reference device's is ~3.9 A; a lit panel here sources
 // ~0.2 A), so a fixed 0..TRACER_PWM_MAX sweep spends all but its first
-// point past Isc, with the panel collapsed to ~0 V - 20 identical
-// short-circuit readings instead of a curve. Each sweep therefore probes
-// for its own top first, which also tracks illumination and shading
-// changes without anyone dialling in a range.
+// point past Isc, with the panel collapsed to ~0 V - every point after
+// the first an identical short-circuit reading instead of a curve. Each
+// sweep therefore probes for its own top first, which also tracks
+// illumination and shading changes without anyone dialling in a range.
 
 /// Settle time per auto-range probe. Matches `TRACER_SETTLE_MS` rather
 /// than undercutting it: a probe's current reading now sets the sweep's
@@ -505,8 +545,9 @@ impl CurveTracer {
     }
 
     /// Finds this sweep's top duty: the commanded current just past the
-    /// panel's Isc, so the 20 recorded points span the real curve instead
-    /// of piling up in the collapsed region (see the auto-range constants).
+    /// panel's Isc, so the `TRACER_SWEEP_POINTS` recorded points span the
+    /// real curve instead of piling up in the collapsed region (see the
+    /// auto-range constants).
     ///
     /// Measures Voc at zero load, then doubles the commanded current until
     /// the panel voltage collapses. Doubling rather than a linear scan

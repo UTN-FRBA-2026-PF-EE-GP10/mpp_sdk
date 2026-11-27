@@ -38,7 +38,8 @@ class _SweepCache:
         self._link = "no data yet"
         # Bumped per fetched sweep so the page can tell "a new sweep
         # landed" from "same sweep, polled again". The point count can't
-        # do that job - every completed sweep returns the same 20 points.
+        # do that job - every completed sweep returns the same number of
+        # points (the firmware's TRACER_SWEEP_POINTS).
         self._seq = 0
         # Keyed by point index rather than a plain list: poll_sweep_progress()
         # is lossy by design (a missed poll just means a gap, not a retry),
